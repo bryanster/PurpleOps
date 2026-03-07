@@ -98,17 +98,58 @@ $('#objective, #actions, #rednotes, #bluenotes').on('input', function(event) {
 	event.target.style.height = event.target.scrollHeight + 5 + 'px';
 }).trigger('input')
 
+// "Same as detection source" — match by name across separate detection/prevention source pools
+function syncPreventionToDetection() {
+	const detectionName = $('#detectionsource option:selected').text().trim()
+	const match = $('#preventionsource option').filter(function() {
+		return $(this).text().trim() === detectionName
+	})
+	$('#preventionsource').val(match.length ? match.val() : '')
+}
+
+$('#samesource').on('change', function() {
+	if ($(this).is(':checked')) {
+		syncPreventionToDetection()
+		$('#preventionsource').addClass('text-muted').css('pointer-events', 'none')
+	} else {
+		$('#preventionsource').removeClass('text-muted').css('pointer-events', '')
+	}
+})
+
+// When detection source changes, re-sync if linked
+$('#detectionsource').on('change', function() {
+	if ($('#samesource').is(':checked')) {
+		syncPreventionToDetection()
+	}
+})
+
+// If prevention source is manually changed, unlink the checkbox
+$('#preventionsource').on('change', function() {
+	if ($('#samesource').is(':checked')) {
+		const detectionName = $('#detectionsource option:selected').text().trim()
+		const preventionName = $(this).find('option:selected').text().trim()
+		if (detectionName !== preventionName) {
+			$('#samesource').prop('checked', false)
+			$('#preventionsource').removeClass('text-muted').css('pointer-events', '')
+		}
+	}
+})
+
 // Dynamically update prevent fields
 $('input[name="prevented"]').on('change', function() {
 	current = $('input[name="prevented"]:checked').val()
 	if (["No", "N/A", ""].includes(current)) {
 		$("#preventedrating").val(current.replace("No", "0.0"))
 		$("#preventedrating-container").hide()
+		$("#preventionsource-container").hide()
+		$("#preventionsource").val("")
+		$("#samesource").prop("checked", false).trigger("change")
 	} else {
 		if (["0.0", "N/A"].includes($("#preventedrating").val())) {
 			$("#preventedrating").val("")
 		}
 		$("#preventedrating-container").show()
+		$("#preventionsource-container").show()
 	}
 }).trigger('change')
 
@@ -132,6 +173,7 @@ $('input[name="alerted"]').on('change', function() {
 	if (current == "Yes") {
 		$("#alert-container").show()
 		$("#detection-container").show()
+		$("#detectionsource-container").show()
 		$("#logged-container").hide()
 		$('input[name="logged"]').prop('checked', false)
 		$('#log-yes').prop("checked", true)
@@ -143,10 +185,13 @@ $('input[name="alerted"]').on('change', function() {
 		$("#alertseverity").val("")
 		$("#logged-container").show()
 		$("#detection-container").hide()
+		// keep detectionsource visible in case logged=Yes
 	} else {
 		$("#alert-container").hide()
 		$("#logged-container").hide()
 		$("#detection-container").hide()
+		$("#detectionsource-container").hide()
+		$("#detectionsource").val("")
 	}
 }).trigger('change')
 
@@ -155,9 +200,15 @@ $('input[name="logged"]').on('change', function() {
 	current = $('input[name="logged"]:checked').val()
 	if (current == "Yes") {
 		$('#detection-container').show()
+		$('#detectionsource-container').show()
 	} else if (current == "No") {
 		$('#detectionrating').val("0.0")
 		$('#detection-container').hide()
+		// only hide detection source if also not alerted
+		if ($('input[name="alerted"]:checked').val() != "Yes") {
+			$('#detectionsource-container').hide()
+			$('#detectionsource').val("")
+		}
 	}
 }).trigger('change')
 
