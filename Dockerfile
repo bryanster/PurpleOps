@@ -1,23 +1,31 @@
-# pull official base image
-FROM python:3.11.3-slim
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim
 
-# set work directory
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 WORKDIR /usr/src/app
 
-# set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Place venv outside workdir so source-code volume mounts don't shadow it
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
-# install system dependencies
-RUN apt-get update && apt-get install -y netcat git
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        netcat-openbsd git \
+    && rm -rf /var/lib/apt/lists/*
 
-# install dependencies
-RUN pip install --upgrade pip
-COPY ./requirements.txt /usr/src/app/requirements.txt
-RUN pip install -r requirements.txt
+# Install Python dependencies (cached layer — only reruns when lock/toml change)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-dev
 
-# copy project
-COPY . /usr/src/app/
+# Copy application source
+COPY . .
 
-# run entrypoint.sh
 ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
