@@ -2,25 +2,33 @@ version: "3.8"
 
 services:
   mongodb:
-    image: mongo:7.0-rc
+    image: mongo:7.0
     container_name: mongodb
-    ports:
-      - 27017
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   purpleops:
     build: .
     container_name: purpleops
-    command: gunicorn --bind 0.0.0.0:5000 purpleops:app
+    command: gunicorn --bind 0.0.0.0:5000 --workers 2 purpleops:app
     ports:
       - "8080:5000"
     env_file:
       - ./.env
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     volumes:
       - purpleops_data:/usr/src/app/
       - ./custom:/usr/src/app/custom
+    profiles:
+      - prod
+
 volumes:
   mongodb_data:
   purpleops_data:
