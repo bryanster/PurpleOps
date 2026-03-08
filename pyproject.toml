@@ -5,48 +5,18 @@ description = "Open-source self-hosted purple team management platform"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    # Web framework
+    "argon2-cffi>=25.1.0",
+    "docxtpl>=0.20.2",
+    "dotenv>=0.9.9",
     "flask>=3.1",
-    "flask-wtf>=1.2",
-
-    # Authentication & security
-    "flask-security-too[mfa]>=5.5",
-    "passlib[argon2,bcrypt]>=1.7",
-    "cryptography>=44.0",
-    "webauthn>=2.5",
-
-    # Database
-    "flask-mongoengine>=1.0",
-    "mongoengine>=0.29",
-    "pymongo>=4.9",
-
-    # Email
-    "flask-mailman>=1.0",
-
-    # SQL (required by flask-security-too internals)
-    "flask-sqlalchemy>=3.1",
-    "sqlalchemy>=2.0",
-
-    # Document generation
-    "python-docx>=1.1",
-    "docxtpl>=0.18",
-    "docxcompose>=1.4",
-    "openpyxl>=3.1",
-
-    # Data validation
-    "email-validator>=2.2",
-    "bleach>=6.0",
-
-    # Utilities
-    "gitpython>=3.1",
-    "requests>=2.32",
-    "python-dotenv>=1.1",
-    "pyyaml>=6.0",
-    "lxml>=5.3",
-    "phonenumberslite>=8.13",
-
-    # Production server
-    "gunicorn>=21.2",
+    "flask-mongoengine-3>=1.1.0",
+    "flask-security>=5.7.1",
+    "gitpython>=3.1.46",
+    "openpyxl>=3.1.5",
+    "passlib>=1.7.4",
+    "pymongo>=4.16.0",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
 ]
 
 [tool.uv]

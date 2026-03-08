@@ -1,9 +1,9 @@
 import datetime
 
 from bson.objectid import ObjectId
-from flask import escape
 from flask_mongoengine import MongoEngine
 from flask_security import MongoEngineUserDatastore, RoleMixin, UserMixin
+from markupsafe import escape
 
 db = MongoEngine()
 
@@ -18,7 +18,7 @@ class Technique(db.Document):
     name = db.StringField()
     description = db.StringField()
     detection = db.StringField()
-    tactics = db.ListField(db.StringField())
+    tactics = db.ListField(field=db.StringField())
 
 
 # TODO how to generalise? 4x same object
@@ -154,13 +154,13 @@ class TestCase(db.Document):
     uuid = db.StringField(default="")
     mitreid = db.StringField()
     tactic = db.StringField()
-    sources = db.ListField(db.StringField())
-    targets = db.ListField(db.StringField())
-    tools = db.ListField(db.StringField())
-    controls = db.ListField(db.StringField())
-    tags = db.ListField(db.StringField())
-    datasources = db.ListField(db.StringField())
-    rules = db.ListField(db.StringField())
+    sources = db.ListField(field=db.StringField())
+    targets = db.ListField(field=db.StringField())
+    tools = db.ListField(field=db.StringField())
+    controls = db.ListField(field=db.StringField())
+    tags = db.ListField(field=db.StringField())
+    datasources = db.ListField(field=db.StringField())
+    rules = db.ListField(field=db.StringField())
     detectionsource = db.StringField(default="")
     preventionsource = db.StringField(default="")
     state = db.StringField(default="Pending")
@@ -175,8 +175,8 @@ class TestCase(db.Document):
     starttime = db.DateTimeField()
     endtime = db.DateTimeField()
     detecttime = db.DateTimeField()
-    redfiles = db.EmbeddedDocumentListField(File)
-    bluefiles = db.EmbeddedDocumentListField(File)
+    redfiles = db.EmbeddedDocumentListField(document_type=File)
+    bluefiles = db.EmbeddedDocumentListField(document_type=File)
     visible = db.BooleanField(default=False)
     modifytime = db.DateTimeField(default=datetime.datetime.utcnow)
     outcome = db.StringField(default="")
@@ -255,15 +255,15 @@ class Assessment(db.Document):
     name = db.StringField()
     description = db.StringField(default="")
     created = db.DateTimeField(default=datetime.datetime.utcnow)
-    targets = db.EmbeddedDocumentListField(Target)
-    sources = db.EmbeddedDocumentListField(Source)
-    tools = db.EmbeddedDocumentListField(Tool)
-    controls = db.EmbeddedDocumentListField(Control)
-    tags = db.EmbeddedDocumentListField(Tag)
-    datasources = db.EmbeddedDocumentListField(Datasource)
-    rules = db.EmbeddedDocumentListField(DetectionRule)
-    detectionsources = db.EmbeddedDocumentListField(Datasource)
-    preventionsources = db.EmbeddedDocumentListField(Datasource)
+    targets = db.EmbeddedDocumentListField(document_type=Target)
+    sources = db.EmbeddedDocumentListField(document_type=Source)
+    tools = db.EmbeddedDocumentListField(document_type=Tool)
+    controls = db.EmbeddedDocumentListField(document_type=Control)
+    tags = db.EmbeddedDocumentListField(document_type=Tag)
+    datasources = db.EmbeddedDocumentListField(document_type=Datasource)
+    rules = db.EmbeddedDocumentListField(document_type=DetectionRule)
+    detectionsources = db.EmbeddedDocumentListField(document_type=Datasource)
+    preventionsources = db.EmbeddedDocumentListField(document_type=Datasource)
     navigatorexport = db.StringField(default="")
 
     def get_progress(self):
@@ -309,8 +309,10 @@ class User(db.Document, UserMixin):
     email = db.StringField(max_length=255)
     username = db.StringField(max_length=255, unique=True, nullable=True)
     password = db.StringField(max_length=255)
-    roles = db.ListField(db.ReferenceField(Role), default=[])
-    assessments = db.ListField(db.ReferenceField(Assessment), default=[])
+    roles = db.ListField(field=db.ReferenceField(document_type=Role), default=[])
+    assessments = db.ListField(
+        field=db.ReferenceField(document_type=Assessment), default=[]
+    )
     initpwd = db.BooleanField(default=True)
     active = db.BooleanField(default=True)
 

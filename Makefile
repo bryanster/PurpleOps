@@ -9,10 +9,10 @@ help:
 	@echo "  make logs     Tail all running container logs"
 
 db:
-	docker compose up -d mongodb
+	docker-compose up mongodb
 
 db-stop:
-	docker compose stop mongodb
+	docker-compose stop mongodb
 
 # Override MONGO_HOST so the local process hits localhost instead of the
 # Docker service name defined in .env
