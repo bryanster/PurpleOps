@@ -1,78 +1,96 @@
-import os
 import json
-import string
+import os
 import shutil
+import string
+
+from flask import Blueprint, jsonify, request
+from flask_security import auth_required, roles_accepted
+from werkzeug.utils import secure_filename
+
 from model import *
 from utils import user_assigned_assessment
-from flask import Blueprint, request, jsonify
-from werkzeug.utils import secure_filename
-from flask_security import auth_required, roles_accepted
 
-blueprint_assessment_import = Blueprint('blueprint_assessment_import', __name__)
+blueprint_assessment_import = Blueprint("blueprint_assessment_import", __name__)
 
-@blueprint_assessment_import.route('/assessment/<id>/import/template', methods = ['POST'])
+
+@blueprint_assessment_import.route("/assessment/<id>/import/template", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def testcasetemplates(id):
     newcases = []
     for templateid in request.json["ids"]:
         template = TestCaseTemplate.objects(id=templateid).first()
         newcase = TestCase(
-            name = template.name,
-            mitreid = template.mitreid,
-            tactic = template.tactic,
-            objective = template.objective,
-            actions = template.actions,
-            rednotes = template.rednotes,
-            assessmentid = id
+            name=template.name,
+            mitreid=template.mitreid,
+            tactic=template.tactic,
+            objective=template.objective,
+            actions=template.actions,
+            rednotes=template.rednotes,
+            assessmentid=id,
         ).save()
         newcases.append(newcase.to_json())
-        
+
     return jsonify(newcases), 200
 
-@blueprint_assessment_import.route('/assessment/<id>/import/navigator', methods = ['POST'])
+
+@blueprint_assessment_import.route(
+    "/assessment/<id>/import/navigator", methods=["POST"]
+)
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def testcasenavigator(id):
     newcases = []
-    navigatorTestcases = json.loads(request.files['file'].read())
+    navigatorTestcases = json.loads(request.files["file"].read())
     for testcase in navigatorTestcases["techniques"]:
         tactic = string.capwords(testcase["tactic"].replace("-", " "))
-        templates = TestCaseTemplate.objects(mitreid=testcase["techniqueID"], tactic=tactic).all()
+        templates = TestCaseTemplate.objects(
+            mitreid=testcase["techniqueID"], tactic=tactic
+        ).all()
         if templates:
             newcase = TestCase(
-                name = templates[0].name,
-                mitreid = templates[0].mitreid,
-                tactic = templates[0].tactic,
-                objective = templates[0].objective,
-                actions = templates[0].actions,
-                assessmentid = id
+                name=templates[0].name,
+                mitreid=templates[0].mitreid,
+                tactic=templates[0].tactic,
+                objective=templates[0].objective,
+                actions=templates[0].actions,
+                assessmentid=id,
             ).save()
         else:
             newcase = TestCase(
-                name = Technique.objects(mitreid=testcase["techniqueID"]).first().name,
-                mitreid = testcase["techniqueID"],
-                tactic = tactic,
-                assessmentid = id
+                name=Technique.objects(mitreid=testcase["techniqueID"]).first().name,
+                mitreid=testcase["techniqueID"],
+                tactic=tactic,
+                assessmentid=id,
             ).save()
         newcases.append(newcase.to_json())
-        
+
     return jsonify(newcases), 200
 
-@blueprint_assessment_import.route('/assessment/<id>/import/campaign', methods = ['POST'])
+
+@blueprint_assessment_import.route("/assessment/<id>/import/campaign", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def testcasecampaign(id):
     newcases = []
-    campaignTestcases = json.loads(request.files['file'].read())
+    campaignTestcases = json.loads(request.files["file"].read())
     assessment = Assessment.objects(id=id).first()
     for testcase in campaignTestcases:
         newcase = TestCase()
         newcase.assessmentid = id
-        for field in ["name", "mitreid", "tactic", "objective", "actions", "tools", "uuid", "tags"]:
+        for field in [
+            "name",
+            "mitreid",
+            "tactic",
+            "objective",
+            "actions",
+            "tools",
+            "uuid",
+            "tags",
+        ]:
             if field in testcase:
                 if field not in ["tools", "tags"]:
                     newcase[field] = testcase[field]
@@ -81,7 +99,13 @@ def testcasecampaign(id):
                     for multi in testcase[field]:
                         name, desc = multi.split("|")
                         if name in [i.name for i in assessment[field]]:
-                            multis.append([str(i.id) for i in assessment[field] if i.name == name][0])
+                            multis.append(
+                                [
+                                    str(i.id)
+                                    for i in assessment[field]
+                                    if i.name == name
+                                ][0]
+                            )
                             continue
                         elif field == "tools":
                             newMulti = Tool(name=name, description=desc)
@@ -94,33 +118,32 @@ def testcasecampaign(id):
 
         newcase.save()
         newcases.append(newcase.to_json())
-        
+
     return jsonify(newcases), 200
 
-@blueprint_assessment_import.route('/assessment/import/entire', methods = ['POST'])
+
+@blueprint_assessment_import.route("/assessment/import/entire", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin')
+@roles_accepted("Admin")
 def importentire():
     assessment = Assessment(name="Importing...")
     assessment.save()
     assessmentID = str(assessment.id)
 
     os.makedirs(f"files/{assessmentID}/tmp")
-    f = request.files['file']
+    f = request.files["file"]
     f.save(f"files/{assessmentID}/tmp/entire.zip")
     shutil.unpack_archive(
-        f"files/{assessmentID}/tmp/entire.zip",
-        f"files/{assessmentID}/tmp/",
-        "zip"
+        f"files/{assessmentID}/tmp/entire.zip", f"files/{assessmentID}/tmp/", "zip"
     )
 
-    with open(f"files/{assessmentID}/tmp/meta.json", 'r') as f:
+    with open(f"files/{assessmentID}/tmp/meta.json", "r") as f:
         meta = json.load(f)
     for key in ["name", "description"]:
         assessment[key] = meta[key]
     assessment.save()
 
-    with open(f"files/{assessmentID}/tmp/export.json", 'r') as f:
+    with open(f"files/{assessmentID}/tmp/export.json", "r") as f:
         export = json.load(f)
 
     assessmentMultis = {
@@ -128,7 +151,7 @@ def importentire():
         "targets": {},
         "tools": {},
         "controls": {},
-        "tags": {}
+        "tags": {},
     }
 
     for oldTestcase in export:
@@ -137,19 +160,38 @@ def importentire():
         newTestcase.save()
         testcaseID = str(newTestcase.id)
 
-        for field in ["name", "objective", "actions", "rednotes", "bluenotes",
-                      "uuid", "mitreid", "tactic", "state", "prevented", "preventedrating",
-                      "alerted", "alertseverity", "logged", "detectionrating",
-                      "priority", "priorityurgency", "visible", "outcome"]:
+        for field in [
+            "name",
+            "objective",
+            "actions",
+            "rednotes",
+            "bluenotes",
+            "uuid",
+            "mitreid",
+            "tactic",
+            "state",
+            "prevented",
+            "preventedrating",
+            "alerted",
+            "alertseverity",
+            "logged",
+            "detectionrating",
+            "priority",
+            "priorityurgency",
+            "visible",
+            "outcome",
+        ]:
             newTestcase[field] = oldTestcase[field]
 
         for field in ["starttime", "endtime", "detecttime", "modifytime"]:
             if oldTestcase[field] != "None":
-                newTestcase[field] = datetime.datetime.strptime(oldTestcase[field].split(".")[0], "%Y-%m-%d %H:%M:%S")
+                newTestcase[field] = datetime.datetime.strptime(
+                    oldTestcase[field].split(".")[0], "%Y-%m-%d %H:%M:%S"
+                )
 
         for field in ["sources", "targets", "tools", "controls", "tags"]:
             newTestcase[field] = []
-            
+
             for multi in oldTestcase[field]:
                 if multi in assessmentMultis[field]:
                     newTestcase[field].append(assessmentMultis[field][multi])
@@ -167,15 +209,21 @@ def importentire():
                         newMulti = Tag(name=name, colour=details)
                     assessment[field].append(newMulti)
                     assessment[field].save()
-                    assessmentMultis[field][f"{newMulti.name}|{newMulti.description if field != 'tags' else newMulti.colour}"] = str(assessment[field][-1].id)
-                    newTestcase[field].append(assessmentMultis[field][f"{newMulti.name}|{newMulti.description if field != 'tags' else newMulti.colour}"])
+                    detail = (
+                        newMulti.colour if field == "tags" else newMulti.description
+                    )
+                    multi_key = f"{newMulti.name}|{detail}"
+                    assessmentMultis[field][multi_key] = str(assessment[field][-1].id)
+                    newTestcase[field].append(assessmentMultis[field][multi_key])
 
         for field in ["redfiles", "bluefiles"]:
             newFiles = []
             for file in oldTestcase[field]:
                 origFilePath, caption = file.split("|")
-                _, _, oldTestcaseID, name = [secure_filename(i) for i in origFilePath.split("/")]
-                origFilePath = f'files/{assessmentID}/tmp/{oldTestcaseID}/{name}'
+                _, _, oldTestcaseID, name = [
+                    secure_filename(i) for i in origFilePath.split("/")
+                ]
+                origFilePath = f"files/{assessmentID}/tmp/{oldTestcaseID}/{name}"
                 # If an exported attachment is corrupt, don't import and continue
                 if not os.path.exists(origFilePath):
                     continue

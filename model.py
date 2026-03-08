@@ -1,10 +1,12 @@
 import datetime
+
 from bson.objectid import ObjectId
 from flask import escape
 from flask_mongoengine import MongoEngine
-from flask_security import UserMixin, RoleMixin, MongoEngineUserDatastore
+from flask_security import MongoEngineUserDatastore, RoleMixin, UserMixin
 
 db = MongoEngine()
+
 
 class Tactic(db.Document):
     mitreid = db.StringField()
@@ -21,7 +23,7 @@ class Technique(db.Document):
 
 # TODO how to generalise? 4x same object
 class Source(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     description = db.StringField(default="")
 
@@ -29,12 +31,12 @@ class Source(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "description": esc(self.description, raw)
+            "description": esc(self.description, raw),
         }
 
 
 class Target(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     description = db.StringField(default="")
 
@@ -42,12 +44,12 @@ class Target(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "description": esc(self.description, raw)
+            "description": esc(self.description, raw),
         }
 
 
 class Tool(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     description = db.StringField(default="")
 
@@ -55,12 +57,12 @@ class Tool(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "description": esc(self.description, raw)
+            "description": esc(self.description, raw),
         }
 
 
 class Control(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     description = db.StringField(default="")
 
@@ -68,12 +70,12 @@ class Control(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "description": esc(self.description, raw)
+            "description": esc(self.description, raw),
         }
 
 
 class Tag(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     colour = db.StringField(default="#ff0000")
 
@@ -81,12 +83,12 @@ class Tag(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "colour": esc(self.colour, raw) # AU spelling is non-negotiable xx
+            "colour": esc(self.colour, raw),  # AU spelling is non-negotiable xx
         }
 
 
 class Datasource(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     description = db.StringField(default="")
 
@@ -94,12 +96,12 @@ class Datasource(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "description": esc(self.description, raw)
+            "description": esc(self.description, raw),
         }
 
 
 class DetectionRule(db.EmbeddedDocument):
-    id = db.ObjectIdField( required=True, default=ObjectId )
+    id = db.ObjectIdField(required=True, default=ObjectId)
     name = db.StringField()
     description = db.StringField(default="")
 
@@ -107,7 +109,7 @@ class DetectionRule(db.EmbeddedDocument):
         return {
             "id": str(self.id),
             "name": esc(self.name, raw),
-            "description": esc(self.description, raw)
+            "description": esc(self.description, raw),
         }
 
 
@@ -181,15 +183,42 @@ class TestCase(db.Document):
 
     def to_json(self, raw=False):
         jsonDict = {}
-        for field in ["assessmentid", "name", "objective", "actions", "rednotes", "bluenotes",
-                      "uuid", "mitreid", "tactic", "state", "prevented", "preventedrating",
-                      "alerted", "alertseverity", "logged", "detectionrating",
-                      "priority", "priorityurgency", "visible", "outcome",
-                      "detectionsource", "preventionsource"]:
+        for field in [
+            "assessmentid",
+            "name",
+            "objective",
+            "actions",
+            "rednotes",
+            "bluenotes",
+            "uuid",
+            "mitreid",
+            "tactic",
+            "state",
+            "prevented",
+            "preventedrating",
+            "alerted",
+            "alertseverity",
+            "logged",
+            "detectionrating",
+            "priority",
+            "priorityurgency",
+            "visible",
+            "outcome",
+            "detectionsource",
+            "preventionsource",
+        ]:
             jsonDict[field] = esc(self[field], raw)
         for field in ["id", "detecttime", "modifytime", "starttime", "endtime"]:
             jsonDict[field] = str(self[field]).split(".")[0]
-        for field in ["tags", "sources", "targets", "tools", "controls", "datasources", "rules"]:
+        for field in [
+            "tags",
+            "sources",
+            "targets",
+            "tools",
+            "controls",
+            "datasources",
+            "rules",
+        ]:
             jsonDict[field] = self.to_json_multi(field)
         for field in ["redfiles", "bluefiles"]:
             files = []
@@ -197,17 +226,30 @@ class TestCase(db.Document):
                 files.append(f"{file.path}|{file.caption}")
             jsonDict[field] = files
         return jsonDict
-    
+
     def to_json_multi(self, field):
         assessment = Assessment.objects(id=self.assessmentid).first()
         strs = []
         for i in self[field]:
             # Pipe delimit name and desc/colour for export/display
             if field == "tags":
-                strs.append([f"{j.name}|{j.colour}" for j in assessment[field] if str(j.id) == i][0])
+                strs.append(
+                    [
+                        f"{j.name}|{j.colour}"
+                        for j in assessment[field]
+                        if str(j.id) == i
+                    ][0]
+                )
             else:
-                strs.append([f"{j.name}|{j.description}" for j in assessment[field] if str(j.id) == i][0])
+                strs.append(
+                    [
+                        f"{j.name}|{j.description}"
+                        for j in assessment[field]
+                        if str(j.id) == i
+                    ][0]
+                )
         return strs
+
 
 class Assessment(db.Document):
     name = db.StringField()
@@ -231,10 +273,18 @@ class Assessment(db.Document):
             return "0|0|0|0|0"
         outcomes = []
         for outcome in ["Prevented", "Alerted", "Logged", "Missed"]:
-            outcomes.append(str(round(
-                TestCase.objects(assessmentid=str(self.id), outcome=outcome).count() / 
-                testcases * 100
-            , 2)))
+            outcomes.append(
+                str(
+                    round(
+                        TestCase.objects(
+                            assessmentid=str(self.id), outcome=outcome
+                        ).count()
+                        / testcases
+                        * 100,
+                        2,
+                    )
+                )
+            )
         return "|".join(outcomes)
 
     def to_json(self, raw=False):
@@ -243,9 +293,9 @@ class Assessment(db.Document):
             "name": esc(self.name, raw),
             "description": esc(self.description, raw),
             "progress": self.get_progress(),
-            "created": str(self.created).split(".")[0]
+            "created": str(self.created).split(".")[0],
         }
-                    
+
     def multi_to_json(self, field, raw=False):
         return [item.to_json(raw=raw) for item in self[field]]
 
@@ -279,7 +329,7 @@ class User(db.Document, UserMixin):
             return [a.id for a in Assessment.objects()]
         else:
             return [a.id for a in self.assessments]
-        
+
     def to_json(self, raw=False):
         return {
             "id": str(self.id),
@@ -288,11 +338,12 @@ class User(db.Document, UserMixin):
             "roles": [r.name for r in self.roles],
             "assessments": [a.name for a in self.assessments],
             "current_login_at": self.current_login_at,
-            "current_login_ip": self.current_login_ip
+            "current_login_ip": self.current_login_ip,
         }
 
 
 user_datastore = MongoEngineUserDatastore(db, User, Role)
+
 
 def esc(s, raw):
     if raw:

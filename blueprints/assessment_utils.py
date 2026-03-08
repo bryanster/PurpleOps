@@ -1,22 +1,41 @@
 import secrets
-from model import *
-from time import time
 from copy import deepcopy
-from utils import user_assigned_assessment
-from flask_security import auth_required, roles_accepted, current_user
+from time import time
+
+from flask import (
+    Blueprint,
+    jsonify,
+    make_response,
+    render_template,
+    request,
+    send_from_directory,
+)
+from flask_security import auth_required, current_user, roles_accepted
+
 from blueprints.assessment_export import exportnavigator
-from flask import Blueprint, render_template, request, send_from_directory, make_response, jsonify
+from model import *
+from utils import user_assigned_assessment
 
-blueprint_assessment_utils = Blueprint('blueprint_assessment_utils', __name__)
+blueprint_assessment_utils = Blueprint("blueprint_assessment_utils", __name__)
 
-@blueprint_assessment_utils.route('/assessment/<id>/multi/<field>', methods = ['POST'])
+
+@blueprint_assessment_utils.route("/assessment/<id>/multi/<field>", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin', 'Red', 'Blue')
+@roles_accepted("Admin", "Red", "Blue")
 @user_assigned_assessment
 def assessmentmulti(id, field):
-    if field not in ["sources", "targets", "tools", "controls", "tags", "datasources", "rules",
-                     "detectionsources", "preventionsources"]:
-        return '', 418
+    if field not in [
+        "sources",
+        "targets",
+        "tools",
+        "controls",
+        "tags",
+        "datasources",
+        "rules",
+        "detectionsources",
+        "preventionsources",
+    ]:
+        return "", 418
 
     assessment = Assessment.objects(id=id).first()
 
@@ -48,7 +67,8 @@ def assessmentmulti(id, field):
 
     return jsonify(assessment.multi_to_json(field)), 200
 
-@blueprint_assessment_utils.route('/assessment/<id>/navigator', methods = ['GET'])
+
+@blueprint_assessment_utils.route("/assessment/<id>/navigator", methods=["GET"])
 @auth_required()
 @user_assigned_assessment
 def assessmentnavigator(id):
@@ -62,13 +82,16 @@ def assessmentnavigator(id):
 
     exportnavigator(id)
 
-    return render_template('assessment_navigator.html', assessment=assessment, secret=secret)
+    return render_template(
+        "assessment_navigator.html", assessment=assessment, secret=secret
+    )
 
-@blueprint_assessment_utils.route('/assessment/<id>/navigator.json', methods = ['GET'])
+
+@blueprint_assessment_utils.route("/assessment/<id>/navigator.json", methods=["GET"])
 def assessmentnavigatorjson(id):
     assessment = Assessment.objects(id=id).first()
     timestamp, ip, secret = assessment.navigatorexport.split("|")
-    
+
     # This endpoint is unauthed so that we can embed the ATT&CK Navigator and
     # allow it to fetch a layer.json on behalf of the user. To mitigate security issues
     # the endpoint needs to be hit
@@ -77,38 +100,52 @@ def assessmentnavigatorjson(id):
     # 3. With a one-time secret key returned in the above authed endpoint
     # 4. From the mitre-attack origin (yes this is spoofable, but why not)
     # if (int(time()) - int(timestamp) <= 30 and
-        #request.remote_addr == ip and
-        # request.args.get("secret") == secret): # and
-        #request.origin == "https://mitre-attack.github.io"):
-    response = make_response(send_from_directory('files', f"{id}/navigator.json"))
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    # request.remote_addr == ip and
+    # request.args.get("secret") == secret): # and
+    # request.origin == "https://mitre-attack.github.io"):
+    response = make_response(send_from_directory("files", f"{id}/navigator.json"))
+    response.headers.add("Access-Control-Allow-Origin", "*")
     return response
 
     return "", 401
 
-@blueprint_assessment_utils.route('/assessment/<id>/stats',methods = ['GET'])
+
+@blueprint_assessment_utils.route("/assessment/<id>/stats", methods=["GET"])
 @auth_required()
 @user_assigned_assessment
 def assessmentstats(id):
     assessment = Assessment.objects(id=id).first()
     if current_user.has_role("Blue"):
-        testcases = TestCase.objects(assessmentid=str(assessment.id), visible=True).all()
+        testcases = TestCase.objects(
+            assessmentid=str(assessment.id), visible=True
+        ).all()
     else:
         testcases = TestCase.objects(assessmentid=str(assessment.id)).all()
 
     # Initalise metrics that are captured
     stats = {
         "All": {
-            "Prevented": 0, "Alerted": 0, "Logged": 0, "Missed": 0,
-            "Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Informational": 0,
-            "scoresPrevent": [], "scoresDetect": [],
-            "priorityType": [], "priorityUrgency": [],
-            "controls": []
+            "Prevented": 0,
+            "Alerted": 0,
+            "Logged": 0,
+            "Missed": 0,
+            "Critical": 0,
+            "High": 0,
+            "Medium": 0,
+            "Low": 0,
+            "Informational": 0,
+            "scoresPrevent": [],
+            "scoresDetect": [],
+            "priorityType": [],
+            "priorityUrgency": [],
+            "controls": [],
         }
     }
 
     # What MITRE tactics do we currently have data for?
-    activeTactics = list(set([t["tactic"] for t in testcases if t["state"] == "Complete"]))
+    activeTactics = list(
+        set([t["tactic"] for t in testcases if t["state"] == "Complete"])
+    )
 
     for testcase in testcases:
         if testcase["tactic"] in activeTactics:
@@ -126,60 +163,110 @@ def assessmentstats(id):
 
             # Store scores to later average with
             if testcase["preventedrating"] and testcase["preventedrating"] != "N/A":
-                stats[testcase["tactic"]]["scoresPrevent"].append(float(testcase["preventedrating"]))
+                stats[testcase["tactic"]]["scoresPrevent"].append(
+                    float(testcase["preventedrating"])
+                )
             if testcase["detectionrating"]:
-                stats[testcase["tactic"]]["scoresDetect"].append(float(testcase["detectionrating"]))
+                stats[testcase["tactic"]]["scoresDetect"].append(
+                    float(testcase["detectionrating"])
+                )
 
             # Collate priorities, ratings and controls
             if testcase["priority"] and testcase["priority"] != "N/A":
                 stats[testcase["tactic"]]["priorityType"].append(testcase["priority"])
             if testcase["priorityurgency"] and testcase["priorityurgency"] != "N/A":
-                stats[testcase["tactic"]]["priorityUrgency"].append(testcase["priorityurgency"])
+                stats[testcase["tactic"]]["priorityUrgency"].append(
+                    testcase["priorityurgency"]
+                )
             if testcase["controls"]:
                 controls = []
                 for control in testcase["controls"]:
-                    controls.append([c.name for c in assessment.controls if str(c.id) == control][0])
+                    controls.append(
+                        [c.name for c in assessment.controls if str(c.id) == control][0]
+                    )
                 stats[testcase["tactic"]]["controls"].extend(controls)
 
-    # We've populated per-tactic data, this function adds it all together for an "All" tactic
+    # We've populated per-tactic data, this function adds it all
+    # together for an "All" tactic
     for tactic in stats:
         if tactic == "All":
             continue
-        for key in ["Prevented", "Alerted", "Logged", "Missed", "Critical", "High", "Medium", "Low", "Informational"]:
+        for key in [
+            "Prevented",
+            "Alerted",
+            "Logged",
+            "Missed",
+            "Critical",
+            "High",
+            "Medium",
+            "Low",
+            "Informational",
+        ]:
             stats["All"][key] += stats[tactic][key]
-        for key in ["scoresPrevent", "scoresDetect", "priorityType", "priorityUrgency", "controls"]:
+        for key in [
+            "scoresPrevent",
+            "scoresDetect",
+            "priorityType",
+            "priorityUrgency",
+            "controls",
+        ]:
             stats["All"][key].extend(stats[tactic][key])
 
     return render_template(
-        'assessment_stats.html',
+        "assessment_stats.html",
         assessment=assessment,
         stats=stats,
-        hexagons=assessmenthexagons(id)
-    ) 
+        hexagons=assessmenthexagons(id),
+    )
 
-@blueprint_assessment_utils.route('/assessment/<id>/assessment_hexagons.svg',methods = ['GET'])
+
+@blueprint_assessment_utils.route(
+    "/assessment/<id>/assessment_hexagons.svg", methods=["GET"]
+)
 @auth_required()
 @user_assigned_assessment
 def assessmenthexagons(id):
     # Use SVG to create the hexagon graph because making a hex grid in HTML is a no
-    tactics = ["Execution", "Command and Control", "Discovery", "Persistence", "Privilege Escalation", "Credential Access", "Lateral Movement", "Exfiltration", "Impact"]
+    tactics = [
+        "Execution",
+        "Command and Control",
+        "Discovery",
+        "Persistence",
+        "Privilege Escalation",
+        "Credential Access",
+        "Lateral Movement",
+        "Exfiltration",
+        "Impact",
+    ]
 
     shownHexs = []
     hiddenHexs = []
     for i in range(len(tactics)):
-        if not TestCase.objects(assessmentid=id, tactic=tactics[i], state="Complete").count():
-            hiddenHexs.append({
-                "display": "none",
-                "stroke": "#ffffff",
-                "fill": "#ffffff",
-                "arrow": "rgba(0, 0, 0, 0)",
-                "text": ""
-            })
+        if not TestCase.objects(
+            assessmentid=id, tactic=tactics[i], state="Complete"
+        ).count():
+            hiddenHexs.append(
+                {
+                    "display": "none",
+                    "stroke": "#ffffff",
+                    "fill": "#ffffff",
+                    "arrow": "rgba(0, 0, 0, 0)",
+                    "text": "",
+                }
+            )
             continue
-            
-        score = (TestCase.objects(assessmentid=id, tactic=tactics[i], outcome="Prevented").count() +
-                TestCase.objects(assessmentid=id, tactic=tactics[i], outcome="Alerted").count() -
-                TestCase.objects(assessmentid=id, tactic=tactics[i], outcome="Missed").count())
+
+        score = (
+            TestCase.objects(
+                assessmentid=id, tactic=tactics[i], outcome="Prevented"
+            ).count()
+            + TestCase.objects(
+                assessmentid=id, tactic=tactics[i], outcome="Alerted"
+            ).count()
+            - TestCase.objects(
+                assessmentid=id, tactic=tactics[i], outcome="Missed"
+            ).count()
+        )
         if score > 1:
             color = "#B8DF43"
         elif score < -1:
@@ -187,13 +274,15 @@ def assessmenthexagons(id):
         else:
             color = "#FFC000"
 
-        shownHexs.append({
-            "display": "block",
-            "stroke": color,
-            "fill": "#eeeeee",
-            "arrow": "rgb(0, 0, 0)",
-            "text": tactics[i]
-        })
+        shownHexs.append(
+            {
+                "display": "block",
+                "stroke": color,
+                "fill": "#eeeeee",
+                "arrow": "rgb(0, 0, 0)",
+                "text": tactics[i],
+            }
+        )
 
     # Dynamic SVG height and width depending on # hexs as CSS has no visibility
     # over which hexs are shown so we can center it for prettyness
@@ -216,5 +305,10 @@ def assessmenthexagons(id):
         width = 380
     else:
         width = 517
-        
-    return render_template('assessment_hexagons.svg', hexs = [*shownHexs, *hiddenHexs], height = height, width = width)
+
+    return render_template(
+        "assessment_hexagons.svg",
+        hexs=[*shownHexs, *hiddenHexs],
+        height=height,
+        width=width,
+    )
