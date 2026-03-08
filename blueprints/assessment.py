@@ -1,21 +1,23 @@
 import os
 import shutil
-from model import *
 from glob import glob
-from utils import applyFormData, user_assigned_assessment
-from flask_security import auth_required, roles_accepted, current_user
-from flask import Blueprint, render_template, request, jsonify
+
+from flask import Blueprint, jsonify, render_template, request
+from flask_security import auth_required, current_user, roles_accepted
+
 from blueprints.assessment_utils import assessmenthexagons
+from model import *
+from utils import applyFormData, user_assigned_assessment
 
-blueprint_assessment = Blueprint('blueprint_assessment', __name__)
+blueprint_assessment = Blueprint("blueprint_assessment", __name__)
 
-@blueprint_assessment.route('/assessment', methods = ['POST'])
+
+@blueprint_assessment.route("/assessment", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin')
+@roles_accepted("Admin")
 def newassessment():
     assessment = Assessment(
-        name = request.form['name'],
-        description = request.form['description']
+        name=request.form["name"], description=request.form["description"]
     )
     assessment.save()
 
@@ -24,19 +26,21 @@ def newassessment():
 
     return jsonify(assessment.to_json()), 200
 
-@blueprint_assessment.route('/assessment/<id>', methods = ['POST'])
+
+@blueprint_assessment.route("/assessment/<id>", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin')
+@roles_accepted("Admin")
 def editassessment(id):
     assessment = Assessment.objects(id=id).first()
     assessment = applyFormData(assessment, request.form, ["name", "description"])
     assessment.save()
-    
+
     return jsonify(assessment.to_json()), 200
 
-@blueprint_assessment.route('/assessment/<id>', methods = ['DELETE'])
+
+@blueprint_assessment.route("/assessment/<id>", methods=["DELETE"])
 @auth_required()
-@roles_accepted('Admin')
+@roles_accepted("Admin")
 def deleteassessment(id):
     assessment = Assessment.objects(id=id).first()
     [testcase.delete() for testcase in TestCase.objects(assessmentid=id).all()]
@@ -45,27 +49,27 @@ def deleteassessment(id):
     assessment.delete()
     return "", 200
 
-@blueprint_assessment.route('/assessment/<id>', methods = ['GET'])
+
+@blueprint_assessment.route("/assessment/<id>", methods=["GET"])
 @auth_required()
 @user_assigned_assessment
 def loadassessment(id):
     assessment = Assessment.objects(id=id).first()
     return render_template(
-        'assessment.html',
-        testcases = TestCase.objects(assessmentid=id).all(),
-        assessment = assessment,
-        templates = TestCaseTemplate.objects(),
-        mitres = sorted(
-            [[m["mitreid"], m["name"]] for m in Technique.objects()],
-            key=lambda m: m[0]
+        "assessment.html",
+        testcases=TestCase.objects(assessmentid=id).all(),
+        assessment=assessment,
+        templates=TestCaseTemplate.objects(),
+        mitres=sorted(
+            [[m["mitreid"], m["name"]] for m in Technique.objects()], key=lambda m: m[0]
         ),
-        tactics = [tactic["name"] for tactic in Tactic.objects()],
-        hexagons = assessmenthexagons(id),
-        reports = [f.split("/")[-1] for f in sorted(glob("custom/reports/*.docx"))],
-        multi = {
+        tactics=[tactic["name"] for tactic in Tactic.objects()],
+        hexagons=assessmenthexagons(id),
+        reports=[f.split("/")[-1] for f in sorted(glob("custom/reports/*.docx"))],
+        multi={
             "datasources": assessment.datasources,
             "rules": assessment.rules,
             "detectionsources": assessment.detectionsources,
-            "preventionsources": assessment.preventionsources
-        }
+            "preventionsources": assessment.preventionsources,
+        },
     )

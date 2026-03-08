@@ -52,3 +52,17 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "F401", # unused imports (many re-exported via wildcard)
+    "F403", # star imports
+    "F405", # names from star imports
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["model", "utils", "blueprints"]

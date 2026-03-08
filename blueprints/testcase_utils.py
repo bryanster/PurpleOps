@@ -1,32 +1,47 @@
 import os
 import shutil
+
+from flask import Blueprint, jsonify, request, send_from_directory
+from flask_security import auth_required, current_user, roles_accepted
+from werkzeug.utils import secure_filename
+
 from model import *
 from utils import user_assigned_assessment
-from werkzeug.utils import secure_filename
-from flask import Blueprint, request, send_from_directory, jsonify
-from flask_security import auth_required, roles_accepted, current_user
 
-blueprint_testcase_utils = Blueprint('blueprint_testcase_utils', __name__)
+blueprint_testcase_utils = Blueprint("blueprint_testcase_utils", __name__)
 
-@blueprint_testcase_utils.route('/testcase/<id>/toggle-visibility', methods = ['GET'])
+
+@blueprint_testcase_utils.route("/testcase/<id>/toggle-visibility", methods=["GET"])
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def testcasevisibility(id):
     newcase = TestCase.objects(id=id).first()
     newcase.visible = not newcase.visible
     newcase.save()
-        
+
     return jsonify(newcase.to_json()), 200
 
-@blueprint_testcase_utils.route('/testcase/<id>/clone', methods = ['GET'])
+
+@blueprint_testcase_utils.route("/testcase/<id>/clone", methods=["GET"])
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def testcaseclone(id):
     orig = TestCase.objects(id=id).first()
     newcase = TestCase()
-    copy = ["name", "assessmentid", "objective", "actions", "rednotes", "mitreid", "uuid", "tactic", "tools", "tags"]
+    copy = [
+        "name",
+        "assessmentid",
+        "objective",
+        "actions",
+        "rednotes",
+        "mitreid",
+        "uuid",
+        "tactic",
+        "tools",
+        "tags",
+    ]
     for field in copy:
         newcase[field] = orig[field]
     newcase.name = orig["name"] + " (Copy)"
@@ -34,9 +49,10 @@ def testcaseclone(id):
 
     return jsonify(newcase.to_json()), 200
 
-@blueprint_testcase_utils.route('/testcase/<id>/delete', methods = ['GET'])
+
+@blueprint_testcase_utils.route("/testcase/<id>/delete", methods=["GET"])
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def testcasedelete(id):
     testcase = TestCase.objects(id=id).first()
@@ -47,16 +63,19 @@ def testcasedelete(id):
 
     return "", 200
 
-@blueprint_testcase_utils.route('/testcase/<id>/evidence/<colour>/<file>', methods = ['DELETE'])
+
+@blueprint_testcase_utils.route(
+    "/testcase/<id>/evidence/<colour>/<file>", methods=["DELETE"]
+)
 @auth_required()
-@roles_accepted('Admin', 'Red', 'Blue')
+@roles_accepted("Admin", "Red", "Blue")
 @user_assigned_assessment
 def deletefile(id, colour, file):
     if colour not in ["red", "blue"]:
         return 401
     if colour == "red" and current_user.has_role("Blue"):
         return 403
-    
+
     testcase = TestCase.objects(id=id).first()
     # Sanity check to prevent death if the image has already been removed
     path = f"files/{testcase.assessmentid}/{testcase.id}/{secure_filename(file)}"
@@ -67,22 +86,23 @@ def deletefile(id, colour, file):
     for f in testcase["redfiles" if colour == "red" else "bluefiles"]:
         if f.name != file:
             files.append(f)
-            
+
     if colour == "red":
         testcase.update(set__redfiles=files)
     else:
         testcase.update(set__bluefiles=files)
 
-    return '', 204
+    return "", 204
 
-@blueprint_testcase_utils.route('/testcase/<id>/evidence/<file>', methods = ['GET'])
+
+@blueprint_testcase_utils.route("/testcase/<id>/evidence/<file>", methods=["GET"])
 @auth_required()
 @user_assigned_assessment
 def fetchFile(id, file):
     testcase = TestCase.objects(id=id).first()
-    
+
     return send_from_directory(
-        'files',
+        "files",
         f"{testcase.assessmentid}/{str(testcase.id)}/{secure_filename(file)}",
-        as_attachment = True if "download" in request.args else False
+        as_attachment=True if "download" in request.args else False,
     )

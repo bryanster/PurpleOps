@@ -1,16 +1,19 @@
 import os
+from datetime import datetime
+
+from flask import Blueprint, jsonify, render_template, request
+from flask_security import auth_required, current_user, roles_accepted
+from werkzeug.utils import secure_filename
+
 from model import *
 from utils import *
-from datetime import datetime
-from werkzeug.utils import secure_filename
-from flask import Blueprint, render_template, request, jsonify
-from flask_security import auth_required, roles_accepted, current_user
 
-blueprint_testcase = Blueprint('blueprint_testcase', __name__)
+blueprint_testcase = Blueprint("blueprint_testcase", __name__)
 
-@blueprint_testcase.route('/testcase/<id>/single', methods = ['POST'])
+
+@blueprint_testcase.route("/testcase/<id>/single", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin', 'Red')
+@roles_accepted("Admin", "Red")
 @user_assigned_assessment
 def newtestcase(id):
     newcase = TestCase()
@@ -19,7 +22,8 @@ def newtestcase(id):
     newcase.save()
     return jsonify(newcase.to_json()), 200
 
-@blueprint_testcase.route('/testcase/<id>',methods = ['GET'])
+
+@blueprint_testcase.route("/testcase/<id>", methods=["GET"])
 @auth_required()
 @user_assigned_assessment
 def runtestcasepost(id):
@@ -29,16 +33,17 @@ def runtestcasepost(id):
     if not testcase.visible and current_user.has_role("Blue"):
         return ("", 403)
 
-    return render_template('testcase.html',
-        testcase = testcase,
-        testcases = TestCase.objects(assessmentid=str(assessment.id)).all(),
-        tactics = Tactic.objects().all(),
-        assessment = assessment,
-        kb = KnowlegeBase.objects(mitreid=testcase.mitreid).first(),
-        templates = TestCaseTemplate.objects(mitreid=testcase["mitreid"]),
-        mitres = [[m["mitreid"], m["name"]] for m in Technique.objects()],
-        sigmas = Sigma.objects(mitreid=testcase["mitreid"]),
-        multi = {
+    return render_template(
+        "testcase.html",
+        testcase=testcase,
+        testcases=TestCase.objects(assessmentid=str(assessment.id)).all(),
+        tactics=Tactic.objects().all(),
+        assessment=assessment,
+        kb=KnowlegeBase.objects(mitreid=testcase.mitreid).first(),
+        templates=TestCaseTemplate.objects(mitreid=testcase["mitreid"]),
+        mitres=[[m["mitreid"], m["name"]] for m in Technique.objects()],
+        sigmas=Sigma.objects(mitreid=testcase["mitreid"]),
+        multi={
             "sources": assessment.sources,
             "targets": assessment.targets,
             "tools": assessment.tools,
@@ -47,13 +52,14 @@ def runtestcasepost(id):
             "datasources": assessment.datasources,
             "rules": assessment.rules,
             "detectionsources": assessment.detectionsources,
-            "preventionsources": assessment.preventionsources
-        }
+            "preventionsources": assessment.preventionsources,
+        },
     )
 
-@blueprint_testcase.route('/testcase/<id>',methods = ['POST'])
+
+@blueprint_testcase.route("/testcase/<id>", methods=["POST"])
 @auth_required()
-@roles_accepted('Admin', 'Red', 'Blue')
+@roles_accepted("Admin", "Red", "Blue")
 @user_assigned_assessment
 def testcasesave(id):
     testcase = TestCase.objects(id=id).first()
@@ -62,9 +68,49 @@ def testcasesave(id):
     if not testcase.visible and isBlue:
         return ("", 403)
 
-    directFields = ["name", "objective", "actions", "rednotes", "bluenotes", "uuid", "mitreid", "tactic", "state", "prevented", "preventedrating", "alertseverity", "logged", "detectionrating", "priority", "priorityurgency", "detectionsource", "preventionsource"] if not isBlue else ["bluenotes", "prevented", "alerted", "alertseverity", "detectionsource", "preventionsource"]
-    listFields = ["sources", "targets", "tools", "controls", "tags", "datasources", "rules"]
-    boolFields = ["alerted", "logged", "visible"] if not isBlue else ["alerted", "logged"]
+    directFields = (
+        [
+            "name",
+            "objective",
+            "actions",
+            "rednotes",
+            "bluenotes",
+            "uuid",
+            "mitreid",
+            "tactic",
+            "state",
+            "prevented",
+            "preventedrating",
+            "alertseverity",
+            "logged",
+            "detectionrating",
+            "priority",
+            "priorityurgency",
+            "detectionsource",
+            "preventionsource",
+        ]
+        if not isBlue
+        else [
+            "bluenotes",
+            "prevented",
+            "alerted",
+            "alertseverity",
+            "detectionsource",
+            "preventionsource",
+        ]
+    )
+    listFields = [
+        "sources",
+        "targets",
+        "tools",
+        "controls",
+        "tags",
+        "datasources",
+        "rules",
+    ]
+    boolFields = (
+        ["alerted", "logged", "visible"] if not isBlue else ["alerted", "logged"]
+    )
     timeFields = ["starttime", "endtime"]
     fileFields = ["redfiles", "bluefiles"] if not isBlue else ["bluefiles"]
 
@@ -83,11 +129,13 @@ def testcasesave(id):
                 caption = request.form[field.replace("files", "").upper() + file.name]
             else:
                 caption = ""
-            files.append({
-                "name": secure_filename(file.name),
-                "path": file.path,
-                "caption": caption
-            })
+            files.append(
+                {
+                    "name": secure_filename(file.name),
+                    "path": file.path,
+                    "caption": caption,
+                }
+            )
         for file in request.files.getlist(field):
             if request.files.getlist(field)[0].filename:
                 filename = secure_filename(file.filename)
@@ -100,7 +148,11 @@ def testcasesave(id):
             testcase.update(set__bluefiles=files)
 
     testcase.modifytime = datetime.utcnow()
-    if "logged" in request.form and request.form["logged"] == "Yes" and not testcase.detecttime:
+    if (
+        "logged" in request.form
+        and request.form["logged"] == "Yes"
+        and not testcase.detecttime
+    ):
         testcase.detecttime = datetime.utcnow()
 
     if testcase.prevented in ["Yes", "Partial"]:
@@ -114,9 +166,11 @@ def testcasesave(id):
     else:
         testcase.outcome = ""
 
-    # This is some sanity check code where we check if some of the UI elements are out of sync with the backend. This is trggered by the horrible tabs bug
+    # This is some sanity check code where we check if some of the UI elements
+    # are out of sync with the backend. This is trggered by the horrible tabs bug
     # Does not fix user not saving test case before navigating away
-    # Todo: Turns this BS code into a single mongoengine query against the subdocument list
+    # Todo: Turns this BS code into a single mongoengine query
+    # against the subdocument list
     assessment = Assessment.objects(id=testcase.assessmentid).first()
     for field in listFields:
         ids = []

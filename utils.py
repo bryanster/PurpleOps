@@ -1,29 +1,35 @@
 from datetime import datetime, timedelta
-from model import TestCase
-from flask_security import current_user
 from functools import wraps
 
-def applyFormData (obj, form, fields):
+from flask_security import current_user
+
+from model import TestCase
+
+
+def applyFormData(obj, form, fields):
     for field in fields:
-        if field in form: # and form[field]:
+        if field in form:  # and form[field]:
             obj[field] = form[field]
     return obj
 
-def applyFormListData (obj, form, fields):
+
+def applyFormListData(obj, form, fields):
     for field in fields:
-        if field in form: # and form[field]:
+        if field in form:  # and form[field]:
             obj[field] = form.getlist(field)
     return obj
 
-def applyFormBoolData (obj, form, fields):
+
+def applyFormBoolData(obj, form, fields):
     for field in fields:
-        if field in form: # and form[field]:
+        if field in form:  # and form[field]:
             obj[field] = form[field].lower() in ["true", "yes", "on"]
     return obj
 
-def applyFormTimeData (obj, form, fields):
+
+def applyFormTimeData(obj, form, fields):
     for field in fields:
-        if field in form: # and form[field]:
+        if field in form:  # and form[field]:
             if form[field] and form[field] != "None":
                 localTime = datetime.strptime(form[field], "%Y-%m-%dT%H:%M")
                 utcTime = localTime + timedelta(minutes=int(form["timezone"]))
@@ -31,6 +37,7 @@ def applyFormTimeData (obj, form, fields):
             else:
                 obj[field] = None
     return obj
+
 
 def user_assigned_assessment(f):
     @wraps(f)
@@ -42,8 +49,9 @@ def user_assigned_assessment(f):
             id = args[0]
         if TestCase.objects(id=id).count():
             id = TestCase.objects(id=id).first().assessmentid
-        if (id in [str(a.id) for a in current_user.assessments]):
+        if id in [str(a.id) for a in current_user.assessments]:
             return f(*args, **kwargs)
         else:
             return ("", 403)
+
     return inner
