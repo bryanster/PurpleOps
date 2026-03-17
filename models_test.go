@@ -1,0 +1,304 @@
+package main
+
+import (
+	"testing"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+)
+
+func TestEsc(t *testing.T) {
+	tests := []struct {
+		input string
+		raw   bool
+		want  string
+	}{
+		{"hello", false, "hello"},
+		{"hello", true, "hello"},
+		{"<script>alert('xss')</script>", false, "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"},
+		{"<script>alert('xss')</script>", true, "<script>alert('xss')</script>"},
+		{"a & b", false, "a &amp; b"},
+		{"a & b", true, "a & b"},
+		{`"quoted"`, false, "&#34;quoted&#34;"},
+		{`"quoted"`, true, `"quoted"`},
+		{"", false, ""},
+		{"", true, ""},
+	}
+
+	for _, tt := range tests {
+		got := esc(tt.input, tt.raw)
+		if got != tt.want {
+			t.Errorf("esc(%q, %v) = %q, want %q", tt.input, tt.raw, got, tt.want)
+		}
+	}
+}
+
+func TestTimeStr(t *testing.T) {
+	tm := time.Date(2024, 3, 15, 10, 30, 45, 0, time.UTC)
+
+	if got := timeStr(&tm); got != "2024-03-15 10:30:45" {
+		t.Errorf("timeStr(&tm) = %q, want %q", got, "2024-03-15 10:30:45")
+	}
+
+	if got := timeStr(nil); got != "None" {
+		t.Errorf("timeStr(nil) = %q, want %q", got, "None")
+	}
+}
+
+func TestTimeStrLocal(t *testing.T) {
+	tm := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
+
+	if got := timeStrLocal(&tm); got != "2024-03-15T10:30" {
+		t.Errorf("timeStrLocal(&tm) = %q, want %q", got, "2024-03-15T10:30")
+	}
+
+	if got := timeStrLocal(nil); got != "" {
+		t.Errorf("timeStrLocal(nil) = %q, want %q", got, "")
+	}
+}
+
+func TestBoolPtr(t *testing.T) {
+	truePtr := boolPtr(true)
+	if truePtr == nil || *truePtr != true {
+		t.Error("boolPtr(true) should return pointer to true")
+	}
+
+	falsePtr := boolPtr(false)
+	if falsePtr == nil || *falsePtr != false {
+		t.Error("boolPtr(false) should return pointer to false")
+	}
+}
+
+func TestNowPtr(t *testing.T) {
+	before := time.Now().UTC()
+	result := nowPtr()
+	after := time.Now().UTC()
+
+	if result == nil {
+		t.Fatal("nowPtr() returned nil")
+	}
+	if result.Before(before) || result.After(after) {
+		t.Error("nowPtr() should return current UTC time")
+	}
+}
+
+func TestFormatFloat(t *testing.T) {
+	tests := []struct {
+		input float64
+		want  string
+	}{
+		{0, "0.00"},
+		{100, "100.00"},
+		{33.333333, "33.33"},
+		{50.5, "50.50"},
+		{99.999, "100.00"},
+		{0.1, "0.10"},
+	}
+
+	for _, tt := range tests {
+		got := formatFloat(tt.input)
+		if got != tt.want {
+			t.Errorf("formatFloat(%f) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestAssessmentMultiToJSON(t *testing.T) {
+	id1 := bson.NewObjectID()
+	id2 := bson.NewObjectID()
+
+	assessment := Assessment{
+		Sources: []Source{
+			{ID: id1, Name: "Source1", Description: "Desc1"},
+			{ID: id2, Name: "Source2", Description: "Desc2"},
+		},
+		Tags: []Tag{
+			{ID: id1, Name: "Tag1", Colour: "#ff0000"},
+		},
+		Tools: []Tool{
+			{ID: id1, Name: "Tool1", Description: "ToolDesc"},
+		},
+		Controls: []Control{
+			{ID: id1, Name: "Ctrl1", Description: "CtrlDesc"},
+		},
+		Targets: []Target{
+			{ID: id1, Name: "Target1", Description: "TargetDesc"},
+		},
+		Datasources: []Datasource{
+			{ID: id1, Name: "DS1", Description: "DSDesc"},
+		},
+		Rules: []DetectionRule{
+			{ID: id1, Name: "Rule1", Description: "RuleDesc"},
+		},
+		DetectionSources: []Datasource{
+			{ID: id1, Name: "DetSrc1", Description: "DetDesc"},
+		},
+		PreventionSources: []Datasource{
+			{ID: id1, Name: "PrevSrc1", Description: "PrevDesc"},
+		},
+	}
+
+	// Test sources with escaping
+	result := assessment.MultiToJSON("sources", false)
+	if len(result) != 2 {
+		t.Errorf("expected 2 sources, got %d", len(result))
+	}
+	if result[0]["name"] != "Source1" {
+		t.Errorf("expected Source1, got %v", result[0]["name"])
+	}
+
+	// Test sources raw
+	result = assessment.MultiToJSON("sources", true)
+	if len(result) != 2 {
+		t.Errorf("expected 2 sources raw, got %d", len(result))
+	}
+
+	// Test tags
+	result = assessment.MultiToJSON("tags", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 tag, got %d", len(result))
+	}
+	if result[0]["colour"] != "#ff0000" {
+		t.Errorf("expected #ff0000, got %v", result[0]["colour"])
+	}
+
+	// Test tools
+	result = assessment.MultiToJSON("tools", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 tool, got %d", len(result))
+	}
+
+	// Test controls
+	result = assessment.MultiToJSON("controls", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 control, got %d", len(result))
+	}
+
+	// Test targets
+	result = assessment.MultiToJSON("targets", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 target, got %d", len(result))
+	}
+
+	// Test datasources
+	result = assessment.MultiToJSON("datasources", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 datasource, got %d", len(result))
+	}
+
+	// Test rules
+	result = assessment.MultiToJSON("rules", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 rule, got %d", len(result))
+	}
+
+	// Test detectionsources
+	result = assessment.MultiToJSON("detectionsources", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 detection source, got %d", len(result))
+	}
+
+	// Test preventionsources
+	result = assessment.MultiToJSON("preventionsources", false)
+	if len(result) != 1 {
+		t.Errorf("expected 1 prevention source, got %d", len(result))
+	}
+
+	// Test unknown field
+	result = assessment.MultiToJSON("unknown", false)
+	if result != nil {
+		t.Errorf("expected nil for unknown field, got %v", result)
+	}
+}
+
+func TestAssessmentMultiToJSON_Escaping(t *testing.T) {
+	id := bson.NewObjectID()
+
+	assessment := Assessment{
+		Sources: []Source{
+			{ID: id, Name: "<b>XSS</b>", Description: "a & b"},
+		},
+	}
+
+	// With escaping
+	result := assessment.MultiToJSON("sources", false)
+	if result[0]["name"] != "&lt;b&gt;XSS&lt;/b&gt;" {
+		t.Errorf("expected escaped name, got %v", result[0]["name"])
+	}
+	if result[0]["description"] != "a &amp; b" {
+		t.Errorf("expected escaped description, got %v", result[0]["description"])
+	}
+
+	// Raw (no escaping)
+	result = assessment.MultiToJSON("sources", true)
+	if result[0]["name"] != "<b>XSS</b>" {
+		t.Errorf("expected raw name, got %v", result[0]["name"])
+	}
+}
+
+func TestTestCaseToJSON(t *testing.T) {
+	alerted := true
+	logged := false
+	startTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	tc := TestCase{
+		ID:              bson.NewObjectID(),
+		AssessmentID:    "invalid-not-hex", // Will cause ToJSONMulti to return nil
+		Name:            "Test Case 1",
+		Objective:       "Test <objective>",
+		MitreID:         "T1059",
+		Tactic:          "Execution",
+		State:           "Complete",
+		Prevented:       "Yes",
+		PreventedRating: "High",
+		Alerted:         &alerted,
+		AlertSeverity:   "Critical",
+		Logged:          &logged,
+		DetectionRating: "Medium",
+		Visible:         true,
+		Outcome:         "Prevented",
+		StartTime:       &startTime,
+		RedFiles: []FileDoc{
+			{Name: "evidence.png", Path: "files/abc/def/evidence.png", Caption: "Screenshot"},
+		},
+		BlueFiles: []FileDoc{},
+	}
+
+	j := tc.ToJSON(false)
+
+	if j["name"] != "Test Case 1" {
+		t.Errorf("expected 'Test Case 1', got %v", j["name"])
+	}
+	if j["objective"] != "Test &lt;objective&gt;" {
+		t.Errorf("expected escaped objective, got %v", j["objective"])
+	}
+	if j["alerted"] != &alerted {
+		t.Errorf("expected alerted pointer")
+	}
+	if j["visible"] != true {
+		t.Errorf("expected visible=true")
+	}
+	if j["starttime"] != "2024-01-01 12:00:00" {
+		t.Errorf("expected formatted start time, got %v", j["starttime"])
+	}
+
+	// Red files
+	redFiles := j["redfiles"].([]string)
+	if len(redFiles) != 1 {
+		t.Errorf("expected 1 red file, got %d", len(redFiles))
+	}
+	if redFiles[0] != "files/abc/def/evidence.png|Screenshot" {
+		t.Errorf("unexpected red file format: %s", redFiles[0])
+	}
+
+	// Blue files
+	blueFiles := j["bluefiles"].([]string)
+	if len(blueFiles) != 0 {
+		t.Errorf("expected 0 blue files, got %d", len(blueFiles))
+	}
+
+	// Raw mode
+	jRaw := tc.ToJSON(true)
+	if jRaw["objective"] != "Test <objective>" {
+		t.Errorf("expected raw objective, got %v", jRaw["objective"])
+	}
+}

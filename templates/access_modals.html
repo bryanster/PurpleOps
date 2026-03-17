@@ -1,6 +1,6 @@
 <!-- New / update user modal -->
 <form action="/manage/access/user" method="POST" class="m-0" id="userDetailForm">
-  {{ macros.modalHead(name="userDetail", title="New User") }}
+  {{ modalHead("userDetail", "New User") }}
   <form>
     <div class="mb-3">
       <label for="username" class="col-form-label">Username</label>
@@ -18,7 +18,7 @@
       <label for="message-text" class="col-form-label">Role</label>
       <select class="selectpicker form-control" multiple data-live-search="true" title="Role(s)" data-style="" data-style-base="form-control" data-live-search-placeholder="Search..." data-width="auto" name="roles" id="roles">
         {% for role in roles %}
-        <option>{{ role.name }}</option>
+        <option>{{ role.Name }}</option>
         {% endfor %}
       </select>
     </div>
@@ -26,15 +26,15 @@
       <label for="message-text" class="col-form-label">Assessments</label>
       <select class="selectpicker form-control" multiple data-live-search="true" title="Assessment(s)" data-style="" data-style-base="form-control" data-live-search-placeholder="Search..." data-width="auto" name="assessments" id="assessments">
         {% for assessment in assessments %}
-        <option>{{ assessment.name }}</option>
+        <option>{{ assessment.Name }}</option>
         {% endfor %}
       </select>
     </div>
   </form>
-  {{ macros.modalTail(name="userDetail", cancelLabel="Close", actionLabel="Create") }}
+  {{ modalTail("userDetail", "Close", "Create") }}
 </form>
 
 <!-- Confirm delete user modal -->
-{{ macros.modalHead(name="deleteUser", title="Delete User") }}
+{{ modalHead("deleteUser", "Delete User") }}
 <div class="mb-3" id="deleteUserWarning">ERROR</div>
-{{ macros.modalTail(name="deleteUser", cancelLabel="No", actionLabel="Delete") }}
+{{ modalTail("deleteUser", "No", "Delete") }}

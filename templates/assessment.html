@@ -1,12 +1,12 @@
 {% extends "master.html" %}
 {% block content %}
 
-{% include 'assessment_modals.html' %}
+{% include "assessment_modals.html" %}
 
 <div class="m-2 mt-0">
     <div id="toolbar">
-        <p class="d-inline-block" style="font-size:1.3em;margin: 0 10px 0 5px;font-weight:bold">{{ assessment.name }}</p>
-        {% if current_user.has_role("Admin") or current_user.has_role("Red") %}
+        <p class="d-inline-block" style="font-size:1.3em;margin: 0 10px 0 5px;font-weight:bold">{{ assessment.Name }}</p>
+        {% if current_user.HasRole("Admin") || current_user.HasRole("Red") %}
         <button id="newTestcase" class="btn btn-primary">New</button>
         <div class="btn-group">
             <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Import...</button>
@@ -20,20 +20,20 @@
         <div class="btn-group">
             <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Export...</button>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="/assessment/{{ assessment.id }}/export/json">Results as JSON</a></li>
-                <li><a class="dropdown-item" href="/assessment/{{ assessment.id }}/export/csv">Results as CSV</a></li>
-                {% if current_user.has_role("Admin") %}
-                <li><a class="dropdown-item" href="/assessment/{{ assessment.id }}/export/campaign">Campaign Template</a></li>
-                <li><a class="dropdown-item" href="/assessment/{{ assessment.id }}/export/templates">Testcase Templates</a></li>
+                <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/json">Results as JSON</a></li>
+                <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/csv">Results as CSV</a></li>
+                {% if current_user.HasRole("Admin") %}
+                <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/campaign">Campaign Template</a></li>
+                <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/templates">Testcase Templates</a></li>
                 {% endif %}
-                <li><a class="dropdown-item" href="/assessment/{{ assessment.id }}/export/navigator">ATT&amp;CK Navigator Layer</a></li>
+                <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/navigator">ATT&amp;CK Navigator Layer</a></li>
                 {% if reports %}
                 <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#exportReportModal">Generate Report</a></li>
                 {% endif %}
-                <li><a class="dropdown-item" href="/assessment/{{ assessment.id }}/export/entire">Entire Assessment</a></li>
+                <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/entire">Entire Assessment</a></li>
             </ul>
         </div>
-        {% if not current_user.has_role("Spectator") %}
+        {% if !current_user.HasRole("Spectator") %}
         <div class="btn-group">
             <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Manage...</button>
             <ul class="dropdown-menu">
@@ -45,8 +45,8 @@
             </ul>
         </div>
         {% endif %}
-        <a type="button" class="btn btn-secondary" href="/assessment/{{ assessment.id }}/stats">Statistics</a>
-        <a type="button" class="btn btn-secondary" href="/assessment/{{ assessment.id }}/navigator">ATT&amp;CK Navigator</a>
+        <a type="button" class="btn btn-secondary" href="/assessment/{{ assessment.ID.Hex }}/stats">Statistics</a>
+        <a type="button" class="btn btn-secondary" href="/assessment/{{ assessment.ID.Hex }}/navigator">ATT&amp;CK Navigator</a>
         <span id="selected-count" class="ms-1"></span>
     </div>
     <table data-toggle="table" data-toolbar="#toolbar" data-search="true" data-show-columns="true" data-search-highlight="true" data-show-search-clear-button="true" data-filter-control="true" id="assessmentTable" data-click-to-select="true" data-maintain-meta-data="false" data-sort-name="modified" data-sort-order="desc" data-silent-sort="false" style="display:none;"  data-unique-id="id" data-id-field="id" data-cookie="true" data-cookie-id-table="assessmentTable">
@@ -58,36 +58,36 @@
                 <th data-field="name" data-sortable="true" data-filter-control="input" data-formatter="nameFormatter">Name</th>
                 <th data-field="tactic" data-sortable="true" data-width="15" data-width-unit="%" data-filter-control="select">Tactic</th>
                 <th data-field="state" data-sortable="true" data-width="15" data-width-unit="%" data-filter-control="select" data-cell-style="bgFormatter">State</th>
-                <th data-field="visible" data-sortable="true" data-filter-control="select" data-formatter="visibleFormatter" data-cell-style="bgFormatter" class="text-center" {% if current_user.has_role("Blue") %} data-visible="false" data-switchable="false"{% endif %}><i class="bi-eye"></i></th>
+                <th data-field="visible" data-sortable="true" data-filter-control="select" data-formatter="visibleFormatter" data-cell-style="bgFormatter" class="text-center" {% if current_user.HasRole("Blue") %} data-visible="false" data-switchable="false"{% endif %}><i class="bi-eye"></i></th>
                 <th data-field="tags" data-width="15" data-width-unit="%" data-filter-control="input" data-formatter="tagFormatter">Tags</th>
                 <th data-field="start" data-sortable="true" data-width="10" data-width-unit="%" data-visible="false" data-filter-control="input" data-formatter="timeFormatter">Start</th>
                 <th data-field="modified" data-sortable="true" data-width="10" data-width-unit="%" data-visible="false" data-filter-control="input" data-formatter="timeFormatter">Modified</th>
                 <th data-field="preventscore" data-sortable="true" data-width="10" data-width-unit="%" data-visible="false" data-filter-control="input" data-cell-style="bgFormatter" class="text-center">Prevention</th>
                 <th data-field="detectscore" data-sortable="true" data-width="10" data-width-unit="%" data-visible="false" data-filter-control="input" data-cell-style="bgFormatter" class="text-center">Detection</th>
                 <th data-field="outcome" data-sortable="true" data-width="10" data-width-unit="%" data-visible="false" data-filter-control="input" data-cell-style="bgFormatter">Outcome</th>
-                <th data-field="actions" class="text-center" data-width="10" data-width-unit="%" data-switchable="false"{% if current_user.has_role("Blue") or current_user.has_role("Spectator") %} data-visible="false"{% endif %} data-formatter="actionFormatter">Actions</th>
+                <th data-field="actions" class="text-center" data-width="10" data-width-unit="%" data-switchable="false"{% if current_user.HasRole("Blue") || current_user.HasRole("Spectator") %} data-visible="false"{% endif %} data-formatter="actionFormatter">Actions</th>
 		<th data-field="uuid" data-sortable="true" data-width="10" data-width-unit="%" data-visible="false" data-filter-control="input">UUID</th>
             </tr>
         </thead>
 
         <tbody>
             {% for t in testcases %}
-            {% if not (current_user.has_role("Blue") and t.visible == false) %}
-            <tr data-title="bootstrap table" data-object='{"key": "value"}' id="{{ t.id }}">
+            {% if !(current_user.HasRole("Blue") && t.Visible == false) %}
+            <tr data-title="bootstrap table" data-object='{"key": "value"}' id="{{ t.ID.Hex }}">
                 <td></td>
-                <td>{{ t.id }}</td>
-                <td>{{ t.mitreid }}</td>
-                <td>{{ t.name }}</td>
-                <td>{{ t.tactic }}</td>
-                <td>{{ t.state }}</td>
-                <td>{{ t.visible }}</td>
-                <td>{{ t.to_json_multi("tags") | join(",") }}</td>
-                <td>{% if t.starttime %}{{ t.starttime.strftime('%Y-%m-%dT%H:%M') }}{% else %}{% endif %}</td>
-                <td>{% if t.modifytime %}{{ t.modifytime.strftime('%Y-%m-%dT%H:%M') }}{% else %}{% endif %}</td>
-                <td>{{ t.preventedrating or "" }}</td>
-                <td>{{ t.detectionrating or "" }}</td>
-                <td>{{ t.outcome }}</td>
-		<td>{{ t.uuid }}</td>
+                <td>{{ t.ID.Hex }}</td>
+                <td>{{ t.MitreID }}</td>
+                <td>{{ t.Name }}</td>
+                <td>{{ t.Tactic }}</td>
+                <td>{{ t.State }}</td>
+                <td>{{ t.Visible }}</td>
+                <td>{{ t.TagsJSON }}</td>
+                <td>{% if t.StartTime %}{{ t.StartTime|strftime:"%Y-%m-%dT%H:%M" }}{% endif %}</td>
+                <td>{% if t.ModifyTime %}{{ t.ModifyTime|strftime:"%Y-%m-%dT%H:%M" }}{% endif %}</td>
+                <td>{{ t.PreventedRating }}</td>
+                <td>{{ t.DetectionRating }}</td>
+                <td>{{ t.Outcome }}</td>
+		<td>{{ t.UUID }}</td>
                 <td></td>
             </tr>
             {% endif %}
@@ -98,6 +98,6 @@
 
 {{ hexagons|safe }}
 
-<script src="/static/scripts/assessment.js"></script> 
+<script src="/static/scripts/assessment.js"></script>
 
 {% endblock %}

@@ -1,67 +1,85 @@
 <!-- Testcase Saved Toast -->
-{{ macros.toast(title="Testcase Saved") }}
+{{ toast("Testcase Saved") }}
 
-{% macro multiContent(type, description="description") -%}
+{% macro multiContent(type, description="Description") %}
 <div class="mb-3">
     <div id="{{ type }}Toolbar">
         <button id="{{ type }}NewButton" class="btn btn-primary multiNew">New</button>
     </div>
-    <table data-toggle="table" id="{{type}}Table" class="multiTable" data-unique-id="id" data-id-field="id" data-toolbar="#{{ type }}Toolbar" >
+    <table data-toggle="table" id="{{ type }}Table" class="multiTable" data-unique-id="id" data-id-field="id" data-toolbar="#{{ type }}Toolbar" >
         <thead>
             <tr>
                 <th data-field="id" data-visible="false">ID</th>
                 <th data-field="name" data-formatter="nameFormatter" id="nameField">Name</th>
-                <th data-field="{{ description }}" data-formatter="{{ description }}Formatter">{{ description | capitalize }}</th>
+                <th data-field="{{ description }}" data-formatter="{{ description }}Formatter">{{ description|capitalize }}</th>
                 <th data-field="delete" data-align="center" data-formatter="deleteFormatter">Delete</th>
             </tr>
         </thead>
         <tbody>
-            {% for multi in multi[type] %}
-            <tr data-title="bootstrap table" data-object='{"key": "value"}' id="{{ multi.id }}">
-                <td>{{ multi.id }}</td>
-                <td>{{ multi.name }}</td>
-                <td>{{ multi[description] }}</td>
+            {% for item in multi_items %}
+            <tr data-title="bootstrap table" data-object='{"key": "value"}' id="{{ item.ID.Hex }}">
+                <td>{{ item.ID.Hex }}</td>
+                <td>{{ item.Name }}</td>
+                <td>{{ item.Description }}</td>
                 <td></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{%- endmacro %}
+{% endmacro %}
 
-{% for i in ["Source", "Target", "Tool", "Control", "Tag", "Datasource", "Rule"] %}
-    {{ macros.modalHead(name="multi" ~ i, title="Manage " ~ i ~ "s", xl=True) }}
-        {% if i != "Tag" %}
-            {{ multiContent(type=i | lower ~ "s") }}
-        {% else %}
-            {{ multiContent(type=i | lower ~ "s", description="colour") }}
-        {% endif %}
-    {{ macros.modalTail(name="multi" ~ i, cancelLabel="Cancel", actionLabel="Save", buttonClass="multiButton") }}
-{% endfor %}
+{{ modalHead("multiSource", "Manage Sources", True) }}
+    {{ multiContent("sources") }}
+{{ modalTail("multiSource", "Cancel", "Save", "multiButton") }}
 
-{{ macros.modalHead(name="multiDetectionsource", title="Manage Detection Sources", xl=True) }}
-    {{ multiContent(type="detectionsources") }}
-{{ macros.modalTail(name="multiDetectionsource", cancelLabel="Cancel", actionLabel="Save", buttonClass="multiButton") }}
+{{ modalHead("multiTarget", "Manage Targets", True) }}
+    {{ multiContent("targets") }}
+{{ modalTail("multiTarget", "Cancel", "Save", "multiButton") }}
 
-{{ macros.modalHead(name="multiPreventionsource", title="Manage Prevention Sources", xl=True) }}
-    {{ multiContent(type="preventionsources") }}
-{{ macros.modalTail(name="multiPreventionsource", cancelLabel="Cancel", actionLabel="Save", buttonClass="multiButton") }}
+{{ modalHead("multiTool", "Manage Tools", True) }}
+    {{ multiContent("tools") }}
+{{ modalTail("multiTool", "Cancel", "Save", "multiButton") }}
 
-{{ macros.modalHead(name="ttpInfo", title=testcase.mitreid ~ " TTP Information", xl=True) }}
+{{ modalHead("multiControl", "Manage Controls", True) }}
+    {{ multiContent("controls") }}
+{{ modalTail("multiControl", "Cancel", "Save", "multiButton") }}
+
+{{ modalHead("multiTag", "Manage Tags", True) }}
+    {{ multiContent("tags", "Colour") }}
+{{ modalTail("multiTag", "Cancel", "Save", "multiButton") }}
+
+{{ modalHead("multiDatasource", "Manage Datasources", True) }}
+    {{ multiContent("datasources") }}
+{{ modalTail("multiDatasource", "Cancel", "Save", "multiButton") }}
+
+{{ modalHead("multiRule", "Manage Rules", True) }}
+    {{ multiContent("rules") }}
+{{ modalTail("multiRule", "Cancel", "Save", "multiButton") }}
+
+{{ modalHead("multiDetectionsource", "Manage Detection Sources", True) }}
+    {{ multiContent("detectionsources") }}
+{{ modalTail("multiDetectionsource", "Cancel", "Save", "multiButton") }}
+
+{{ modalHead("multiPreventionsource", "Manage Prevention Sources", True) }}
+    {{ multiContent("preventionsources") }}
+{{ modalTail("multiPreventionsource", "Cancel", "Save", "multiButton") }}
+
+{{ modalHead("ttpInfo", testcase.MitreID + " TTP Information", True) }}
 <h3>Description</h3>
-<pre style="white-space: pre-wrap;word-wrap: break-word;">{{ kb.overview | safe }}</pre>
+<pre style="white-space: pre-wrap;word-wrap: break-word;">{{ kb.Overview | safe }}</pre>
 <h3>Recommendations</h3>
-<pre style="white-space: pre-wrap;word-wrap: break-word;">{{ kb.advice }}</pre>
+<pre style="white-space: pre-wrap;word-wrap: break-word;">{{ kb.Advice }}</pre>
 {% if sigmas %}
 <h3>SIGMA Rules</h3>
 <ul>
     {% for sigma in sigmas %}
-    <li><a href='{{ sigma.url }}' target="_blank">{{ sigma.name }}</a><br/>{{ sigma.description }}</li>
+    <li><a href='{{ sigma.URL }}' target="_blank">{{ sigma.Name }}</a><br/>{{ sigma.Description }}</li>
     {% endfor %}
 </ul>
 {% endif %}
 <h3>References</h3>
 <ul>
-    <li><a href='{{ "https://attack.mitre.org/techniques/" ~ testcase.mitreid | replace(".", "/" )}}' target="_blank">MITRE Reference</a></li>
+    <li><a href='https://attack.mitre.org/techniques/{{ testcase.MitreID|replace:".,/" }}' target="_blank">MITRE Reference</a></li>
 </ul>
-{{ macros.modalTail(name="ttpInfo", cancelLabel="Close") }}
+{{ modalTail("ttpInfo", "Close") }}
