@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"archive/zip"
@@ -12,24 +12,28 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleExportAssessment exports testcases as JSON or CSV.
 // GET /assessment/{id}/export/{filetype}
 func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 	id := chi.URLParam(r, "id")
 	filetype := chi.URLParam(r, "filetype")
 
-	_, err := FindAssessment(ctx, id)
+	_, err := models.FindAssessment(ctx, id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
 	}
 
-	testcases, err := GetTestCases(ctx, id)
+	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
 		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
 		return
@@ -161,7 +165,7 @@ func flattenValue(v interface{}) string {
 // GET /assessment/{id}/export/campaign
 func HandleExportCampaign(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 	id := chi.URLParam(r, "id")
 
 	data, err := buildCampaignExport(ctx, id, user)
@@ -193,8 +197,8 @@ func HandleExportCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildCampaignExport builds the campaign data for an assessment.
-func buildCampaignExport(ctx context.Context, id string, user *User) ([]map[string]interface{}, error) {
-	testcases, err := GetTestCases(ctx, id)
+func buildCampaignExport(ctx context.Context, id string, user *models.User) ([]map[string]interface{}, error) {
+	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load testcases")
 	}
@@ -221,7 +225,7 @@ func buildCampaignExport(ctx context.Context, id string, user *User) ([]map[stri
 // GET /assessment/{id}/export/templates
 func HandleExportTestcases(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 	id := chi.URLParam(r, "id")
 
 	data, err := buildTestcaseTemplatesExport(ctx, id, user)
@@ -253,8 +257,8 @@ func HandleExportTestcases(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildTestcaseTemplatesExport builds campaign export data with provider field added.
-func buildTestcaseTemplatesExport(ctx context.Context, id string, user *User) ([]map[string]interface{}, error) {
-	testcases, err := GetTestCases(ctx, id)
+func buildTestcaseTemplatesExport(ctx context.Context, id string, user *models.User) ([]map[string]interface{}, error) {
+	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load testcases")
 	}
@@ -305,14 +309,14 @@ func HandleExportNavigator(w http.ResponseWriter, r *http.Request) {
 // ExportNavigatorFile generates the MITRE ATT&CK Navigator layer JSON file.
 func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 
-	assessment, err := FindAssessment(ctx, id)
+	assessment, err := models.FindAssessment(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("assessment not found")
 	}
 
-	testcases, err := GetTestCases(ctx, id)
+	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("failed to load testcases")
 	}
@@ -320,8 +324,8 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 	isBlue := user != nil && !user.HasRole(ctx, "Admin") && !user.HasRole(ctx, "Red")
 
 	// Load all techniques from the DB.
-	var techniques []Technique
-	cursor, err := Col("technique").Find(ctx, nil)
+	var techniques []models.Technique
+	cursor, err := db.Col("technique").Find(ctx, bson.M{})
 	if err != nil {
 		return "", fmt.Errorf("failed to load techniques")
 	}
@@ -333,7 +337,7 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 	var navTechniques []map[string]interface{}
 	for _, tech := range techniques {
 		// Find testcases matching this technique's mitreid.
-		var matching []TestCase
+		var matching []models.TestCase
 		for i := range testcases {
 			if testcases[i].MitreID == tech.MitreID {
 				if isBlue && !testcases[i].Visible {
@@ -385,7 +389,7 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 			"showID":              true,
 			"showName":            true,
 			"showAggregateScores": true,
-			"countUnscored":      false,
+			"countUnscored":       false,
 		},
 		"hideDisabled": false,
 		"techniques":   navTechniques,
@@ -394,9 +398,9 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 			"minValue": 0,
 			"maxValue": 100,
 		},
-		"showTacticRowBackground":       true,
-		"tacticRowBackground":           "#593196",
-		"selectTechniquesAcrossTactics":  true,
+		"showTacticRowBackground":      true,
+		"tacticRowBackground":          "#593196",
+		"selectTechniquesAcrossTactics": true,
 		"selectSubtechniquesWithParent": false,
 	}
 
@@ -421,16 +425,16 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 // GET /assessment/{id}/export/entire
 func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 	id := chi.URLParam(r, "id")
 
-	assessment, err := FindAssessment(ctx, id)
+	assessment, err := models.FindAssessment(ctx, id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
 	}
 
-	testcases, err := GetTestCases(ctx, id)
+	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
 		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
 		return

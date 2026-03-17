@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/json"
@@ -8,27 +8,31 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
+	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// HandleNewAssessment creates a new assessment. POST /assessment. Admin only.
+// HandleNewAssessment creates a new assessment. POST /assessment.
 func HandleNewAssessment(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	now := nowPtr()
-	assessment := Assessment{
+	now := models.NowPtr()
+	assessment := models.Assessment{
 		ID:          bson.NewObjectID(),
 		Name:        r.FormValue("name"),
 		Description: r.FormValue("description"),
 		Created:     now,
 	}
 
-	_, err := Col("assessment").InsertOne(r.Context(), &assessment)
+	_, err := db.Col("assessment").InsertOne(r.Context(), &assessment)
 	if err != nil {
 		http.Error(w, "Failed to create assessment", http.StatusInternalServerError)
 		return
@@ -45,7 +49,7 @@ func HandleNewAssessment(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(assessment.ToJSON(false))
 }
 
-// HandleEditAssessment updates an assessment's name and description. POST /assessment/{id}. Admin only.
+// HandleEditAssessment updates an assessment's name and description. POST /assessment/{id}.
 func HandleEditAssessment(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
@@ -53,7 +57,7 @@ func HandleEditAssessment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	assessment, err := FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -62,7 +66,7 @@ func HandleEditAssessment(w http.ResponseWriter, r *http.Request) {
 	assessment.Name = r.FormValue("name")
 	assessment.Description = r.FormValue("description")
 
-	_, err = Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{
 			"name":        assessment.Name,
 			"description": assessment.Description,
@@ -77,12 +81,12 @@ func HandleEditAssessment(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(assessment.ToJSON(false))
 }
 
-// HandleDeleteAssessment deletes an assessment, its testcases, and files. DELETE /assessment/{id}. Admin only.
+// HandleDeleteAssessment deletes an assessment, its testcases, and files. DELETE /assessment/{id}.
 func HandleDeleteAssessment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Delete all testcases belonging to this assessment.
-	_, err := Col("test_case").DeleteMany(r.Context(), bson.M{"assessmentid": id})
+	_, err := db.Col("test_case").DeleteMany(r.Context(), bson.M{"assessmentid": id})
 	if err != nil {
 		http.Error(w, "Failed to delete testcases", http.StatusInternalServerError)
 		return
@@ -98,7 +102,7 @@ func HandleDeleteAssessment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
-	_, err = Col("assessment").DeleteOne(r.Context(), bson.M{"_id": oid})
+	_, err = db.Col("assessment").DeleteOne(r.Context(), bson.M{"_id": oid})
 	if err != nil {
 		http.Error(w, "Failed to delete assessment", http.StatusInternalServerError)
 		return
@@ -111,28 +115,28 @@ func HandleDeleteAssessment(w http.ResponseWriter, r *http.Request) {
 func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	assessment, err := FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
 	}
 
-	testcases, err := GetTestCases(r.Context(), id)
+	testcases, err := models.GetTestCases(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
 		return
 	}
 
 	// Load all testcase templates.
-	var templates []TestCaseTemplate
-	cursor, err := Col("test_case_template").Find(r.Context(), bson.M{})
+	var templates []models.TestCaseTemplate
+	cursor, err := db.Col("test_case_template").Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &templates)
 	}
 
-	// Load techniques sorted by MitreID (templates access .MitreID and .Name).
-	var techniques []Technique
-	cursor, err = Col("technique").Find(r.Context(), bson.M{})
+	// Load techniques sorted by MitreID.
+	var techniques []models.Technique
+	cursor, err = db.Col("technique").Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &techniques)
 	}
@@ -140,9 +144,9 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 		return techniques[i].MitreID < techniques[j].MitreID
 	})
 
-	// Load tactics (templates access .Name).
-	var tactics []Tactic
-	cursor, err = Col("tactic").Find(r.Context(), bson.M{})
+	// Load tactics.
+	var tactics []models.Tactic
+	cursor, err = db.Col("tactic").Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &tactics)
 	}
@@ -170,7 +174,7 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 		"preventionsources": assessment.MultiToJSON("preventionsources", false),
 	}
 
-	Render(w, r, "assessment.html", pongo2.Context{
+	render.Render(w, r, "assessment.html", pongo2.Context{
 		"testcases":  testcases,
 		"assessment": assessment,
 		"templates":  templates,
@@ -184,7 +188,7 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 
 // HandleIndex renders the assessments index page. GET /.
 func HandleIndex(w http.ResponseWriter, r *http.Request) {
-	user := UserFromContext(r.Context())
+	user := auth.UserFromContext(r.Context())
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -195,13 +199,13 @@ func HandleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var assessments []Assessment
-	cursor, err := Col("assessment").Find(r.Context(), bson.M{})
+	var assessments []models.Assessment
+	cursor, err := db.Col("assessment").Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &assessments)
 	}
 
-	Render(w, r, "assessments.html", pongo2.Context{
+	render.Render(w, r, "assessments.html", pongo2.Context{
 		"assessments": assessments,
 	})
 }

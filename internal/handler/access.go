@@ -1,10 +1,14 @@
-package main
+package handler
 
 import (
 	"encoding/json"
 	"net/http"
 	"strings"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
+	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -12,7 +16,7 @@ import (
 
 // UserDisplay wraps User with pre-computed template-friendly fields.
 type UserDisplay struct {
-	User
+	models.User
 	RoleNames       string
 	AssessmentNames string
 }
@@ -23,22 +27,22 @@ func HandleAccessPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Load all users.
-	var users []User
-	cursor, err := Col("user").Find(ctx, bson.M{})
+	var users []models.User
+	cursor, err := db.Col("user").Find(ctx, bson.M{})
 	if err == nil {
 		cursor.All(ctx, &users)
 	}
 
 	// Load all assessments.
-	var assessments []Assessment
-	cursor, err = Col("assessment").Find(ctx, bson.M{})
+	var assessments []models.Assessment
+	cursor, err = db.Col("assessment").Find(ctx, bson.M{})
 	if err == nil {
 		cursor.All(ctx, &assessments)
 	}
 
 	// Load all roles.
-	var roles []Role
-	cursor, err = Col("role").Find(ctx, bson.M{})
+	var roles []models.Role
+	cursor, err = db.Col("role").Find(ctx, bson.M{})
 	if err == nil {
 		cursor.All(ctx, &roles)
 	}
@@ -53,7 +57,7 @@ func HandleAccessPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	Render(w, r, "access.html", pongo2.Context{
+	render.Render(w, r, "access.html", pongo2.Context{
 		"users":       displayUsers,
 		"assessments": assessments,
 		"roles":       roles,
@@ -80,7 +84,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Hash the password.
-	hashed, err := HashPassword(password)
+	hashed, err := auth.HashPassword(password)
 	if err != nil {
 		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
 		return
@@ -90,7 +94,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	roleNames := r.Form["roles"]
 	var roleIDs []bson.ObjectID
 	for _, name := range roleNames {
-		role, err := FindRole(ctx, name)
+		role, err := models.FindRole(ctx, name)
 		if err == nil {
 			roleIDs = append(roleIDs, role.ID)
 		}
@@ -100,14 +104,14 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	assessmentNames := r.Form["assessments"]
 	var assessmentIDs []bson.ObjectID
 	for _, name := range assessmentNames {
-		var a Assessment
-		err := Col("assessment").FindOne(ctx, bson.M{"name": name}).Decode(&a)
+		var a models.Assessment
+		err := db.Col("assessment").FindOne(ctx, bson.M{"name": name}).Decode(&a)
 		if err == nil {
 			assessmentIDs = append(assessmentIDs, a.ID)
 		}
 	}
 
-	user := User{
+	user := models.User{
 		ID:          bson.NewObjectID(),
 		Email:       email,
 		Username:    username,
@@ -118,7 +122,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		InitPwd:     true,
 	}
 
-	if _, err := Col("user").InsertOne(ctx, &user); err != nil {
+	if _, err := db.Col("user").InsertOne(ctx, &user); err != nil {
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
@@ -133,7 +137,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	user, err := FindUser(ctx, id)
+	user, err := models.FindUser(ctx, id)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -163,7 +167,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 	// Update password if provided and not blank.
 	// Note: editUserModal fills password with spaces to indicate "unchanged" — trim to detect this.
 	if password := strings.TrimSpace(r.FormValue("password")); password != "" {
-		hashed, err := HashPassword(password)
+		hashed, err := auth.HashPassword(password)
 		if err != nil {
 			http.Error(w, "Failed to hash password", http.StatusInternalServerError)
 			return
@@ -179,7 +183,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 		if name == "Admin" {
 			isAdmin = true
 		}
-		role, err := FindRole(ctx, name)
+		role, err := models.FindRole(ctx, name)
 		if err == nil {
 			roleIDs = append(roleIDs, role.ID)
 		}
@@ -201,8 +205,8 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 		assessmentNames := r.Form["assessments"]
 		var assessmentIDs []bson.ObjectID
 		for _, name := range assessmentNames {
-			var a Assessment
-			err := Col("assessment").FindOne(ctx, bson.M{"name": name}).Decode(&a)
+			var a models.Assessment
+			err := db.Col("assessment").FindOne(ctx, bson.M{"name": name}).Decode(&a)
 			if err == nil {
 				assessmentIDs = append(assessmentIDs, a.ID)
 			}
@@ -210,14 +214,14 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 		updates["assessments"] = assessmentIDs
 	}
 
-	_, err = Col("user").UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": updates})
+	_, err = db.Col("user").UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": updates})
 	if err != nil {
 		http.Error(w, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
 
 	// Reload user to return updated data.
-	user, _ = FindUser(ctx, id)
+	user, _ = models.FindUser(ctx, id)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user.ToJSON(ctx, false))
@@ -229,7 +233,7 @@ func HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	user, err := FindUser(ctx, id)
+	user, err := models.FindUser(ctx, id)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -247,7 +251,7 @@ func HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = Col("user").DeleteOne(ctx, bson.M{"_id": oid})
+	_, err = db.Col("user").DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
 		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
 		return

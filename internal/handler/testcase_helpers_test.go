@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"net/http"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/models"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -44,47 +45,47 @@ func TestComputeOutcome(t *testing.T) {
 
 	tests := []struct {
 		name string
-		tc   *TestCase
+		tc   *models.TestCase
 		want string
 	}{
 		{
 			name: "prevented yes",
-			tc:   &TestCase{Prevented: "Yes"},
+			tc:   &models.TestCase{Prevented: "Yes"},
 			want: "Prevented",
 		},
 		{
 			name: "prevented partial",
-			tc:   &TestCase{Prevented: "Partial"},
+			tc:   &models.TestCase{Prevented: "Partial"},
 			want: "Prevented",
 		},
 		{
 			name: "alerted",
-			tc:   &TestCase{Prevented: "No", Alerted: &trueVal},
+			tc:   &models.TestCase{Prevented: "No", Alerted: &trueVal},
 			want: "Alerted",
 		},
 		{
 			name: "logged",
-			tc:   &TestCase{Prevented: "No", Alerted: &falseVal, Logged: &trueVal},
+			tc:   &models.TestCase{Prevented: "No", Alerted: &falseVal, Logged: &trueVal},
 			want: "Logged",
 		},
 		{
 			name: "missed",
-			tc:   &TestCase{Prevented: "No", Alerted: &falseVal, Logged: &falseVal},
+			tc:   &models.TestCase{Prevented: "No", Alerted: &falseVal, Logged: &falseVal},
 			want: "Missed",
 		},
 		{
 			name: "empty - no data",
-			tc:   &TestCase{},
+			tc:   &models.TestCase{},
 			want: "",
 		},
 		{
 			name: "only logged false, no prevented",
-			tc:   &TestCase{Logged: &falseVal},
+			tc:   &models.TestCase{Logged: &falseVal},
 			want: "",
 		},
 		{
 			name: "prevented overrides alerted",
-			tc:   &TestCase{Prevented: "Yes", Alerted: &trueVal},
+			tc:   &models.TestCase{Prevented: "Yes", Alerted: &trueVal},
 			want: "Prevented",
 		},
 	}
@@ -157,7 +158,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	id2 := bson.NewObjectID()
 
 	t.Run("extractIDs (sources)", func(t *testing.T) {
-		sources := []Source{{ID: id1}, {ID: id2}}
+		sources := []models.Source{{ID: id1}, {ID: id2}}
 		m := extractIDs(sources)
 		if len(m) != 2 {
 			t.Errorf("expected 2 IDs, got %d", len(m))
@@ -168,7 +169,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	})
 
 	t.Run("extractTargetIDs", func(t *testing.T) {
-		targets := []Target{{ID: id1}}
+		targets := []models.Target{{ID: id1}}
 		m := extractTargetIDs(targets)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
@@ -176,7 +177,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	})
 
 	t.Run("extractToolIDs", func(t *testing.T) {
-		tools := []Tool{{ID: id1}, {ID: id2}}
+		tools := []models.Tool{{ID: id1}, {ID: id2}}
 		m := extractToolIDs(tools)
 		if len(m) != 2 {
 			t.Errorf("expected 2 IDs, got %d", len(m))
@@ -184,7 +185,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	})
 
 	t.Run("extractControlIDs", func(t *testing.T) {
-		controls := []Control{{ID: id1}}
+		controls := []models.Control{{ID: id1}}
 		m := extractControlIDs(controls)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
@@ -192,7 +193,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	})
 
 	t.Run("extractTagIDs", func(t *testing.T) {
-		tags := []Tag{{ID: id1}}
+		tags := []models.Tag{{ID: id1}}
 		m := extractTagIDs(tags)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
@@ -200,7 +201,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	})
 
 	t.Run("extractDatasourceIDs", func(t *testing.T) {
-		ds := []Datasource{{ID: id1}}
+		ds := []models.Datasource{{ID: id1}}
 		m := extractDatasourceIDs(ds)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
@@ -208,7 +209,7 @@ func TestExtractIDFunctions(t *testing.T) {
 	})
 
 	t.Run("extractRuleIDs", func(t *testing.T) {
-		rules := []DetectionRule{{ID: id1}, {ID: id2}}
+		rules := []models.DetectionRule{{ID: id1}, {ID: id2}}
 		m := extractRuleIDs(rules)
 		if len(m) != 2 {
 			t.Errorf("expected 2 IDs, got %d", len(m))

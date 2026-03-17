@@ -1,8 +1,9 @@
-package main
+package handler
 
 import (
 	"testing"
 
+	"github.com/bryanster/purpleops/internal/models"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -29,7 +30,7 @@ func TestRatingToScore(t *testing.T) {
 }
 
 func TestBuildStats(t *testing.T) {
-	testcases := []TestCase{
+	testcases := []models.TestCase{
 		{Tactic: "Execution", Outcome: "Prevented", AlertSeverity: "Critical", PreventedRating: "High", Priority: "P1", PriorityUrgency: "Immediate", Controls: []string{"ctrl1"}},
 		{Tactic: "Execution", Outcome: "Alerted", AlertSeverity: "Medium", DetectionRating: "Low"},
 		{Tactic: "Persistence", Outcome: "Missed", AlertSeverity: "Low"},
@@ -103,16 +104,16 @@ func TestBuildStatsEmpty(t *testing.T) {
 
 func TestGetFieldValue(t *testing.T) {
 	id := bson.NewObjectID()
-	a := &Assessment{
-		Sources:           []Source{{ID: id, Name: "S1"}},
-		Targets:           []Target{{ID: id, Name: "T1"}},
-		Tools:             []Tool{{ID: id, Name: "Tool1"}},
-		Controls:          []Control{{ID: id, Name: "C1"}},
-		Tags:              []Tag{{ID: id, Name: "Tag1"}},
-		Datasources:       []Datasource{{ID: id, Name: "DS1"}},
-		Rules:             []DetectionRule{{ID: id, Name: "R1"}},
-		DetectionSources:  []Datasource{{ID: id, Name: "DetSrc"}},
-		PreventionSources: []Datasource{{ID: id, Name: "PrevSrc"}},
+	a := &models.Assessment{
+		Sources:           []models.Source{{ID: id, Name: "S1"}},
+		Targets:           []models.Target{{ID: id, Name: "T1"}},
+		Tools:             []models.Tool{{ID: id, Name: "Tool1"}},
+		Controls:          []models.Control{{ID: id, Name: "C1"}},
+		Tags:              []models.Tag{{ID: id, Name: "Tag1"}},
+		Datasources:       []models.Datasource{{ID: id, Name: "DS1"}},
+		Rules:             []models.DetectionRule{{ID: id, Name: "R1"}},
+		DetectionSources:  []models.Datasource{{ID: id, Name: "DetSrc"}},
+		PreventionSources: []models.Datasource{{ID: id, Name: "PrevSrc"}},
 	}
 
 	if v := getFieldValue(a, "sources"); v == nil {
@@ -149,7 +150,7 @@ func TestGetFieldValue(t *testing.T) {
 
 func TestUpdateSources(t *testing.T) {
 	id1 := bson.NewObjectID()
-	existing := []Source{
+	existing := []models.Source{
 		{ID: id1, Name: "Old Source", Description: "Old Desc"},
 	}
 
@@ -182,7 +183,7 @@ func TestUpdateSources(t *testing.T) {
 
 func TestUpdateSourcesNonMatchingID(t *testing.T) {
 	id1 := bson.NewObjectID()
-	existing := []Source{
+	existing := []models.Source{
 		{ID: id1, Name: "Source1"},
 	}
 
@@ -198,7 +199,7 @@ func TestUpdateSourcesNonMatchingID(t *testing.T) {
 }
 
 func TestUpdateTargets(t *testing.T) {
-	existing := []Target{}
+	existing := []models.Target{}
 	data := []map[string]string{
 		{"id": "tmp-1", "name": "New Target", "description": "Desc"},
 	}
@@ -214,7 +215,7 @@ func TestUpdateTargets(t *testing.T) {
 
 func TestUpdateTools(t *testing.T) {
 	id1 := bson.NewObjectID()
-	existing := []Tool{{ID: id1, Name: "Tool1"}}
+	existing := []models.Tool{{ID: id1, Name: "Tool1"}}
 	data := []map[string]string{
 		{"id": id1.Hex(), "name": "Tool1 Updated", "description": "Desc"},
 	}
@@ -244,7 +245,7 @@ func TestUpdateControls(t *testing.T) {
 
 func TestUpdateTags(t *testing.T) {
 	id1 := bson.NewObjectID()
-	existing := []Tag{{ID: id1, Name: "Tag1", Colour: "#ff0000"}}
+	existing := []models.Tag{{ID: id1, Name: "Tag1", Colour: "#ff0000"}}
 	data := []map[string]string{
 		{"id": id1.Hex(), "name": "Tag1", "colour": "#00ff00"},
 		{"id": "tmp-1", "name": "NewTag", "colour": "#0000ff"},
@@ -284,4 +285,3 @@ func TestUpdateDetectionRules(t *testing.T) {
 		t.Fatalf("expected 2 rules, got %d", len(result))
 	}
 }
-

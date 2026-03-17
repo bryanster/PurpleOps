@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"context"
@@ -6,16 +6,19 @@ import (
 	"log"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/config"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 var (
-	mongoDB     *mongo.Database
+	// DB is the package-level MongoDB database instance.
+	DB          *mongo.Database
 	mongoClient *mongo.Client
 )
 
-func InitDB(cfg *Config) {
+// InitDB connects to MongoDB using the provided config and sets the package-level DB var.
+func InitDB(cfg *config.Config) {
 	uri := fmt.Sprintf("mongodb://%s:%d", cfg.MongoHost, cfg.MongoPort)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -30,10 +33,11 @@ func InitDB(cfg *Config) {
 	}
 
 	mongoClient = client
-	mongoDB = client.Database(cfg.MongoDB)
+	DB = client.Database(cfg.MongoDB)
 	log.Println("Connected to MongoDB")
 }
 
+// Col returns a MongoDB collection by name from the package-level database.
 func Col(name string) *mongo.Collection {
-	return mongoDB.Collection(name)
+	return DB.Collection(name)
 }

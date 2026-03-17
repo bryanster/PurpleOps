@@ -1,8 +1,9 @@
-package main
+package handler
 
 import (
 	"testing"
 
+	"github.com/bryanster/purpleops/internal/models"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -66,14 +67,14 @@ func TestFindExistingMultiEntry(t *testing.T) {
 	id1 := bson.NewObjectID()
 	id2 := bson.NewObjectID()
 
-	assessment := &Assessment{
-		Sources:     []Source{{ID: id1, Name: "Source1"}},
-		Targets:     []Target{{ID: id1, Name: "Target1"}},
-		Tools:       []Tool{{ID: id1, Name: "Tool1"}},
-		Controls:    []Control{{ID: id1, Name: "Control1"}},
-		Tags:        []Tag{{ID: id1, Name: "Tag1"}},
-		Datasources: []Datasource{{ID: id2, Name: "DS1"}},
-		Rules:       []DetectionRule{{ID: id2, Name: "Rule1"}},
+	assessment := &models.Assessment{
+		Sources:     []models.Source{{ID: id1, Name: "Source1"}},
+		Targets:     []models.Target{{ID: id1, Name: "Target1"}},
+		Tools:       []models.Tool{{ID: id1, Name: "Tool1"}},
+		Controls:    []models.Control{{ID: id1, Name: "Control1"}},
+		Tags:        []models.Tag{{ID: id1, Name: "Tag1"}},
+		Datasources: []models.Datasource{{ID: id2, Name: "DS1"}},
+		Rules:       []models.DetectionRule{{ID: id2, Name: "Rule1"}},
 	}
 
 	tests := []struct {

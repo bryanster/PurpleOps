@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/json"
@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -17,7 +20,7 @@ func HandleToggleVisibility(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ctx := r.Context()
 
-	tc, err := FindTestCase(ctx, id)
+	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return
@@ -26,7 +29,7 @@ func HandleToggleVisibility(w http.ResponseWriter, r *http.Request) {
 	tc.Visible = !tc.Visible
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
 		return
@@ -42,13 +45,13 @@ func HandleCloneTestCase(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ctx := r.Context()
 
-	tc, err := FindTestCase(ctx, id)
+	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return
 	}
 
-	clone := TestCase{
+	clone := models.TestCase{
 		ID:           bson.NewObjectID(),
 		AssessmentID: tc.AssessmentID,
 		Name:         tc.Name + " (Copy)",
@@ -64,7 +67,7 @@ func HandleCloneTestCase(w http.ResponseWriter, r *http.Request) {
 		Visible:      true,
 	}
 
-	_, err = Col("test_case").InsertOne(ctx, &clone)
+	_, err = db.Col("test_case").InsertOne(ctx, &clone)
 	if err != nil {
 		http.Error(w, "Failed to clone testcase", http.StatusInternalServerError)
 		return
@@ -80,14 +83,14 @@ func HandleDeleteTestCase(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ctx := r.Context()
 
-	tc, err := FindTestCase(ctx, id)
+	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return
 	}
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = Col("test_case").DeleteOne(ctx, bson.M{"_id": oid})
+	_, err = db.Col("test_case").DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
 		http.Error(w, "Failed to delete testcase", http.StatusInternalServerError)
 		return
@@ -107,7 +110,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	colour := chi.URLParam(r, "colour")
 	filename := chi.URLParam(r, "file")
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 
 	if colour != "red" && colour != "blue" {
 		http.Error(w, "Invalid colour", http.StatusBadRequest)
@@ -121,7 +124,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tc, err := FindTestCase(ctx, id)
+	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return
@@ -130,7 +133,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	safeName := sanitizeFilenameSafe(filename)
 
 	// Remove from the appropriate file list and delete physical file
-	var files *[]FileDoc
+	var files *[]models.FileDoc
 	if colour == "red" {
 		files = &tc.RedFiles
 	} else {
@@ -138,7 +141,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	found := false
-	newFiles := make([]FileDoc, 0, len(*files))
+	newFiles := make([]models.FileDoc, 0, len(*files))
 	for _, f := range *files {
 		if f.Name == safeName {
 			// Delete the physical file
@@ -157,7 +160,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	*files = newFiles
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
 		return
@@ -172,7 +175,7 @@ func HandleFetchEvidence(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	filename := chi.URLParam(r, "file")
 
-	tc, err := FindTestCase(r.Context(), id)
+	tc, err := models.FindTestCase(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return

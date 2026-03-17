@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"context"
@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
+	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -22,7 +26,7 @@ func HandleAssessmentMulti(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	field := chi.URLParam(r, "field")
 
-	assessment, err := FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -60,7 +64,7 @@ func HandleAssessmentMulti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{field: getFieldValue(assessment, field)},
 	})
 	if err != nil {
@@ -75,7 +79,7 @@ func HandleAssessmentMulti(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func getFieldValue(a *Assessment, field string) interface{} {
+func getFieldValue(a *models.Assessment, field string) interface{} {
 	switch field {
 	case "sources":
 		return a.Sources
@@ -99,18 +103,17 @@ func getFieldValue(a *Assessment, field string) interface{} {
 	return nil
 }
 
-func updateSources(existing []Source, data []map[string]string) []Source {
-	result := make([]Source, 0, len(data))
+func updateSources(existing []models.Source, data []map[string]string) []models.Source {
+	result := make([]models.Source, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, Source{
+			result = append(result, models.Source{
 				ID:          bson.NewObjectID(),
 				Name:        item["name"],
 				Description: item["description"],
 			})
 		} else {
-			// Find existing and update.
 			for _, s := range existing {
 				if s.ID.Hex() == id {
 					s.Name = item["name"]
@@ -124,12 +127,12 @@ func updateSources(existing []Source, data []map[string]string) []Source {
 	return result
 }
 
-func updateTargets(existing []Target, data []map[string]string) []Target {
-	result := make([]Target, 0, len(data))
+func updateTargets(existing []models.Target, data []map[string]string) []models.Target {
+	result := make([]models.Target, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, Target{
+			result = append(result, models.Target{
 				ID:          bson.NewObjectID(),
 				Name:        item["name"],
 				Description: item["description"],
@@ -148,12 +151,12 @@ func updateTargets(existing []Target, data []map[string]string) []Target {
 	return result
 }
 
-func updateTools(existing []Tool, data []map[string]string) []Tool {
-	result := make([]Tool, 0, len(data))
+func updateTools(existing []models.Tool, data []map[string]string) []models.Tool {
+	result := make([]models.Tool, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, Tool{
+			result = append(result, models.Tool{
 				ID:          bson.NewObjectID(),
 				Name:        item["name"],
 				Description: item["description"],
@@ -172,12 +175,12 @@ func updateTools(existing []Tool, data []map[string]string) []Tool {
 	return result
 }
 
-func updateControls(existing []Control, data []map[string]string) []Control {
-	result := make([]Control, 0, len(data))
+func updateControls(existing []models.Control, data []map[string]string) []models.Control {
+	result := make([]models.Control, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, Control{
+			result = append(result, models.Control{
 				ID:          bson.NewObjectID(),
 				Name:        item["name"],
 				Description: item["description"],
@@ -196,12 +199,12 @@ func updateControls(existing []Control, data []map[string]string) []Control {
 	return result
 }
 
-func updateTags(existing []Tag, data []map[string]string) []Tag {
-	result := make([]Tag, 0, len(data))
+func updateTags(existing []models.Tag, data []map[string]string) []models.Tag {
+	result := make([]models.Tag, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, Tag{
+			result = append(result, models.Tag{
 				ID:     bson.NewObjectID(),
 				Name:   item["name"],
 				Colour: item["colour"],
@@ -220,12 +223,12 @@ func updateTags(existing []Tag, data []map[string]string) []Tag {
 	return result
 }
 
-func updateDatasources(existing []Datasource, data []map[string]string) []Datasource {
-	result := make([]Datasource, 0, len(data))
+func updateDatasources(existing []models.Datasource, data []map[string]string) []models.Datasource {
+	result := make([]models.Datasource, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, Datasource{
+			result = append(result, models.Datasource{
 				ID:          bson.NewObjectID(),
 				Name:        item["name"],
 				Description: item["description"],
@@ -244,12 +247,12 @@ func updateDatasources(existing []Datasource, data []map[string]string) []Dataso
 	return result
 }
 
-func updateDetectionRules(existing []DetectionRule, data []map[string]string) []DetectionRule {
-	result := make([]DetectionRule, 0, len(data))
+func updateDetectionRules(existing []models.DetectionRule, data []map[string]string) []models.DetectionRule {
+	result := make([]models.DetectionRule, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, DetectionRule{
+			result = append(result, models.DetectionRule{
 				ID:          bson.NewObjectID(),
 				Name:        item["name"],
 				Description: item["description"],
@@ -273,7 +276,7 @@ func updateDetectionRules(existing []DetectionRule, data []map[string]string) []
 func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	assessment, err := FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -289,7 +292,7 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 	ip := r.RemoteAddr
 	navigatorExport := fmt.Sprintf("%s|%s|%s", timestamp, ip, secret)
 
-	_, err = Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{"navigatorexport": navigatorExport},
 	})
 	if err != nil {
@@ -299,7 +302,7 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 
 	ExportNavigatorFile(id, r)
 
-	Render(w, r, "assessment_navigator.html", pongo2.Context{
+	render.Render(w, r, "assessment_navigator.html", pongo2.Context{
 		"assessment": assessment,
 		"secret":     secret,
 	})
@@ -321,20 +324,20 @@ func HandleNavigatorJSON(w http.ResponseWriter, r *http.Request) {
 func HandleAssessmentStats(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	assessment, err := FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
 	}
 
-	testcases, err := GetTestCases(r.Context(), id)
+	testcases, err := models.GetTestCases(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
 		return
 	}
 
 	// Determine if the user is blue-only (not Admin, not Red).
-	user := UserFromContext(r.Context())
+	user := auth.UserFromContext(r.Context())
 	blueOnly := false
 	if user != nil {
 		isAdmin := user.HasRole(r.Context(), "Admin")
@@ -345,7 +348,7 @@ func HandleAssessmentStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Filter testcases for blue users.
-	filtered := make([]TestCase, 0, len(testcases))
+	filtered := make([]models.TestCase, 0, len(testcases))
 	for _, tc := range testcases {
 		if blueOnly && !tc.Visible {
 			continue
@@ -358,7 +361,7 @@ func HandleAssessmentStats(w http.ResponseWriter, r *http.Request) {
 
 	hexagons := RenderHexagons(id)
 
-	Render(w, r, "assessment_stats.html", pongo2.Context{
+	render.Render(w, r, "assessment_stats.html", pongo2.Context{
 		"assessment": assessment,
 		"stats":      stats,
 		"hexagons":   hexagons,
@@ -382,7 +385,7 @@ type tacticStats struct {
 	Controls      []string
 }
 
-func buildStats(testcases []TestCase) map[string]*tacticStats {
+func buildStats(testcases []models.TestCase) map[string]*tacticStats {
 	stats := map[string]*tacticStats{
 		"All": {},
 	}
@@ -483,7 +486,7 @@ func RenderHexagons(id string) string {
 	}
 
 	bgCtx := context.Background()
-	testcases, _ := GetTestCases(bgCtx, id)
+	testcases, _ := models.GetTestCases(bgCtx, id)
 
 	type hexData struct {
 		Name  string

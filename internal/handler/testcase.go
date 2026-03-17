@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/json"
@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
+	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -25,7 +29,7 @@ func HandleNewTestCase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tc := TestCase{
+	tc := models.TestCase{
 		ID:           bson.NewObjectID(),
 		AssessmentID: assessmentID,
 		Name:         r.FormValue("name"),
@@ -35,7 +39,7 @@ func HandleNewTestCase(w http.ResponseWriter, r *http.Request) {
 		Visible:      true,
 	}
 
-	_, err := Col("test_case").InsertOne(r.Context(), &tc)
+	_, err := db.Col("test_case").InsertOne(r.Context(), &tc)
 	if err != nil {
 		http.Error(w, "Failed to create testcase", http.StatusInternalServerError)
 		return
@@ -50,15 +54,15 @@ func HandleNewTestCase(w http.ResponseWriter, r *http.Request) {
 func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 
-	tc, err := FindTestCase(ctx, id)
+	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return
 	}
 
-	assessment, err := FindAssessment(ctx, tc.AssessmentID)
+	assessment, err := models.FindAssessment(ctx, tc.AssessmentID)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -71,36 +75,36 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// All testcases for this assessment
-	testcases, _ := GetTestCases(ctx, tc.AssessmentID)
+	testcases, _ := models.GetTestCases(ctx, tc.AssessmentID)
 
 	// All tactics
-	var tactics []Tactic
-	tacticCursor, err := Col("tactic").Find(ctx, bson.M{})
+	var tactics []models.Tactic
+	tacticCursor, err := db.Col("tactic").Find(ctx, bson.M{})
 	if err == nil {
 		tacticCursor.All(ctx, &tactics)
 	}
 
 	// KnowledgeBase matching mitreid
-	var kb *KnowledgeBase
+	var kb *models.KnowledgeBase
 	if tc.MitreID != "" {
-		var kbDoc KnowledgeBase
-		if err := Col("knowledge_base").FindOne(ctx, bson.M{"mitreid": tc.MitreID}).Decode(&kbDoc); err == nil {
+		var kbDoc models.KnowledgeBase
+		if err := db.Col("knowledge_base").FindOne(ctx, bson.M{"mitreid": tc.MitreID}).Decode(&kbDoc); err == nil {
 			kb = &kbDoc
 		}
 	}
 
 	// TestCaseTemplates matching mitreid
-	var templates []TestCaseTemplate
+	var templates []models.TestCaseTemplate
 	if tc.MitreID != "" {
-		tplCursor, err := Col("testcase_template").Find(ctx, bson.M{"mitreid": tc.MitreID})
+		tplCursor, err := db.Col("testcase_template").Find(ctx, bson.M{"mitreid": tc.MitreID})
 		if err == nil {
 			tplCursor.All(ctx, &templates)
 		}
 	}
 
-	// All techniques (templates access .MitreID and .Name).
-	var techniques []Technique
-	techCursor, err := Col("technique").Find(ctx, bson.M{})
+	// All techniques
+	var techniques []models.Technique
+	techCursor, err := db.Col("technique").Find(ctx, bson.M{})
 	if err == nil {
 		techCursor.All(ctx, &techniques)
 	}
@@ -109,9 +113,9 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Sigma docs matching mitreid
-	var sigmas []Sigma
+	var sigmas []models.Sigma
 	if tc.MitreID != "" {
-		sigmaCursor, err := Col("sigma").Find(ctx, bson.M{"mitreid": tc.MitreID})
+		sigmaCursor, err := db.Col("sigma").Find(ctx, bson.M{"mitreid": tc.MitreID})
 		if err == nil {
 			sigmaCursor.All(ctx, &sigmas)
 		}
@@ -130,7 +134,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 		"preventionsources": assessment.MultiToJSON("preventionsources", true),
 	}
 
-	Render(w, r, "testcase.html", pongo2.Context{
+	render.Render(w, r, "testcase.html", pongo2.Context{
 		"testcase":   tc,
 		"assessment": assessment,
 		"testcases":  testcases,
@@ -148,20 +152,20 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	ctx := r.Context()
-	user := UserFromContext(ctx)
+	user := auth.UserFromContext(ctx)
 
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	tc, err := FindTestCase(ctx, id)
+	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
 		http.Error(w, "Testcase not found", http.StatusNotFound)
 		return
 	}
 
-	assessment, err := FindAssessment(ctx, tc.AssessmentID)
+	assessment, err := models.FindAssessment(ctx, tc.AssessmentID)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -250,12 +254,12 @@ func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set modify time
-	tc.ModifyTime = nowPtr()
+	tc.ModifyTime = models.NowPtr()
 
 	// If logged is "Yes" and detecttime is nil, set detecttime
 	loggedVal := r.FormValue("logged")
 	if strings.EqualFold(loggedVal, "yes") && tc.DetectTime == nil {
-		tc.DetectTime = nowPtr()
+		tc.DetectTime = models.NowPtr()
 	}
 
 	// Compute outcome
@@ -274,7 +278,7 @@ func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 
 	// Save
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to save testcase", http.StatusInternalServerError)
 		return
@@ -328,7 +332,7 @@ func applyFormTime(r *http.Request, field string, target **time.Time) {
 	*target = &tUTC
 }
 
-func computeOutcome(tc *TestCase) string {
+func computeOutcome(tc *models.TestCase) string {
 	if tc.Prevented == "Yes" || tc.Prevented == "Partial" {
 		return "Prevented"
 	}
@@ -344,9 +348,9 @@ func computeOutcome(tc *TestCase) string {
 	return ""
 }
 
-func processFiles(r *http.Request, tc *TestCase, assessment *Assessment, colour string) {
+func processFiles(r *http.Request, tc *models.TestCase, assessment *models.Assessment, colour string) {
 	formField := colour + "files"
-	var existingFiles *[]FileDoc
+	var existingFiles *[]models.FileDoc
 	if colour == "red" {
 		existingFiles = &tc.RedFiles
 	} else {
@@ -398,7 +402,7 @@ func processFiles(r *http.Request, tc *TestCase, assessment *Assessment, colour 
 		src.Close()
 		dst.Close()
 
-		*existingFiles = append(*existingFiles, FileDoc{
+		*existingFiles = append(*existingFiles, models.FileDoc{
 			Name:    safeName,
 			Path:    destPath,
 			Caption: "",
@@ -433,7 +437,7 @@ func sanitizeIDs(ids []string, validIDs map[string]bool) []string {
 	return result
 }
 
-func extractIDs(sources []Source) map[string]bool {
+func extractIDs(sources []models.Source) map[string]bool {
 	m := make(map[string]bool, len(sources))
 	for _, s := range sources {
 		m[s.ID.Hex()] = true
@@ -441,7 +445,7 @@ func extractIDs(sources []Source) map[string]bool {
 	return m
 }
 
-func extractTargetIDs(targets []Target) map[string]bool {
+func extractTargetIDs(targets []models.Target) map[string]bool {
 	m := make(map[string]bool, len(targets))
 	for _, t := range targets {
 		m[t.ID.Hex()] = true
@@ -449,7 +453,7 @@ func extractTargetIDs(targets []Target) map[string]bool {
 	return m
 }
 
-func extractToolIDs(tools []Tool) map[string]bool {
+func extractToolIDs(tools []models.Tool) map[string]bool {
 	m := make(map[string]bool, len(tools))
 	for _, t := range tools {
 		m[t.ID.Hex()] = true
@@ -457,7 +461,7 @@ func extractToolIDs(tools []Tool) map[string]bool {
 	return m
 }
 
-func extractControlIDs(controls []Control) map[string]bool {
+func extractControlIDs(controls []models.Control) map[string]bool {
 	m := make(map[string]bool, len(controls))
 	for _, c := range controls {
 		m[c.ID.Hex()] = true
@@ -465,7 +469,7 @@ func extractControlIDs(controls []Control) map[string]bool {
 	return m
 }
 
-func extractTagIDs(tags []Tag) map[string]bool {
+func extractTagIDs(tags []models.Tag) map[string]bool {
 	m := make(map[string]bool, len(tags))
 	for _, t := range tags {
 		m[t.ID.Hex()] = true
@@ -473,7 +477,7 @@ func extractTagIDs(tags []Tag) map[string]bool {
 	return m
 }
 
-func extractDatasourceIDs(datasources []Datasource) map[string]bool {
+func extractDatasourceIDs(datasources []models.Datasource) map[string]bool {
 	m := make(map[string]bool, len(datasources))
 	for _, d := range datasources {
 		m[d.ID.Hex()] = true
@@ -481,11 +485,10 @@ func extractDatasourceIDs(datasources []Datasource) map[string]bool {
 	return m
 }
 
-func extractRuleIDs(rules []DetectionRule) map[string]bool {
+func extractRuleIDs(rules []models.DetectionRule) map[string]bool {
 	m := make(map[string]bool, len(rules))
 	for _, r := range rules {
 		m[r.ID.Hex()] = true
 	}
 	return m
 }
-
