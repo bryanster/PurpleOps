@@ -1,4 +1,4 @@
-package main
+package models
 
 import (
 	"testing"
@@ -26,9 +26,9 @@ func TestEsc(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := esc(tt.input, tt.raw)
+		got := Esc(tt.input, tt.raw)
 		if got != tt.want {
-			t.Errorf("esc(%q, %v) = %q, want %q", tt.input, tt.raw, got, tt.want)
+			t.Errorf("Esc(%q, %v) = %q, want %q", tt.input, tt.raw, got, tt.want)
 		}
 	}
 }
@@ -36,49 +36,49 @@ func TestEsc(t *testing.T) {
 func TestTimeStr(t *testing.T) {
 	tm := time.Date(2024, 3, 15, 10, 30, 45, 0, time.UTC)
 
-	if got := timeStr(&tm); got != "2024-03-15 10:30:45" {
-		t.Errorf("timeStr(&tm) = %q, want %q", got, "2024-03-15 10:30:45")
+	if got := TimeStr(&tm); got != "2024-03-15 10:30:45" {
+		t.Errorf("TimeStr(&tm) = %q, want %q", got, "2024-03-15 10:30:45")
 	}
 
-	if got := timeStr(nil); got != "None" {
-		t.Errorf("timeStr(nil) = %q, want %q", got, "None")
+	if got := TimeStr(nil); got != "None" {
+		t.Errorf("TimeStr(nil) = %q, want %q", got, "None")
 	}
 }
 
 func TestTimeStrLocal(t *testing.T) {
 	tm := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
 
-	if got := timeStrLocal(&tm); got != "2024-03-15T10:30" {
-		t.Errorf("timeStrLocal(&tm) = %q, want %q", got, "2024-03-15T10:30")
+	if got := TimeStrLocal(&tm); got != "2024-03-15T10:30" {
+		t.Errorf("TimeStrLocal(&tm) = %q, want %q", got, "2024-03-15T10:30")
 	}
 
-	if got := timeStrLocal(nil); got != "" {
-		t.Errorf("timeStrLocal(nil) = %q, want %q", got, "")
+	if got := TimeStrLocal(nil); got != "" {
+		t.Errorf("TimeStrLocal(nil) = %q, want %q", got, "")
 	}
 }
 
 func TestBoolPtr(t *testing.T) {
-	truePtr := boolPtr(true)
+	truePtr := BoolPtr(true)
 	if truePtr == nil || *truePtr != true {
-		t.Error("boolPtr(true) should return pointer to true")
+		t.Error("BoolPtr(true) should return pointer to true")
 	}
 
-	falsePtr := boolPtr(false)
+	falsePtr := BoolPtr(false)
 	if falsePtr == nil || *falsePtr != false {
-		t.Error("boolPtr(false) should return pointer to false")
+		t.Error("BoolPtr(false) should return pointer to false")
 	}
 }
 
 func TestNowPtr(t *testing.T) {
 	before := time.Now().UTC()
-	result := nowPtr()
+	result := NowPtr()
 	after := time.Now().UTC()
 
 	if result == nil {
-		t.Fatal("nowPtr() returned nil")
+		t.Fatal("NowPtr() returned nil")
 	}
 	if result.Before(before) || result.After(after) {
-		t.Error("nowPtr() should return current UTC time")
+		t.Error("NowPtr() should return current UTC time")
 	}
 }
 
@@ -96,9 +96,9 @@ func TestFormatFloat(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := formatFloat(tt.input)
+		got := FormatFloat(tt.input)
 		if got != tt.want {
-			t.Errorf("formatFloat(%f) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("FormatFloat(%f) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

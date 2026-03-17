@@ -1,9 +1,7 @@
-package main
+package render
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -11,111 +9,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-var templateSet *pongo2.TemplateSet
-
-func InitTemplates() {
-	loader := pongo2.MustNewLocalFileSystemLoader("templates")
-	templateSet = pongo2.NewSet("purpleops", loader)
-	templateSet.Debug = true
-}
-
-func Render(w http.ResponseWriter, r *http.Request, templateName string, ctx pongo2.Context) {
-	if ctx == nil {
-		ctx = pongo2.Context{}
-	}
-
-	// Always inject current_user and request into template context
-	user := UserFromContext(r.Context())
-	if user == nil {
-		user = GetCurrentUser(r)
-	}
-	ctx["current_user"] = &TemplateUser{user: user, ctx: r.Context()}
-	ctx["request"] = &TemplateRequest{r: r}
-
-	tpl, err := templateSet.FromFile(templateName)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	out, err := tpl.Execute(ctx)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Template render error: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(out))
-}
-
-// TemplateUser wraps User for template access
-type TemplateUser struct {
-	user *User
-	ctx  context.Context
-}
-
-func (tu *TemplateUser) IsAuthenticated() bool {
-	return tu.user != nil
-}
-
-func (tu *TemplateUser) HasRole(role string) bool {
-	if tu.user == nil {
-		return false
-	}
-	return tu.user.HasRole(tu.ctx, role)
-}
-
-func (tu *TemplateUser) GetInitpwd() bool {
-	if tu.user == nil {
-		return false
-	}
-	return tu.user.InitPwd
-}
-
-func (tu *TemplateUser) GetUsername() string {
-	if tu.user == nil {
-		return ""
-	}
-	return tu.user.Username
-}
-
-func (tu *TemplateUser) GetID() string {
-	if tu.user == nil {
-		return ""
-	}
-	return tu.user.ID.Hex()
-}
-
-func (tu *TemplateUser) AssessmentList() []string {
-	if tu.user == nil {
-		return nil
-	}
-	ids := tu.user.AssessmentList(tu.ctx)
-	strs := make([]string, len(ids))
-	for i, id := range ids {
-		strs[i] = id.Hex()
-	}
-	return strs
-}
-
-// TemplateRequest wraps http.Request for template access
-type TemplateRequest struct {
-	r *http.Request
-}
-
-func (tr *TemplateRequest) GetPath() string {
-	return tr.r.URL.Path
-}
-
-// Helper to check if a string is in a slice (used in templates)
 func init() {
-	// Register custom pongo2 filters
+	// Register custom pongo2 filters.
+
 	pongo2.RegisterFilter("string", func(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
 		return pongo2.AsValue(fmt.Sprintf("%v", in.Interface())), nil
 	})
 
 	pongo2.RegisterFilter("strftime", func(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
-		// Convert Python strftime format to Go format
+		// Convert Python strftime format to Go format.
 		format := param.String()
 		format = strings.ReplaceAll(format, "%Y", "2006")
 		format = strings.ReplaceAll(format, "%m", "01")

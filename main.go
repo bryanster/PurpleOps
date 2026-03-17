@@ -5,17 +5,20 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/handler"
+	"github.com/bryanster/purpleops/internal/render"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-var appConfig *Config
-
 func main() {
-	appConfig = LoadConfig()
-	InitDB(appConfig)
-	InitSessions(appConfig.SecretKey)
-	InitTemplates()
+	cfg := config.LoadConfig()
+	db.InitDB(cfg)
+	auth.InitSessions(cfg.SecretKey)
+	render.InitTemplates()
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -26,87 +29,86 @@ func main() {
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 
 	// Auth routes (no auth required)
-	r.Get("/login", HandleLogin)
-	r.Post("/login", HandleLoginPost)
-	r.Get("/logout", HandleLogout)
+	r.Get("/login", handler.HandleLogin)
+	r.Post("/login", handler.HandleLoginPost)
+	r.Get("/logout", handler.HandleLogout)
 
 	// All authenticated routes
 	r.Group(func(r chi.Router) {
-		r.Use(AuthRequired)
+		r.Use(auth.AuthRequired)
 
 		// Home / index
-		r.Get("/", HandleIndex)
-		r.Get("/index", HandleIndex)
+		r.Get("/", handler.HandleIndex)
+		r.Get("/index", handler.HandleIndex)
 
 		// Password management
-		r.Get("/password/change", HandlePasswordChange)
-		r.Post("/password/change", HandlePasswordChangePost)
-		r.Get("/password/changed", HandlePasswordChanged)
+		r.Get("/password/change", handler.HandlePasswordChange)
+		r.Post("/password/change", handler.HandlePasswordChangePost)
+		r.Get("/password/changed", handler.HandlePasswordChanged)
 
 		// MFA routes
-		r.Get("/mfa/register", HandleMFARegister)
-		r.Post("/mfa/register", HandleMFARegisterPost)
-		r.Get("/mfa/verify", HandleMFAVerify)
-		r.Post("/mfa/verify", HandleMFAVerifyPost)
+		r.Get("/mfa/register", handler.HandleMFARegister)
+		r.Post("/mfa/register", handler.HandleMFARegisterPost)
+		r.Get("/mfa/verify", handler.HandleMFAVerify)
+		r.Post("/mfa/verify", handler.HandleMFAVerifyPost)
 
 		// Assessment CRUD
-		r.Post("/assessment", HandleNewAssessment)
+		r.Post("/assessment", handler.HandleNewAssessment)
 		r.Route("/assessment/{id}", func(r chi.Router) {
-			r.Use(UserAssignedAssessment)
-			r.Get("/", HandleLoadAssessment)
-			r.Post("/", HandleEditAssessment)
-			r.Delete("/", HandleDeleteAssessment)
+			r.Use(auth.UserAssignedAssessment)
+			r.Get("/", handler.HandleLoadAssessment)
+			r.Post("/", handler.HandleEditAssessment)
+			r.Delete("/", handler.HandleDeleteAssessment)
 
 			// Assessment utils
-			r.Post("/multi/{field}", HandleAssessmentMulti)
-			r.Get("/navigator", HandleAssessmentNavigator)
-			r.Get("/stats", HandleAssessmentStats)
-			r.Get("/assessment_hexagons.svg", HandleAssessmentHexagons)
+			r.Post("/multi/{field}", handler.HandleAssessmentMulti)
+			r.Get("/navigator", handler.HandleAssessmentNavigator)
+			r.Get("/stats", handler.HandleAssessmentStats)
+			r.Get("/assessment_hexagons.svg", handler.HandleAssessmentHexagons)
 
 			// Assessment export
-			r.Get("/export/{filetype}", HandleExportAssessment)
-			r.Get("/export/campaign", HandleExportCampaign)
-			r.Get("/export/templates", HandleExportTestcases)
-			r.Post("/export/report", HandleExportReport)
-			r.Get("/export/navigator", HandleExportNavigator)
-			r.Get("/export/entire", HandleExportEntire)
+			r.Get("/export/{filetype}", handler.HandleExportAssessment)
+			r.Get("/export/campaign", handler.HandleExportCampaign)
+			r.Get("/export/templates", handler.HandleExportTestcases)
+			r.Post("/export/report", handler.HandleExportReport)
+			r.Get("/export/navigator", handler.HandleExportNavigator)
+			r.Get("/export/entire", handler.HandleExportEntire)
 
 			// Assessment import
-			r.Post("/import/template", HandleImportTemplate)
-			r.Post("/import/navigator", HandleImportNavigator)
-			r.Post("/import/campaign", HandleImportCampaign)
+			r.Post("/import/template", handler.HandleImportTemplate)
+			r.Post("/import/navigator", handler.HandleImportNavigator)
+			r.Post("/import/campaign", handler.HandleImportCampaign)
 		})
 
 		// Assessment import entire (no assessment ID in URL)
-		r.Post("/assessment/import/entire", HandleImportEntire)
+		r.Post("/assessment/import/entire", handler.HandleImportEntire)
 
-		// Navigator JSON (unauthenticated - handled separately)
 		// Testcase routes
 		r.Route("/testcase/{id}", func(r chi.Router) {
-			r.Use(UserAssignedAssessment)
-			r.Get("/", HandleLoadTestCase)
-			r.Post("/", HandleSaveTestCase)
-			r.Post("/single", HandleNewTestCase)
-			r.Get("/toggle-visibility", HandleToggleVisibility)
-			r.Get("/clone", HandleCloneTestCase)
-			r.Get("/delete", HandleDeleteTestCase)
-			r.Delete("/evidence/{colour}/{file}", HandleDeleteEvidence)
-			r.Get("/evidence/{file}", HandleFetchEvidence)
+			r.Use(auth.UserAssignedAssessment)
+			r.Get("/", handler.HandleLoadTestCase)
+			r.Post("/", handler.HandleSaveTestCase)
+			r.Post("/single", handler.HandleNewTestCase)
+			r.Get("/toggle-visibility", handler.HandleToggleVisibility)
+			r.Get("/clone", handler.HandleCloneTestCase)
+			r.Get("/delete", handler.HandleDeleteTestCase)
+			r.Delete("/evidence/{colour}/{file}", handler.HandleDeleteEvidence)
+			r.Get("/evidence/{file}", handler.HandleFetchEvidence)
 		})
 
 		// Access control (admin only)
 		r.Route("/manage/access", func(r chi.Router) {
-			r.Get("/", HandleAccessPage)
-			r.Post("/user", HandleCreateUser)
-			r.Post("/user/{id}", HandleEditUser)
-			r.Delete("/user/{id}", HandleDeleteUser)
+			r.Get("/", handler.HandleAccessPage)
+			r.Post("/user", handler.HandleCreateUser)
+			r.Post("/user/{id}", handler.HandleEditUser)
+			r.Delete("/user/{id}", handler.HandleDeleteUser)
 		})
 	})
 
 	// Unauthenticated navigator JSON endpoint
-	r.Get("/assessment/{id}/navigator.json", HandleNavigatorJSON)
+	r.Get("/assessment/{id}/navigator.json", handler.HandleNavigatorJSON)
 
-	addr := fmt.Sprintf("%s:%s", appConfig.Host, appConfig.Port)
+	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	log.Printf("PurpleOps starting on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, r))
 }

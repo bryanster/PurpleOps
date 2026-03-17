@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"os"
@@ -7,6 +7,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config holds application configuration loaded from environment variables.
 type Config struct {
 	MongoDB   string
 	MongoHost string
@@ -23,11 +24,16 @@ type Config struct {
 	AdminPwd   string
 }
 
+// Cfg is the package-level config instance set by LoadConfig.
+var Cfg *Config
+
+// LoadConfig reads configuration from the environment (and .env file) and
+// stores it in Cfg, returning the populated *Config.
 func LoadConfig() *Config {
 	_ = godotenv.Load()
 
 	port, _ := strconv.Atoi(getEnv("MONGO_PORT", "27017"))
-	return &Config{
+	cfg := &Config{
 		MongoDB:    getEnv("MONGO_DB", "assessments3"),
 		MongoHost:  getEnv("MONGO_HOST", "localhost"),
 		MongoPort:  port,
@@ -41,6 +47,8 @@ func LoadConfig() *Config {
 		TOTPSecret: getEnv("FLASK_SECURITY_TOTP_SECRETS", ""),
 		AdminPwd:   getEnv("POPS_ADMIN_PWD", ""),
 	}
+	Cfg = cfg
+	return cfg
 }
 
 func getEnv(key, fallback string) string {

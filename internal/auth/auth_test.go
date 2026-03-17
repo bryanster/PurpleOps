@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bryanster/purpleops/internal/models"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -44,7 +45,7 @@ func TestUserFromContext(t *testing.T) {
 	}
 
 	// Context with user
-	u := &User{ID: bson.NewObjectID(), Username: "testuser"}
+	u := &models.User{ID: bson.NewObjectID(), Username: "testuser"}
 	ctx = context.WithValue(context.Background(), userContextKey, u)
 	if user := UserFromContext(ctx); user == nil {
 		t.Error("UserFromContext should return user from context")

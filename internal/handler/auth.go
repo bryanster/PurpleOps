@@ -1,10 +1,15 @@
-package main
+package handler
 
 import (
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
+	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
 	"github.com/pquerna/otp/totp"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -16,9 +21,9 @@ type FlashMessage struct {
 	Message  string
 }
 
-// getFlashMessages reads flash from session and returns flash_messages context.
+// getFlashMessages reads flash messages from the session and clears them.
 func getFlashMessages(w http.ResponseWriter, r *http.Request) []FlashMessage {
-	sess := GetSession(r)
+	sess := auth.GetSession(r)
 	if flash, ok := sess.Values["flash"].(string); ok && flash != "" {
 		category, _ := sess.Values["flash_category"].(string)
 		delete(sess.Values, "flash")
@@ -35,7 +40,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if msgs := getFlashMessages(w, r); msgs != nil {
 		ctx["flash_messages"] = msgs
 	}
-	Render(w, r, "login.html", ctx)
+	render.Render(w, r, "login.html", ctx)
 }
 
 // HandleLoginPost authenticates a user with email and password.
@@ -48,7 +53,7 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 	email := strings.TrimSpace(r.FormValue("email"))
 	password := r.FormValue("password")
 
-	sess := GetSession(r)
+	sess := auth.GetSession(r)
 
 	setFlash := func(msg, category string) {
 		sess.Values["flash"] = msg
@@ -62,7 +67,7 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := FindUserByEmail(r.Context(), email)
+	user, err := models.FindUserByEmail(r.Context(), email)
 	if err != nil || user == nil {
 		setFlash("Invalid email or password.", "danger")
 		return
@@ -78,7 +83,7 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 	// Otherwise treat it as a plain text password (initial admin seeder).
 	authenticated := false
 	if strings.HasPrefix(user.Password, "$2") {
-		authenticated = CheckPassword(user.Password, password)
+		authenticated = auth.CheckPassword(user.Password, password)
 	} else {
 		// Plain text comparison for initial seed passwords.
 		authenticated = user.Password == password
@@ -91,19 +96,19 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	// If the user has no bcrypt hash yet (initpwd / migration), hash and persist.
 	if !strings.HasPrefix(user.Password, "$2") {
-		hashed, err := HashPassword(password)
+		hashed, err := auth.HashPassword(password)
 		if err != nil {
 			setFlash("Internal error.", "danger")
 			return
 		}
-		Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+		db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 			"$set": bson.M{"password": hashed},
 		})
 	}
 
 	// Update login tracking fields.
 	now := time.Now().UTC()
-	Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
 			"last_login_at":    user.CurrentLoginAt,
 			"last_login_ip":    user.CurrentLoginIP,
@@ -116,21 +121,20 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// If MFA is enabled globally and the user has a TOTP secret, redirect to verify.
-	if appConfig.MFA && user.TFSecret != "" {
-		// Store user ID in session temporarily for MFA verification.
+	if config.Cfg.MFA && user.TFSecret != "" {
 		sess.Values["mfa_user_id"] = user.ID.Hex()
 		sess.Save(r, w)
 		http.Redirect(w, r, "/mfa/verify", http.StatusFound)
 		return
 	}
 
-	SetSessionUser(w, r, user.ID.Hex())
+	auth.SetSessionUser(w, r, user.ID.Hex())
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // HandleLogout clears the session and redirects to login.
 func HandleLogout(w http.ResponseWriter, r *http.Request) {
-	ClearSession(w, r)
+	auth.ClearSession(w, r)
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
@@ -140,7 +144,7 @@ func HandlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	if msgs := getFlashMessages(w, r); msgs != nil {
 		ctx["flash_messages"] = msgs
 	}
-	Render(w, r, "password_change.html", ctx)
+	render.Render(w, r, "password_change.html", ctx)
 }
 
 // HandlePasswordChangePost validates and updates the user's password.
@@ -150,7 +154,7 @@ func HandlePasswordChangePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := UserFromContext(r.Context())
+	user := auth.UserFromContext(r.Context())
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -160,7 +164,7 @@ func HandlePasswordChangePost(w http.ResponseWriter, r *http.Request) {
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("new_password_confirm")
 
-	sess := GetSession(r)
+	sess := auth.GetSession(r)
 
 	setFlash := func(msg, category string) {
 		sess.Values["flash"] = msg
@@ -170,7 +174,7 @@ func HandlePasswordChangePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify current password.
-	if !CheckPassword(user.Password, currentPassword) {
+	if !auth.CheckPassword(user.Password, currentPassword) {
 		setFlash("Current password is incorrect.", "danger")
 		return
 	}
@@ -187,13 +191,13 @@ func HandlePasswordChangePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashed, err := HashPassword(newPassword)
+	hashed, err := auth.HashPassword(newPassword)
 	if err != nil {
 		setFlash("Internal error.", "danger")
 		return
 	}
 
-	_, err = Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	_, err = db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{"password": hashed},
 	})
 	if err != nil {
@@ -206,13 +210,13 @@ func HandlePasswordChangePost(w http.ResponseWriter, r *http.Request) {
 
 // HandlePasswordChanged marks the user's initial password as changed and redirects home.
 func HandlePasswordChanged(w http.ResponseWriter, r *http.Request) {
-	user := UserFromContext(r.Context())
+	user := auth.UserFromContext(r.Context())
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
-	Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{"initpwd": false},
 	})
 
@@ -221,23 +225,23 @@ func HandlePasswordChanged(w http.ResponseWriter, r *http.Request) {
 
 // HandleMFARegister renders the MFA registration page.
 func HandleMFARegister(w http.ResponseWriter, r *http.Request) {
-	Render(w, r, "mfa_register.html", nil)
+	render.Render(w, r, "mfa_register.html", nil)
 }
 
 // HandleMFARegisterPost generates a TOTP key for the user and returns the provisioning URI.
 func HandleMFARegisterPost(w http.ResponseWriter, r *http.Request) {
-	user := UserFromContext(r.Context())
+	user := auth.UserFromContext(r.Context())
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      appConfig.Name,
+		Issuer:      config.Cfg.Name,
 		AccountName: user.Email,
 	})
 	if err != nil {
-		sess := GetSession(r)
+		sess := auth.GetSession(r)
 		sess.Values["flash"] = "Failed to generate MFA key."
 		sess.Values["flash_category"] = "danger"
 		sess.Save(r, w)
@@ -246,22 +250,22 @@ func HandleMFARegisterPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store the secret on the user record.
-	Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
-			"tf_totp_secret":   key.Secret(),
+			"tf_totp_secret":    key.Secret(),
 			"tf_primary_method": "totp",
 		},
 	})
 
-	Render(w, r, "mfa_register.html", pongo2.Context{
-		"qr_url":     key.URL(),
+	render.Render(w, r, "mfa_register.html", pongo2.Context{
+		"qr_url":      key.URL(),
 		"totp_secret": key.Secret(),
 	})
 }
 
 // HandleMFAVerify renders the MFA verification page.
 func HandleMFAVerify(w http.ResponseWriter, r *http.Request) {
-	Render(w, r, "mfa_verify.html", nil)
+	render.Render(w, r, "mfa_verify.html", nil)
 }
 
 // HandleMFAVerifyPost validates the TOTP code and completes authentication.
@@ -271,7 +275,7 @@ func HandleMFAVerifyPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := GetSession(r)
+	sess := auth.GetSession(r)
 	code := strings.TrimSpace(r.FormValue("code"))
 
 	setFlash := func(msg, category string) {
@@ -285,7 +289,7 @@ func HandleMFAVerifyPost(w http.ResponseWriter, r *http.Request) {
 	userID, ok := sess.Values["mfa_user_id"].(string)
 	if !ok || userID == "" {
 		// Fall back to authenticated user (for post-login MFA setup verification).
-		user := UserFromContext(r.Context())
+		user := auth.UserFromContext(r.Context())
 		if user == nil {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
@@ -293,7 +297,7 @@ func HandleMFAVerifyPost(w http.ResponseWriter, r *http.Request) {
 		userID = user.ID.Hex()
 	}
 
-	user, err := FindUser(r.Context(), userID)
+	user, err := models.FindUser(r.Context(), userID)
 	if err != nil || user == nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
@@ -314,6 +318,6 @@ func HandleMFAVerifyPost(w http.ResponseWriter, r *http.Request) {
 	delete(sess.Values, "mfa_user_id")
 	sess.Save(r, w)
 
-	SetSessionUser(w, r, user.ID.Hex())
+	auth.SetSessionUser(w, r, user.ID.Hex())
 	http.Redirect(w, r, "/", http.StatusFound)
 }

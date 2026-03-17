@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"archive/zip"
@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bryanster/purpleops/internal/db"
+	"github.com/bryanster/purpleops/internal/models"
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -20,7 +22,7 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	_, err := FindAssessment(ctx, id)
+	_, err := models.FindAssessment(ctx, id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -41,12 +43,12 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		var tmpl TestCaseTemplate
-		if err := Col("test_case_template").FindOne(ctx, bson.M{"_id": oid}).Decode(&tmpl); err != nil {
+		var tmpl models.TestCaseTemplate
+		if err := db.Col("test_case_template").FindOne(ctx, bson.M{"_id": oid}).Decode(&tmpl); err != nil {
 			continue
 		}
 
-		tc := TestCase{
+		tc := models.TestCase{
 			ID:           bson.NewObjectID(),
 			AssessmentID: id,
 			Name:         tmpl.Name,
@@ -57,10 +59,10 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 			RedNotes:     tmpl.RedNotes,
 			UUID:         tmpl.UUID,
 			Visible:      true,
-			ModifyTime:   nowPtr(),
+			ModifyTime:   models.NowPtr(),
 		}
 
-		if _, err := Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
 			continue
 		}
 
@@ -81,7 +83,7 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	_, err := FindAssessment(ctx, id)
+	_, err := models.FindAssessment(ctx, id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -113,16 +115,16 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		tacticTitle := toTitleCase(entry.Tactic)
 
 		// Try to find a matching template.
-		var tmpl TestCaseTemplate
-		err := Col("test_case_template").FindOne(ctx, bson.M{
+		var tmpl models.TestCaseTemplate
+		err := db.Col("test_case_template").FindOne(ctx, bson.M{
 			"mitreid": entry.TechniqueID,
 			"tactic":  tacticTitle,
 		}).Decode(&tmpl)
 
-		var tc TestCase
+		var tc models.TestCase
 		if err == nil {
 			// Create testcase from template.
-			tc = TestCase{
+			tc = models.TestCase{
 				ID:           bson.NewObjectID(),
 				AssessmentID: id,
 				Name:         tmpl.Name,
@@ -133,29 +135,29 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 				RedNotes:     tmpl.RedNotes,
 				UUID:         tmpl.UUID,
 				Visible:      true,
-				ModifyTime:   nowPtr(),
+				ModifyTime:   models.NowPtr(),
 			}
 		} else {
 			// No template found. Look up the Technique name from the techniques collection.
-			var tech Technique
-			techErr := Col("technique").FindOne(ctx, bson.M{"mitreid": entry.TechniqueID}).Decode(&tech)
+			var tech models.Technique
+			techErr := db.Col("technique").FindOne(ctx, bson.M{"mitreid": entry.TechniqueID}).Decode(&tech)
 			name := entry.TechniqueID
 			if techErr == nil {
 				name = tech.Name
 			}
 
-			tc = TestCase{
+			tc = models.TestCase{
 				ID:           bson.NewObjectID(),
 				AssessmentID: id,
 				Name:         name,
 				MitreID:      entry.TechniqueID,
 				Tactic:       tacticTitle,
 				Visible:      true,
-				ModifyTime:   nowPtr(),
+				ModifyTime:   models.NowPtr(),
 			}
 		}
 
-		if _, err := Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
 			continue
 		}
 
@@ -187,7 +189,7 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	assessment, err := FindAssessment(ctx, id)
+	assessment, err := models.FindAssessment(ctx, id)
 	if err != nil {
 		http.Error(w, "Assessment not found", http.StatusNotFound)
 		return
@@ -209,11 +211,11 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 
 	var results []map[string]interface{}
 	for _, entry := range entries {
-		tc := TestCase{
+		tc := models.TestCase{
 			ID:           bson.NewObjectID(),
 			AssessmentID: id,
 			Visible:      true,
-			ModifyTime:   nowPtr(),
+			ModifyTime:   models.NowPtr(),
 		}
 
 		if v, ok := entry["name"].(string); ok {
@@ -245,7 +247,7 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 			tc.Tags = resolveMultiField(ctx, assessment, "tags", tagsRaw)
 		}
 
-		if _, err := Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
 			continue
 		}
 
@@ -260,7 +262,7 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // resolveMultiField resolves tool/tag names to IDs, creating new entries on the assessment if needed.
-func resolveMultiField(ctx context.Context, assessment *Assessment, field string, raw interface{}) []string {
+func resolveMultiField(ctx context.Context, assessment *models.Assessment, field string, raw interface{}) []string {
 	var names []string
 	switch v := raw.(type) {
 	case []interface{}:
@@ -292,9 +294,9 @@ func resolveMultiField(ctx context.Context, assessment *Assessment, field string
 			}
 			if !found {
 				newID := bson.NewObjectID()
-				newTool := Tool{ID: newID, Name: name}
+				newTool := models.Tool{ID: newID, Name: name}
 				assessment.Tools = append(assessment.Tools, newTool)
-				Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+				db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 					"$push": bson.M{"tools": newTool},
 				})
 				ids = append(ids, newID.Hex())
@@ -309,9 +311,9 @@ func resolveMultiField(ctx context.Context, assessment *Assessment, field string
 			}
 			if !found {
 				newID := bson.NewObjectID()
-				newTag := Tag{ID: newID, Name: name}
+				newTag := models.Tag{ID: newID, Name: name}
 				assessment.Tags = append(assessment.Tags, newTag)
-				Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+				db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 					"$push": bson.M{"tags": newTag},
 				})
 				ids = append(ids, newID.Hex())
@@ -414,14 +416,14 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 		assessmentName = "Imported Assessment"
 	}
 
-	assessment := Assessment{
+	assessment := models.Assessment{
 		ID:          newAssessmentID,
 		Name:        assessmentName,
 		Description: assessmentDesc,
-		Created:     nowPtr(),
+		Created:     models.NowPtr(),
 	}
 
-	if _, err := Col("assessment").InsertOne(ctx, &assessment); err != nil {
+	if _, err := db.Col("assessment").InsertOne(ctx, &assessment); err != nil {
 		http.Error(w, "Failed to create assessment", http.StatusInternalServerError)
 		return
 	}
@@ -446,11 +448,11 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	for _, entry := range testcaseEntries {
 		oldID, _ := entry["id"].(string)
 
-		tc := TestCase{
+		tc := models.TestCase{
 			ID:           bson.NewObjectID(),
 			AssessmentID: newAssessmentID.Hex(),
 			Visible:      true,
-			ModifyTime:   nowPtr(),
+			ModifyTime:   models.NowPtr(),
 		}
 
 		// Set string fields.
@@ -541,7 +543,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if _, err := Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
 			continue
 		}
 
@@ -567,7 +569,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 }
 
 // rebuildMultiField recreates embedded document references on the assessment for imported testcases.
-func rebuildMultiField(ctx context.Context, assessment *Assessment, field string, rawVal interface{}) []string {
+func rebuildMultiField(ctx context.Context, assessment *models.Assessment, field string, rawVal interface{}) []string {
 	var nameDescPairs []string
 	switch v := rawVal.(type) {
 	case []interface{}:
@@ -600,46 +602,46 @@ func rebuildMultiField(ctx context.Context, assessment *Assessment, field string
 		newID := bson.NewObjectID()
 		switch field {
 		case "sources":
-			entry := Source{ID: newID, Name: name, Description: desc}
+			entry := models.Source{ID: newID, Name: name, Description: desc}
 			assessment.Sources = append(assessment.Sources, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"sources": entry},
 			})
 		case "targets":
-			entry := Target{ID: newID, Name: name, Description: desc}
+			entry := models.Target{ID: newID, Name: name, Description: desc}
 			assessment.Targets = append(assessment.Targets, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"targets": entry},
 			})
 		case "tools":
-			entry := Tool{ID: newID, Name: name, Description: desc}
+			entry := models.Tool{ID: newID, Name: name, Description: desc}
 			assessment.Tools = append(assessment.Tools, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"tools": entry},
 			})
 		case "controls":
-			entry := Control{ID: newID, Name: name, Description: desc}
+			entry := models.Control{ID: newID, Name: name, Description: desc}
 			assessment.Controls = append(assessment.Controls, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"controls": entry},
 			})
 		case "tags":
 			// Tags use "name|colour" format.
-			entry := Tag{ID: newID, Name: name, Colour: desc}
+			entry := models.Tag{ID: newID, Name: name, Colour: desc}
 			assessment.Tags = append(assessment.Tags, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"tags": entry},
 			})
 		case "datasources":
-			entry := Datasource{ID: newID, Name: name, Description: desc}
+			entry := models.Datasource{ID: newID, Name: name, Description: desc}
 			assessment.Datasources = append(assessment.Datasources, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"datasources": entry},
 			})
 		case "rules":
-			entry := DetectionRule{ID: newID, Name: name, Description: desc}
+			entry := models.DetectionRule{ID: newID, Name: name, Description: desc}
 			assessment.Rules = append(assessment.Rules, entry)
-			Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
 				"$push": bson.M{"rules": entry},
 			})
 		}
@@ -649,7 +651,7 @@ func rebuildMultiField(ctx context.Context, assessment *Assessment, field string
 }
 
 // findExistingMultiEntry checks if a name already exists in the assessment's embedded docs.
-func findExistingMultiEntry(assessment *Assessment, field, name string) string {
+func findExistingMultiEntry(assessment *models.Assessment, field, name string) string {
 	switch field {
 	case "sources":
 		for _, s := range assessment.Sources {
