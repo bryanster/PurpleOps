@@ -136,3 +136,11 @@ supervisord.pid
 sampledata/sigma/*
 external/*
 INITIAL_ADMIN_PASSWORD.TXT
+
+# Go
+purpleops
+/seed
+
+# E2E tests
+e2e/node_modules/
+e2e/test-results/

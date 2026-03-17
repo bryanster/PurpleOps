@@ -2,8 +2,8 @@
 	<div class="row my-2 align-items-center">
 		<div class="col-2">
 			<button id="run-button" name="run-button" type="button"
-				class="btn {% if testcase.state=="Pending" %}btn-outline-success{% endif%}{% if testcase.state=="Running" %}btn-outline-danger{% endif%}{% if testcase.state=="Complete" %}btn-outline-warning{% endif%} btn-sm w-100" aria-pressed="false"
-				value="{{ testcase.state }}" {% if current_user.has_role("Blue") %} disabled{% endif %}>{% if testcase.state=="Pending" %}Start{% endif%}{% if testcase.state=="Running" %}Stop{% endif%}{% if testcase.state=="Complete" %}Restart{% endif%}</button>
+				class="btn {% if testcase.State == "Pending" %}btn-outline-success{% endif %}{% if testcase.State == "Running" %}btn-outline-danger{% endif %}{% if testcase.State == "Complete" %}btn-outline-warning{% endif %} btn-sm w-100" aria-pressed="false"
+				value="{{ testcase.State }}" {% if current_user.HasRole("Blue") %} disabled{% endif %}>{% if testcase.State == "Pending" %}Start{% endif %}{% if testcase.State == "Running" %}Stop{% endif %}{% if testcase.State == "Complete" %}Restart{% endif %}</button>
 		</div>
 		<div class="col-4">
 			<div class="input-group input-group-sm">
@@ -11,7 +11,7 @@
 					<i class="bi-clock-history">&zwnj;</i>
 				</span>
 				<input type="hidden" name="timezone" id="timezone">
-				<input id='time-start' name="starttime" type="datetime-local" class='form-control' autocomplete="off" value="{% if testcase.starttime %}{{ testcase.starttime.strftime('%Y-%m-%dT%H:%M') }}{% endif %}" {% if current_user.has_role("Blue") %} disabled{% endif %}>
+				<input id='time-start' name="starttime" type="datetime-local" class='form-control' autocomplete="off" value="{% if testcase.StartTime %}{{ testcase.StartTime|strftime:"%Y-%m-%dT%H:%M" }}{% endif %}" {% if current_user.HasRole("Blue") %} disabled{% endif %}>
 			</div>
 		</div>
 		<div class="col-4">
@@ -19,20 +19,20 @@
 				<span class="input-group-text text-danger" title="End time">
 					<i class="bi-clock-fill">&zwnj;</i>
 				</span>
-				<input id='time-end' name="endtime" type="datetime-local" class='form-control' autocomplete="off" value="{% if testcase.endtime %}{{ testcase.endtime.strftime('%Y-%m-%dT%H:%M') }}{% endif %}" {% if current_user.has_role("Blue") %} disabled{% endif %}>
+				<input id='time-end' name="endtime" type="datetime-local" class='form-control' autocomplete="off" value="{% if testcase.EndTime %}{{ testcase.EndTime|strftime:"%Y-%m-%dT%H:%M" }}{% endif %}" {% if current_user.HasRole("Blue") %} disabled{% endif %}>
 			</div>
 		</div>
 		<div class="col-2">
 			<div class="btn-group-sm text-end" role="group">
 				<select class="selectpicker" data-width="fit" data-live-search="true" autocomplete="off" value="" title="Go" onchange="location = this.value;" data-style-base="form-control-sm form-control">
-					{% for test in testcases | sort(attribute='state') %}
-					{% if not (current_user.has_role("Blue") and not test.visible) %}
-					<option value="/testcase/{{test.id}}">{{test.name}} ({{test.state}})</option>
+					{% for test in testcases_sorted %}
+					{% if !(current_user.HasRole("Blue") && !test.Visible) %}
+					<option value="/testcase/{{ test.ID.Hex }}">{{ test.Name }} ({{ test.State }})</option>
 					{% endif %}
 					{% endfor %}
 				</select>
-				{% if current_user.has_role("Admin") or current_user.has_role("Red") %}
-					<input type="checkbox" class="btn-check" name="visible" id="visible" autocomplete="off"{% if testcase.visible %} checked{% endif %}>
+				{% if current_user.HasRole("Admin") || current_user.HasRole("Red") %}
+					<input type="checkbox" class="btn-check" name="visible" id="visible" autocomplete="off"{% if testcase.Visible %} checked{% endif %}>
 					<label class="btn btn-outline-primary" for="visible"><i class="bi-eye">&zwnj;</i></label>
 				{% endif %}
 			</div>
@@ -48,11 +48,11 @@
 				<select class="selectpicker form-control" multiple data-live-search="true" title="Source(s)"
 					data-style="" data-style-base="form-control-sm form-control"
 					data-live-search-placeholder="Search..." data-width="auto" id="sources"
-					name="sources" autocomplete="off" data-size="10"{% if current_user.has_role("Blue") %} disabled{% endif %}>
-					{% if not current_user.has_role("Spectator") %}<option data-icon="bi-gear">Manage</option>{% endif %}
+					name="sources" autocomplete="off" data-size="10"{% if current_user.HasRole("Blue") %} disabled{% endif %}>
+					{% if !current_user.HasRole("Spectator") %}<option data-icon="bi-gear">Manage</option>{% endif %}
 					<option data-divider="true"></option>
-					{% for source in multi.sources %}
-						<option {% if source.id|string in testcase.sources %}selected{% endif %} class="dynopt-sources" value="{{ source.id }}">{{ source.name }}</option>
+					{% for source in multi.Sources %}
+						<option {% if source.ID.Hex|is_in:testcase.Sources %}selected{% endif %} class="dynopt-sources" value="{{ source.ID.Hex }}">{{ source.Name }}</option>
 					{% endfor %}
 				</select>
 			</div>
@@ -66,11 +66,11 @@
 				<select class="selectpicker form-control" multiple data-live-search="true" title="Target(s)"
 					data-style="" data-style-base="form-control-sm form-control"
 					data-live-search-placeholder="Search..." data-width="auto" id="targets"
-					name="targets" autocomplete="off" data-size="10"{% if current_user.has_role("Blue") %} disabled{% endif %}>
-					{% if not current_user.has_role("Spectator") %}<option data-icon="bi-gear">Manage</option>{% endif %}
+					name="targets" autocomplete="off" data-size="10"{% if current_user.HasRole("Blue") %} disabled{% endif %}>
+					{% if !current_user.HasRole("Spectator") %}<option data-icon="bi-gear">Manage</option>{% endif %}
 					<option data-divider="true"></option>
-					{% for target in multi.targets %}
-						<option {% if target.id|string in testcase.targets %}selected{% endif %} class="dynopt-targets" value="{{ target.id }}">{{ target.name }}</option>
+					{% for target in multi.Targets %}
+						<option {% if target.ID.Hex|is_in:testcase.Targets %}selected{% endif %} class="dynopt-targets" value="{{ target.ID.Hex }}">{{ target.Name }}</option>
 					{% endfor %}
 				</select>
 			</div>
@@ -84,11 +84,11 @@
 				<select class="selectpicker form-control" multiple data-live-search="true" title="Tools(s)"
 					data-style="" data-style-base="form-control-sm form-control"
 					data-live-search-placeholder="Search..." data-width="auto" id="tools"
-					name="tools" autocomplete="off" data-size="10"{% if current_user.has_role("Blue") %} disabled{% endif %}>
-					{% if not current_user.has_role("Spectator") %}<option data-icon="bi-gear">Manage</option>{% endif %}
+					name="tools" autocomplete="off" data-size="10"{% if current_user.HasRole("Blue") %} disabled{% endif %}>
+					{% if !current_user.HasRole("Spectator") %}<option data-icon="bi-gear">Manage</option>{% endif %}
 					<option data-divider="true"></option>
-					{% for tool in multi.tools %}
-						<option {% if tool.id|string in testcase.tools %}selected{% endif %} class="dynopt-tools" value="{{ tool.id }}">{{ tool.name }}</option>
+					{% for tool in multi.Tools %}
+						<option {% if tool.ID.Hex|is_in:testcase.Tools %}selected{% endif %} class="dynopt-tools" value="{{ tool.ID.Hex }}">{{ tool.Name }}</option>
 					{% endfor %}
 				</select>
 			</div>
@@ -100,25 +100,25 @@
 					<span class="input-group-text px-1 text-danger"
 						style="writing-mode: vertical-lr">Objective</span>
 					<textarea class="form-control" name="objective" id="objective"
-						style="min-height: 5em"{% if current_user.has_role("Blue") %} disabled{% endif %}>{{ testcase.objective }}</textarea>
+						style="min-height: 5em"{% if current_user.HasRole("Blue") %} disabled{% endif %}>{{ testcase.Objective }}</textarea>
 				</div>
 				<div class="input-group my-3" id="red-actions">
 					<span class="input-group-text px-1 text-danger"
 						style="writing-mode: vertical-lr;">Actions</span>
 					<textarea class="form-control" name="actions" id="actions"
-						style="min-height: 4.5em;font-family: monospace;font-size:0.94em;"{% if current_user.has_role("Blue") %} disabled{% endif %}>{{ testcase.actions }}</textarea>
+						style="min-height: 4.5em;font-family: monospace;font-size:0.94em;"{% if current_user.HasRole("Blue") %} disabled{% endif %}>{{ testcase.Actions }}</textarea>
 				</div>
 				<div class="input-group my-2" id="red-notes">
 					<span class="input-group-text px-1 text-danger"
 						style="writing-mode: vertical-lr;">Notes</span>
 					<textarea class="form-control" name="rednotes" id="rednotes"
-						style="min-height: 4em"{% if current_user.has_role("Blue") %} disabled{% endif %}>{{ testcase.rednotes }}</textarea>
+						style="min-height: 4em"{% if current_user.HasRole("Blue") %} disabled{% endif %}>{{ testcase.RedNotes }}</textarea>
 				</div>
 				<div class="input-group my-2" id="red-uuid">
 					<span class="input-group-text px-1 text-danger"
 						style="writing-mode: vertical-lr;">UUID</span>
 					<textarea class="form-control" name="uuid" id="uuid" rows="1"
-						style="resize: none; min-height: 1.5em;"{% if current_user.has_role("Blue") %} disabled{% endif %}>{{ testcase.uuid }}</textarea>
+						style="resize: none; min-height: 1.5em;"{% if current_user.HasRole("Blue") %} disabled{% endif %}>{{ testcase.UUID }}</textarea>
 				</div>
 		</div>
 
@@ -126,32 +126,32 @@
 	<div class="row">
 		<div class="row m-0">
 			<ul class="list-group p-0" id="evidence-red">
-				{% if not current_user.has_role("Blue") %}
+				{% if !current_user.HasRole("Blue") %}
 				<li class="list-group-item">
 					<div class="input-group input-group-sm">
 						<label class="input-group-text text-danger" for="redfiles">Upload
 							Evidence</label>
-						<input type="file" class="form-control" id="redfiles" name="redfiles" multiple="multiple"{% if current_user.has_role("Blue") %} disabled{% endif %} autocomplete="off">
+						<input type="file" class="form-control" id="redfiles" name="redfiles" multiple="multiple"{% if current_user.HasRole("Blue") %} disabled{% endif %} autocomplete="off">
 					</div>
 				</li>
 				{% endif %}
-				{% for file in testcase.redfiles %}
+				{% for file in testcase.RedFiles %}
 				<li class="list-group-item">
-					{% if not current_user.has_role("Blue") %}
+					{% if !current_user.HasRole("Blue") %}
 						<button type="button" class="btn btn-outline-danger btn-sm me-2 evidence-delete evidence-red">
 							<i class="bi-trash small">&zwnj;</i>
 						</button>
 					{% endif %}
-					<a href="/testcase/{{ testcase.id }}/evidence/{{ file.name }}?download=true" class="btn btn-outline-primary btn-sm me-2">
+					<a href="/testcase/{{ testcase.ID.Hex }}/evidence/{{ file.Name }}?download=true" class="btn btn-outline-primary btn-sm me-2">
 						<i class="bi-download small">&zwnj;</i>
 					</a>
-					{% if (file.name|lower).endswith('.png') or (file.name|lower).endswith('.jpg') or (file.name|lower).endswith('.jpeg') %}
-						<a href="/testcase/{{ testcase.id }}/evidence/{{ file.name }}" target="_blank">
-							<img class="img-fluid img-thumbnail" style="max-width: 80%" src="/testcase/{{ testcase.id }}/evidence/{{ file.name }}"/>
+					{% if file.Name|is_image %}
+						<a href="/testcase/{{ testcase.ID.Hex }}/evidence/{{ file.Name }}" target="_blank">
+							<img class="img-fluid img-thumbnail" style="max-width: 80%" src="/testcase/{{ testcase.ID.Hex }}/evidence/{{ file.Name }}"/>
 						</a>
-						<input style="margin-left: 6em; width:80%;" class="form-control form-control-sm" type="text" placeholder="Caption..." value="{{ file.caption }}" id="RED{{ file.name }}" name="RED{{ file.name }}" {% if current_user.has_role("Blue") %}disabled{% endif %}/>
+						<input style="margin-left: 6em; width:80%;" class="form-control form-control-sm" type="text" placeholder="Caption..." value="{{ file.Caption }}" id="RED{{ file.Name }}" name="RED{{ file.Name }}" {% if current_user.HasRole("Blue") %}disabled{% endif %}/>
 					{% else %}
-						<span class="name small">{{ file.name }}</span>
+						<span class="name small">{{ file.Name }}</span>
 					{% endif %}
 				</li>
 				{% endfor %}

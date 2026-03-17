@@ -1,7 +1,7 @@
 {% extends "master.html" %}
 {% block content %}
 
-{% include 'access_modals.html' %}
+{% include "access_modals.html" %}
 
 <div class="m-2 mt-0">
 	<div id="toolbar">
@@ -23,13 +23,13 @@
 		<tbody>
 			{% for user in users %}
 			<tr data-title="bootstrap table" data-object='{"key": "value"}'>
-				<td>{{ user.id }}</td>
-				<td>{{ user.username }}</td>
-				<td>{{ user.email }}</td>
-				<td>{{ user.roles | map(attribute='name') | join(', ') or "-" }}</td>
-				<td>{% if user.current_login_at %}{{ user.current_login_at.strftime('%Y-%m-%dT%H:%M') }}{% else %}-{% endif %}|{{ user.current_login_ip or "-" }}</td>
-				<td>{% if 'Admin' in (user.roles | map(attribute='name')) %}*{% elif user.assessments %}{{ (user.assessments | map(attribute='name') | join(', ')) }}{% else %}-{% endif %}</td>
-				<td>{{ user.username }}</td>
+				<td>{{ user.ID.Hex }}</td>
+				<td>{{ user.Username }}</td>
+				<td>{{ user.Email }}</td>
+				<td>{{ user.RoleNames }}</td>
+				<td>{% if user.CurrentLoginAt %}{{ user.CurrentLoginAt|strftime:"%Y-%m-%dT%H:%M" }}{% else %}-{% endif %}|{{ user.CurrentLoginIP|default:"-" }}</td>
+				<td>{{ user.AssessmentNames }}</td>
+				<td>{{ user.Username }}</td>
 			</tr>
 			{% endfor %}
 		</tbody>

@@ -18,25 +18,21 @@
     }
 </style>
 <main class="form-mfa">
-    {{ macros.logo() }}
+    {{ logo() }}
 
-    {%- with messages = get_flashed_messages(with_categories=true) -%}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category }}" role="alert">
-            {{message}}
+    {% if flash_messages %}
+        {% for fm in flash_messages %}
+        <div class="alert alert-{{ fm.Category }}" role="alert">
+            {{ fm.Message }}
         </div>
         {% endfor %}
-        {% endif %}
-    {%- endwith %}
+    {% endif %}
 
     <h1 class="h3 mb-3 fw-normal">Multi-Factor Authentication</h1>
-    <form action="{{ url_for_security("two_factor_token_validation") }}" method="POST" name="two_factor_verify_code_form">
-        {{ two_factor_verify_code_form.hidden_tag() }}
-        {{ macros.render_field_errors(two_factor_verify_code_form.code) }}
+    <form action="/mfa/verify" method="POST" name="two_factor_verify_code_form">
         <div class="form-floating">
             <input id="code" name="code" placeholder="XXXXXX" type="text" value="" required class="form-control">
-            <label for="code">Authentication Code</label> 
+            <label for="code">Authentication Code</label>
         </div>
         <input id="submit" name="submit" type="submit" value="Submit Code" class="btn btn-primary w-100 " >
     </form>

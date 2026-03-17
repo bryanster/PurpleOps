@@ -71,11 +71,48 @@
     <script src="/static/scripts/bootstrap-select.min.js"></script>
     <script src="/static/scripts/popper.min.js"></script>
 
-    {% include 'master_modals.html' %}
+    {% include "master_modals.html" %}
 
-    {% import "macros.html" as macros %}
+    {% macro modalHead(name, title, xl=false) %}
+    <div class="modal fade" id="{{ name }}Modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog {% if xl %}modal-xl{% endif %}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="{{ name }}Label">{{ title }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+    {% endmacro %}
 
-    {% if current_user.initpwd and request.path not in ["/login", "/mfa/register", "/mfa/verify", "/password/change"] %}
+    {% macro modalTail(name, cancelLabel, actionLabel="", buttonClass="") %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ cancelLabel }}</button>
+                    {% if actionLabel %}
+                    <button type="submit" class="btn btn-primary {{ buttonClass }}" id="{{ name }}Button">{{ actionLabel }}</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endmacro %}
+
+    {% macro toast(title) %}
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="toast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">{{ title }}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+    {% endmacro %}
+
+    {% macro logo() %}
+    <img class="mb-4" src="/static/images/logo.png" alt="" width="200" style="margin: 0 auto;display: block;">
+    {% endmacro %}
+
+    {% if current_user.GetInitpwd() && request.GetPath() != "/login" && request.GetPath() != "/mfa/register" && request.GetPath() != "/mfa/verify" && request.GetPath() != "/password/change" %}
     <div class="alert alert-danger alert-server m-0 border-0 rounded-0" role="alert">
         <strong>Initial password is still in use.</strong> Change it via Settings (Top Right) > Update Password
     </div>
@@ -84,14 +121,14 @@
     <nav class="navbar sticky-top navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="/"><img class="mx-2" src="/static/images/logo.png" width="28px"><span style="color: var(--bs-secondary)">Purple</span>Ops</a>
-            {% if not request.path in ["/login", "/mfa/register", "/mfa/verify"] %}
+            {% if request.GetPath() != "/login" && request.GetPath() != "/mfa/register" && request.GetPath() != "/mfa/verify" %}
             {% block navpill %}{% endblock %}
             <div class="btn-group navbar-right" role="group">
                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="dropdown" aria-expanded="false" title="Settings">
                     <i class="bi-gear-fill">&zwnj;</i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-lg-end">
-                    {% if current_user.has_role("Admin") %}
+                    {% if current_user.HasRole("Admin") %}
                     <li><a class="dropdown-item" href="/manage/access">Access Control</a></li>
                     {% endif %}
                     <li><a class="dropdown-item" href="/password/change">Change Password</a></li>

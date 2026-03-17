@@ -22,33 +22,29 @@
         margin: 10px;
     }
 </style>
-<main class="form-mfa">            
-    {{ macros.logo() }}
+<main class="form-mfa">
+    {{ logo() }}
 
-    {%- with messages = get_flashed_messages(with_categories=true) -%}
-    {% if messages %}
-    {% for category, message in messages %}
-    <div class="alert alert-{{ category }}" role="alert">
-        {{message}}
-    </div>
-    {% endfor %}
+    {% if flash_messages %}
+        {% for fm in flash_messages %}
+        <div class="alert alert-{{ fm.Category }}" role="alert">
+            {{ fm.Message }}
+        </div>
+        {% endfor %}
     {% endif %}
-    {%- endwith %}
 
     <h1 class="h3 mb-3 fw-normal">Setup Multi-Factor Authentication (MFA)</h1>
-    <form action="{{ url_for_security("two_factor_setup") }}" method="POST" name="two_factor_setup_form">
-        {{ two_factor_setup_form.hidden_tag() }}
+    <form action="/mfa/register" method="POST" name="two_factor_setup_form">
         <input id="setup-1" name="setup" type="radio" value="authenticator" checked="checked" style="display: none">
-        {{ macros.render_field_errors(two_factor_setup_form.setup) }}
         <input id="submit" name="submit" type="submit" value="Generate QR Code" class="btn btn-primary w-100 " >
-        {% if chosen_method=="authenticator" and chosen_method in choices %}
+        {% if chosen_method == "authenticator" %}
         <hr>
         <div class="center">
             <div>
-            {{ _fsdomain("Open an authenticator app on your device and scan the following QRcode (or enter the code below manually) to start receiving codes:") }}
+            Open an authenticator app on your device and scan the following QRcode (or enter the code below manually) to start receiving codes:
             </div>
             <div>
-            <img alt="{{ _fsdomain("Two factor authentication code") }}" id="qrcode" src="{{ authr_qrcode }}">
+            <img alt="Two factor authentication code" id="qrcode" src="{{ authr_qrcode }}">
             </div>
             <div>
             {{ authr_key }}
@@ -56,17 +52,15 @@
         </div>
         {% endif %}
     </form>
-    {% if chosen_method=="authenticator" and chosen_method in choices %}
+    {% if chosen_method == "authenticator" %}
     <hr>
-    <form action="{{ url_for_security("two_factor_token_validation") }}" method="POST"
+    <form action="/mfa/verify" method="POST"
         name="two_factor_verify_code_form">
-        {{ two_factor_verify_code_form.hidden_tag() }}
         <div class="form-floating">
             <input id="code" name="code" placeholder="XXXXXX" type="text" value="" required class="form-control">
-            <label for="code">Authentication Code</label> 
+            <label for="code">Authentication Code</label>
         </div>
         <input id="submit" name="submit" type="submit" value="Submit Code" class="btn btn-primary w-100 " >
-        {{ macros.render_field_errors(two_factor_verify_code_form.code) }}
     </form>
     {% endif %}
 

@@ -1,12 +1,12 @@
 <!-- Delete assessment Toast -->
-{{ macros.toast(title="Assessment Delete") }}
+{{ toast("Assessment Delete") }}
 
 <!-- Clone assessment Toast -->
-{{ macros.toast(title="Cloned") }}
+{{ toast("Cloned") }}
 
 <!-- Create/edit assessment modal -->
 <form action="/assessment" method="POST" class="m-0" id="newAssessmentForm">
-	{{ macros.modalHead(name="newAssessment", title="New Assessment") }}
+	{{ modalHead("newAssessment", "New Assessment") }}
 	<form>
 		<div class="mb-3">
 			<label class="col-form-label">Name</label>
@@ -17,20 +17,20 @@
 			<textarea class="form-control" name="description" placeholder="The purpose of this engagement is to..." required id="description" autocomplete="off"></textarea>
 		</div>
 	</form>
-	{{ macros.modalTail(name="newAssessment", cancelLabel="Cancel", actionLabel="Create") }}
+	{{ modalTail("newAssessment", "Cancel", "Create") }}
 </form>
 
 <!-- Delete assessment confirmation modal -->
-{{ macros.modalHead(name="deleteAssessment", title="Delete Assessment") }}
+{{ modalHead("deleteAssessment", "Delete Assessment") }}
 <div class="mb-3" id="deleteAssessmentWarning">ERROR</div>
-{{ macros.modalTail(name="deleteAssessment", cancelLabel="No", actionLabel="Delete") }}
+{{ modalTail("deleteAssessment", "No", "Delete") }}
 
 <!-- Import assessment modal -->
 <form action="/assessment/import/entire" enctype="multipart/form-data" method="POST" class="m-0" id="importAssessmentForm">
-	{{ macros.modalHead(name="importAssessment", title="Import Assessment") }}
+	{{ modalHead("importAssessment", "Import Assessment") }}
 	<div class="mb-3">
 		<p>Select the <code>Assessment.zip</code> file output from <code>Export > Entire Assessment</code>.</p>
 		<input class="form-control" type="file" id="formFile" name="file" accept=".zip,application/zip" autocomplete="off">
 	</div>
-	{{ macros.modalTail(name="deleteAssessment", cancelLabel="Cancel", actionLabel="Import") }}
+	{{ modalTail("deleteAssessment", "Cancel", "Import") }}
 </form>
