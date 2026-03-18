@@ -13,9 +13,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: go vet
-        run: go vet ./...
+          cache: true
+      - name: Download modules
+        run: go mod download
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.5.0
