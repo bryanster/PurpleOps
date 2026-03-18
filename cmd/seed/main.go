@@ -575,11 +575,11 @@ func generateSecrets() {
 	securitySalt := randomHex(16)
 
 	// Append secrets if not already present
-	if !strings.Contains(content, "SECRET_KEY=") {
-		content += fmt.Sprintf("\nSECRET_KEY=%s", secretKey)
+	if !strings.Contains(content, "FLASK_SECRET_KEY=") {
+		content += fmt.Sprintf("\nFLASK_SECRET_KEY=%s", secretKey)
 	}
-	if !strings.Contains(content, "SECURITY_PASSWORD_SALT=") {
-		content += fmt.Sprintf("\nSECURITY_PASSWORD_SALT=%s", securitySalt)
+	if !strings.Contains(content, "FLASK_SECURITY_PASSWORD_SALT=") {
+		content += fmt.Sprintf("\nFLASK_SECURITY_PASSWORD_SALT=%s", securitySalt)
 	}
 
 	if err := os.WriteFile(envPath, []byte(strings.TrimSpace(content)+"\n"), 0644); err != nil {

@@ -308,12 +308,31 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleNavigatorJSON serves the navigator JSON file. Unauthenticated.
-// GET /assessment/{id}/navigator.json
+// HandleNavigatorJSON serves the navigator JSON file. Unauthenticated but secret-gated.
+// The caller must supply ?secret=<value> matching the token stored in assessment.NavigatorExport.
+// GET /assessment/{id}/navigator.json?secret=<token>
 func HandleNavigatorJSON(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	filePath := filepath.Join("files", id, "navigator.json")
+	secret := r.URL.Query().Get("secret")
+	if secret == "" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
+	assessment, err := models.FindAssessment(r.Context(), id)
+	if err != nil || assessment == nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	// NavigatorExport is stored as "timestamp|ip|secret"
+	parts := strings.SplitN(assessment.NavigatorExport, "|", 3)
+	if len(parts) != 3 || parts[2] != secret {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	filePath := filepath.Join("files", id, "navigator.json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 	http.ServeFile(w, r, filePath)

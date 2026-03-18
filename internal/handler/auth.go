@@ -78,32 +78,9 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle password verification.
-	// If the stored hash starts with "$2", it is a bcrypt hash.
-	// Otherwise treat it as a plain text password (initial admin seeder).
-	authenticated := false
-	if strings.HasPrefix(user.Password, "$2") {
-		authenticated = auth.CheckPassword(user.Password, password)
-	} else {
-		// Plain text comparison for initial seed passwords.
-		authenticated = user.Password == password
-	}
-
-	if !authenticated {
+	if !auth.CheckPassword(user.Password, password) {
 		setFlash("Invalid email or password.", "danger")
 		return
-	}
-
-	// If the user has no bcrypt hash yet (initpwd / migration), hash and persist.
-	if !strings.HasPrefix(user.Password, "$2") {
-		hashed, err := auth.HashPassword(password)
-		if err != nil {
-			setFlash("Internal error.", "danger")
-			return
-		}
-		db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
-			"$set": bson.M{"password": hashed},
-		})
 	}
 
 	// Update login tracking fields.
