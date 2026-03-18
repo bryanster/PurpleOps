@@ -27,11 +27,20 @@ func GetSession(r *http.Request) *sessions.Session {
 	return sess
 }
 
-// SetSessionUser stores the user ID in the session.
+// SetSessionUser stores the user ID in a new session, invalidating the old one
+// to prevent session fixation attacks.
 func SetSessionUser(w http.ResponseWriter, r *http.Request, userID string) {
-	sess := GetSession(r)
-	sess.Values["user_id"] = userID
-	sess.Save(r, w)
+	// Invalidate the pre-login session so a previously known session ID
+	// cannot be used by an attacker after the user authenticates.
+	old := GetSession(r)
+	old.Values = make(map[interface{}]interface{})
+	old.Options.MaxAge = -1
+	old.Save(r, w)
+
+	// Create a fresh session with a new ID.
+	newSess, _ := store.New(r, "purpleops")
+	newSess.Values["user_id"] = userID
+	newSess.Save(r, w)
 }
 
 // ClearSession destroys the session.
