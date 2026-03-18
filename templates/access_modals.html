@@ -1,8 +1,7 @@
 <!-- New / update user modal -->
 <form action="/manage/access/user" method="POST" class="m-0" id="userDetailForm">
   {{ modalHead("userDetail", "New User") }}
-  <form>
-    <div class="mb-3">
+  <div class="mb-3">
       <label for="username" class="col-form-label">Username</label>
       <input type="text" class="form-control" id="username" name="username" placeholder="johns" required>
     </div>
@@ -30,7 +29,6 @@
         {% endfor %}
       </select>
     </div>
-  </form>
   {{ modalTail("userDetail", "Close", "Create") }}
 </form>
 
