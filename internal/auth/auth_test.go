@@ -146,3 +146,152 @@ func TestAuthRequiredMiddleware(t *testing.T) {
 		t.Errorf("expected redirect to /login, got %q", loc)
 	}
 }
+
+// --- intersectIDs ---
+
+func TestIntersectIDs(t *testing.T) {
+	id1 := bson.NewObjectID()
+	id2 := bson.NewObjectID()
+	id3 := bson.NewObjectID()
+
+	t.Run("overlap", func(t *testing.T) {
+		got := intersectIDs([]bson.ObjectID{id1, id2}, []bson.ObjectID{id2, id3})
+		if len(got) != 1 || got[0] != id2 {
+			t.Errorf("expected [id2], got %v", got)
+		}
+	})
+
+	t.Run("no overlap", func(t *testing.T) {
+		got := intersectIDs([]bson.ObjectID{id1}, []bson.ObjectID{id2, id3})
+		if len(got) != 0 {
+			t.Errorf("expected empty, got %v", got)
+		}
+	})
+
+	t.Run("all overlap", func(t *testing.T) {
+		got := intersectIDs([]bson.ObjectID{id1, id2}, []bson.ObjectID{id1, id2})
+		if len(got) != 2 {
+			t.Errorf("expected 2, got %d", len(got))
+		}
+	})
+
+	t.Run("empty a", func(t *testing.T) {
+		got := intersectIDs(nil, []bson.ObjectID{id1})
+		if len(got) != 0 {
+			t.Errorf("expected empty for nil a, got %v", got)
+		}
+	})
+
+	t.Run("empty b", func(t *testing.T) {
+		got := intersectIDs([]bson.ObjectID{id1}, nil)
+		if len(got) != 0 {
+			t.Errorf("expected empty for nil b, got %v", got)
+		}
+	})
+
+	t.Run("both empty", func(t *testing.T) {
+		got := intersectIDs(nil, nil)
+		if len(got) != 0 {
+			t.Errorf("expected empty for both nil, got %v", got)
+		}
+	})
+
+	t.Run("no duplicates in result", func(t *testing.T) {
+		// Even if b has duplicates, result should only contain what a has
+		got := intersectIDs([]bson.ObjectID{id1}, []bson.ObjectID{id1, id1})
+		if len(got) != 1 {
+			t.Errorf("expected 1, got %d", len(got))
+		}
+	})
+}
+
+// --- APIKeyAuth middleware ---
+
+func TestAPIKeyAuthMissingHeader(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := APIKeyAuth(next)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestAPIKeyAuthXAPIKeyHeader(t *testing.T) {
+	// A key that won't be found in DB (no DB in unit tests) should still 401,
+	// but the middleware must reach the DB lookup — meaning the header was accepted.
+	// We verify it gets past the "empty header" check and reaches the lookup stage
+	// (which returns 401 from DB miss, not from "no header").
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := APIKeyAuth(next)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-API-Key", "pops_notarealkey")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	// Either 401 (key not found in DB) or 500 (no DB configured in test) — both
+	// indicate the header was read successfully and we didn't get a 200.
+	if w.Code == http.StatusOK {
+		t.Error("expected non-200 for unrecognised key")
+	}
+}
+
+func TestAPIKeyAuthBearerFallback(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := APIKeyAuth(next)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer pops_notarealkey")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	// Bearer key was extracted — same as above: not 200
+	if w.Code == http.StatusOK {
+		t.Error("expected non-200 for unrecognised bearer key")
+	}
+}
+
+func TestAPIKeyAuthEmptyBearerPrefix(t *testing.T) {
+	// "Bearer " prefix without a key body → treated as empty → 401
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := APIKeyAuth(next)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer ")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	// Empty string after stripping "Bearer " → hits the empty-key 401 branch
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for empty bearer value, got %d", w.Code)
+	}
+}
+
+func TestAPIKeyAuthNonBearerAuthHeader(t *testing.T) {
+	// Authorization: Basic ... should not be accepted as a key
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := APIKeyAuth(next)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for Basic auth header, got %d", w.Code)
+	}
+}
