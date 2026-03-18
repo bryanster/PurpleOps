@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -68,7 +69,7 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 
 		// Create evidence directory for this testcase.
 		tcDir := filepath.Join("files", id, tc.ID.Hex())
-		os.MkdirAll(tcDir, 0o755)
+		os.MkdirAll(tcDir, 0o750)
 
 		results = append(results, tc.ToJSON(false))
 	}
@@ -162,7 +163,7 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tcDir := filepath.Join("files", id, tc.ID.Hex())
-		os.MkdirAll(tcDir, 0o755)
+		os.MkdirAll(tcDir, 0o750)
 
 		results = append(results, tc.ToJSON(false))
 	}
@@ -252,7 +253,7 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tcDir := filepath.Join("files", id, tc.ID.Hex())
-		os.MkdirAll(tcDir, 0o755)
+		os.MkdirAll(tcDir, 0o750)
 
 		results = append(results, tc.ToJSON(false))
 	}
@@ -362,7 +363,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	newAssessmentID := bson.NewObjectID()
 	filesDir := filepath.Join("files", newAssessmentID.Hex())
 	tmpExtractDir := filepath.Join(filesDir, "tmp")
-	if err := os.MkdirAll(tmpExtractDir, 0o755); err != nil {
+	if err := os.MkdirAll(tmpExtractDir, 0o750); err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -374,12 +375,12 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 		destPath := filepath.Join(tmpExtractDir, safeName)
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(destPath, 0o755)
+			os.MkdirAll(destPath, 0o750)
 			continue
 		}
 
 		// Ensure parent directory exists.
-		os.MkdirAll(filepath.Dir(destPath), 0o755)
+		os.MkdirAll(filepath.Dir(destPath), 0o750)
 
 		rc, err := f.Open()
 		if err != nil {
@@ -549,12 +550,14 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 
 		// Copy evidence files from old testcase directory to new one.
 		newTCDir := filepath.Join(filesDir, tc.ID.Hex())
-		os.MkdirAll(newTCDir, 0o755)
+		os.MkdirAll(newTCDir, 0o750)
 
 		if oldID != "" {
 			oldTCDir := filepath.Join(tmpExtractDir, oldID)
 			if info, err := os.Stat(oldTCDir); err == nil && info.IsDir() {
-				copyDir(oldTCDir, newTCDir)
+				if err := copyDir(oldTCDir, newTCDir); err != nil {
+					log.Printf("warning: failed to copy evidence directory %s: %v", oldTCDir, err)
+				}
 			}
 		}
 

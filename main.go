@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/config"
@@ -115,5 +116,12 @@ func main() {
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	log.Printf("PurpleOps starting on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, r))
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }

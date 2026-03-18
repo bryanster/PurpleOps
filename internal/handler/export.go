@@ -50,7 +50,7 @@ func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filesDir := filepath.Join("files", id)
-	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filesDir, 0o750); err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -63,7 +63,7 @@ func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
 			return
 		}
-		if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		if err := os.WriteFile(outPath, data, 0o600); err != nil {
 			http.Error(w, "Failed to write file", http.StatusInternalServerError)
 			return
 		}
@@ -89,7 +89,7 @@ func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
 // writeCSVExport flattens testcase JSON records into a CSV file.
 func writeCSVExport(outPath string, records []map[string]interface{}) error {
 	if len(records) == 0 {
-		return os.WriteFile(outPath, []byte{}, 0o644)
+		return os.WriteFile(outPath, []byte{}, 0o600)
 	}
 
 	// Collect all keys for headers.
@@ -175,7 +175,7 @@ func HandleExportCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filesDir := filepath.Join("files", id)
-	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filesDir, 0o750); err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -186,7 +186,7 @@ func HandleExportCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
 		return
 	}
-	if err := os.WriteFile(outPath, jsonData, 0o644); err != nil {
+	if err := os.WriteFile(outPath, jsonData, 0o600); err != nil {
 		http.Error(w, "Failed to write file", http.StatusInternalServerError)
 		return
 	}
@@ -235,7 +235,7 @@ func HandleExportTestcases(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filesDir := filepath.Join("files", id)
-	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filesDir, 0o750); err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -246,7 +246,7 @@ func HandleExportTestcases(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
 		return
 	}
-	if err := os.WriteFile(outPath, jsonData, 0o644); err != nil {
+	if err := os.WriteFile(outPath, jsonData, 0o600); err != nil {
 		http.Error(w, "Failed to write file", http.StatusInternalServerError)
 		return
 	}
@@ -398,14 +398,14 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 			"minValue": 0,
 			"maxValue": 100,
 		},
-		"showTacticRowBackground":      true,
-		"tacticRowBackground":          "#593196",
+		"showTacticRowBackground":       true,
+		"tacticRowBackground":           "#593196",
 		"selectTechniquesAcrossTactics": true,
 		"selectSubtechniquesWithParent": false,
 	}
 
 	filesDir := filepath.Join("files", id)
-	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filesDir, 0o750); err != nil {
 		return "", fmt.Errorf("failed to create directory")
 	}
 
@@ -414,7 +414,7 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to encode navigator JSON")
 	}
-	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+	if err := os.WriteFile(outPath, data, 0o600); err != nil {
 		return "", fmt.Errorf("failed to write navigator file")
 	}
 
@@ -443,7 +443,7 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 	isBlue := !user.HasRole(ctx, "Admin") && !user.HasRole(ctx, "Red")
 
 	filesDir := filepath.Join("files", id)
-	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filesDir, 0o750); err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -470,7 +470,10 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 	}
 	testcasesPath := filepath.Join(filesDir, "testcases.json")
 	testcasesData, _ := json.MarshalIndent(templateRecords, "", "  ")
-	os.WriteFile(testcasesPath, testcasesData, 0o644)
+	if err := os.WriteFile(testcasesPath, testcasesData, 0o600); err != nil {
+		http.Error(w, "Failed to write testcases export", http.StatusInternalServerError)
+		return
+	}
 
 	// Run navigator export.
 	if _, err := ExportNavigatorFile(id, r); err != nil {
@@ -481,7 +484,10 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 	// Write meta.json with assessment data.
 	metaPath := filepath.Join(filesDir, "meta.json")
 	metaData, _ := json.MarshalIndent(assessment.ToJSON(true), "", "  ")
-	os.WriteFile(metaPath, metaData, 0o644)
+	if err := os.WriteFile(metaPath, metaData, 0o600); err != nil {
+		http.Error(w, "Failed to write meta export", http.StatusInternalServerError)
+		return
+	}
 
 	// Create ZIP.
 	var zipDir string
@@ -577,7 +583,7 @@ func copyDir(src, dst string) error {
 		dstPath := filepath.Join(dst, relPath)
 
 		if info.IsDir() {
-			return os.MkdirAll(dstPath, 0o755)
+			return os.MkdirAll(dstPath, 0o750)
 		}
 
 		srcFile, err := os.Open(path)

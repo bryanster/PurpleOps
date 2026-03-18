@@ -284,7 +284,7 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 
 	// Generate a one-time secret.
 	secretBytes := make([]byte, 16)
-	rand.Read(secretBytes)
+	_, _ = rand.Read(secretBytes)
 	secret := hex.EncodeToString(secretBytes)
 
 	// Store as "timestamp|ip|secret" in assessment.NavigatorExport.
@@ -300,7 +300,10 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ExportNavigatorFile(id, r)
+	if _, err := ExportNavigatorFile(id, r); err != nil {
+		http.Error(w, "Failed to export navigator", http.StatusInternalServerError)
+		return
+	}
 
 	render.Render(w, r, "assessment_navigator.html", pongo2.Context{
 		"assessment": assessment,
@@ -437,9 +440,7 @@ func buildStats(testcases []models.TestCase) map[string]*tacticStats {
 				s.PriorityUrg = append(s.PriorityUrg, tc.PriorityUrgency)
 			}
 
-			for _, c := range tc.Controls {
-				s.Controls = append(s.Controls, c)
-			}
+			s.Controls = append(s.Controls, tc.Controls...)
 		}
 	}
 
