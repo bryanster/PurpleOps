@@ -180,3 +180,17 @@ type User struct {
 	TFMethod       string          `bson:"tf_primary_method,omitempty" json:"-"`
 	TFSecret       string          `bson:"tf_totp_secret,omitempty" json:"-"`
 }
+
+// APIKey represents a user-generated API key scoped to a subset of user permissions.
+type APIKey struct {
+	ID          bson.ObjectID   `bson:"_id,omitempty" json:"id"`
+	UserID      bson.ObjectID   `bson:"user_id" json:"user_id"`
+	Name        string          `bson:"name" json:"name"`
+	KeyHash     string          `bson:"key_hash" json:"-"`
+	Prefix      string          `bson:"prefix" json:"prefix"`
+	Roles       []bson.ObjectID `bson:"roles,omitempty" json:"-"`
+	Assessments []bson.ObjectID `bson:"assessments,omitempty" json:"-"`
+	CreatedAt   time.Time       `bson:"created_at" json:"created_at"`
+	LastUsedAt  *time.Time      `bson:"last_used_at,omitempty" json:"last_used_at"`
+	Active      bool            `bson:"active" json:"active"`
+}

@@ -8,6 +8,29 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
+// FindAPIKeyByHash retrieves an API key record by its SHA-256 hash.
+func FindAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) {
+	var k APIKey
+	err := db.Col("api_key").FindOne(ctx, bson.M{"key_hash": hash, "active": true}).Decode(&k)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	return &k, err
+}
+
+// FindAPIKeysByUser retrieves all API keys belonging to a user.
+func FindAPIKeysByUser(ctx context.Context, userID bson.ObjectID) ([]APIKey, error) {
+	var keys []APIKey
+	cursor, err := db.Col("api_key").Find(ctx, bson.M{"user_id": userID})
+	if err != nil {
+		return nil, err
+	}
+	if err := cursor.All(ctx, &keys); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
 // FindAssessment retrieves an assessment by its hex ID.
 func FindAssessment(ctx context.Context, id string) (*Assessment, error) {
 	oid, err := bson.ObjectIDFromHex(id)

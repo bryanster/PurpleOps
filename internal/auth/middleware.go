@@ -1,10 +1,15 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/bryanster/purpleops/internal/db"
 	"github.com/bryanster/purpleops/internal/models"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // AuthRequired redirects to /login if not authenticated.
@@ -92,4 +97,67 @@ func extractID(r *http.Request) string {
 		}
 	}
 	return ""
+}
+
+// APIKeyAuth is middleware that authenticates requests using an X-API-Key header.
+// On success it sets a user in context whose roles and assessments are restricted
+// to those granted by the API key (always a subset of the key owner's permissions).
+func APIKeyAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw := r.Header.Get("X-API-Key")
+		if raw == "" {
+			// Also accept Authorization: Bearer <key>
+			bearer := r.Header.Get("Authorization")
+			if strings.HasPrefix(bearer, "Bearer ") {
+				raw = strings.TrimPrefix(bearer, "Bearer ")
+			}
+		}
+		if raw == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		sum := sha256.Sum256([]byte(raw))
+		hash := hex.EncodeToString(sum[:])
+
+		apiKey, err := models.FindAPIKeyByHash(r.Context(), hash)
+		if err != nil || apiKey == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		owner, err := models.FindUser(r.Context(), apiKey.UserID.Hex())
+		if err != nil || owner == nil || !owner.Active {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Build a restricted user: same as owner but with only the API key's
+		// allowed roles and assessments.
+		restricted := *owner
+		restricted.Roles = intersectIDs(owner.Roles, apiKey.Roles)
+		restricted.Assessments = intersectIDs(owner.Assessments, apiKey.Assessments)
+
+		// Update last_used_at asynchronously.
+		now := time.Now()
+		go db.Col("api_key").UpdateOne(r.Context(), bson.M{"_id": apiKey.ID}, bson.M{"$set": bson.M{"last_used_at": now}}) //nolint
+
+		ctx := WithUser(r.Context(), &restricted)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// intersectIDs returns the intersection of two ObjectID slices.
+func intersectIDs(a, b []bson.ObjectID) []bson.ObjectID {
+	set := make(map[bson.ObjectID]struct{}, len(b))
+	for _, id := range b {
+		set[id] = struct{}{}
+	}
+	var result []bson.ObjectID
+	for _, id := range a {
+		if _, ok := set[id]; ok {
+			result = append(result, id)
+		}
+	}
+	return result
 }

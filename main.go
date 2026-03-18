@@ -103,6 +103,11 @@ func main() {
 			r.Post("/user/{id}", handler.HandleEditUser)
 			r.Delete("/user/{id}", handler.HandleDeleteUser)
 		})
+
+		// API key management (any authenticated user, for their own keys)
+		r.Get("/api-keys", handler.HandleAPIKeysPage)
+		r.Post("/api-keys", handler.HandleCreateAPIKey)
+		r.Delete("/api-keys/{id}", handler.HandleDeleteAPIKey)
 	})
 
 	// Unauthenticated navigator JSON endpoint
