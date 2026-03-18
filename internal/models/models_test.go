@@ -7,6 +7,89 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// --- APIKey model ---
+
+func TestAPIKeyDefaults(t *testing.T) {
+	userID := bson.NewObjectID()
+	now := time.Now()
+
+	k := APIKey{
+		ID:        bson.NewObjectID(),
+		UserID:    userID,
+		Name:      "CI pipeline",
+		KeyHash:   "abc123hash",
+		Prefix:    "pops_abc1",
+		CreatedAt: now,
+		Active:    true,
+	}
+
+	if k.Name != "CI pipeline" {
+		t.Errorf("unexpected Name: %q", k.Name)
+	}
+	if k.UserID != userID {
+		t.Error("UserID mismatch")
+	}
+	if !k.Active {
+		t.Error("expected Active=true")
+	}
+	if k.LastUsedAt != nil {
+		t.Error("expected LastUsedAt=nil by default")
+	}
+	if len(k.Roles) != 0 {
+		t.Errorf("expected empty Roles, got %d", len(k.Roles))
+	}
+	if len(k.Assessments) != 0 {
+		t.Errorf("expected empty Assessments, got %d", len(k.Assessments))
+	}
+}
+
+func TestAPIKeyWithRolesAndAssessments(t *testing.T) {
+	r1 := bson.NewObjectID()
+	r2 := bson.NewObjectID()
+	a1 := bson.NewObjectID()
+
+	k := APIKey{
+		ID:          bson.NewObjectID(),
+		UserID:      bson.NewObjectID(),
+		Roles:       []bson.ObjectID{r1, r2},
+		Assessments: []bson.ObjectID{a1},
+		Active:      true,
+	}
+
+	if len(k.Roles) != 2 {
+		t.Errorf("expected 2 roles, got %d", len(k.Roles))
+	}
+	if k.Roles[0] != r1 || k.Roles[1] != r2 {
+		t.Error("role IDs not preserved")
+	}
+	if len(k.Assessments) != 1 {
+		t.Errorf("expected 1 assessment, got %d", len(k.Assessments))
+	}
+	if k.Assessments[0] != a1 {
+		t.Error("assessment ID not preserved")
+	}
+}
+
+func TestAPIKeyLastUsedAt(t *testing.T) {
+	t1 := time.Now()
+	k := APIKey{
+		LastUsedAt: &t1,
+	}
+	if k.LastUsedAt == nil {
+		t.Fatal("expected LastUsedAt to be set")
+	}
+	if !k.LastUsedAt.Equal(t1) {
+		t.Error("LastUsedAt value mismatch")
+	}
+}
+
+func TestAPIKeyInactiveFlag(t *testing.T) {
+	k := APIKey{Active: false}
+	if k.Active {
+		t.Error("expected Active=false")
+	}
+}
+
 func TestEsc(t *testing.T) {
 	tests := []struct {
 		input string

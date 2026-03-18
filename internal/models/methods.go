@@ -236,6 +236,30 @@ func (a *Assessment) MultiToJSON(field string, raw bool) []map[string]interface{
 	return result
 }
 
+// GetRoleNames resolves an APIKey's role IDs to their names.
+func (k *APIKey) GetRoleNames(ctx context.Context) []string {
+	names := make([]string, 0, len(k.Roles))
+	for _, rid := range k.Roles {
+		var role Role
+		if err := db.Col("role").FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
+			names = append(names, role.Name)
+		}
+	}
+	return names
+}
+
+// GetAssessmentNames resolves an APIKey's assessment IDs to their names.
+func (k *APIKey) GetAssessmentNames(ctx context.Context) []string {
+	names := make([]string, 0, len(k.Assessments))
+	for _, aid := range k.Assessments {
+		var a Assessment
+		if err := db.Col("assessment").FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
+			names = append(names, a.Name)
+		}
+	}
+	return names
+}
+
 // GetRoleNames resolves the user's role IDs to their names.
 func (u *User) GetRoleNames(ctx context.Context) []string {
 	names := make([]string, 0, len(u.Roles))

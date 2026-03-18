@@ -1,0 +1,161 @@
+{% extends "master.html" %}
+{% block content %}
+
+<!-- Create API Key modal -->
+<form action="/api-keys" method="POST" class="m-0" id="apiKeyForm">
+  {{ modalHead("apiKeyDetail", "New API Key") }}
+  <div class="mb-3">
+    <label for="keyName" class="col-form-label">Name</label>
+    <input type="text" class="form-control" id="keyName" name="name" placeholder="My automation key" required>
+  </div>
+  <div class="mb-3">
+    <label class="col-form-label">Roles</label>
+    <select class="selectpicker form-control" multiple data-live-search="true" title="Role(s)" data-style="" data-style-base="form-control" data-live-search-placeholder="Search..." data-width="auto" name="roles" id="keyRoles">
+      {% for role in roles %}
+      <option>{{ role.Name }}</option>
+      {% endfor %}
+    </select>
+    <small class="text-muted">Only roles you currently hold can be granted.</small>
+  </div>
+  <div class="mb-3">
+    <label class="col-form-label">Assessments</label>
+    <select class="selectpicker form-control" multiple data-live-search="true" title="Assessment(s)" data-style="" data-style-base="form-control" data-live-search-placeholder="Search..." data-width="auto" name="assessments" id="keyAssessments">
+      {% for assessment in assessments %}
+      <option value="{{ assessment.ID.Hex }}">{{ assessment.Name }}</option>
+      {% endfor %}
+    </select>
+    <small class="text-muted">Only assessments you have access to can be granted.</small>
+  </div>
+  {{ modalTail("apiKeyDetail", "Close", "Create") }}
+</form>
+
+<!-- Key reveal modal (shown once after creation) -->
+{{ modalHead("keyReveal", "API Key Created") }}
+<div class="alert alert-warning">
+  <strong>Copy this key now.</strong> It will not be shown again.
+</div>
+<div class="input-group mb-3">
+  <input type="text" class="form-control font-monospace" id="revealedKey" readonly>
+  <button class="btn btn-outline-secondary" type="button" onclick="copyKey()">Copy</button>
+</div>
+{{ modalTail("keyReveal", "Close") }}
+
+<!-- Confirm delete modal -->
+{{ modalHead("deleteKey", "Revoke API Key") }}
+<div class="mb-3" id="deleteKeyWarning">Are you sure you want to revoke this API key?</div>
+{{ modalTail("deleteKey", "Cancel", "Revoke") }}
+
+<div class="m-2 mt-0">
+  <div id="toolbar">
+    <p class="d-inline-block" style="font-size:1.3em;margin: 0 10px 0 5px;font-weight:bold">API Keys</p>
+    <button class="btn btn-primary" onclick="newKeyModal()">New API Key</button>
+  </div>
+  <table data-toggle="table" data-toolbar="#toolbar" data-search="true" data-show-search-clear-button="true" data-unique-id="id" data-id-field="id" id="keyTable" style="display: none">
+    <thead>
+      <tr>
+        <th data-field="id" data-visible="false">ID</th>
+        <th data-field="name" data-sortable="true">Name</th>
+        <th data-field="prefix">Key Prefix</th>
+        <th data-field="roles">Roles</th>
+        <th data-field="assessments">Assessments</th>
+        <th data-field="created" data-sortable="true" data-formatter="timeFormatter">Created</th>
+        <th data-field="last_used" data-sortable="true" data-formatter="timeFormatter">Last Used</th>
+        <th data-field="actions" data-formatter="keyActionFormatter" class="text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key in api_keys %}
+      <tr>
+        <td>{{ key.ID.Hex }}</td>
+        <td>{{ key.Name }}</td>
+        <td><code>{{ key.Prefix }}...</code></td>
+        <td>{{ key.RoleNames }}</td>
+        <td>{{ key.AssessmentNames }}</td>
+        <td>{{ key.CreatedAt|strftime:"%Y-%m-%dT%H:%M" }}|</td>
+        <td>{% if key.LastUsedAt %}{{ key.LastUsedAt|strftime:"%Y-%m-%dT%H:%M" }}|{% else %}-|{% endif %}</td>
+        <td>{{ key.Name }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+var pendingDeleteID = null;
+
+function newKeyModal() {
+  document.getElementById('apiKeyForm').action = '/api-keys';
+  $('#apiKeyDetailModal').modal('show');
+}
+
+function copyKey() {
+  var el = document.getElementById('revealedKey');
+  el.select();
+  document.execCommand('copy');
+}
+
+function timeFormatter(value) {
+  if (!value || value === '-|') return '-';
+  var parts = value.split('|');
+  return parts[0] || '-';
+}
+
+function keyActionFormatter(value) {
+  return '<button class="btn btn-danger btn-sm" onclick="confirmDeleteKey(this)" data-name="' + value + '"><i class="bi-trash"></i></button>';
+}
+
+function confirmDeleteKey(btn) {
+  var row = $(btn).closest('tr');
+  var id = row.find('td:first').text().trim();
+  var name = row.find('td:nth-child(2)').text().trim();
+  pendingDeleteID = id;
+  document.getElementById('deleteKeyWarning').innerHTML = 'Revoke API key <strong>' + name + '</strong>? This cannot be undone.';
+  document.getElementById('deleteKeyButton').onclick = function() { doDeleteKey(id); };
+  $('#deleteKeyModal').modal('show');
+}
+
+function doDeleteKey(id) {
+  $.ajax({
+    url: '/api-keys/' + id,
+    type: 'DELETE',
+    success: function() {
+      $('#deleteKeyModal').modal('hide');
+      location.reload();
+    },
+    error: function(xhr) {
+      alert('Failed to revoke key: ' + xhr.responseText);
+    }
+  });
+}
+
+$(document).ready(function() {
+  document.getElementById('apiKeyDetailButton').addEventListener('click', function(e) {
+    e.preventDefault();
+    var form = document.getElementById('apiKeyForm');
+    var data = new FormData(form);
+    var params = new URLSearchParams();
+    for (var pair of data.entries()) {
+      params.append(pair[0], pair[1]);
+    }
+    fetch('/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    }).then(function(resp) {
+      if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
+      return resp.json();
+    }).then(function(data) {
+      $('#apiKeyDetailModal').modal('hide');
+      document.getElementById('revealedKey').value = data.key;
+      $('#keyRevealModal').modal('show');
+      setTimeout(function() { location.reload(); }, 300);
+    }).catch(function(err) {
+      alert('Error: ' + err.message);
+    });
+  });
+
+  $('#keyTable').bootstrapTable();
+});
+</script>
+
+{% endblock %}
