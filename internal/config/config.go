@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 
@@ -47,6 +48,13 @@ func LoadConfig() *Config {
 		TOTPSecret: getEnv("FLASK_SECURITY_TOTP_SECRETS", ""),
 		AdminPwd:   getEnv("POPS_ADMIN_PWD", ""),
 	}
+	if cfg.SecretKey == "change-me" {
+		log.Println("WARNING: FLASK_SECRET_KEY is set to the insecure default. Set this to a random value before deploying.")
+	}
+	if cfg.PassSalt == "change-me" {
+		log.Println("WARNING: FLASK_SECURITY_PASSWORD_SALT is set to the insecure default. Set this to a random value before deploying.")
+	}
+
 	Cfg = cfg
 	return cfg
 }
