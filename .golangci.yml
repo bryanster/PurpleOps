@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gocritic      # opinionated code checks
+    - gosec         # security issues
+    - misspell      # spelling mistakes
+    - revive        # drop-in replacement for golint
+
+formatters:
+  enable:
+    - goimports     # import formatting
+
+linters-settings:
+  gosec:
+    excludes:
+      - G104 # unhandled errors — covered by errcheck
+  revive:
+    rules:
+      - name: exported
+        disabled: true # don't require doc comments on all exported symbols
+
+issues:
+  max-same-issues: 0
