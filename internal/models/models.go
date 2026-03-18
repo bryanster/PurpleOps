@@ -179,6 +179,7 @@ type User struct {
 	LoginCount     int             `bson:"login_count,omitempty" json:"login_count"`
 	TFMethod       string          `bson:"tf_primary_method,omitempty" json:"-"`
 	TFSecret       string          `bson:"tf_totp_secret,omitempty" json:"-"`
+	AuthProvider   string          `bson:"auth_provider,omitempty" json:"auth_provider,omitempty"` // "local", "oauth", "saml"
 }
 
 // APIKey represents a user-generated API key scoped to a subset of user permissions.

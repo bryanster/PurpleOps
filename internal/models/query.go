@@ -91,6 +91,51 @@ func FindRole(ctx context.Context, name string) (*Role, error) {
 	return &r, err
 }
 
+// FindOrCreateSSOUser looks up a user by email. If found, returns it.
+// If not found and autoProvision is true, creates a new user with the given
+// provider and default role, then returns it.
+func FindOrCreateSSOUser(ctx context.Context, email, username, provider, defaultRole string, autoProvision bool) (*User, error) {
+	user, err := FindUserByEmail(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	if user != nil {
+		return user, nil
+	}
+
+	if !autoProvision {
+		return nil, nil
+	}
+
+	// Resolve default role.
+	var roleIDs []bson.ObjectID
+	role, err := FindRole(ctx, defaultRole)
+	if err == nil && role != nil {
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	if username == "" {
+		username = email
+	}
+
+	newUser := User{
+		ID:           bson.NewObjectID(),
+		Email:        email,
+		Username:     username,
+		Password:     "", // SSO users have no local password
+		Roles:        roleIDs,
+		Active:       true,
+		InitPwd:      false,
+		AuthProvider: provider,
+	}
+
+	if _, err := db.Col("user").InsertOne(ctx, &newUser); err != nil {
+		return nil, err
+	}
+
+	return &newUser, nil
+}
+
 // GetTestCases returns all testcases for a given assessment ID string.
 func GetTestCases(ctx context.Context, assessmentID string) ([]TestCase, error) {
 	var tcs []TestCase

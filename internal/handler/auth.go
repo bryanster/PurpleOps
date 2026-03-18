@@ -36,7 +36,11 @@ func getFlashMessages(w http.ResponseWriter, r *http.Request) []FlashMessage {
 
 // HandleLogin renders the login page.
 func HandleLogin(w http.ResponseWriter, r *http.Request) {
-	ctx := pongo2.Context{}
+	ctx := pongo2.Context{
+		"oauth_enabled":       config.Cfg.OAuthEnabled,
+		"oauth_provider_name": config.Cfg.OAuthProviderName,
+		"saml_enabled":        config.Cfg.SAMLEnabled,
+	}
 	if msgs := getFlashMessages(w, r); msgs != nil {
 		ctx["flash_messages"] = msgs
 	}

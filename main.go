@@ -17,8 +17,21 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 	db.InitDB(cfg)
-	auth.InitSessions(cfg.SecretKey)
+	ssoEnabled := cfg.OAuthEnabled || cfg.SAMLEnabled
+	auth.InitSessions(cfg.SecretKey, ssoEnabled)
 	render.InitTemplates()
+
+	// Initialise SSO providers.
+	if cfg.OAuthEnabled {
+		handler.InitOAuth(cfg)
+		log.Println("OAuth SSO enabled: provider=" + cfg.OAuthProviderName)
+	}
+	if cfg.SAMLEnabled {
+		if err := handler.InitSAML(cfg); err != nil {
+			log.Fatalf("Failed to initialize SAML: %v", err)
+		}
+		log.Println("SAML SSO enabled")
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -32,6 +45,15 @@ func main() {
 	r.Get("/login", handler.HandleLogin)
 	r.Post("/login", handler.HandleLoginPost)
 	r.Get("/logout", handler.HandleLogout)
+
+	// OAuth SSO routes
+	r.Get("/auth/oauth/login", handler.HandleOAuthLogin)
+	r.Get("/auth/oauth/callback", handler.HandleOAuthCallback)
+
+	// SAML SSO routes
+	r.Get("/auth/saml/login", handler.HandleSAMLLogin)
+	r.Post("/auth/saml/acs", handler.HandleSAMLACS)
+	r.Get("/auth/saml/metadata", handler.HandleSAMLMetadata)
 
 	// All authenticated routes
 	r.Group(func(r chi.Router) {
