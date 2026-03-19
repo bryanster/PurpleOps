@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"log"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"time"
 
@@ -21,6 +22,9 @@ import (
 
 // samlSP is the package-level SAML service provider, initialised at startup.
 var samlSP *samlsp.Middleware
+
+// samlACSURL is the expected ACS URL for recipient validation.
+var samlACSURL string
 
 // InitSAML sets up the SAML service provider from the application config.
 // Call this at startup if SAML is enabled.
@@ -56,40 +60,29 @@ func InitSAML(cfg *config.Config) error {
 		return err
 	}
 
-	entityID := cfg.SAMLEntityID
-	if entityID == "" {
-		entityID = cfg.SAMLRootURL
-	}
-
-	sp := saml.ServiceProvider{
-		Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
-		Certificate: keyPair.Leaf,
-		MetadataURL: *rootURL,
-		AcsURL:      *rootURL,
-		IDPMetadata: idpMetadata,
-	}
-	sp.MetadataURL.Path = "/auth/saml/metadata"
-	sp.AcsURL.Path = "/auth/saml/acs"
-
-	// Override entity ID if configured.
-	if entityID != "" {
-		entityIDURL, err := url.Parse(entityID)
-		if err == nil {
-			sp.MetadataURL = *entityIDURL
-		}
-	}
-
-	samlSP, err = samlsp.New(samlsp.Options{
+	opts := samlsp.Options{
 		URL:         *rootURL,
 		Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
 		Certificate: keyPair.Leaf,
 		IDPMetadata: idpMetadata,
-	})
+	}
+
+	if cfg.SAMLEntityID != "" {
+		entityIDURL, err := url.Parse(cfg.SAMLEntityID)
+		if err == nil {
+			opts.EntityID = entityIDURL.String()
+		}
+	}
+
+	samlSP, err = samlsp.New(opts)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("SAML SP initialized: entity_id=%s acs=%s", sp.MetadataURL.String(), sp.AcsURL.String())
+	// Store the ACS URL for recipient validation during assertion parsing.
+	samlACSURL = cfg.SAMLRootURL + "/auth/saml/acs"
+
+	log.Printf("SAML SP initialized: acs=%s", samlACSURL)
 	return nil
 }
 
@@ -133,7 +126,7 @@ func HandleSAMLACS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assertion, err := samlSP.ServiceProvider.ParseResponse(r, []string{""})
+	assertion, err := samlSP.ServiceProvider.ParseResponse(r, []string{samlACSURL})
 	if err != nil {
 		log.Printf("SAML assertion parse error: %v", err)
 		setFlash("SAML login failed: could not validate assertion.")
@@ -155,6 +148,12 @@ func HandleSAMLACS(w http.ResponseWriter, r *http.Request) {
 
 	if email == "" {
 		setFlash("SAML login failed: no email address in assertion.")
+		return
+	}
+
+	// Validate email format.
+	if _, err := mail.ParseAddress(email); err != nil {
+		setFlash("SAML login failed: invalid email format in assertion.")
 		return
 	}
 

@@ -445,3 +445,58 @@ func TestFetchOAuthUserInfoInvalidJSON(t *testing.T) {
 		t.Error("expected error for invalid JSON response")
 	}
 }
+
+func TestFetchOAuthUserInfoHTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"invalid_token"}`))
+	}))
+	defer ts.Close()
+
+	oauthConfig = &oauth2.Config{
+		ClientID: "test",
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  ts.URL + "/authorize",
+			TokenURL: ts.URL + "/token",
+		},
+	}
+	config.Cfg = &config.Config{
+		OAuthUserInfoURL: ts.URL + "/userinfo",
+	}
+
+	r := httptest.NewRequest("GET", "/", nil)
+	token := &oauth2.Token{AccessToken: "test-token"}
+	token = token.WithExtra(map[string]interface{}{})
+
+	_, _, err := fetchOAuthUserInfo(r, token)
+	if err == nil {
+		t.Error("expected error for HTTP 401 response")
+	}
+}
+
+func TestFetchOAuthUserInfoHTTP500(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	oauthConfig = &oauth2.Config{
+		ClientID: "test",
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  ts.URL + "/authorize",
+			TokenURL: ts.URL + "/token",
+		},
+	}
+	config.Cfg = &config.Config{
+		OAuthUserInfoURL: ts.URL + "/userinfo",
+	}
+
+	r := httptest.NewRequest("GET", "/", nil)
+	token := &oauth2.Token{AccessToken: "test-token"}
+	token = token.WithExtra(map[string]interface{}{})
+
+	_, _, err := fetchOAuthUserInfo(r, token)
+	if err == nil {
+		t.Error("expected error for HTTP 500 response")
+	}
+}

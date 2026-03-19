@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -79,15 +81,14 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusFound)
 	}
 
-	// Verify state parameter.
+	// Verify state parameter (validate before deleting to avoid race conditions).
 	expectedState, _ := sess.Values["oauth_state"].(string)
-	delete(sess.Values, "oauth_state")
-	sess.Save(r, w)
-
 	if expectedState == "" || r.URL.Query().Get("state") != expectedState {
 		setFlash("OAuth login failed: invalid state parameter.")
 		return
 	}
+	delete(sess.Values, "oauth_state")
+	sess.Save(r, w)
 
 	// Check for error from provider.
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
@@ -123,6 +124,12 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	if email == "" {
 		setFlash("OAuth login failed: no email address returned by provider.")
+		return
+	}
+
+	// Validate email format.
+	if _, err := mail.ParseAddress(email); err != nil {
+		setFlash("OAuth login failed: invalid email format from provider.")
 		return
 	}
 
@@ -168,6 +175,10 @@ func fetchOAuthUserInfo(r *http.Request, token *oauth2.Token) (email, username s
 		return "", "", err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("userinfo endpoint returned HTTP %d", resp.StatusCode)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

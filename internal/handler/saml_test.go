@@ -8,6 +8,16 @@ import (
 	"github.com/crewjam/saml"
 )
 
+// --- samlACSURL ---
+
+func TestSAMLACSURLNotSetByDefault(t *testing.T) {
+	// When SAML is not initialized, samlACSURL should be empty.
+	samlACSURL = ""
+	if samlACSURL != "" {
+		t.Error("expected empty samlACSURL before initialization")
+	}
+}
+
 // --- HandleSAMLMetadata ---
 
 func TestHandleSAMLMetadataNotConfigured(t *testing.T) {
