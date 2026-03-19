@@ -55,6 +55,12 @@ linters:
           disabled: true
         - name: package-comments
           disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck  # test setup helpers don't need exhaustive error checking
+          - gosec     # test data files don't need tight permissions
 
 formatters:
   enable:
@@ -62,8 +68,3 @@ formatters:
 
 issues:
   max-same-issues: 0
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck  # test setup helpers don't need exhaustive error checking
-        - gosec     # test data files don't need tight permissions
