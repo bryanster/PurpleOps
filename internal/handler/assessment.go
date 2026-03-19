@@ -40,7 +40,7 @@ func HandleNewAssessment(w http.ResponseWriter, r *http.Request) {
 
 	// Create files directory for this assessment.
 	filesDir := filepath.Join("files", assessment.ID.Hex())
-	if err := os.MkdirAll(filesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filesDir, 0o750); err != nil {
 		http.Error(w, "Failed to create files directory", http.StatusInternalServerError)
 		return
 	}

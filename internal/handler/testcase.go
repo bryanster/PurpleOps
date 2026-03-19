@@ -378,7 +378,7 @@ func processFiles(r *http.Request, tc *models.TestCase, assessment *models.Asses
 	}
 
 	dir := filepath.Join("files", assessment.ID.Hex(), tc.ID.Hex())
-	os.MkdirAll(dir, 0755)
+	os.MkdirAll(dir, 0o750)
 
 	for _, fh := range files {
 		if fh.Filename == "" {

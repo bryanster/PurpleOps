@@ -13,8 +13,7 @@ import (
 
 var (
 	// DB is the package-level MongoDB database instance.
-	DB          *mongo.Database
-	mongoClient *mongo.Client
+	DB *mongo.Database
 )
 
 // InitDB connects to MongoDB using the provided config and sets the package-level DB var.
@@ -32,7 +31,6 @@ func InitDB(cfg *config.Config) {
 		log.Fatalf("Failed to ping MongoDB: %v", err)
 	}
 
-	mongoClient = client
 	DB = client.Database(cfg.MongoDB)
 	log.Println("Connected to MongoDB")
 }

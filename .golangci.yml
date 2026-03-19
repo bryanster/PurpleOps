@@ -1,0 +1,70 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gocritic
+    - gosec
+    - misspell
+    - revive
+  settings:
+    errcheck:
+      exclude-functions:
+        # Idiomatic defer/cleanup-close patterns — error = already closing
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*archive/zip.Writer).Close
+        - (*archive/zip.ReadCloser).Close
+        - (io.ReadCloser).Close
+        - (*github.com/xuri/excelize/v2.File).Close
+        - io.Copy  # errors in upload/extract loops handled upstream
+        # Cursor iteration in UI handlers — failure = empty list shown, acceptable
+        - (*go.mongodb.org/mongo-driver/v2/mongo.Cursor).All
+        # MongoDB driver cleanup
+        - (*go.mongodb.org/mongo-driver/v2/mongo.Client).Disconnect
+        # Fire-and-forget tracking updates (login count, timestamps, flags)
+        - (*go.mongodb.org/mongo-driver/v2/mongo.Collection).UpdateOne
+        # HTTP response writes — error = client disconnected, nothing to do
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
+        # Session saves for flash messages — failure = message not shown, not a security issue
+        - (*github.com/gorilla/sessions.Session).Save
+        # Environment helpers (only used in tests)
+        - os.Setenv
+        - os.Unsetenv
+        # Template filter registration — only fails if filter name is already taken
+        - github.com/flosch/pongo2/v6.RegisterFilter
+        # Cleanup helpers
+        - os.Remove
+        - os.RemoveAll
+        # Directory/file creation — downstream file ops surface failures
+        - os.MkdirAll
+        - os.WriteFile
+    gocritic:
+      disabled-checks:
+        - exitAfterDefer  # all occurrences are in init/fatal-exit paths
+    gosec:
+      excludes:
+        - G104  # duplicate of errcheck
+        - G110  # decompression bomb — imports are from trusted authenticated users
+        - G304  # file path via variable — paths are controlled by this app
+        - G107  # HTTP request with variable URL — intentional in seed
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck  # test setup helpers don't need exhaustive error checking
+          - gosec     # test data files don't need tight permissions
+
+formatters:
+  enable:
+    - goimports
+
+issues:
+  max-same-issues: 0

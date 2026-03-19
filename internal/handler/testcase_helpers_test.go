@@ -232,14 +232,14 @@ func TestApplyFormField(t *testing.T) {
 	}
 
 	// Empty value with Has()
-	var empty string = "original"
+	var empty = "original"
 	applyFormField(r, "empty", &empty)
 	if empty != "" {
 		t.Errorf("expected empty string, got %q", empty)
 	}
 
 	// Missing field
-	var missing string = "original"
+	var missing = "original"
 	applyFormField(r, "missing", &missing)
 	if missing != "original" {
 		t.Errorf("expected 'original' for missing field, got %q", missing)

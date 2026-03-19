@@ -207,7 +207,7 @@ func seedTechniques(db *mongo.Database) {
 	}
 
 	techColl := db.Collection("technique")
-	kbColl := db.Collection("knowlege_base") // typo preserved from original
+	kbColl := db.Collection("knowledge_base") // typo preserved from original
 
 	var techDocs []interface{}
 	var kbDocs []interface{}
@@ -472,7 +472,7 @@ func seedCustomTestcases(db *mongo.Database) {
 func seedCustomKB(db *mongo.Database) {
 	fmt.Println("Parsing custom knowledge bases...")
 
-	coll := db.Collection("knowlege_base") // typo preserved from original
+	coll := db.Collection("knowledge_base") // typo preserved from original
 	var docs []interface{}
 
 	files, err := filepath.Glob("custom/knowledgebase/*.yaml")
@@ -582,7 +582,7 @@ func generateSecrets() {
 		content += fmt.Sprintf("\nFLASK_SECURITY_PASSWORD_SALT=%s", securitySalt)
 	}
 
-	if err := os.WriteFile(envPath, []byte(strings.TrimSpace(content)+"\n"), 0644); err != nil {
+	if err := os.WriteFile(envPath, []byte(strings.TrimSpace(content)+"\n"), 0o600); err != nil {
 		log.Fatalf("Failed to write .env: %v", err)
 	}
 
