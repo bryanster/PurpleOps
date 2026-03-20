@@ -141,7 +141,6 @@ func seedTactics(db *mongo.Database) {
 		if err := downloadFile(url, tmpFile); err != nil {
 			log.Fatalf("Failed to download tactics XLSX: %v", err)
 		}
-		defer os.Remove(tmpFile)
 	} else {
 		fmt.Println("Using cached MITRE tactics from disk...")
 	}
@@ -193,7 +192,6 @@ func seedTechniques(db *mongo.Database) {
 		if err := downloadFile(url, tmpFile); err != nil {
 			log.Fatalf("Failed to download techniques XLSX: %v", err)
 		}
-		defer os.Remove(tmpFile)
 	} else {
 		fmt.Println("Using cached MITRE techniques from disk...")
 	}
@@ -299,7 +297,6 @@ func seedSigma(db *mongo.Database) {
 		if err != nil {
 			log.Fatalf("Failed to clone sigma repo: %v", err)
 		}
-		defer os.RemoveAll(cloneDir)
 	} else {
 		fmt.Println("Using cached SigmaHQ/sigma repository from disk...")
 	}
@@ -376,7 +373,6 @@ func seedART(db *mongo.Database) {
 		if err != nil {
 			log.Fatalf("Failed to clone atomic-red-team repo: %v", err)
 		}
-		defer os.RemoveAll(cloneDir)
 	} else {
 		fmt.Println("Using cached redcanaryco/atomic-red-team repository from disk...")
 	}
