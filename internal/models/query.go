@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"errors"
 
 	"github.com/bryanster/purpleops/internal/db"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -10,6 +11,9 @@ import (
 
 // FindAPIKeyByHash retrieves an API key record by its SHA-256 hash.
 func FindAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) {
+	if db.DB == nil {
+		return nil, errors.New("database not initialised")
+	}
 	var k APIKey
 	err := db.Col("api_key").FindOne(ctx, bson.M{"key_hash": hash, "active": true}).Decode(&k)
 	if err == mongo.ErrNoDocuments {
@@ -86,9 +90,57 @@ func FindUserByUsername(ctx context.Context, username string) (*User, error) {
 
 // FindRole retrieves a role by name.
 func FindRole(ctx context.Context, name string) (*Role, error) {
+	if db.DB == nil {
+		return nil, errors.New("database not initialised")
+	}
 	var r Role
 	err := db.Col("role").FindOne(ctx, bson.M{"name": name}).Decode(&r)
 	return &r, err
+}
+
+// FindOrCreateSSOUser looks up a user by email. If found, returns it.
+// If not found and autoProvision is true, creates a new user with the given
+// provider and default role, then returns it.
+func FindOrCreateSSOUser(ctx context.Context, email, username, provider, defaultRole string, autoProvision bool) (*User, error) {
+	user, err := FindUserByEmail(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	if user != nil {
+		return user, nil
+	}
+
+	if !autoProvision {
+		return nil, nil
+	}
+
+	// Resolve default role.
+	var roleIDs []bson.ObjectID
+	role, err := FindRole(ctx, defaultRole)
+	if err == nil && role != nil {
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	if username == "" {
+		username = email
+	}
+
+	newUser := User{
+		ID:           bson.NewObjectID(),
+		Email:        email,
+		Username:     username,
+		Password:     "", // SSO users have no local password
+		Roles:        roleIDs,
+		Active:       true,
+		InitPwd:      false,
+		AuthProvider: provider,
+	}
+
+	if _, err := db.Col("user").InsertOne(ctx, &newUser); err != nil {
+		return nil, err
+	}
+
+	return &newUser, nil
 }
 
 // GetTestCases returns all testcases for a given assessment ID string.

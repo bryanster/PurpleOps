@@ -36,6 +36,10 @@ func InitDB(cfg *config.Config) {
 }
 
 // Col returns a MongoDB collection by name from the package-level database.
+// Returns nil if the database has not been initialised (e.g. in unit tests).
 func Col(name string) *mongo.Collection {
+	if DB == nil {
+		return nil
+	}
 	return DB.Collection(name)
 }
