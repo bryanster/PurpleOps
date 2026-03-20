@@ -106,11 +106,10 @@ function keyActionFormatter(value) {
 
 function confirmDeleteKey(btn) {
   var row = $(btn).closest('tr');
-  var id = row.find('td:first').text().trim();
-  var name = row.find('td:nth-child(2)').text().trim();
-  pendingDeleteID = id;
-  document.getElementById('deleteKeyWarning').innerHTML = 'Revoke API key <strong>' + name + '</strong>? This cannot be undone.';
-  document.getElementById('deleteKeyButton').onclick = function() { doDeleteKey(id); };
+  var rowData = $('#keyTable').bootstrapTable('getData')[row.data('index')];
+  pendingDeleteID = rowData.id;
+  document.getElementById('deleteKeyWarning').innerHTML = 'Revoke API key <strong>' + rowData.name + '</strong>? This cannot be undone.';
+  document.getElementById('deleteKeyButton').onclick = function() { doDeleteKey(rowData.id); };
   $('#deleteKeyModal').modal('show');
 }
 
@@ -128,7 +127,9 @@ function doDeleteKey(id) {
   });
 }
 
-$(document).ready(function() {
+$(function() {
+  $('#keyTable').show();
+
   document.getElementById('apiKeyDetailButton').addEventListener('click', function(e) {
     e.preventDefault();
     var form = document.getElementById('apiKeyForm');
@@ -147,14 +148,13 @@ $(document).ready(function() {
     }).then(function(data) {
       $('#apiKeyDetailModal').modal('hide');
       document.getElementById('revealedKey').value = data.key;
+      $('#keyRevealModal').one('hidden.bs.modal', function() { location.reload(); });
       $('#keyRevealModal').modal('show');
-      setTimeout(function() { location.reload(); }, 300);
     }).catch(function(err) {
       alert('Error: ' + err.message);
     });
   });
 
-  $('#keyTable').bootstrapTable();
 });
 </script>
 
