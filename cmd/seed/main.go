@@ -423,9 +423,8 @@ func seedART(db *mongo.Database) {
 				docs = append(docs, bson.D{
 					{Key: "mitreid", Value: artFile.AttackTechnique},
 					{Key: "name", Value: test.Name},
-					{Key: "description", Value: test.Description},
-					{Key: "command", Value: test.Executor.Command},
-					{Key: "arguments", Value: strings.Join(argParts, "\n")},
+					{Key: "objective", Value: test.Description},
+					{Key: "actions", Value: test.Executor.Command},
 					{Key: "provider", Value: "Atomic Red Team"},
 				})
 			}
