@@ -175,15 +175,19 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 		"PreventionSources": assessment.PreventionSources,
 	}
 
+	// Build MitreID → first tactic mapping for JS auto-population.
+	mitreTactics := buildMitreTacticsMap(techniques)
+
 	render.Render(w, r, "assessment.html", pongo2.Context{
-		"testcases":  testcases,
-		"assessment": assessment,
-		"templates":  templates,
-		"mitres":     techniques,
-		"tactics":    tactics,
-		"hexagons":   hexagons,
-		"reports":    reports,
-		"multi":      multi,
+		"testcases":     testcases,
+		"assessment":    assessment,
+		"templates":     templates,
+		"mitres":        techniques,
+		"tactics":       tactics,
+		"hexagons":      hexagons,
+		"reports":       reports,
+		"multi":         multi,
+		"mitre_tactics": mitreTactics,
 	})
 }
 

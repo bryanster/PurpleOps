@@ -49,12 +49,18 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// If the template has no tactic, look it up from the technique.
+		tactic := tmpl.Tactic
+		if tactic == "" && tmpl.MitreID != "" {
+			tactic = lookupTacticForTechnique(ctx, tmpl.MitreID)
+		}
+
 		tc := models.TestCase{
 			ID:           bson.NewObjectID(),
 			AssessmentID: id,
 			Name:         tmpl.Name,
 			MitreID:      tmpl.MitreID,
-			Tactic:       tmpl.Tactic,
+			Tactic:       tactic,
 			Objective:    tmpl.Objective,
 			Actions:      tmpl.Actions,
 			RedNotes:     tmpl.RedNotes,
@@ -116,21 +122,33 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		tacticTitle := toTitleCase(entry.Tactic)
 
 		// Try to find a matching template.
+		// Try to find a matching template (exact match on mitreid + tactic first,
+		// then fall back to mitreid-only match).
 		var tmpl models.TestCaseTemplate
 		err := db.Col("test_case_template").FindOne(ctx, bson.M{
 			"mitreid": entry.TechniqueID,
 			"tactic":  tacticTitle,
 		}).Decode(&tmpl)
+		if err != nil {
+			// Try mitreid-only match (e.g., ART templates have no tactic).
+			db.Col("test_case_template").FindOne(ctx, bson.M{
+				"mitreid": entry.TechniqueID,
+			}).Decode(&tmpl)
+		}
 
 		var tc models.TestCase
-		if err == nil {
-			// Create testcase from template.
+		if tmpl.Name != "" {
+			// Create testcase from template, always using the navigator's tactic.
+			tactic := tmpl.Tactic
+			if tactic == "" {
+				tactic = tacticTitle
+			}
 			tc = models.TestCase{
 				ID:           bson.NewObjectID(),
 				AssessmentID: id,
 				Name:         tmpl.Name,
 				MitreID:      tmpl.MitreID,
-				Tactic:       tmpl.Tactic,
+				Tactic:       tactic,
 				Objective:    tmpl.Objective,
 				Actions:      tmpl.Actions,
 				RedNotes:     tmpl.RedNotes,
@@ -698,6 +716,19 @@ func findExistingMultiEntry(assessment *models.Assessment, field, name string) s
 				return r.ID.Hex()
 			}
 		}
+	}
+	return ""
+}
+
+// lookupTacticForTechnique finds the first tactic name for a given MitreID
+// by looking up the technique in the database.
+func lookupTacticForTechnique(ctx context.Context, mitreID string) string {
+	var tech models.Technique
+	if err := db.Col("technique").FindOne(ctx, bson.M{"mitreid": mitreID}).Decode(&tech); err != nil {
+		return ""
+	}
+	if len(tech.Tactics) > 0 {
+		return tech.Tactics[0]
 	}
 	return ""
 }

@@ -92,6 +92,14 @@ function deleteFormatter() {
 	`
 }
 
+// Auto-populate tactic when MitreID changes
+$('#mitreid').on('changed.bs.select change', function() {
+	var selectedMitre = $(this).val()
+	if (selectedMitre && typeof mitreTactics !== 'undefined' && mitreTactics[selectedMitre]) {
+		$('#tactic').val(mitreTactics[selectedMitre])
+	}
+})
+
 // Dynamic <textarea> height (no native HTML/CSS way :( )
 $('#objective, #actions, #rednotes, #bluenotes').on('input', function(event) {
 	event.target.style.height = 0;
