@@ -120,23 +120,38 @@ func TestInitSessionsSameSiteLax(t *testing.T) {
 func TestSetAndClearSession(t *testing.T) {
 	InitSessions("test-secret-key", false)
 
-	// Create a request/response pair
 	r := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 
-	// Set session user
+	// SetSessionUser invalidates the old session and creates a new one,
+	// writing two Set-Cookie headers to w. Take the last "purpleops" cookie
+	// (the new session) and simulate a follow-up request with it.
 	SetSessionUser(w, r, "user123")
 
-	sess := GetSession(r)
+	var sessionCookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "purpleops" {
+			sessionCookie = c
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("no purpleops cookie written to response")
+	}
+
+	r2 := httptest.NewRequest("GET", "/", nil)
+	r2.AddCookie(sessionCookie)
+	sess := GetSession(r2)
 	if sess.Values["user_id"] != "user123" {
 		t.Errorf("expected user_id 'user123', got %v", sess.Values["user_id"])
 	}
 
-	// Clear session
-	ClearSession(w, r)
-	sess = GetSession(r)
+	// Clear session and verify a fresh request has no user_id.
+	w2 := httptest.NewRecorder()
+	ClearSession(w2, r2)
+	r3 := httptest.NewRequest("GET", "/", nil)
+	sess = GetSession(r3)
 	if _, ok := sess.Values["user_id"]; ok {
-		t.Error("expected user_id to be cleared")
+		t.Error("expected user_id to be cleared from session")
 	}
 }
 

@@ -160,7 +160,12 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		Active:      true,
 	}
 
-	if _, err := db.Col("api_key").InsertOne(ctx, &apiKey); err != nil {
+	col := db.Col("api_key")
+	if col == nil {
+		http.Error(w, "Failed to create API key", http.StatusInternalServerError)
+		return
+	}
+	if _, err := col.InsertOne(ctx, &apiKey); err != nil {
 		http.Error(w, "Failed to create API key", http.StatusInternalServerError)
 		return
 	}

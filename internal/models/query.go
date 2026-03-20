@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"errors"
 
 	"github.com/bryanster/purpleops/internal/db"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -10,6 +11,9 @@ import (
 
 // FindAPIKeyByHash retrieves an API key record by its SHA-256 hash.
 func FindAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) {
+	if db.DB == nil {
+		return nil, errors.New("database not initialised")
+	}
 	var k APIKey
 	err := db.Col("api_key").FindOne(ctx, bson.M{"key_hash": hash, "active": true}).Decode(&k)
 	if err == mongo.ErrNoDocuments {
@@ -86,6 +90,9 @@ func FindUserByUsername(ctx context.Context, username string) (*User, error) {
 
 // FindRole retrieves a role by name.
 func FindRole(ctx context.Context, name string) (*Role, error) {
+	if db.DB == nil {
+		return nil, errors.New("database not initialised")
+	}
 	var r Role
 	err := db.Col("role").FindOne(ctx, bson.M{"name": name}).Decode(&r)
 	return &r, err
