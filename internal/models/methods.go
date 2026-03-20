@@ -143,6 +143,32 @@ func (tc *TestCase) ToJSONMulti(field string) []string {
 	return strs
 }
 
+// AlertedNo returns true when the testcase's Alerted field is explicitly false.
+func (tc *TestCase) AlertedNo() bool {
+	return tc.Alerted != nil && !*tc.Alerted
+}
+
+// AlertedNull returns true when the testcase's Alerted field is nil (unset).
+func (tc *TestCase) AlertedNull() bool {
+	return tc.Alerted == nil
+}
+
+// LoggedNo returns true when the testcase's Logged field is explicitly false.
+func (tc *TestCase) LoggedNo() bool {
+	return tc.Logged != nil && !*tc.Logged
+}
+
+// LoggedNull returns true when the testcase's Logged field is nil (unset).
+func (tc *TestCase) LoggedNull() bool {
+	return tc.Logged == nil
+}
+
+// TagsJSON returns the testcase's tags resolved to "name|colour" format,
+// comma-separated, for display in the assessment table.
+func (tc *TestCase) TagsJSON() string {
+	return strings.Join(tc.ToJSONMulti("tags"), ",")
+}
+
 // GetProgress returns a "|"-delimited string of outcome percentages for an assessment.
 func (a *Assessment) GetProgress() string {
 	ctx := context.Background()

@@ -121,29 +121,40 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Multi fields from assessment
+	// Multi fields from assessment — pass raw structs so templates can
+	// access .ID.Hex, .Name, .Description, .Colour directly via pongo2.
 	multi := map[string]interface{}{
-		"sources":           assessment.MultiToJSON("sources", true),
-		"targets":           assessment.MultiToJSON("targets", true),
-		"tools":             assessment.MultiToJSON("tools", true),
-		"controls":          assessment.MultiToJSON("controls", true),
-		"tags":              assessment.MultiToJSON("tags", true),
-		"datasources":       assessment.MultiToJSON("datasources", true),
-		"rules":             assessment.MultiToJSON("rules", true),
-		"detectionsources":  assessment.MultiToJSON("detectionsources", true),
-		"preventionsources": assessment.MultiToJSON("preventionsources", true),
+		"Sources":           assessment.Sources,
+		"Targets":           assessment.Targets,
+		"Tools":             assessment.Tools,
+		"Controls":          assessment.Controls,
+		"Tags":              assessment.Tags,
+		"Datasources":       assessment.Datasources,
+		"Rules":             assessment.Rules,
+		"DetectionSources":  assessment.DetectionSources,
+		"PreventionSources": assessment.PreventionSources,
 	}
 
+	// Rating/severity option lists for blue-side dropdowns.
+	preventionRatings := []string{"0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "4.5", "5.0"}
+	detectionRatings := []string{"0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "4.5", "5.0"}
+	alertSeverities := []string{"Critical", "High", "Medium", "Low", "Informational"}
+	urgencyOptions := []string{"Critical", "High", "Medium", "Low"}
+
 	render.Render(w, r, "testcase.html", pongo2.Context{
-		"testcase":   tc,
-		"assessment": assessment,
-		"testcases":  testcases,
-		"tactics":    tactics,
-		"kb":         kb,
-		"templates":  templates,
-		"mitres":     techniques,
-		"sigmas":     sigmas,
-		"multi":      multi,
+		"testcase":           tc,
+		"assessment":         assessment,
+		"testcases":          testcases,
+		"tactics":            tactics,
+		"kb":                 kb,
+		"templates":          templates,
+		"mitres":             techniques,
+		"sigmas":             sigmas,
+		"multi":              multi,
+		"prevention_ratings": preventionRatings,
+		"detection_ratings":  detectionRatings,
+		"alert_severities":   alertSeverities,
+		"urgency_options":    urgencyOptions,
 	})
 }
 
