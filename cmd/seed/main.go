@@ -168,7 +168,7 @@ func seedTactics(db *mongo.Database) {
 			continue
 		}
 		docs = append(docs, bson.D{
-			{Key: "mitre_id", Value: row[0]},
+			{Key: "mitreid", Value: row[0]},
 			{Key: "name", Value: row[1]},
 		})
 	}
@@ -247,7 +247,7 @@ func seedTechniques(db *mongo.Database) {
 		}
 
 		techDocs = append(techDocs, bson.D{
-			{Key: "mitre_id", Value: mitreID},
+			{Key: "mitreid", Value: mitreID},
 			{Key: "name", Value: name},
 			{Key: "description", Value: description},
 			{Key: "detection", Value: detection},
@@ -255,7 +255,7 @@ func seedTechniques(db *mongo.Database) {
 		})
 
 		kbDocs = append(kbDocs, bson.D{
-			{Key: "mitre_id", Value: mitreID},
+			{Key: "mitreid", Value: mitreID},
 			{Key: "name", Value: name},
 			{Key: "overview", Value: description},
 			{Key: "advice", Value: detection},
@@ -331,8 +331,8 @@ func seedSigma(db *mongo.Database) {
 
 		for _, mitreID := range mitreIDs {
 			docs = append(docs, bson.D{
-				{Key: "mitre_id", Value: mitreID},
-				{Key: "title", Value: rule.Title},
+				{Key: "mitreid", Value: mitreID},
+				{Key: "name", Value: rule.Title},
 				{Key: "description", Value: rule.Description},
 			})
 		}
@@ -409,7 +409,7 @@ func seedART(db *mongo.Database) {
 				}
 
 				docs = append(docs, bson.D{
-					{Key: "mitre_id", Value: artFile.AttackTechnique},
+					{Key: "mitreid", Value: artFile.AttackTechnique},
 					{Key: "name", Value: test.Name},
 					{Key: "description", Value: test.Description},
 					{Key: "command", Value: test.Executor.Command},
@@ -452,7 +452,7 @@ func seedCustomTestcases(db *mongo.Database) {
 		}
 
 		docs = append(docs, bson.D{
-			{Key: "mitre_id", Value: tc.MitreID},
+			{Key: "mitreid", Value: tc.MitreID},
 			{Key: "name", Value: tc.Name},
 			{Key: "tactic", Value: tc.Tactic},
 			{Key: "objective", Value: tc.Objective},
@@ -493,7 +493,7 @@ func seedCustomKB(db *mongo.Database) {
 		}
 
 		docs = append(docs, bson.D{
-			{Key: "mitre_id", Value: kb.MitreID},
+			{Key: "mitreid", Value: kb.MitreID},
 			{Key: "overview", Value: kb.Overview},
 			{Key: "advice", Value: kb.Advice},
 			{Key: "provider", Value: kb.Provider},

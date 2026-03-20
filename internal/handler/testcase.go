@@ -96,7 +96,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	// TestCaseTemplates matching mitreid
 	var templates []models.TestCaseTemplate
 	if tc.MitreID != "" {
-		tplCursor, err := db.Col("testcase_template").Find(ctx, bson.M{"mitreid": tc.MitreID})
+		tplCursor, err := db.Col("test_case_template").Find(ctx, bson.M{"mitreid": tc.MitreID})
 		if err == nil {
 			tplCursor.All(ctx, &templates)
 		}
