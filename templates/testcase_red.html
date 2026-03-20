@@ -25,7 +25,7 @@
 		<div class="col-2">
 			<div class="btn-group-sm text-end" role="group">
 				<select class="selectpicker" data-width="fit" data-live-search="true" autocomplete="off" value="" title="Go" onchange="location = this.value;" data-style-base="form-control-sm form-control">
-					{% for test in testcases_sorted %}
+					{% for test in testcases %}
 					{% if !(current_user.HasRole("Blue") && !test.Visible) %}
 					<option value="/testcase/{{ test.ID.Hex }}">{{ test.Name }} ({{ test.State }})</option>
 					{% endif %}

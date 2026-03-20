@@ -1,7 +1,7 @@
 <!-- Testcase Saved Toast -->
 {{ toast("Testcase Saved") }}
 
-{% macro multiContent(type, description="Description") %}
+{% macro multiContent(type, items, description="description") %}
 <div class="mb-3">
     <div id="{{ type }}Toolbar">
         <button id="{{ type }}NewButton" class="btn btn-primary multiNew">New</button>
@@ -16,11 +16,11 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in multi_items %}
+            {% for item in items %}
             <tr data-title="bootstrap table" data-object='{"key": "value"}' id="{{ item.ID.Hex }}">
                 <td>{{ item.ID.Hex }}</td>
                 <td>{{ item.Name }}</td>
-                <td>{{ item.Description }}</td>
+                <td>{% if description == "colour" %}{{ item.Colour }}{% else %}{{ item.Description }}{% endif %}</td>
                 <td></td>
             </tr>
             {% endfor %}
@@ -30,39 +30,39 @@
 {% endmacro %}
 
 {{ modalHead("multiSource", "Manage Sources", True) }}
-    {{ multiContent("sources") }}
+    {{ multiContent("sources", multi.Sources) }}
 {{ modalTail("multiSource", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiTarget", "Manage Targets", True) }}
-    {{ multiContent("targets") }}
+    {{ multiContent("targets", multi.Targets) }}
 {{ modalTail("multiTarget", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiTool", "Manage Tools", True) }}
-    {{ multiContent("tools") }}
+    {{ multiContent("tools", multi.Tools) }}
 {{ modalTail("multiTool", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiControl", "Manage Controls", True) }}
-    {{ multiContent("controls") }}
+    {{ multiContent("controls", multi.Controls) }}
 {{ modalTail("multiControl", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiTag", "Manage Tags", True) }}
-    {{ multiContent("tags", "Colour") }}
+    {{ multiContent("tags", multi.Tags, "colour") }}
 {{ modalTail("multiTag", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiDatasource", "Manage Datasources", True) }}
-    {{ multiContent("datasources") }}
+    {{ multiContent("datasources", multi.Datasources) }}
 {{ modalTail("multiDatasource", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiRule", "Manage Rules", True) }}
-    {{ multiContent("rules") }}
+    {{ multiContent("rules", multi.Rules) }}
 {{ modalTail("multiRule", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiDetectionsource", "Manage Detection Sources", True) }}
-    {{ multiContent("detectionsources") }}
+    {{ multiContent("detectionsources", multi.DetectionSources) }}
 {{ modalTail("multiDetectionsource", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("multiPreventionsource", "Manage Prevention Sources", True) }}
-    {{ multiContent("preventionsources") }}
+    {{ multiContent("preventionsources", multi.PreventionSources) }}
 {{ modalTail("multiPreventionsource", "Cancel", "Save", "multiButton") }}
 
 {{ modalHead("ttpInfo", testcase.MitreID + " TTP Information", True) }}

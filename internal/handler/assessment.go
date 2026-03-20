@@ -166,12 +166,13 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build multi map.
+	// Build multi map — pass raw structs so templates can access
+	// .ID.Hex, .Name, .Description directly via pongo2.
 	multi := map[string]interface{}{
-		"datasources":       assessment.MultiToJSON("datasources", false),
-		"rules":             assessment.MultiToJSON("rules", false),
-		"detectionsources":  assessment.MultiToJSON("detectionsources", false),
-		"preventionsources": assessment.MultiToJSON("preventionsources", false),
+		"Datasources":       assessment.Datasources,
+		"Rules":             assessment.Rules,
+		"DetectionSources":  assessment.DetectionSources,
+		"PreventionSources": assessment.PreventionSources,
 	}
 
 	render.Render(w, r, "assessment.html", pongo2.Context{
