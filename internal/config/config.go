@@ -63,14 +63,14 @@ func LoadConfig() *Config {
 		MongoDB:    getEnv("MONGO_DB", "assessments3"),
 		MongoHost:  getEnv("MONGO_HOST", "localhost"),
 		MongoPort:  port,
-		Debug:      getEnv("FLASK_DEBUG", "False") == "True",
-		MFA:        getEnv("FLASK_MFA", "False") == "True",
+		Debug:      getEnv("DEBUG", "False") == "True",
+		MFA:        getEnv("MFA", "False") == "True",
 		Host:       getEnv("HOST", "0.0.0.0"),
 		Port:       getEnv("PORT", "8888"),
 		Name:       getEnv("NAME", "dev"),
-		SecretKey:  getEnv("FLASK_SECRET_KEY", "change-me"),
-		PassSalt:   getEnv("FLASK_SECURITY_PASSWORD_SALT", "change-me"),
-		TOTPSecret: getEnv("FLASK_SECURITY_TOTP_SECRETS", ""),
+		SecretKey:  getEnv("SECRET_KEY", "change-me"),
+		PassSalt:   getEnv("PASSWORD_SALT", "change-me"),
+		TOTPSecret: getEnv("TOTP_SECRET", ""),
 		AdminPwd:   getEnv("POPS_ADMIN_PWD", ""),
 
 		OAuthEnabled:      getEnv("OAUTH_ENABLED", "") == "true",
@@ -94,10 +94,10 @@ func LoadConfig() *Config {
 		SSOAutoProvision: ssoAutoProvision == "true" || ssoAutoProvision == "True",
 	}
 	if cfg.SecretKey == "change-me" {
-		log.Println("WARNING: FLASK_SECRET_KEY is set to the insecure default. Set this to a random value before deploying.")
+		log.Println("WARNING: SECRET_KEY is set to the insecure default. Set this to a random value before deploying.")
 	}
 	if cfg.PassSalt == "change-me" {
-		log.Println("WARNING: FLASK_SECURITY_PASSWORD_SALT is set to the insecure default. Set this to a random value before deploying.")
+		log.Println("WARNING: PASSWORD_SALT is set to the insecure default. Set this to a random value before deploying.")
 	}
 
 	Cfg = cfg

@@ -33,13 +33,13 @@ func TestLoadConfig(t *testing.T) {
 
 	os.Setenv("MONGO_HOST", "db.example.com")
 	os.Setenv("MONGO_PORT", "27018")
-	os.Setenv("FLASK_DEBUG", "True")
-	os.Setenv("FLASK_MFA", "True")
+	os.Setenv("DEBUG", "True")
+	os.Setenv("MFA", "True")
 	defer func() {
 		os.Unsetenv("MONGO_HOST")
 		os.Unsetenv("MONGO_PORT")
-		os.Unsetenv("FLASK_DEBUG")
-		os.Unsetenv("FLASK_MFA")
+		os.Unsetenv("DEBUG")
+		os.Unsetenv("MFA")
 	}()
 
 	cfg := LoadConfig()

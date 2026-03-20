@@ -17,14 +17,11 @@ help:
 install-hooks:
 	pre-commit install
 
-db:
-	docker-compose up mongodb -d
+dev-db:
+	docker-compose --profile dev up -d
 
-db-stop:
-	docker-compose stop mongodb
-
-db-rm:
-	docker-compose down -v
+dev-db-rm:
+	docker-compose --profile dev down -v
 
 build:
 	go build -o purpleops .
@@ -33,7 +30,7 @@ build:
 seed: build
 	MONGO_HOST=localhost ./seed
 
-dev: db build seed
+dev: dev-db build seed
 	MONGO_HOST=localhost ./purpleops
 
 prod:
