@@ -25,18 +25,18 @@ type Config struct {
 	AdminPwd   string
 
 	// OAuth2 SSO configuration.
-	OAuthEnabled     bool
+	OAuthEnabled      bool
 	OAuthProviderName string // Display name, e.g. "Google", "GitHub", "Azure AD"
-	OAuthClientID    string
+	OAuthClientID     string
 	OAuthClientSecret string
-	OAuthAuthURL     string // Authorization endpoint
-	OAuthTokenURL    string // Token endpoint
-	OAuthUserInfoURL string // UserInfo endpoint (must return JSON with "email" field)
-	OAuthScopes      string // Comma-separated scopes (default: "openid,email,profile")
-	OAuthRedirectURL string // Full callback URL, e.g. "https://purpleops.example.com/auth/oauth/callback"
+	OAuthAuthURL      string // Authorization endpoint
+	OAuthTokenURL     string // Token endpoint
+	OAuthUserInfoURL  string // UserInfo endpoint (must return JSON with "email" field)
+	OAuthScopes       string // Comma-separated scopes (default: "openid,email,profile")
+	OAuthRedirectURL  string // Full callback URL, e.g. "https://purpleops.example.com/auth/oauth/callback"
 
 	// SAML SSO configuration.
-	SAMLEnabled    bool
+	SAMLEnabled        bool
 	SAMLIDPMetadataURL string // IdP metadata URL
 	SAMLEntityID       string // SP entity ID (default: derived from root URL)
 	SAMLRootURL        string // Root URL of this application, e.g. "https://purpleops.example.com"
@@ -44,8 +44,8 @@ type Config struct {
 	SAMLKeyFile        string // Path to SP private key file (PEM)
 
 	// SSO shared settings.
-	SSODefaultRole    string // Default role for auto-provisioned SSO users (default: "Spectator")
-	SSOAutoProvision  bool   // Auto-create users on first SSO login (default: true)
+	SSODefaultRole   string // Default role for auto-provisioned SSO users (default: "Spectator")
+	SSOAutoProvision bool   // Auto-create users on first SSO login (default: true)
 }
 
 // Cfg is the package-level config instance set by LoadConfig.
