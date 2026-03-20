@@ -16,3 +16,5 @@ supervisord.pid
 # E2E tests
 e2e/node_modules/
 e2e/test-results/
+
+/vendor
