@@ -135,6 +135,9 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 		"PreventionSources": assessment.PreventionSources,
 	}
 
+	// Build MitreID → first tactic mapping for JS auto-population.
+	mitreTactics := buildMitreTacticsMap(techniques)
+
 	// Rating/severity option lists for blue-side dropdowns.
 	preventionRatings := []string{"0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "4.5", "5.0"}
 	detectionRatings := []string{"0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "4.5", "5.0"}
@@ -151,6 +154,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 		"mitres":             techniques,
 		"sigmas":             sigmas,
 		"multi":              multi,
+		"mitre_tactics":      mitreTactics,
 		"prevention_ratings": preventionRatings,
 		"detection_ratings":  detectionRatings,
 		"alert_severities":   alertSeverities,
@@ -299,6 +303,18 @@ func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Helper functions ---
+
+// buildMitreTacticsMap creates a JSON string mapping MitreID → first tactic name.
+func buildMitreTacticsMap(techniques []models.Technique) string {
+	m := make(map[string]string, len(techniques))
+	for _, t := range techniques {
+		if len(t.Tactics) > 0 {
+			m[t.MitreID] = t.Tactics[0]
+		}
+	}
+	data, _ := json.Marshal(m)
+	return string(data)
+}
 
 func applyFormField(r *http.Request, field string, target *string) {
 	if v := r.FormValue(field); v != "" || r.Form.Has(field) {

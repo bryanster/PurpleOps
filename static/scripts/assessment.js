@@ -15,6 +15,14 @@ $('#newTestcase').click(function() {
 	$('#newTestcaseModal').modal('show')
 });
 
+// Auto-populate tactic when MitreID changes in the new testcase modal
+$('#newTestcaseForm #mitreid').on('changed.bs.select change', function() {
+	var selectedMitre = $(this).val()
+	if (selectedMitre && typeof mitreTactics !== 'undefined' && mitreTactics[selectedMitre]) {
+		$('#newTestcaseForm #tactic').val(mitreTactics[selectedMitre])
+	}
+})
+
 // Wrapper for formatting server responses into table rows
 function formatRow(response) {
 	return {
