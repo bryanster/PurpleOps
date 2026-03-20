@@ -133,14 +133,17 @@ func downloadFile(url, dest string) error {
 }
 
 func seedTactics(db *mongo.Database) {
-	fmt.Println("Pulling MITRE tactics...")
-
 	url := "https://github.com/CyberCX-STA/PurpleOps-Deps/raw/master/attack.mitre/15.1/enterprise-attack-v15.1-tactics.xlsx"
 	tmpFile := "/tmp/tactics.xlsx"
-	if err := downloadFile(url, tmpFile); err != nil {
-		log.Fatalf("Failed to download tactics XLSX: %v", err)
+
+	if _, err := os.Stat(tmpFile); err != nil {
+		fmt.Println("Pulling MITRE tactics...")
+		if err := downloadFile(url, tmpFile); err != nil {
+			log.Fatalf("Failed to download tactics XLSX: %v", err)
+		}
+	} else {
+		fmt.Println("Using cached MITRE tactics from disk...")
 	}
-	defer os.Remove(tmpFile)
 
 	f, err := excelize.OpenFile(tmpFile)
 	if err != nil {
@@ -181,14 +184,17 @@ func seedTactics(db *mongo.Database) {
 }
 
 func seedTechniques(db *mongo.Database) {
-	fmt.Println("Pulling MITRE techniques...")
-
 	url := "https://github.com/CyberCX-STA/PurpleOps-Deps/raw/master/attack.mitre/15.1/enterprise-attack-v15.1-techniques.xlsx"
 	tmpFile := "/tmp/techniques.xlsx"
-	if err := downloadFile(url, tmpFile); err != nil {
-		log.Fatalf("Failed to download techniques XLSX: %v", err)
+
+	if _, err := os.Stat(tmpFile); err != nil {
+		fmt.Println("Pulling MITRE techniques...")
+		if err := downloadFile(url, tmpFile); err != nil {
+			log.Fatalf("Failed to download techniques XLSX: %v", err)
+		}
+	} else {
+		fmt.Println("Using cached MITRE techniques from disk...")
 	}
-	defer os.Remove(tmpFile)
 
 	f, err := excelize.OpenFile(tmpFile)
 	if err != nil {
@@ -279,25 +285,28 @@ func seedTechniques(db *mongo.Database) {
 }
 
 func seedSigma(db *mongo.Database) {
-	fmt.Println("Cloning SigmaHQ/sigma repository...")
-
 	cloneDir := "/tmp/sigma"
-	os.RemoveAll(cloneDir)
 
-	_, err := git.PlainClone(cloneDir, false, &git.CloneOptions{
-		URL: "https://github.com/SigmaHQ/sigma.git",
-	})
-	if err != nil {
-		log.Fatalf("Failed to clone sigma repo: %v", err)
+	if _, err := os.Stat(filepath.Join(cloneDir, "rules")); err != nil {
+		fmt.Println("Cloning SigmaHQ/sigma repository...")
+		os.RemoveAll(cloneDir)
+
+		_, err := git.PlainClone(cloneDir, false, &git.CloneOptions{
+			URL: "https://github.com/SigmaHQ/sigma.git",
+		})
+		if err != nil {
+			log.Fatalf("Failed to clone sigma repo: %v", err)
+		}
+	} else {
+		fmt.Println("Using cached SigmaHQ/sigma repository from disk...")
 	}
-	defer os.RemoveAll(cloneDir)
 
 	fmt.Println("Parsing Sigma rules...")
 	coll := db.Collection("sigma")
 	var docs []interface{}
 
 	rulesDir := filepath.Join(cloneDir, "rules")
-	err = filepath.Walk(rulesDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(rulesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -352,18 +361,21 @@ func seedSigma(db *mongo.Database) {
 }
 
 func seedART(db *mongo.Database) {
-	fmt.Println("Cloning redcanaryco/atomic-red-team repository...")
-
 	cloneDir := "/tmp/atomic-red-team"
-	os.RemoveAll(cloneDir)
 
-	_, err := git.PlainClone(cloneDir, false, &git.CloneOptions{
-		URL: "https://github.com/redcanaryco/atomic-red-team.git",
-	})
-	if err != nil {
-		log.Fatalf("Failed to clone atomic-red-team repo: %v", err)
+	if _, err := os.Stat(filepath.Join(cloneDir, "atomics")); err != nil {
+		fmt.Println("Cloning redcanaryco/atomic-red-team repository...")
+		os.RemoveAll(cloneDir)
+
+		_, err := git.PlainClone(cloneDir, false, &git.CloneOptions{
+			URL: "https://github.com/redcanaryco/atomic-red-team.git",
+		})
+		if err != nil {
+			log.Fatalf("Failed to clone atomic-red-team repo: %v", err)
+		}
+	} else {
+		fmt.Println("Using cached redcanaryco/atomic-red-team repository from disk...")
 	}
-	defer os.RemoveAll(cloneDir)
 
 	fmt.Println("Parsing Atomic Red Team testcases...")
 	coll := db.Collection("test_case_template")
