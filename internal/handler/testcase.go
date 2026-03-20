@@ -327,6 +327,10 @@ func parseBool(v string) bool {
 func applyFormTime(r *http.Request, field string, target **time.Time) {
 	v := r.FormValue(field)
 	if v == "" {
+		// Clear the time if the form field is present but empty (e.g. Restart clears end time)
+		if r.Form.Has(field) {
+			*target = nil
+		}
 		return
 	}
 	t, err := time.Parse("2006-01-02T15:04", v)
