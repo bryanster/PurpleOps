@@ -21,7 +21,10 @@ db:
 	docker-compose up mongodb -d
 
 db-stop:
-	docker compose stop mongodb
+	docker-compose stop mongodb
+
+db-rm:
+	docker-compose down -v
 
 build:
 	go build -o purpleops .
