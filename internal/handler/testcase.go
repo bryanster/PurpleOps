@@ -277,6 +277,14 @@ func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 		tc.DetectTime = models.NowPtr()
 	}
 
+	// Validate state — only known values are accepted.
+	switch tc.State {
+	case "Pending", "Running", "Complete":
+		// valid
+	default:
+		tc.State = "Pending"
+	}
+
 	// Compute outcome
 	tc.Outcome = computeOutcome(tc)
 

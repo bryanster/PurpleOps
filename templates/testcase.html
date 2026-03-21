@@ -41,7 +41,7 @@
             <div class="col-{% if current_user.HasRole("Spectator") %}3{% else %}2{% endif %}">
                 <div class="input-group">
                     <span class="input-group-text">Status</span>
-                    <input id="state" name="state" type="text" class="form-control {% if testcase.State == "Running" %}bg-warning{% endif %}{% if testcase.State == "Complete" %}bg-primary text-white{% endif %}" value="{{ testcase.State }}" {% if current_user.HasRole("Blue") %} disabled{% endif %}>
+                    <input id="state" name="state" type="text" class="form-control {% if testcase.State == "Running" %}bg-warning{% endif %}{% if testcase.State == "Complete" %}bg-primary text-white{% endif %}" value="{{ testcase.State }}" readonly {% if current_user.HasRole("Blue") %} disabled{% endif %}>
                 </div>
             </div>
             {% if !current_user.HasRole("Spectator") %}

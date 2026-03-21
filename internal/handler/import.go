@@ -470,6 +470,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 		tc := models.TestCase{
 			ID:           bson.NewObjectID(),
 			AssessmentID: newAssessmentID.Hex(),
+			State:        "Pending",
 			Visible:      true,
 			ModifyTime:   models.NowPtr(),
 		}
