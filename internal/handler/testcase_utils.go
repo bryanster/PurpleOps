@@ -234,12 +234,17 @@ func HandleToggleTimer(w http.ResponseWriter, r *http.Request) {
 		tc.StartTime = now
 		tc.EndTime = nil
 		tc.State = "Running"
+	default:
+		// Invalid/empty state: reset to Running (start fresh)
+		tc.State = "Running"
+		tc.StartTime = now
+		tc.EndTime = nil
 	}
 
 	tc.ModifyTime = now
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
 		return
