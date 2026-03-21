@@ -15,7 +15,7 @@ func FindAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) {
 		return nil, errors.New("database not initialised")
 	}
 	var k APIKey
-	err := db.Col("api_key").FindOne(ctx, bson.M{"key_hash": hash, "active": true}).Decode(&k)
+	err := db.Col(db.ColAPIKey).FindOne(ctx, bson.M{"key_hash": hash, "active": true}).Decode(&k)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
 	}
@@ -25,7 +25,7 @@ func FindAPIKeyByHash(ctx context.Context, hash string) (*APIKey, error) {
 // FindAPIKeysByUser retrieves all API keys belonging to a user.
 func FindAPIKeysByUser(ctx context.Context, userID bson.ObjectID) ([]APIKey, error) {
 	var keys []APIKey
-	cursor, err := db.Col("api_key").Find(ctx, bson.M{"user_id": userID})
+	cursor, err := db.Col(db.ColAPIKey).Find(ctx, bson.M{"user_id": userID})
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func FindAssessment(ctx context.Context, id string) (*Assessment, error) {
 		return nil, err
 	}
 	var a Assessment
-	err = db.Col("assessment").FindOne(ctx, bson.M{"_id": oid}).Decode(&a)
+	err = db.Col(db.ColAssessment).FindOne(ctx, bson.M{"_id": oid}).Decode(&a)
 	return &a, err
 }
 
@@ -53,7 +53,7 @@ func FindTestCase(ctx context.Context, id string) (*TestCase, error) {
 		return nil, err
 	}
 	var tc TestCase
-	err = db.Col("test_case").FindOne(ctx, bson.M{"_id": oid}).Decode(&tc)
+	err = db.Col(db.ColTestCase).FindOne(ctx, bson.M{"_id": oid}).Decode(&tc)
 	return &tc, err
 }
 
@@ -64,14 +64,14 @@ func FindUser(ctx context.Context, id string) (*User, error) {
 		return nil, err
 	}
 	var u User
-	err = db.Col("user").FindOne(ctx, bson.M{"_id": oid}).Decode(&u)
+	err = db.Col(db.ColUser).FindOne(ctx, bson.M{"_id": oid}).Decode(&u)
 	return &u, err
 }
 
 // FindUserByEmail retrieves a user by email address. Returns nil, nil if not found.
 func FindUserByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
-	err := db.Col("user").FindOne(ctx, bson.M{"email": email}).Decode(&u)
+	err := db.Col(db.ColUser).FindOne(ctx, bson.M{"email": email}).Decode(&u)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
 	}
@@ -81,7 +81,7 @@ func FindUserByEmail(ctx context.Context, email string) (*User, error) {
 // FindUserByUsername retrieves a user by username. Returns nil, nil if not found.
 func FindUserByUsername(ctx context.Context, username string) (*User, error) {
 	var u User
-	err := db.Col("user").FindOne(ctx, bson.M{"username": username}).Decode(&u)
+	err := db.Col(db.ColUser).FindOne(ctx, bson.M{"username": username}).Decode(&u)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
 	}
@@ -94,7 +94,7 @@ func FindRole(ctx context.Context, name string) (*Role, error) {
 		return nil, errors.New("database not initialised")
 	}
 	var r Role
-	err := db.Col("role").FindOne(ctx, bson.M{"name": name}).Decode(&r)
+	err := db.Col(db.ColRole).FindOne(ctx, bson.M{"name": name}).Decode(&r)
 	return &r, err
 }
 
@@ -136,7 +136,7 @@ func FindOrCreateSSOUser(ctx context.Context, email, username, provider, default
 		AuthProvider: provider,
 	}
 
-	if _, err := db.Col("user").InsertOne(ctx, &newUser); err != nil {
+	if _, err := db.Col(db.ColUser).InsertOne(ctx, &newUser); err != nil {
 		return nil, err
 	}
 
@@ -146,7 +146,7 @@ func FindOrCreateSSOUser(ctx context.Context, email, username, provider, default
 // GetTestCases returns all testcases for a given assessment ID string.
 func GetTestCases(ctx context.Context, assessmentID string) ([]TestCase, error) {
 	var tcs []TestCase
-	cursor, err := db.Col("test_case").Find(ctx, bson.M{"assessmentid": assessmentID})
+	cursor, err := db.Col(db.ColTestCase).Find(ctx, bson.M{"assessmentid": assessmentID})
 	if err != nil {
 		return nil, err
 	}

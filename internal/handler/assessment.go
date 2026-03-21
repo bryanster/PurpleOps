@@ -32,7 +32,7 @@ func HandleNewAssessment(w http.ResponseWriter, r *http.Request) {
 		Created:     now,
 	}
 
-	_, err := db.Col("assessment").InsertOne(r.Context(), &assessment)
+	_, err := db.Col(db.ColAssessment).InsertOne(r.Context(), &assessment)
 	if err != nil {
 		http.Error(w, "Failed to create assessment", http.StatusInternalServerError)
 		return
@@ -40,7 +40,7 @@ func HandleNewAssessment(w http.ResponseWriter, r *http.Request) {
 
 	// Create files directory for this assessment.
 	filesDir := filepath.Join("files", assessment.ID.Hex())
-	if err := os.MkdirAll(filesDir, 0o750); err != nil {
+	if err := os.MkdirAll(filesDir, DirPerm); err != nil {
 		http.Error(w, "Failed to create files directory", http.StatusInternalServerError)
 		return
 	}
@@ -66,7 +66,7 @@ func HandleEditAssessment(w http.ResponseWriter, r *http.Request) {
 	assessment.Name = r.FormValue("name")
 	assessment.Description = r.FormValue("description")
 
-	_, err = db.Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col(db.ColAssessment).UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{
 			"name":        assessment.Name,
 			"description": assessment.Description,
@@ -86,7 +86,7 @@ func HandleDeleteAssessment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Delete all testcases belonging to this assessment.
-	_, err := db.Col("test_case").DeleteMany(r.Context(), bson.M{"assessmentid": id})
+	_, err := db.Col(db.ColTestCase).DeleteMany(r.Context(), bson.M{"assessmentid": id})
 	if err != nil {
 		http.Error(w, "Failed to delete testcases", http.StatusInternalServerError)
 		return
@@ -102,7 +102,7 @@ func HandleDeleteAssessment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
-	_, err = db.Col("assessment").DeleteOne(r.Context(), bson.M{"_id": oid})
+	_, err = db.Col(db.ColAssessment).DeleteOne(r.Context(), bson.M{"_id": oid})
 	if err != nil {
 		http.Error(w, "Failed to delete assessment", http.StatusInternalServerError)
 		return
@@ -129,14 +129,14 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 
 	// Load all testcase templates.
 	var templates []models.TestCaseTemplate
-	cursor, err := db.Col("test_case_template").Find(r.Context(), bson.M{})
+	cursor, err := db.Col(db.ColTestCaseTemplate).Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &templates)
 	}
 
 	// Load techniques sorted by MitreID.
 	var techniques []models.Technique
-	cursor, err = db.Col("technique").Find(r.Context(), bson.M{})
+	cursor, err = db.Col(db.ColTechnique).Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &techniques)
 	}
@@ -146,7 +146,7 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 
 	// Load tactics.
 	var tactics []models.Tactic
-	cursor, err = db.Col("tactic").Find(r.Context(), bson.M{})
+	cursor, err = db.Col(db.ColTactic).Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &tactics)
 	}
@@ -205,7 +205,7 @@ func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var assessments []models.Assessment
-	cursor, err := db.Col("assessment").Find(r.Context(), bson.M{})
+	cursor, err := db.Col(db.ColAssessment).Find(r.Context(), bson.M{})
 	if err == nil {
 		cursor.All(r.Context(), &assessments)
 	}

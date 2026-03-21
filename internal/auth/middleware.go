@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -140,7 +141,11 @@ func APIKeyAuth(next http.Handler) http.Handler {
 
 		// Update last_used_at asynchronously.
 		now := time.Now()
-		go db.Col("api_key").UpdateOne(r.Context(), bson.M{"_id": apiKey.ID}, bson.M{"$set": bson.M{"last_used_at": now}}) //nolint
+		go func() {
+			if _, err := db.Col(db.ColAPIKey).UpdateOne(r.Context(), bson.M{"_id": apiKey.ID}, bson.M{"$set": bson.M{"last_used_at": now}}); err != nil {
+				slog.Warn("api key: failed to update last_used_at", "key_id", apiKey.ID.Hex(), "err", err)
+			}
+		}()
 
 		ctx := WithUser(r.Context(), &restricted)
 		next.ServeHTTP(w, r.WithContext(ctx))

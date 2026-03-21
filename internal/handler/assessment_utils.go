@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -40,31 +41,39 @@ func HandleAssessmentMulti(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newSource := func() *models.Source { return &models.Source{ID: bson.NewObjectID()} }
+	newTarget := func() *models.Target { return &models.Target{ID: bson.NewObjectID()} }
+	newTool := func() *models.Tool { return &models.Tool{ID: bson.NewObjectID()} }
+	newControl := func() *models.Control { return &models.Control{ID: bson.NewObjectID()} }
+	newTag := func() *models.Tag { return &models.Tag{ID: bson.NewObjectID()} }
+	newDatasource := func() *models.Datasource { return &models.Datasource{ID: bson.NewObjectID()} }
+	newRule := func() *models.DetectionRule { return &models.DetectionRule{ID: bson.NewObjectID()} }
+
 	switch field {
 	case "sources":
-		assessment.Sources = updateSources(assessment.Sources, body.Data)
+		assessment.Sources = updateItems(assessment.Sources, body.Data, newSource)
 	case "targets":
-		assessment.Targets = updateTargets(assessment.Targets, body.Data)
+		assessment.Targets = updateItems(assessment.Targets, body.Data, newTarget)
 	case "tools":
-		assessment.Tools = updateTools(assessment.Tools, body.Data)
+		assessment.Tools = updateItems(assessment.Tools, body.Data, newTool)
 	case "controls":
-		assessment.Controls = updateControls(assessment.Controls, body.Data)
+		assessment.Controls = updateItems(assessment.Controls, body.Data, newControl)
 	case "tags":
-		assessment.Tags = updateTags(assessment.Tags, body.Data)
+		assessment.Tags = updateItems(assessment.Tags, body.Data, newTag)
 	case "datasources":
-		assessment.Datasources = updateDatasources(assessment.Datasources, body.Data)
+		assessment.Datasources = updateItems(assessment.Datasources, body.Data, newDatasource)
 	case "rules":
-		assessment.Rules = updateDetectionRules(assessment.Rules, body.Data)
+		assessment.Rules = updateItems(assessment.Rules, body.Data, newRule)
 	case "detectionsources":
-		assessment.DetectionSources = updateDatasources(assessment.DetectionSources, body.Data)
+		assessment.DetectionSources = updateItems(assessment.DetectionSources, body.Data, newDatasource)
 	case "preventionsources":
-		assessment.PreventionSources = updateDatasources(assessment.PreventionSources, body.Data)
+		assessment.PreventionSources = updateItems(assessment.PreventionSources, body.Data, newDatasource)
 	default:
 		http.Error(w, "Invalid field", http.StatusBadRequest)
 		return
 	}
 
-	_, err = db.Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col(db.ColAssessment).UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{field: getFieldValue(assessment, field)},
 	})
 	if err != nil {
@@ -103,22 +112,26 @@ func getFieldValue(a *models.Assessment, field string) interface{} {
 	return nil
 }
 
-func updateSources(existing []models.Source, data []map[string]string) []models.Source {
-	result := make([]models.Source, 0, len(data))
+// updateItems is a generic function that processes embedded document updates.
+// Items with a "tmp-" ID prefix are created as new; others are matched against
+// existing items and updated in place. PT must be a pointer to T that satisfies NamedItem.
+func updateItems[T any, PT interface {
+	*T
+	models.NamedItem
+}](existing []T, data []map[string]string, newFn func() PT) []T {
+	result := make([]T, 0, len(data))
 	for _, item := range data {
 		id := item["id"]
 		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.Source{
-				ID:          bson.NewObjectID(),
-				Name:        item["name"],
-				Description: item["description"],
-			})
+			n := newFn()
+			n.SetFields(item)
+			result = append(result, *n)
 		} else {
-			for _, s := range existing {
-				if s.ID.Hex() == id {
-					s.Name = item["name"]
-					s.Description = item["description"]
-					result = append(result, s)
+			for i := range existing {
+				ep := PT(&existing[i])
+				if ep.GetID().Hex() == id {
+					ep.SetFields(item)
+					result = append(result, existing[i])
 					break
 				}
 			}
@@ -127,148 +140,31 @@ func updateSources(existing []models.Source, data []map[string]string) []models.
 	return result
 }
 
-func updateTargets(existing []models.Target, data []map[string]string) []models.Target {
-	result := make([]models.Target, 0, len(data))
-	for _, item := range data {
-		id := item["id"]
-		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.Target{
-				ID:          bson.NewObjectID(),
-				Name:        item["name"],
-				Description: item["description"],
-			})
-		} else {
-			for _, t := range existing {
-				if t.ID.Hex() == id {
-					t.Name = item["name"]
-					t.Description = item["description"]
-					result = append(result, t)
-					break
-				}
-			}
-		}
-	}
-	return result
-}
+// Hexagon visualization constants.
+const (
+	hexColorYellow = "#FFC000"
+	hexColorGreen  = "#B8DF43"
+	hexColorRed    = "#FB6B64"
 
-func updateTools(existing []models.Tool, data []map[string]string) []models.Tool {
-	result := make([]models.Tool, 0, len(data))
-	for _, item := range data {
-		id := item["id"]
-		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.Tool{
-				ID:          bson.NewObjectID(),
-				Name:        item["name"],
-				Description: item["description"],
-			})
-		} else {
-			for _, t := range existing {
-				if t.ID.Hex() == id {
-					t.Name = item["name"]
-					t.Description = item["description"]
-					result = append(result, t)
-					break
-				}
-			}
-		}
-	}
-	return result
-}
+	hexWidth    = 120
+	hexHeight   = 104
+	hexMaxCols  = 5
+	hexHalfW    = 50
+	hexQuarterW = 25
+	hexSideH    = 43
 
-func updateControls(existing []models.Control, data []map[string]string) []models.Control {
-	result := make([]models.Control, 0, len(data))
-	for _, item := range data {
-		id := item["id"]
-		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.Control{
-				ID:          bson.NewObjectID(),
-				Name:        item["name"],
-				Description: item["description"],
-			})
-		} else {
-			for _, c := range existing {
-				if c.ID.Hex() == id {
-					c.Name = item["name"]
-					c.Description = item["description"]
-					result = append(result, c)
-					break
-				}
-			}
-		}
-	}
-	return result
-}
+	// Score thresholds for hexagon coloring.
+	hexScoreGreen = 1  // score > this → green
+	hexScoreRed   = -1 // score < this → red
+)
 
-func updateTags(existing []models.Tag, data []map[string]string) []models.Tag {
-	result := make([]models.Tag, 0, len(data))
-	for _, item := range data {
-		id := item["id"]
-		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.Tag{
-				ID:     bson.NewObjectID(),
-				Name:   item["name"],
-				Colour: item["colour"],
-			})
-		} else {
-			for _, t := range existing {
-				if t.ID.Hex() == id {
-					t.Name = item["name"]
-					t.Colour = item["colour"]
-					result = append(result, t)
-					break
-				}
-			}
-		}
-	}
-	return result
-}
-
-func updateDatasources(existing []models.Datasource, data []map[string]string) []models.Datasource {
-	result := make([]models.Datasource, 0, len(data))
-	for _, item := range data {
-		id := item["id"]
-		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.Datasource{
-				ID:          bson.NewObjectID(),
-				Name:        item["name"],
-				Description: item["description"],
-			})
-		} else {
-			for _, d := range existing {
-				if d.ID.Hex() == id {
-					d.Name = item["name"]
-					d.Description = item["description"]
-					result = append(result, d)
-					break
-				}
-			}
-		}
-	}
-	return result
-}
-
-func updateDetectionRules(existing []models.DetectionRule, data []map[string]string) []models.DetectionRule {
-	result := make([]models.DetectionRule, 0, len(data))
-	for _, item := range data {
-		id := item["id"]
-		if strings.HasPrefix(id, "tmp-") {
-			result = append(result, models.DetectionRule{
-				ID:          bson.NewObjectID(),
-				Name:        item["name"],
-				Description: item["description"],
-			})
-		} else {
-			for _, r := range existing {
-				if r.ID.Hex() == id {
-					r.Name = item["name"]
-					r.Description = item["description"]
-					result = append(result, r)
-					break
-				}
-			}
-		}
-	}
-	return result
+// Rating-to-score mapping used for prevention/detection scoring.
+var ratingScores = map[string]int{
+	"Critical":      5,
+	"High":          4,
+	"Medium":        3,
+	"Low":           2,
+	"Informational": 1,
 }
 
 // HandleAssessmentNavigator renders the navigator export page.
@@ -284,7 +180,11 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 
 	// Generate a one-time secret.
 	secretBytes := make([]byte, 16)
-	_, _ = rand.Read(secretBytes)
+	if _, err := rand.Read(secretBytes); err != nil {
+		slog.Error("navigator: failed to generate secret", "err", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
 	secret := hex.EncodeToString(secretBytes)
 
 	// Store as "timestamp|ip|secret" in assessment.NavigatorExport.
@@ -292,7 +192,7 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 	ip := r.RemoteAddr
 	navigatorExport := fmt.Sprintf("%s|%s|%s", timestamp, ip, secret)
 
-	_, err = db.Col("assessment").UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col(db.ColAssessment).UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{"navigatorexport": navigatorExport},
 	})
 	if err != nil {
@@ -467,17 +367,8 @@ func buildStats(testcases []models.TestCase) map[string]*tacticStats {
 }
 
 func ratingToScore(rating string) int {
-	switch rating {
-	case "Critical":
-		return 5
-	case "High":
-		return 4
-	case "Medium":
-		return 3
-	case "Low":
-		return 2
-	case "Informational":
-		return 1
+	if s, ok := ratingScores[rating]; ok {
+		return s
 	}
 	return 0
 }
@@ -542,11 +433,11 @@ func RenderHexagons(id string) string {
 		}
 
 		score := prevented + alerted - missed
-		color := "#FFC000" // yellow
-		if score > 1 {
-			color = "#B8DF43" // green
-		} else if score < -1 {
-			color = "#FB6B64" // red
+		color := hexColorYellow
+		if score > hexScoreGreen {
+			color = hexColorGreen
+		} else if score < hexScoreRed {
+			color = hexColorRed
 		}
 
 		hexes = append(hexes, hexData{
@@ -562,11 +453,9 @@ func RenderHexagons(id string) string {
 	}
 
 	// Calculate dimensions based on number of hexagons.
-	hexWidth := 120
-	hexHeight := 104
 	cols := len(hexes)
-	if cols > 5 {
-		cols = 5
+	if cols > hexMaxCols {
+		cols = hexMaxCols
 	}
 	rows := (len(hexes) + cols - 1) / cols
 	svgWidth := cols*hexWidth + 40
@@ -584,12 +473,12 @@ func RenderHexagons(id string) string {
 
 		// Hexagon points (flat-top).
 		points := fmt.Sprintf("%d,%d %d,%d %d,%d %d,%d %d,%d %d,%d",
-			cx-50, cy,
-			cx-25, cy-43,
-			cx+25, cy-43,
-			cx+50, cy,
-			cx+25, cy+43,
-			cx-25, cy+43,
+			cx-hexHalfW, cy,
+			cx-hexQuarterW, cy-hexSideH,
+			cx+hexQuarterW, cy-hexSideH,
+			cx+hexHalfW, cy,
+			cx+hexQuarterW, cy+hexSideH,
+			cx-hexQuarterW, cy+hexSideH,
 		)
 
 		sb.WriteString(fmt.Sprintf(`  <polygon points="%s" fill="%s" stroke="#333" stroke-width="2"/>`, points, h.Color))

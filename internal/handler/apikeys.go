@@ -38,7 +38,7 @@ func HandleAPIKeysPage(w http.ResponseWriter, r *http.Request) {
 	var allowedRoles []models.Role
 	for _, rid := range userRoleIDs {
 		var role models.Role
-		if err := db.Col("role").FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
+		if err := db.Col(db.ColRole).FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
 			allowedRoles = append(allowedRoles, role)
 		}
 	}
@@ -47,7 +47,7 @@ func HandleAPIKeysPage(w http.ResponseWriter, r *http.Request) {
 	var allowedAssessments []models.Assessment
 	for _, aid := range user.AssessmentList(ctx) {
 		var a models.Assessment
-		if err := db.Col("assessment").FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
+		if err := db.Col(db.ColAssessment).FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
 			allowedAssessments = append(allowedAssessments, a)
 		}
 	}
@@ -160,7 +160,7 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		Active:      true,
 	}
 
-	col := db.Col("api_key")
+	col := db.Col(db.ColAPIKey)
 	if col == nil {
 		http.Error(w, "Failed to create API key", http.StatusInternalServerError)
 		return
@@ -197,7 +197,7 @@ func HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only delete keys owned by the current user.
-	result, err := db.Col("api_key").DeleteOne(ctx, bson.M{"_id": oid, "user_id": user.ID})
+	result, err := db.Col(db.ColAPIKey).DeleteOne(ctx, bson.M{"_id": oid, "user_id": user.ID})
 	if err != nil {
 		http.Error(w, "Failed to delete API key", http.StatusInternalServerError)
 		return

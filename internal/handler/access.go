@@ -28,21 +28,21 @@ func HandleAccessPage(w http.ResponseWriter, r *http.Request) {
 
 	// Load all users.
 	var users []models.User
-	cursor, err := db.Col("user").Find(ctx, bson.M{})
+	cursor, err := db.Col(db.ColUser).Find(ctx, bson.M{})
 	if err == nil {
 		cursor.All(ctx, &users)
 	}
 
 	// Load all assessments.
 	var assessments []models.Assessment
-	cursor, err = db.Col("assessment").Find(ctx, bson.M{})
+	cursor, err = db.Col(db.ColAssessment).Find(ctx, bson.M{})
 	if err == nil {
 		cursor.All(ctx, &assessments)
 	}
 
 	// Load all roles.
 	var roles []models.Role
-	cursor, err = db.Col("role").Find(ctx, bson.M{})
+	cursor, err = db.Col(db.ColRole).Find(ctx, bson.M{})
 	if err == nil {
 		cursor.All(ctx, &roles)
 	}
@@ -105,7 +105,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var assessmentIDs []bson.ObjectID
 	for _, name := range assessmentNames {
 		var a models.Assessment
-		err := db.Col("assessment").FindOne(ctx, bson.M{"name": name}).Decode(&a)
+		err := db.Col(db.ColAssessment).FindOne(ctx, bson.M{"name": name}).Decode(&a)
 		if err == nil {
 			assessmentIDs = append(assessmentIDs, a.ID)
 		}
@@ -122,7 +122,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		InitPwd:     true,
 	}
 
-	if _, err := db.Col("user").InsertOne(ctx, &user); err != nil {
+	if _, err := db.Col(db.ColUser).InsertOne(ctx, &user); err != nil {
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
@@ -206,7 +206,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 		var assessmentIDs []bson.ObjectID
 		for _, name := range assessmentNames {
 			var a models.Assessment
-			err := db.Col("assessment").FindOne(ctx, bson.M{"name": name}).Decode(&a)
+			err := db.Col(db.ColAssessment).FindOne(ctx, bson.M{"name": name}).Decode(&a)
 			if err == nil {
 				assessmentIDs = append(assessmentIDs, a.ID)
 			}
@@ -214,7 +214,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 		updates["assessments"] = assessmentIDs
 	}
 
-	_, err = db.Col("user").UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": updates})
+	_, err = db.Col(db.ColUser).UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": updates})
 	if err != nil {
 		http.Error(w, "Failed to update user", http.StatusInternalServerError)
 		return
@@ -251,7 +251,7 @@ func HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Col("user").DeleteOne(ctx, bson.M{"_id": oid})
+	_, err = db.Col(db.ColUser).DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
 		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
 		return

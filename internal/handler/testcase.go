@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,7 +40,7 @@ func HandleNewTestCase(w http.ResponseWriter, r *http.Request) {
 		Visible:      true,
 	}
 
-	_, err := db.Col("test_case").InsertOne(r.Context(), &tc)
+	_, err := db.Col(db.ColTestCase).InsertOne(r.Context(), &tc)
 	if err != nil {
 		http.Error(w, "Failed to create testcase", http.StatusInternalServerError)
 		return
@@ -79,7 +80,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 
 	// All tactics
 	var tactics []models.Tactic
-	tacticCursor, err := db.Col("tactic").Find(ctx, bson.M{})
+	tacticCursor, err := db.Col(db.ColTactic).Find(ctx, bson.M{})
 	if err == nil {
 		tacticCursor.All(ctx, &tactics)
 	}
@@ -88,7 +89,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	var kb *models.KnowledgeBase
 	if tc.MitreID != "" {
 		var kbDoc models.KnowledgeBase
-		if err := db.Col("knowledge_base").FindOne(ctx, bson.M{"mitreid": tc.MitreID}).Decode(&kbDoc); err == nil {
+		if err := db.Col(db.ColKnowledgeBase).FindOne(ctx, bson.M{"mitreid": tc.MitreID}).Decode(&kbDoc); err == nil {
 			kb = &kbDoc
 		}
 	}
@@ -96,7 +97,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	// TestCaseTemplates matching mitreid
 	var templates []models.TestCaseTemplate
 	if tc.MitreID != "" {
-		tplCursor, err := db.Col("test_case_template").Find(ctx, bson.M{"mitreid": tc.MitreID})
+		tplCursor, err := db.Col(db.ColTestCaseTemplate).Find(ctx, bson.M{"mitreid": tc.MitreID})
 		if err == nil {
 			tplCursor.All(ctx, &templates)
 		}
@@ -104,7 +105,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 
 	// All techniques
 	var techniques []models.Technique
-	techCursor, err := db.Col("technique").Find(ctx, bson.M{})
+	techCursor, err := db.Col(db.ColTechnique).Find(ctx, bson.M{})
 	if err == nil {
 		techCursor.All(ctx, &techniques)
 	}
@@ -115,7 +116,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	// Sigma docs matching mitreid
 	var sigmas []models.Sigma
 	if tc.MitreID != "" {
-		sigmaCursor, err := db.Col("sigma").Find(ctx, bson.M{"mitreid": tc.MitreID})
+		sigmaCursor, err := db.Col(db.ColSigma).Find(ctx, bson.M{"mitreid": tc.MitreID})
 		if err == nil {
 			sigmaCursor.All(ctx, &sigmas)
 		}
@@ -290,18 +291,18 @@ func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 
 	// Sanity check: validate list field IDs against assessment's embedded docs
 	if !isBlue {
-		tc.Sources = sanitizeIDs(tc.Sources, extractIDs(assessment.Sources))
-		tc.Targets = sanitizeIDs(tc.Targets, extractTargetIDs(assessment.Targets))
-		tc.Tools = sanitizeIDs(tc.Tools, extractToolIDs(assessment.Tools))
-		tc.Controls = sanitizeIDs(tc.Controls, extractControlIDs(assessment.Controls))
-		tc.Tags = sanitizeIDs(tc.Tags, extractTagIDs(assessment.Tags))
-		tc.Datasources = sanitizeIDs(tc.Datasources, extractDatasourceIDs(assessment.Datasources))
-		tc.Rules = sanitizeIDs(tc.Rules, extractRuleIDs(assessment.Rules))
+		tc.Sources = sanitizeIDs(tc.Sources, extractItemIDs(assessment.Sources))
+		tc.Targets = sanitizeIDs(tc.Targets, extractItemIDs(assessment.Targets))
+		tc.Tools = sanitizeIDs(tc.Tools, extractItemIDs(assessment.Tools))
+		tc.Controls = sanitizeIDs(tc.Controls, extractItemIDs(assessment.Controls))
+		tc.Tags = sanitizeIDs(tc.Tags, extractItemIDs(assessment.Tags))
+		tc.Datasources = sanitizeIDs(tc.Datasources, extractItemIDs(assessment.Datasources))
+		tc.Rules = sanitizeIDs(tc.Rules, extractItemIDs(assessment.Rules))
 	}
 
 	// Save
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to save testcase", http.StatusInternalServerError)
 		return
@@ -417,7 +418,7 @@ func processFiles(r *http.Request, tc *models.TestCase, assessment *models.Asses
 	}
 
 	dir := filepath.Join("files", assessment.ID.Hex(), tc.ID.Hex())
-	os.MkdirAll(dir, 0o750)
+	os.MkdirAll(dir, DirPerm)
 
 	for _, fh := range files {
 		if fh.Filename == "" {
@@ -437,7 +438,9 @@ func processFiles(r *http.Request, tc *models.TestCase, assessment *models.Asses
 			continue
 		}
 
-		io.Copy(dst, src)
+		if _, err := io.Copy(dst, src); err != nil {
+			slog.Warn("file upload: failed to copy file", "path", destPath, "err", err)
+		}
 		src.Close()
 		dst.Close()
 
@@ -476,58 +479,11 @@ func sanitizeIDs(ids []string, validIDs map[string]bool) []string {
 	return result
 }
 
-func extractIDs(sources []models.Source) map[string]bool {
-	m := make(map[string]bool, len(sources))
-	for _, s := range sources {
-		m[s.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractTargetIDs(targets []models.Target) map[string]bool {
-	m := make(map[string]bool, len(targets))
-	for _, t := range targets {
-		m[t.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractToolIDs(tools []models.Tool) map[string]bool {
-	m := make(map[string]bool, len(tools))
-	for _, t := range tools {
-		m[t.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractControlIDs(controls []models.Control) map[string]bool {
-	m := make(map[string]bool, len(controls))
-	for _, c := range controls {
-		m[c.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractTagIDs(tags []models.Tag) map[string]bool {
-	m := make(map[string]bool, len(tags))
-	for _, t := range tags {
-		m[t.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractDatasourceIDs(datasources []models.Datasource) map[string]bool {
-	m := make(map[string]bool, len(datasources))
-	for _, d := range datasources {
-		m[d.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractRuleIDs(rules []models.DetectionRule) map[string]bool {
-	m := make(map[string]bool, len(rules))
-	for _, r := range rules {
-		m[r.ID.Hex()] = true
+// extractItemIDs returns a set of hex ID strings from any slice of NamedItem-implementing types.
+func extractItemIDs[T interface{ GetID() bson.ObjectID }](items []T) map[string]bool {
+	m := make(map[string]bool, len(items))
+	for _, item := range items {
+		m[item.GetID().Hex()] = true
 	}
 	return m
 }
