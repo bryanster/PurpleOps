@@ -1,3 +1,8 @@
+function csrfToken() {
+	var el = document.querySelector('meta[name="csrf-token"]');
+	return el ? el.content : '';
+}
+
 // Onload
 $(function () {
 	// The cookie extension oddly somtimes force shows the ID column, so force it hidden
@@ -63,6 +68,7 @@ $('#testcaseTemplatesButton').click(function() {
 	$.ajax({
 		url: `/assessment/${window.location.href.split("/").slice(-1)[0]}/import/template`,
 		type: 'POST',
+		headers: { 'X-CSRF-Token': csrfToken() },
 		data: JSON.stringify({
 			ids: $('#testcaseTemplateTable').bootstrapTable('getSelections').map(row => row.id)
 		}),
@@ -270,6 +276,7 @@ $('.assessmentMultiButton').click(function(event) {
 	$.ajax({
 		url: `${window.location.href}/multi/${type}`,
 		type: 'POST',
+		headers: { 'X-CSRF-Token': csrfToken() },
 		data: JSON.stringify({ data: $(`#${type}Table`).bootstrapTable("getData") }),
 		dataType: 'json',
 		contentType: "application/json; charset=utf-8",

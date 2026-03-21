@@ -3,6 +3,7 @@
 
 <!-- New Test Modal-->
 <form action="/testcase/{{ assessment.ID.Hex }}/single" method="POST" class="m-0" id="newTestcaseForm">
+    {{ csrf_field|safe }}
     {{ modalHead("newTestcase", "New Testcase") }}
     <div class="mb-3">
         <label for="name" class="form-label">Name</label>
@@ -61,6 +62,7 @@
 
 <!-- Import MITRE Navigator Modal -->
 <form action="/assessment/{{ assessment.ID.Hex }}/import/navigator" enctype="multipart/form-data" method="POST" class="m-0" id="navigatorTemplateForm">
+    {{ csrf_field|safe }}
     {{ modalHead("testcaseNavigator", "Import MITRE Layer") }}
     <div class="mb-3">
         <label for="formFile" class="form-label">Select your threat actor / ad-hoc TTP at <a href="https://mitre-attack.github.io/attack-navigator/" target="_blank">the Mitre ATT&CK Navigator</a> &gt; <code>Download Controls</code> &gt; <code>Download Layer as JSON</code>.</label>
@@ -71,6 +73,7 @@
 
 <!-- Import Campaign Modal -->
 <form action="/assessment/{{ assessment.ID.Hex }}/import/campaign" enctype="multipart/form-data" method="POST" class="m-0" id="campaignTemplateForm">
+    {{ csrf_field|safe }}
     {{ modalHead("testcaseCampaign", "Import Campaign Template") }}
     <div class="mb-3">
         <label for="campaignFile" class="form-label">Import Campaign from <code>Export</code> &gt; <code>Campaign Template</code>.</label>
@@ -197,6 +200,7 @@
 
 <!-- Template Modal -->
 <form action="/assessment/{{ assessment.ID.Hex }}/export/report" enctype="multipart/form-data" method="POST" class="m-0" id="exportReportForm">
+    {{ csrf_field|safe }}
     {{ modalHead("exportReport", "Generate Engagement Report") }}
     <div class="mb-3">
         <p>Select the report below.</p>

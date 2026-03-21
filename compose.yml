@@ -4,8 +4,6 @@ services:
   mongodb:
     image: mongo:8.0
     container_name: mongodb
-    ports:
-      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -24,7 +22,9 @@ services:
       - "8081:8081"
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
-      ME_CONFIG_BASICAUTH: false
+      ME_CONFIG_BASICAUTH: true
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USER:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASS:-change-me}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -42,6 +42,9 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - purpleops_data:/usr/src/app/files
       - ./custom:/usr/src/app/custom

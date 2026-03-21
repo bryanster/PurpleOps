@@ -3,6 +3,7 @@
 
 <!-- Create API Key modal -->
 <form action="/api-keys" method="POST" class="m-0" id="apiKeyForm">
+  {{ csrf_field|safe }}
   {{ modalHead("apiKeyDetail", "New API Key") }}
   <div class="mb-3">
     <label for="keyName" class="col-form-label">Name</label>

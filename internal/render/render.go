@@ -3,22 +3,30 @@ package render
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
+
+	"html/template"
 
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/flosch/pongo2/v6"
+	"github.com/gorilla/csrf"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // templateSet is the package-level pongo2 template set.
 var templateSet *pongo2.TemplateSet
 
+// debugMode controls whether detailed errors are shown to clients.
+var debugMode bool
+
 // InitTemplates sets up the pongo2 template engine from the "templates" directory.
-func InitTemplates() {
+func InitTemplates(debug bool) {
 	loader := pongo2.MustNewLocalFileSystemLoader("templates")
 	templateSet = pongo2.NewSet("purpleops", loader)
-	templateSet.Debug = true
+	templateSet.Debug = debug
+	debugMode = debug
 }
 
 // Render executes the named template and writes the result to w.
@@ -34,16 +42,28 @@ func Render(w http.ResponseWriter, r *http.Request, templateName string, ctx pon
 	}
 	ctx["current_user"] = &TemplateUser{user: user, ctx: r.Context()}
 	ctx["request"] = &TemplateRequest{r: r}
+	ctx["csrf_token"] = csrf.Token(r)
+	ctx["csrf_field"] = template.HTML(csrf.TemplateField(r)) //nolint:gosec // G203: csrf.TemplateField produces safe HTML
 
 	tpl, err := templateSet.FromFile(templateName)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
+		log.Printf("Template error: %v", err)
+		if debugMode {
+			http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	out, err := tpl.Execute(ctx)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Template render error: %v", err), http.StatusInternalServerError)
+		log.Printf("Template render error: %v", err)
+		if debugMode {
+			http.Error(w, fmt.Sprintf("Template render error: %v", err), http.StatusInternalServerError)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 

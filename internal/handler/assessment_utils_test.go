@@ -7,6 +7,36 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// Test helpers that wrap the generic updateItems function for each type.
+
+func updateSources(existing []models.Source, data []map[string]string) []models.Source {
+	return updateItems(existing, data, func() *models.Source { return &models.Source{ID: bson.NewObjectID()} })
+}
+
+func updateTargets(existing []models.Target, data []map[string]string) []models.Target {
+	return updateItems(existing, data, func() *models.Target { return &models.Target{ID: bson.NewObjectID()} })
+}
+
+func updateTools(existing []models.Tool, data []map[string]string) []models.Tool {
+	return updateItems(existing, data, func() *models.Tool { return &models.Tool{ID: bson.NewObjectID()} })
+}
+
+func updateControls(existing []models.Control, data []map[string]string) []models.Control {
+	return updateItems(existing, data, func() *models.Control { return &models.Control{ID: bson.NewObjectID()} })
+}
+
+func updateTags(existing []models.Tag, data []map[string]string) []models.Tag {
+	return updateItems(existing, data, func() *models.Tag { return &models.Tag{ID: bson.NewObjectID()} })
+}
+
+func updateDatasources(existing []models.Datasource, data []map[string]string) []models.Datasource {
+	return updateItems(existing, data, func() *models.Datasource { return &models.Datasource{ID: bson.NewObjectID()} })
+}
+
+func updateDetectionRules(existing []models.DetectionRule, data []map[string]string) []models.DetectionRule {
+	return updateItems(existing, data, func() *models.DetectionRule { return &models.DetectionRule{ID: bson.NewObjectID()} })
+}
+
 func TestRatingToScore(t *testing.T) {
 	tests := []struct {
 		rating string

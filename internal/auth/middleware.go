@@ -13,7 +13,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// idleTimeout is the maximum allowed inactivity before a session is expired.
+const idleTimeout = 30 * time.Minute
+
 // AuthRequired redirects to /login if not authenticated.
+// It also enforces an idle session timeout: if the user has been inactive for
+// longer than idleTimeout the session is cleared.
 func AuthRequired(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := GetCurrentUser(r)
@@ -21,6 +26,19 @@ func AuthRequired(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
+
+		// Idle timeout check.
+		sess := GetSession(r)
+		if lastActive, ok := sess.Values["last_active"].(int64); ok {
+			if time.Now().Unix()-lastActive > int64(idleTimeout.Seconds()) {
+				ClearSession(w, r)
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
+			}
+		}
+		sess.Values["last_active"] = time.Now().Unix()
+		sess.Save(r, w)
+
 		ctx := WithUser(r.Context(), user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

@@ -12,7 +12,7 @@ import (
 )
 
 func initTestSession() {
-	auth.InitSessions("test-secret-key-for-oauth", true)
+	auth.InitSessions("test-secret-key-for-oauth", true, true)
 }
 
 // --- InitOAuth ---

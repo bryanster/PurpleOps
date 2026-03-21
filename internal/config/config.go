@@ -46,6 +46,9 @@ type Config struct {
 	// SSO shared settings.
 	SSODefaultRole   string // Default role for auto-provisioned SSO users (default: "Spectator")
 	SSOAutoProvision bool   // Auto-create users on first SSO login (default: true)
+
+	// Navigator CORS origin (default: MITRE ATT&CK Navigator).
+	NavigatorCORSOrigin string
 }
 
 // Cfg is the package-level config instance set by LoadConfig.
@@ -92,12 +95,22 @@ func LoadConfig() *Config {
 
 		SSODefaultRole:   getEnv("SSO_DEFAULT_ROLE", "Spectator"),
 		SSOAutoProvision: ssoAutoProvision == "true" || ssoAutoProvision == "True",
+
+		NavigatorCORSOrigin: getEnv("NAVIGATOR_CORS_ORIGIN", "https://mitre-attack.github.io"),
 	}
 	if cfg.SecretKey == "change-me" {
-		log.Println("WARNING: SECRET_KEY is set to the insecure default. Set this to a random value before deploying.")
+		if cfg.Debug {
+			log.Println("WARNING: SECRET_KEY is set to the insecure default. Set this to a random value before deploying.")
+		} else {
+			log.Fatal("FATAL: SECRET_KEY must be changed from the default before running in production. Set the SECRET_KEY environment variable.")
+		}
 	}
 	if cfg.PassSalt == "change-me" {
-		log.Println("WARNING: PASSWORD_SALT is set to the insecure default. Set this to a random value before deploying.")
+		if cfg.Debug {
+			log.Println("WARNING: PASSWORD_SALT is set to the insecure default. Set this to a random value before deploying.")
+		} else {
+			log.Fatal("FATAL: PASSWORD_SALT must be changed from the default before running in production. Set the PASSWORD_SALT environment variable.")
+		}
 	}
 
 	Cfg = cfg

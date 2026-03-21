@@ -1,3 +1,8 @@
+function csrfToken() {
+	var el = document.querySelector('meta[name="csrf-token"]');
+	return el ? el.content : '';
+}
+
 var pendingDeleteID = null;
 
 function newKeyModal() {
@@ -34,6 +39,7 @@ function doDeleteKey(id) {
   $.ajax({
     url: '/api-keys/' + id,
     type: 'DELETE',
+    headers: { 'X-CSRF-Token': csrfToken() },
     success: function() {
       $('#deleteKeyModal').modal('hide');
       location.reload();
@@ -57,7 +63,7 @@ $(function() {
     }
     fetch('/api-keys', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken() },
       body: params.toString()
     }).then(function(resp) {
       if (!resp.ok) return resp.text().then(function(t) { throw new Error(t); });
