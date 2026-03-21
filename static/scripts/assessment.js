@@ -144,6 +144,24 @@ function cloneTest(event) {
 	});
 };
 
+// Toggle timer (start/stop/restart) AJAX and row update
+function toggleTimer(event) {
+	event.stopPropagation();
+	row = $(event.target).closest("tr")
+	rowData = $('#assessmentTable').bootstrapTable('getData')[row.data("index")]
+	$.ajax({
+		url: `/testcase/${rowData.id}/toggle-timer`,
+		type: 'GET',
+		success: function(body) {
+			$('#assessmentTable').bootstrapTable('updateByUniqueId', {
+				id: body.id,
+				row: formatRow(body),
+				replace: true
+			})
+		}
+	});
+};
+
 // Testcase delete AJAX POST and remove from table
 function deleteTest(event) {
 	event.stopPropagation();
@@ -175,9 +193,18 @@ function tagFormatter(tags) {
 	return html.join("&nbsp;")
 }
 
-function actionFormatter() {
+function actionFormatter(value, row) {
+	var timerBtn = '';
+	if (row.state === 'Pending') {
+		timerBtn = `<button type="button" class="btn btn-success py-0" onclick="toggleTimer(event)" title="Start Timer"><i class="bi-play-fill">&zwnj;</i></button>`;
+	} else if (row.state === 'Running') {
+		timerBtn = `<button type="button" class="btn btn-danger py-0" onclick="toggleTimer(event)" title="Stop Timer"><i class="bi-stop-fill">&zwnj;</i></button>`;
+	} else if (row.state === 'Complete') {
+		timerBtn = `<button type="button" class="btn btn-warning py-0" onclick="toggleTimer(event)" title="Restart Timer"><i class="bi-arrow-counterclockwise">&zwnj;</i></button>`;
+	}
 	return `
 		<div class="btn-group btn-group-sm" role="group">
+			${timerBtn}
 			<button type="button" class="btn btn-info py-0" onclick="visibleTest(event)" title="Toggle Visiblity">
 				<i class="bi-eye">&zwnj;</i>
 			</button>

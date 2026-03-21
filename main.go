@@ -113,6 +113,7 @@ func main() {
 			r.Post("/", handler.HandleSaveTestCase)
 			r.Post("/single", handler.HandleNewTestCase)
 			r.Get("/toggle-visibility", handler.HandleToggleVisibility)
+			r.Get("/toggle-timer", handler.HandleToggleTimer)
 			r.Get("/clone", handler.HandleCloneTestCase)
 			r.Get("/delete", handler.HandleDeleteTestCase)
 			r.Delete("/evidence/{colour}/{file}", handler.HandleDeleteEvidence)
