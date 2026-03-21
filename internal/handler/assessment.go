@@ -178,6 +178,12 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 	// Build MitreID → first tactic mapping for JS auto-population.
 	mitreTactics := buildMitreTacticsMap(techniques)
 
+	// Build MitreID → technique name mapping for display.
+	mitreNames := make(map[string]string, len(techniques))
+	for _, t := range techniques {
+		mitreNames[t.MitreID] = t.Name
+	}
+
 	render.Render(w, r, "assessment.html", pongo2.Context{
 		"testcases":     testcases,
 		"assessment":    assessment,
@@ -188,6 +194,7 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 		"reports":       reports,
 		"multi":         multi,
 		"mitre_tactics": mitreTactics,
+		"mitre_names":  mitreNames,
 	})
 }
 
