@@ -242,15 +242,13 @@ $( document ).ready(function() {
     $("#timezone").val(offset)
 
 	if ($("#time-start").val()) {
-		startTime = new Date($("#time-start").val());
-		startTime.setMinutes(startTime.getMinutes() - offset * 2);
-		$("#time-start").val(startTime.toISOString().slice(0,16))
+		startTime = new Date($("#time-start").val() + "Z");
+		$("#time-start").val(new Date(startTime.getTime() - startTime.getTimezoneOffset() * 60000).toISOString().slice(0,16))
 	}
 
 	if ($("#time-end").val()) {
-		endTime = new Date($("#time-end").val());
-		endTime.setMinutes(endTime.getMinutes() - offset * 2);
-		$("#time-end").val(endTime.toISOString().slice(0,16))
+		endTime = new Date($("#time-end").val() + "Z");
+		$("#time-end").val(new Date(endTime.getTime() - endTime.getTimezoneOffset() * 60000).toISOString().slice(0,16))
 	}
 });
 
