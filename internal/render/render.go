@@ -43,7 +43,7 @@ func Render(w http.ResponseWriter, r *http.Request, templateName string, ctx pon
 	ctx["current_user"] = &TemplateUser{user: user, ctx: r.Context()}
 	ctx["request"] = &TemplateRequest{r: r}
 	ctx["csrf_token"] = csrf.Token(r)
-	ctx["csrf_field"] = template.HTML(csrf.TemplateField(r))
+	ctx["csrf_field"] = template.HTML(csrf.TemplateField(r)) //nolint:gosec // G203: csrf.TemplateField produces safe HTML
 
 	tpl, err := templateSet.FromFile(templateName)
 	if err != nil {
