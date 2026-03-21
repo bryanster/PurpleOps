@@ -126,9 +126,6 @@ function timeFormatter(utcip) {
 		return "-"
 	}
 
-	offset = new Date().getTimezoneOffset()
-	local = new Date(utc);
-	local.setMinutes(local.getMinutes() - offset * 2);
-
-	return `${local.toISOString().slice(0,16)} (${ip})`
+	local = new Date(utc.replace(" ", "T") + "Z");
+	return `${new Date(local.getTime() - local.getTimezoneOffset() * 60000).toISOString().slice(0,16)} (${ip})`
 }

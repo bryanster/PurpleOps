@@ -188,10 +188,8 @@ function timeFormatter(utc) {
 		return utc
 	}
 	
-	offset = new Date().getTimezoneOffset()
-	local = new Date(utc);
-	local.setMinutes(local.getMinutes() - offset);
-	return local.toISOString().slice(0,16)
+	local = new Date(utc.replace(" ", "T") + "Z");
+	return new Date(local.getTime() - local.getTimezoneOffset() * 60000).toISOString().slice(0,16)
 }
 
 function bgFormatter(value) {
