@@ -131,7 +131,7 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		}).Decode(&tmpl)
 		if err != nil {
 			// Try mitreid-only match (e.g., ART templates have no tactic).
-			db.Col("test_case_template").FindOne(ctx, bson.M{
+			_ = db.Col("test_case_template").FindOne(ctx, bson.M{
 				"mitreid": entry.TechniqueID,
 			}).Decode(&tmpl)
 		}

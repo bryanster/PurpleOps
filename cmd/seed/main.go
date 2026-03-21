@@ -414,12 +414,6 @@ func seedART(db *mongo.Database) {
 			}
 
 			for _, test := range artFile.AtomicTests {
-				// Build default args string
-				var argParts []string
-				for name, arg := range test.InputArguments {
-					argParts = append(argParts, fmt.Sprintf("%s: %v", name, arg.Default))
-				}
-
 				docs = append(docs, bson.D{
 					{Key: "mitreid", Value: artFile.AttackTechnique},
 					{Key: "name", Value: test.Name},
