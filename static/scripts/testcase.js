@@ -1,3 +1,8 @@
+function csrfToken() {
+	var el = document.querySelector('meta[name="csrf-token"]');
+	return el ? el.content : '';
+}
+
 // When the new source/target etc. button is clicked, add a new row
 $('.multiNew').click(function(event) {
 	type = event.target.id.replace("NewButton", "") // Hacky
@@ -16,7 +21,7 @@ $('.multiButton').click(function(event) {
 	$.ajax({
 		url: `${$("#assessment-crumb-button").attr("href")}/multi/${type}`,
 		type: 'POST',
-		
+		headers: { 'X-CSRF-Token': csrfToken() },
 		data: JSON.stringify({
 			data: $(`#${type}Table`).bootstrapTable("getData")
 		}),
@@ -354,6 +359,7 @@ $(document).on("click", ".evidence-delete", function(event) {
 	$.ajax({
 		url: url,
 		type: 'DELETE',
+		headers: { 'X-CSRF-Token': csrfToken() },
 		success: function(result) {
 			$(target).parent().remove()
 		}

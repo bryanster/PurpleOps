@@ -1,3 +1,8 @@
+function csrfToken() {
+	var el = document.querySelector('meta[name="csrf-token"]');
+	return el ? el.content : '';
+}
+
 // Delay table showing until page is loaded to prevent jumping
 $(function () {
 	$('#userTable').show()
@@ -95,6 +100,7 @@ $('#deleteUserButton').click(function() {
 	$.ajax({
 		url: '/manage/access/user/' + rowData.id,
 		type: 'DELETE',
+		headers: { 'X-CSRF-Token': csrfToken() },
 		success: function(result) {
 			$('#userTable').bootstrapTable('removeByUniqueId', rowData.id)
 			$('#deleteUserModal').modal('hide')

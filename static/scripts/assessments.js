@@ -1,3 +1,8 @@
+function csrfToken() {
+	var el = document.querySelector('meta[name="csrf-token"]');
+	return el ? el.content : '';
+}
+
 // Delay table showing until page is loaded to prevent jumping
 $(function () {
   $('#assessmentsTable').show()
@@ -99,6 +104,7 @@ $('#deleteAssessmentButton').click(function() {
 	$.ajax({
 		url: `/assessment/${rowData.id}`,
 		type: 'DELETE',
+		headers: { 'X-CSRF-Token': csrfToken() },
 		success: function(result) {
 			$('#assessmentsTable').bootstrapTable('removeByUniqueId', rowData.id)
 			$('#deleteAssessmentModal').modal('hide')

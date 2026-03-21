@@ -13,7 +13,7 @@ var store *sessions.CookieStore
 // InitSessions initialises the cookie-based session store.
 // When ssoEnabled is true, SameSite is set to Lax (required for OAuth/SAML
 // redirects that return from an external IdP); otherwise Strict is used.
-func InitSessions(secretKey string, ssoEnabled bool) {
+func InitSessions(secretKey string, ssoEnabled, debug bool) {
 	store = sessions.NewCookieStore([]byte(secretKey))
 	sameSite := http.SameSiteStrictMode
 	if ssoEnabled {
@@ -23,6 +23,7 @@ func InitSessions(secretKey string, ssoEnabled bool) {
 		Path:     "/",
 		MaxAge:   86400 * 7, // 1 week
 		HttpOnly: true,
+		Secure:   !debug,
 		SameSite: sameSite,
 	}
 }

@@ -6,6 +6,7 @@
 
 <!-- Create/edit assessment modal -->
 <form action="/assessment" method="POST" class="m-0" id="newAssessmentForm">
+	{{ csrf_field|safe }}
 	{{ modalHead("newAssessment", "New Assessment") }}
 	<div class="mb-3">
 		<label class="col-form-label">Name</label>
@@ -25,6 +26,7 @@
 
 <!-- Import assessment modal -->
 <form action="/assessment/import/entire" enctype="multipart/form-data" method="POST" class="m-0" id="importAssessmentForm">
+	{{ csrf_field|safe }}
 	{{ modalHead("importAssessment", "Import Assessment") }}
 	<div class="mb-3">
 		<p>Select the <code>Assessment.zip</code> file output from <code>Export > Entire Assessment</code>.</p>

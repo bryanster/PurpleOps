@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	// Ensure tests don't trigger log.Fatal on default secrets.
+	os.Setenv("SECRET_KEY", "test-secret-key")
+	os.Setenv("PASSWORD_SALT", "test-password-salt")
+	os.Exit(m.Run())
+}
+
 func TestGetEnv(t *testing.T) {
 	// Test with unset variable
 	os.Unsetenv("TEST_GETENV_VAR")

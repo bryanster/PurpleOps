@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bryanster/purpleops/internal/auth"
+	"github.com/bryanster/purpleops/internal/config"
 	"github.com/bryanster/purpleops/internal/db"
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/bryanster/purpleops/internal/render"
@@ -236,7 +237,11 @@ func HandleNavigatorJSON(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filePath := filepath.Join("files", id, "navigator.json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	origin := r.Header.Get("Origin")
+	allowed := config.Cfg.NavigatorCORSOrigin
+	if origin != "" && allowed != "" && origin == allowed {
+		w.Header().Set("Access-Control-Allow-Origin", allowed)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	http.ServeFile(w, r, filePath)
 }

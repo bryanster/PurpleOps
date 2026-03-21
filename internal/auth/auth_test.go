@@ -87,7 +87,7 @@ func TestExtractID(t *testing.T) {
 }
 
 func TestInitSessions(t *testing.T) {
-	InitSessions("test-secret-key", false)
+	InitSessions("test-secret-key", false, true)
 
 	if store == nil {
 		t.Fatal("store should not be nil after InitSessions")
@@ -104,21 +104,21 @@ func TestInitSessions(t *testing.T) {
 }
 
 func TestInitSessionsSameSiteStrict(t *testing.T) {
-	InitSessions("test-secret-key", false)
+	InitSessions("test-secret-key", false, true)
 	if store.Options.SameSite != http.SameSiteStrictMode {
 		t.Errorf("expected SameSiteStrictMode when SSO disabled, got %d", store.Options.SameSite)
 	}
 }
 
 func TestInitSessionsSameSiteLax(t *testing.T) {
-	InitSessions("test-secret-key", true)
+	InitSessions("test-secret-key", true, true)
 	if store.Options.SameSite != http.SameSiteLaxMode {
 		t.Errorf("expected SameSiteLaxMode when SSO enabled, got %d", store.Options.SameSite)
 	}
 }
 
 func TestSetAndClearSession(t *testing.T) {
-	InitSessions("test-secret-key", false)
+	InitSessions("test-secret-key", false, true)
 
 	r := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -156,7 +156,7 @@ func TestSetAndClearSession(t *testing.T) {
 }
 
 func TestAuthRequiredMiddleware(t *testing.T) {
-	InitSessions("test-secret-key", false)
+	InitSessions("test-secret-key", false, true)
 
 	handler := AuthRequired(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
