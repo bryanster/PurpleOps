@@ -50,7 +50,7 @@
                 <td></td>
                 <td>{{ template.Provider }}</td>
                 <td>{{ template.Tactic }}</td>
-                <td>{{ template.MitreID }}<!-- TODO mitre tactic name --></td>
+                <td>{{ template.MitreID }}{% if mitre_names[template.MitreID] %} - {{ mitre_names[template.MitreID] }}{% endif %}</td>
                 <td>{{ template.Name }}</td>
                 <td>{{ template.ID.Hex }}</td>
             </tr>
