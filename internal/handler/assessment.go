@@ -194,7 +194,7 @@ func HandleLoadAssessment(w http.ResponseWriter, r *http.Request) {
 		"reports":       reports,
 		"multi":         multi,
 		"mitre_tactics": mitreTactics,
-		"mitre_names":  mitreNames,
+		"mitre_names":   mitreNames,
 	})
 }
 
