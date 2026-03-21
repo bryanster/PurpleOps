@@ -29,7 +29,7 @@ func HandleToggleVisibility(w http.ResponseWriter, r *http.Request) {
 	tc.Visible = !tc.Visible
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
 		return
@@ -67,7 +67,7 @@ func HandleCloneTestCase(w http.ResponseWriter, r *http.Request) {
 		Visible:      true,
 	}
 
-	_, err = db.Col("test_case").InsertOne(ctx, &clone)
+	_, err = db.Col(db.ColTestCase).InsertOne(ctx, &clone)
 	if err != nil {
 		http.Error(w, "Failed to clone testcase", http.StatusInternalServerError)
 		return
@@ -90,7 +90,7 @@ func HandleDeleteTestCase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = db.Col("test_case").DeleteOne(ctx, bson.M{"_id": oid})
+	_, err = db.Col(db.ColTestCase).DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
 		http.Error(w, "Failed to delete testcase", http.StatusInternalServerError)
 		return
@@ -160,7 +160,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	*files = newFiles
 
 	oid, _ := bson.ObjectIDFromHex(id)
-	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
 		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
 		return

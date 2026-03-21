@@ -153,7 +153,7 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Update login tracking.
 	now := time.Now().UTC()
-	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
 			"last_login_at":    user.CurrentLoginAt,
 			"last_login_ip":    user.CurrentLoginIP,

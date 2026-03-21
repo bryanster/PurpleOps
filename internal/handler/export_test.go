@@ -105,9 +105,9 @@ func TestWriteCSVExportEmpty(t *testing.T) {
 func TestCreateZip(t *testing.T) {
 	// Create source directory with files
 	srcDir := t.TempDir()
-	os.WriteFile(filepath.Join(srcDir, "file1.txt"), []byte("hello"), 0o600)
-	os.MkdirAll(filepath.Join(srcDir, "subdir"), 0o750)
-	os.WriteFile(filepath.Join(srcDir, "subdir", "file2.txt"), []byte("world"), 0o600)
+	os.WriteFile(filepath.Join(srcDir, "file1.txt"), []byte("hello"), FilePerm)
+	os.MkdirAll(filepath.Join(srcDir, "subdir"), DirPerm)
+	os.WriteFile(filepath.Join(srcDir, "subdir", "file2.txt"), []byte("world"), FilePerm)
 
 	zipPath := filepath.Join(t.TempDir(), "test.zip")
 
@@ -140,12 +140,12 @@ func TestCreateZip(t *testing.T) {
 
 func TestCopyDir(t *testing.T) {
 	srcDir := t.TempDir()
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("alpha"), 0o600)
-	os.MkdirAll(filepath.Join(srcDir, "sub"), 0o750)
-	os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("beta"), 0o600)
+	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("alpha"), FilePerm)
+	os.MkdirAll(filepath.Join(srcDir, "sub"), DirPerm)
+	os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("beta"), FilePerm)
 
 	dstDir := filepath.Join(t.TempDir(), "copy")
-	os.MkdirAll(dstDir, 0o750)
+	os.MkdirAll(dstDir, DirPerm)
 
 	if err := copyDir(srcDir, dstDir); err != nil {
 		t.Fatalf("copyDir error: %v", err)

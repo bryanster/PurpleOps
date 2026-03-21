@@ -71,7 +71,7 @@ func (tc *TestCase) ToJSONMulti(field string) []string {
 		return []string{}
 	}
 	var assessment Assessment
-	if err := db.Col("assessment").FindOne(ctx, bson.M{"_id": oid}).Decode(&assessment); err != nil {
+	if err := db.Col(db.ColAssessment).FindOne(ctx, bson.M{"_id": oid}).Decode(&assessment); err != nil {
 		return []string{}
 	}
 
@@ -172,14 +172,14 @@ func (tc *TestCase) TagsJSON() string {
 // GetProgress returns a "|"-delimited string of outcome percentages for an assessment.
 func (a *Assessment) GetProgress() string {
 	ctx := context.Background()
-	total, _ := db.Col("test_case").CountDocuments(ctx, bson.M{"assessmentid": a.ID.Hex()})
+	total, _ := db.Col(db.ColTestCase).CountDocuments(ctx, bson.M{"assessmentid": a.ID.Hex()})
 	if total == 0 {
 		return "0|0|0|0|0"
 	}
 
 	results := make([]string, 0, 4)
 	for _, outcome := range []string{"Prevented", "Alerted", "Logged", "Missed"} {
-		count, _ := db.Col("test_case").CountDocuments(ctx, bson.M{
+		count, _ := db.Col(db.ColTestCase).CountDocuments(ctx, bson.M{
 			"assessmentid": a.ID.Hex(),
 			"outcome":      outcome,
 		})
@@ -267,7 +267,7 @@ func (k *APIKey) GetRoleNames(ctx context.Context) []string {
 	names := make([]string, 0, len(k.Roles))
 	for _, rid := range k.Roles {
 		var role Role
-		if err := db.Col("role").FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
+		if err := db.Col(db.ColRole).FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
 			names = append(names, role.Name)
 		}
 	}
@@ -279,7 +279,7 @@ func (k *APIKey) GetAssessmentNames(ctx context.Context) []string {
 	names := make([]string, 0, len(k.Assessments))
 	for _, aid := range k.Assessments {
 		var a Assessment
-		if err := db.Col("assessment").FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
+		if err := db.Col(db.ColAssessment).FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
 			names = append(names, a.Name)
 		}
 	}
@@ -291,7 +291,7 @@ func (u *User) GetRoleNames(ctx context.Context) []string {
 	names := make([]string, 0, len(u.Roles))
 	for _, rid := range u.Roles {
 		var role Role
-		if err := db.Col("role").FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
+		if err := db.Col(db.ColRole).FindOne(ctx, bson.M{"_id": rid}).Decode(&role); err == nil {
 			names = append(names, role.Name)
 		}
 	}
@@ -313,7 +313,7 @@ func (u *User) GetAssessmentNames(ctx context.Context) []string {
 	names := make([]string, 0, len(u.Assessments))
 	for _, aid := range u.Assessments {
 		var a Assessment
-		if err := db.Col("assessment").FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
+		if err := db.Col(db.ColAssessment).FindOne(ctx, bson.M{"_id": aid}).Decode(&a); err == nil {
 			names = append(names, a.Name)
 		}
 	}
@@ -325,7 +325,7 @@ func (u *User) GetAssessmentNames(ctx context.Context) []string {
 func (u *User) AssessmentList(ctx context.Context) []bson.ObjectID {
 	if u.HasRole(ctx, "Admin") {
 		var assessments []Assessment
-		cursor, err := db.Col("assessment").Find(ctx, bson.M{})
+		cursor, err := db.Col(db.ColAssessment).Find(ctx, bson.M{})
 		if err != nil {
 			return nil
 		}

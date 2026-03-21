@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,11 +42,13 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 	for _, templateID := range body.IDs {
 		oid, err := bson.ObjectIDFromHex(templateID)
 		if err != nil {
+			slog.Warn("import template: invalid ObjectID", "id", templateID, "err", err)
 			continue
 		}
 
 		var tmpl models.TestCaseTemplate
-		if err := db.Col("test_case_template").FindOne(ctx, bson.M{"_id": oid}).Decode(&tmpl); err != nil {
+		if err := db.Col(db.ColTestCaseTemplate).FindOne(ctx, bson.M{"_id": oid}).Decode(&tmpl); err != nil {
+			slog.Warn("import template: template not found", "id", templateID, "err", err)
 			continue
 		}
 
@@ -69,13 +72,16 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 			ModifyTime:   models.NowPtr(),
 		}
 
-		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col(db.ColTestCase).InsertOne(ctx, &tc); err != nil {
+			slog.Error("import template: failed to insert testcase", "name", tmpl.Name, "err", err)
 			continue
 		}
 
 		// Create evidence directory for this testcase.
 		tcDir := filepath.Join("files", id, tc.ID.Hex())
-		os.MkdirAll(tcDir, 0o750)
+		if err := os.MkdirAll(tcDir, DirPerm); err != nil {
+			slog.Warn("import template: failed to create evidence dir", "path", tcDir, "err", err)
+		}
 
 		results = append(results, tc.ToJSON(false))
 	}
@@ -125,13 +131,13 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		// Try to find a matching template (exact match on mitreid + tactic first,
 		// then fall back to mitreid-only match).
 		var tmpl models.TestCaseTemplate
-		err := db.Col("test_case_template").FindOne(ctx, bson.M{
+		err := db.Col(db.ColTestCaseTemplate).FindOne(ctx, bson.M{
 			"mitreid": entry.TechniqueID,
 			"tactic":  tacticTitle,
 		}).Decode(&tmpl)
 		if err != nil {
 			// Try mitreid-only match (e.g., ART templates have no tactic).
-			_ = db.Col("test_case_template").FindOne(ctx, bson.M{
+			_ = db.Col(db.ColTestCaseTemplate).FindOne(ctx, bson.M{
 				"mitreid": entry.TechniqueID,
 			}).Decode(&tmpl)
 		}
@@ -159,7 +165,7 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// No template found. Look up the Technique name from the techniques collection.
 			var tech models.Technique
-			techErr := db.Col("technique").FindOne(ctx, bson.M{"mitreid": entry.TechniqueID}).Decode(&tech)
+			techErr := db.Col(db.ColTechnique).FindOne(ctx, bson.M{"mitreid": entry.TechniqueID}).Decode(&tech)
 			name := entry.TechniqueID
 			if techErr == nil {
 				name = tech.Name
@@ -176,12 +182,15 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col(db.ColTestCase).InsertOne(ctx, &tc); err != nil {
+			slog.Error("import navigator: failed to insert testcase", "mitreid", entry.TechniqueID, "err", err)
 			continue
 		}
 
 		tcDir := filepath.Join("files", id, tc.ID.Hex())
-		os.MkdirAll(tcDir, 0o750)
+		if err := os.MkdirAll(tcDir, DirPerm); err != nil {
+			slog.Warn("import navigator: failed to create evidence dir", "path", tcDir, "err", err)
+		}
 
 		results = append(results, tc.ToJSON(false))
 	}
@@ -266,12 +275,15 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 			tc.Tags = resolveMultiField(ctx, assessment, "tags", tagsRaw)
 		}
 
-		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col(db.ColTestCase).InsertOne(ctx, &tc); err != nil {
+			slog.Error("import campaign: failed to insert testcase", "name", tc.Name, "err", err)
 			continue
 		}
 
 		tcDir := filepath.Join("files", id, tc.ID.Hex())
-		os.MkdirAll(tcDir, 0o750)
+		if err := os.MkdirAll(tcDir, DirPerm); err != nil {
+			slog.Warn("import campaign: failed to create evidence dir", "path", tcDir, "err", err)
+		}
 
 		results = append(results, tc.ToJSON(false))
 	}
@@ -301,43 +313,14 @@ func resolveMultiField(ctx context.Context, assessment *models.Assessment, field
 
 	var ids []string
 	for _, name := range names {
-		found := false
-		switch field {
-		case "tools":
-			for _, t := range assessment.Tools {
-				if t.Name == name {
-					ids = append(ids, t.ID.Hex())
-					found = true
-					break
-				}
-			}
-			if !found {
-				newID := bson.NewObjectID()
-				newTool := models.Tool{ID: newID, Name: name}
-				assessment.Tools = append(assessment.Tools, newTool)
-				db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-					"$push": bson.M{"tools": newTool},
-				})
-				ids = append(ids, newID.Hex())
-			}
-		case "tags":
-			for _, t := range assessment.Tags {
-				if t.Name == name {
-					ids = append(ids, t.ID.Hex())
-					found = true
-					break
-				}
-			}
-			if !found {
-				newID := bson.NewObjectID()
-				newTag := models.Tag{ID: newID, Name: name}
-				assessment.Tags = append(assessment.Tags, newTag)
-				db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-					"$push": bson.M{"tags": newTag},
-				})
-				ids = append(ids, newID.Hex())
-			}
+		existingID := findExistingMultiEntry(assessment, field, name)
+		if existingID != "" {
+			ids = append(ids, existingID)
+			continue
 		}
+		newID := bson.NewObjectID()
+		pushField(ctx, assessment, field, newID, name, "")
+		ids = append(ids, newID.Hex())
 	}
 	return ids
 }
@@ -381,7 +364,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	newAssessmentID := bson.NewObjectID()
 	filesDir := filepath.Join("files", newAssessmentID.Hex())
 	tmpExtractDir := filepath.Join(filesDir, "tmp")
-	if err := os.MkdirAll(tmpExtractDir, 0o750); err != nil {
+	if err := os.MkdirAll(tmpExtractDir, DirPerm); err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -393,12 +376,12 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 		destPath := filepath.Join(tmpExtractDir, safeName)
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(destPath, 0o750)
+			os.MkdirAll(destPath, DirPerm)
 			continue
 		}
 
 		// Ensure parent directory exists.
-		os.MkdirAll(filepath.Dir(destPath), 0o750)
+		os.MkdirAll(filepath.Dir(destPath), DirPerm)
 
 		rc, err := f.Open()
 		if err != nil {
@@ -442,7 +425,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 		Created:     models.NowPtr(),
 	}
 
-	if _, err := db.Col("assessment").InsertOne(ctx, &assessment); err != nil {
+	if _, err := db.Col(db.ColAssessment).InsertOne(ctx, &assessment); err != nil {
 		http.Error(w, "Failed to create assessment", http.StatusInternalServerError)
 		return
 	}
@@ -563,13 +546,16 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if _, err := db.Col("test_case").InsertOne(ctx, &tc); err != nil {
+		if _, err := db.Col(db.ColTestCase).InsertOne(ctx, &tc); err != nil {
+			slog.Error("import entire: failed to insert testcase", "name", tc.Name, "err", err)
 			continue
 		}
 
 		// Copy evidence files from old testcase directory to new one.
 		newTCDir := filepath.Join(filesDir, tc.ID.Hex())
-		os.MkdirAll(newTCDir, 0o750)
+		if err := os.MkdirAll(newTCDir, DirPerm); err != nil {
+			slog.Warn("import entire: failed to create evidence dir", "path", newTCDir, "err", err)
+		}
 
 		if oldID != "" {
 			oldTCDir := filepath.Join(tmpExtractDir, oldID)
@@ -620,103 +606,85 @@ func rebuildMultiField(ctx context.Context, assessment *models.Assessment, field
 			continue
 		}
 
-		// Create a new entry on the assessment.
+		// Create a new entry on the assessment and persist it.
 		newID := bson.NewObjectID()
-		switch field {
-		case "sources":
-			entry := models.Source{ID: newID, Name: name, Description: desc}
-			assessment.Sources = append(assessment.Sources, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"sources": entry},
-			})
-		case "targets":
-			entry := models.Target{ID: newID, Name: name, Description: desc}
-			assessment.Targets = append(assessment.Targets, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"targets": entry},
-			})
-		case "tools":
-			entry := models.Tool{ID: newID, Name: name, Description: desc}
-			assessment.Tools = append(assessment.Tools, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"tools": entry},
-			})
-		case "controls":
-			entry := models.Control{ID: newID, Name: name, Description: desc}
-			assessment.Controls = append(assessment.Controls, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"controls": entry},
-			})
-		case "tags":
-			// Tags use "name|colour" format.
-			entry := models.Tag{ID: newID, Name: name, Colour: desc}
-			assessment.Tags = append(assessment.Tags, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"tags": entry},
-			})
-		case "datasources":
-			entry := models.Datasource{ID: newID, Name: name, Description: desc}
-			assessment.Datasources = append(assessment.Datasources, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"datasources": entry},
-			})
-		case "rules":
-			entry := models.DetectionRule{ID: newID, Name: name, Description: desc}
-			assessment.Rules = append(assessment.Rules, entry)
-			db.Col("assessment").UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
-				"$push": bson.M{"rules": entry},
-			})
-		}
+		pushField(ctx, assessment, field, newID, name, desc)
 		ids = append(ids, newID.Hex())
 	}
 	return ids
+}
+
+// pushField creates a new embedded document entry on the assessment and persists it to the DB.
+// For tags, desc is treated as the colour value.
+func pushField(ctx context.Context, assessment *models.Assessment, field string, newID bson.ObjectID, name, desc string) {
+	var entry interface{}
+	switch field {
+	case "sources":
+		e := models.Source{ID: newID, Name: name, Description: desc}
+		assessment.Sources = append(assessment.Sources, e)
+		entry = e
+	case "targets":
+		e := models.Target{ID: newID, Name: name, Description: desc}
+		assessment.Targets = append(assessment.Targets, e)
+		entry = e
+	case "tools":
+		e := models.Tool{ID: newID, Name: name, Description: desc}
+		assessment.Tools = append(assessment.Tools, e)
+		entry = e
+	case "controls":
+		e := models.Control{ID: newID, Name: name, Description: desc}
+		assessment.Controls = append(assessment.Controls, e)
+		entry = e
+	case "tags":
+		e := models.Tag{ID: newID, Name: name, Colour: desc}
+		assessment.Tags = append(assessment.Tags, e)
+		entry = e
+	case "datasources":
+		e := models.Datasource{ID: newID, Name: name, Description: desc}
+		assessment.Datasources = append(assessment.Datasources, e)
+		entry = e
+	case "rules":
+		e := models.DetectionRule{ID: newID, Name: name, Description: desc}
+		assessment.Rules = append(assessment.Rules, e)
+		entry = e
+	default:
+		return
+	}
+	db.Col(db.ColAssessment).UpdateOne(ctx, bson.M{"_id": assessment.ID}, bson.M{
+		"$push": bson.M{field: entry},
+	})
+}
+
+// findByName searches a slice of named items for one matching the given name and returns its hex ID.
+func findByName[T interface {
+	GetID() bson.ObjectID
+	GetName() string
+}](items []T, name string) string {
+	for _, item := range items {
+		if item.GetName() == name {
+			return item.GetID().Hex()
+		}
+	}
+	return ""
 }
 
 // findExistingMultiEntry checks if a name already exists in the assessment's embedded docs.
 func findExistingMultiEntry(assessment *models.Assessment, field, name string) string {
 	switch field {
 	case "sources":
-		for _, s := range assessment.Sources {
-			if s.Name == name {
-				return s.ID.Hex()
-			}
-		}
+		return findByName(assessment.Sources, name)
 	case "targets":
-		for _, t := range assessment.Targets {
-			if t.Name == name {
-				return t.ID.Hex()
-			}
-		}
+		return findByName(assessment.Targets, name)
 	case "tools":
-		for _, t := range assessment.Tools {
-			if t.Name == name {
-				return t.ID.Hex()
-			}
-		}
+		return findByName(assessment.Tools, name)
 	case "controls":
-		for _, c := range assessment.Controls {
-			if c.Name == name {
-				return c.ID.Hex()
-			}
-		}
+		return findByName(assessment.Controls, name)
 	case "tags":
-		for _, t := range assessment.Tags {
-			if t.Name == name {
-				return t.ID.Hex()
-			}
-		}
+		return findByName(assessment.Tags, name)
 	case "datasources":
-		for _, d := range assessment.Datasources {
-			if d.Name == name {
-				return d.ID.Hex()
-			}
-		}
+		return findByName(assessment.Datasources, name)
 	case "rules":
-		for _, r := range assessment.Rules {
-			if r.Name == name {
-				return r.ID.Hex()
-			}
-		}
+		return findByName(assessment.Rules, name)
 	}
 	return ""
 }
@@ -725,7 +693,7 @@ func findExistingMultiEntry(assessment *models.Assessment, field, name string) s
 // by looking up the technique in the database.
 func lookupTacticForTechnique(ctx context.Context, mitreID string) string {
 	var tech models.Technique
-	if err := db.Col("technique").FindOne(ctx, bson.M{"mitreid": mitreID}).Decode(&tech); err != nil {
+	if err := db.Col(db.ColTechnique).FindOne(ctx, bson.M{"mitreid": mitreID}).Decode(&tech); err != nil {
 		return ""
 	}
 	if len(tech.Tactics) > 0 {

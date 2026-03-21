@@ -89,7 +89,7 @@ func HandleLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	// Update login tracking fields.
 	now := time.Now().UTC()
-	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
 			"last_login_at":    user.CurrentLoginAt,
 			"last_login_ip":    user.CurrentLoginIP,
@@ -178,7 +178,7 @@ func HandlePasswordChangePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	_, err = db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{"password": hashed},
 	})
 	if err != nil {
@@ -197,7 +197,7 @@ func HandlePasswordChanged(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{"initpwd": false},
 	})
 
@@ -231,7 +231,7 @@ func HandleMFARegisterPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store the secret on the user record.
-	db.Col("user").UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
 			"tf_totp_secret":    key.Secret(),
 			"tf_primary_method": "totp",
