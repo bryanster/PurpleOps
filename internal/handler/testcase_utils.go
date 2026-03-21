@@ -197,6 +197,58 @@ func HandleFetchEvidence(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filePath)
 }
 
+// HandleToggleTimer starts or stops the timer on a testcase.
+// GET /testcase/{id}/toggle-timer
+func HandleToggleTimer(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	ctx := r.Context()
+	user := auth.UserFromContext(ctx)
+
+	// Blue-only users cannot control the timer
+	isBlue := user.HasRole(ctx, "Blue") && !user.HasRole(ctx, "Red") && !user.HasRole(ctx, "Admin")
+	if isBlue {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	tc, err := models.FindTestCase(ctx, id)
+	if err != nil {
+		http.Error(w, "Testcase not found", http.StatusNotFound)
+		return
+	}
+
+	now := models.NowPtr()
+
+	switch tc.State {
+	case "Pending":
+		// Start: set start time and state to Running
+		tc.StartTime = now
+		tc.EndTime = nil
+		tc.State = "Running"
+	case "Running":
+		// Stop: set end time and state to Complete
+		tc.EndTime = now
+		tc.State = "Complete"
+	case "Complete":
+		// Restart: reset start time, clear end time, state to Running
+		tc.StartTime = now
+		tc.EndTime = nil
+		tc.State = "Running"
+	}
+
+	tc.ModifyTime = now
+
+	oid, _ := bson.ObjectIDFromHex(id)
+	_, err = db.Col("test_case").ReplaceOne(ctx, bson.M{"_id": oid}, tc)
+	if err != nil {
+		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tc.ToJSON(false))
+}
+
 // sanitizeFilenameSafe provides simple filename sanitization for URL parameters.
 func sanitizeFilenameSafe(name string) string {
 	// Replace path separators
