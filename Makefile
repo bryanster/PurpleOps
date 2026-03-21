@@ -1,9 +1,9 @@
-.PHONY: help db db-stop dev prod logs build seed test e2e-seed e2e install-hooks
+.PHONY: help dev-db dev-db-rm dev prod logs build seed test e2e-seed e2e install-hooks
 
 help:
 	@echo "Usage:"
-	@echo "  make db        Start MongoDB in Docker (exposes :27017)"
-	@echo "  make db-stop   Stop MongoDB container"
+	@echo "  make dev-db    Start MongoDB in Docker (exposes :27017)"
+	@echo "  make dev-db-rm Stop MongoDB container"
 	@echo "  make build     Build Go binaries"
 	@echo "  make seed      Run database seeder"
 	@echo "  make dev       Run app locally against Dockerised MongoDB"
@@ -11,7 +11,7 @@ help:
 	@echo "  make logs      Tail all running container logs"
 	@echo "  make test      Run Go unit tests"
 	@echo "  make e2e-seed  Seed E2E test database"
-	@echo "  make e2e           Run Playwright E2E tests (requires: make db)"
+	@echo "  make e2e       Run Playwright E2E tests (requires: make dev-db)"
 	@echo "  make install-hooks Install pre-commit hooks (requires: pip install pre-commit)"
 
 install-hooks:
