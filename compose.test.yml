@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  mongodb-test:
+    image: mongo:8.0
+    container_name: mongodb-test
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  purpleops-test:
+    build: .
+    container_name: purpleops-test
+    command: ./purpleops
+    ports:
+      - "8888:8888"
+    environment:
+      MONGO_DB: assessments_test
+      MONGO_HOST: mongodb-test
+      MONGO_PORT: "27017"
+      PORT: "8888"
+      HOST: "0.0.0.0"
+      NAME: test
+      DEBUG: "True"
+      SECRET_KEY: test-secret-key-for-playwright
+      PASSWORD_SALT: test-salt-for-playwright
+      MFA: "False"
+      POPS_ADMIN_PWD: TestAdmin123!
+    depends_on:
+      mongodb-test:
+        condition: service_healthy
+    tmpfs:
+      - /tmp
+    volumes:
+      - purpleops_test_data:/usr/src/app/files
+      - ./custom:/usr/src/app/custom
+
+volumes:
+  purpleops_test_data:
