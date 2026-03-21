@@ -153,13 +153,13 @@ func TestSanitizeIDs(t *testing.T) {
 	}
 }
 
-func TestExtractIDFunctions(t *testing.T) {
+func TestExtractItemIDs(t *testing.T) {
 	id1 := bson.NewObjectID()
 	id2 := bson.NewObjectID()
 
-	t.Run("extractIDs (sources)", func(t *testing.T) {
+	t.Run("sources", func(t *testing.T) {
 		sources := []models.Source{{ID: id1}, {ID: id2}}
-		m := extractIDs(sources)
+		m := extractItemIDs(sources)
 		if len(m) != 2 {
 			t.Errorf("expected 2 IDs, got %d", len(m))
 		}
@@ -168,49 +168,49 @@ func TestExtractIDFunctions(t *testing.T) {
 		}
 	})
 
-	t.Run("extractTargetIDs", func(t *testing.T) {
+	t.Run("targets", func(t *testing.T) {
 		targets := []models.Target{{ID: id1}}
-		m := extractTargetIDs(targets)
+		m := extractItemIDs(targets)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
 		}
 	})
 
-	t.Run("extractToolIDs", func(t *testing.T) {
+	t.Run("tools", func(t *testing.T) {
 		tools := []models.Tool{{ID: id1}, {ID: id2}}
-		m := extractToolIDs(tools)
+		m := extractItemIDs(tools)
 		if len(m) != 2 {
 			t.Errorf("expected 2 IDs, got %d", len(m))
 		}
 	})
 
-	t.Run("extractControlIDs", func(t *testing.T) {
+	t.Run("controls", func(t *testing.T) {
 		controls := []models.Control{{ID: id1}}
-		m := extractControlIDs(controls)
+		m := extractItemIDs(controls)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
 		}
 	})
 
-	t.Run("extractTagIDs", func(t *testing.T) {
+	t.Run("tags", func(t *testing.T) {
 		tags := []models.Tag{{ID: id1}}
-		m := extractTagIDs(tags)
+		m := extractItemIDs(tags)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
 		}
 	})
 
-	t.Run("extractDatasourceIDs", func(t *testing.T) {
+	t.Run("datasources", func(t *testing.T) {
 		ds := []models.Datasource{{ID: id1}}
-		m := extractDatasourceIDs(ds)
+		m := extractItemIDs(ds)
 		if len(m) != 1 {
 			t.Errorf("expected 1 ID, got %d", len(m))
 		}
 	})
 
-	t.Run("extractRuleIDs", func(t *testing.T) {
+	t.Run("rules", func(t *testing.T) {
 		rules := []models.DetectionRule{{ID: id1}, {ID: id2}}
-		m := extractRuleIDs(rules)
+		m := extractItemIDs(rules)
 		if len(m) != 2 {
 			t.Errorf("expected 2 IDs, got %d", len(m))
 		}

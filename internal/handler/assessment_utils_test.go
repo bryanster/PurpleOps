@@ -148,7 +148,9 @@ func TestGetFieldValue(t *testing.T) {
 	}
 }
 
-func TestUpdateSources(t *testing.T) {
+func TestUpdateItemsSources(t *testing.T) {
+	newSource := func() *models.Source { return &models.Source{ID: bson.NewObjectID()} }
+
 	id1 := bson.NewObjectID()
 	existing := []models.Source{
 		{ID: id1, Name: "Old Source", Description: "Old Desc"},
@@ -159,7 +161,7 @@ func TestUpdateSources(t *testing.T) {
 		{"id": "tmp-1", "name": "New Source", "description": "New Desc"},
 	}
 
-	result := updateSources(existing, data)
+	result := updateItems(existing, data, newSource)
 	if len(result) != 2 {
 		t.Fatalf("expected 2 sources, got %d", len(result))
 	}
@@ -181,7 +183,9 @@ func TestUpdateSources(t *testing.T) {
 	}
 }
 
-func TestUpdateSourcesNonMatchingID(t *testing.T) {
+func TestUpdateItemsSourcesNonMatchingID(t *testing.T) {
+	newSource := func() *models.Source { return &models.Source{ID: bson.NewObjectID()} }
+
 	id1 := bson.NewObjectID()
 	existing := []models.Source{
 		{ID: id1, Name: "Source1"},
@@ -192,19 +196,21 @@ func TestUpdateSourcesNonMatchingID(t *testing.T) {
 		{"id": bson.NewObjectID().Hex(), "name": "Ghost", "description": ""},
 	}
 
-	result := updateSources(existing, data)
+	result := updateItems(existing, data, newSource)
 	if len(result) != 0 {
 		t.Errorf("expected 0 sources for non-matching ID, got %d", len(result))
 	}
 }
 
-func TestUpdateTargets(t *testing.T) {
+func TestUpdateItemsTargets(t *testing.T) {
+	newTarget := func() *models.Target { return &models.Target{ID: bson.NewObjectID()} }
+
 	existing := []models.Target{}
 	data := []map[string]string{
 		{"id": "tmp-1", "name": "New Target", "description": "Desc"},
 	}
 
-	result := updateTargets(existing, data)
+	result := updateItems(existing, data, newTarget)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 target, got %d", len(result))
 	}
@@ -213,14 +219,16 @@ func TestUpdateTargets(t *testing.T) {
 	}
 }
 
-func TestUpdateTools(t *testing.T) {
+func TestUpdateItemsTools(t *testing.T) {
+	newTool := func() *models.Tool { return &models.Tool{ID: bson.NewObjectID()} }
+
 	id1 := bson.NewObjectID()
 	existing := []models.Tool{{ID: id1, Name: "Tool1"}}
 	data := []map[string]string{
 		{"id": id1.Hex(), "name": "Tool1 Updated", "description": "Desc"},
 	}
 
-	result := updateTools(existing, data)
+	result := updateItems(existing, data, newTool)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 tool, got %d", len(result))
 	}
@@ -229,12 +237,14 @@ func TestUpdateTools(t *testing.T) {
 	}
 }
 
-func TestUpdateControls(t *testing.T) {
+func TestUpdateItemsControls(t *testing.T) {
+	newControl := func() *models.Control { return &models.Control{ID: bson.NewObjectID()} }
+
 	data := []map[string]string{
 		{"id": "tmp-1", "name": "Firewall", "description": "Network firewall"},
 	}
 
-	result := updateControls(nil, data)
+	result := updateItems[models.Control](nil, data, newControl)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 control, got %d", len(result))
 	}
@@ -243,7 +253,9 @@ func TestUpdateControls(t *testing.T) {
 	}
 }
 
-func TestUpdateTags(t *testing.T) {
+func TestUpdateItemsTags(t *testing.T) {
+	newTag := func() *models.Tag { return &models.Tag{ID: bson.NewObjectID()} }
+
 	id1 := bson.NewObjectID()
 	existing := []models.Tag{{ID: id1, Name: "Tag1", Colour: "#ff0000"}}
 	data := []map[string]string{
@@ -251,7 +263,7 @@ func TestUpdateTags(t *testing.T) {
 		{"id": "tmp-1", "name": "NewTag", "colour": "#0000ff"},
 	}
 
-	result := updateTags(existing, data)
+	result := updateItems(existing, data, newTag)
 	if len(result) != 2 {
 		t.Fatalf("expected 2 tags, got %d", len(result))
 	}
@@ -263,24 +275,28 @@ func TestUpdateTags(t *testing.T) {
 	}
 }
 
-func TestUpdateDatasources(t *testing.T) {
+func TestUpdateItemsDatasources(t *testing.T) {
+	newDatasource := func() *models.Datasource { return &models.Datasource{ID: bson.NewObjectID()} }
+
 	data := []map[string]string{
 		{"id": "tmp-1", "name": "DS1", "description": "Data source 1"},
 	}
 
-	result := updateDatasources(nil, data)
+	result := updateItems[models.Datasource](nil, data, newDatasource)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 datasource, got %d", len(result))
 	}
 }
 
-func TestUpdateDetectionRules(t *testing.T) {
+func TestUpdateItemsDetectionRules(t *testing.T) {
+	newRule := func() *models.DetectionRule { return &models.DetectionRule{ID: bson.NewObjectID()} }
+
 	data := []map[string]string{
 		{"id": "tmp-1", "name": "Rule1", "description": "Detection rule 1"},
 		{"id": "tmp-2", "name": "Rule2", "description": "Detection rule 2"},
 	}
 
-	result := updateDetectionRules(nil, data)
+	result := updateItems[models.DetectionRule](nil, data, newRule)
 	if len(result) != 2 {
 		t.Fatalf("expected 2 rules, got %d", len(result))
 	}
