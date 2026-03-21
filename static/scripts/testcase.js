@@ -250,7 +250,66 @@ $( document ).ready(function() {
 		endTime = new Date($("#time-end").val() + "Z");
 		$("#time-end").val(new Date(endTime.getTime() - endTime.getTimezoneOffset() * 60000).toISOString().slice(0,16))
 	}
+
+	// Initialize elapsed timer based on current state
+	if ($("#state").val() === "Running" && $("#time-start").val()) {
+		startElapsedTimer();
+	} else if ($("#state").val() === "Complete" && $("#time-start").val()) {
+		updateElapsedDisplay();
+	}
 });
+
+// Elapsed timer logic
+var elapsedInterval = null;
+
+function formatElapsed(ms) {
+	var totalSeconds = Math.floor(ms / 1000);
+	var hours = Math.floor(totalSeconds / 3600);
+	var minutes = Math.floor((totalSeconds % 3600) / 60);
+	var seconds = totalSeconds % 60;
+	return String(hours).padStart(2, '0') + ':' +
+		String(minutes).padStart(2, '0') + ':' +
+		String(seconds).padStart(2, '0');
+}
+
+function startElapsedTimer() {
+	stopElapsedTimer();
+	updateElapsedDisplay();
+	elapsedInterval = setInterval(updateElapsedDisplay, 1000);
+}
+
+function updateElapsedDisplay() {
+	var startVal = $("#time-start").val();
+	if (!startVal) {
+		$("#elapsed-time").text("00:00:00");
+		return;
+	}
+	var startDate = new Date(startVal);
+	var endVal = $("#time-end").val();
+	var endDate = endVal ? new Date(endVal) : new Date();
+	var elapsed = endDate - startDate;
+	if (elapsed < 0) elapsed = 0;
+	$("#elapsed-time").text(formatElapsed(elapsed));
+}
+
+function stopElapsedTimer() {
+	if (elapsedInterval) {
+		clearInterval(elapsedInterval);
+		elapsedInterval = null;
+	}
+}
+
+function updateTimerBadge(state) {
+	var badge = $("#elapsed-timer");
+	badge.removeClass("bg-secondary bg-warning bg-primary text-dark text-white");
+	if (state === "Running") {
+		badge.addClass("bg-warning text-dark");
+	} else if (state === "Complete") {
+		badge.addClass("bg-primary");
+	} else {
+		badge.addClass("bg-secondary");
+	}
+}
 
 // Alter timestamps, button labels and state when hitting run button
 $("#run-button").click(function(){
@@ -267,6 +326,8 @@ $("#run-button").click(function(){
 		$("#state").val("Running")
 		$("#state").removeClass("bg-primary text-white")
 		$("#state").addClass("bg-warning text-dark")
+		updateTimerBadge("Running");
+		startElapsedTimer();
 	} else if ($("#run-button").text() == "Stop") {
 		$("#time-end").val(clickTime)
 		$("#run-button").text("Restart")
@@ -277,6 +338,9 @@ $("#run-button").click(function(){
 		$("#state").addClass("bg-primary")
 		$("#state").removeClass("text-dark")
 		$("#state").addClass("text-white")
+		updateTimerBadge("Complete");
+		stopElapsedTimer();
+		updateElapsedDisplay();
 	}
 });
 
