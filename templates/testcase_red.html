@@ -5,7 +5,12 @@
 				class="btn {% if testcase.State == "Pending" %}btn-outline-success{% endif %}{% if testcase.State == "Running" %}btn-outline-danger{% endif %}{% if testcase.State == "Complete" %}btn-outline-warning{% endif %} btn-sm w-100" aria-pressed="false"
 				value="{{ testcase.State }}" {% if current_user.HasRole("Blue") %} disabled{% endif %}>{% if testcase.State == "Pending" %}Start{% endif %}{% if testcase.State == "Running" %}Stop{% endif %}{% if testcase.State == "Complete" %}Restart{% endif %}</button>
 		</div>
-		<div class="col-4">
+		<div class="col-2">
+			<span id="elapsed-timer" class="badge {% if testcase.State == "Running" %}bg-warning text-dark{% elif testcase.State == "Complete" %}bg-primary{% else %}bg-secondary{% endif %} w-100 py-2" style="font-size: 0.85em; font-family: monospace;">
+				<i class="bi-stopwatch">&zwnj;</i>&nbsp;<span id="elapsed-time">00:00:00</span>
+			</span>
+		</div>
+		<div class="col-3">
 			<div class="input-group input-group-sm">
 				<span class="input-group-text text-danger" title="Start time">
 					<i class="bi-clock-history">&zwnj;</i>
@@ -14,7 +19,7 @@
 				<input id='time-start' name="starttime" type="datetime-local" class='form-control' autocomplete="off" value="{% if testcase.StartTime %}{{ testcase.StartTime|strftime:"%Y-%m-%dT%H:%M" }}{% endif %}" {% if current_user.HasRole("Blue") %} disabled{% endif %}>
 			</div>
 		</div>
-		<div class="col-4">
+		<div class="col-3">
 			<div class="input-group input-group-sm">
 				<span class="input-group-text text-danger" title="End time">
 					<i class="bi-clock-fill">&zwnj;</i>
