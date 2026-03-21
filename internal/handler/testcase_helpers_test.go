@@ -10,64 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// Test helpers that extract ID maps from typed slices.
-
-func extractIDs(sources []models.Source) map[string]bool {
-	m := make(map[string]bool, len(sources))
-	for _, s := range sources {
-		m[s.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractTargetIDs(targets []models.Target) map[string]bool {
-	m := make(map[string]bool, len(targets))
-	for _, t := range targets {
-		m[t.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractToolIDs(tools []models.Tool) map[string]bool {
-	m := make(map[string]bool, len(tools))
-	for _, t := range tools {
-		m[t.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractControlIDs(controls []models.Control) map[string]bool {
-	m := make(map[string]bool, len(controls))
-	for _, c := range controls {
-		m[c.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractTagIDs(tags []models.Tag) map[string]bool {
-	m := make(map[string]bool, len(tags))
-	for _, t := range tags {
-		m[t.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractDatasourceIDs(ds []models.Datasource) map[string]bool {
-	m := make(map[string]bool, len(ds))
-	for _, d := range ds {
-		m[d.ID.Hex()] = true
-	}
-	return m
-}
-
-func extractRuleIDs(rules []models.DetectionRule) map[string]bool {
-	m := make(map[string]bool, len(rules))
-	for _, r := range rules {
-		m[r.ID.Hex()] = true
-	}
-	return m
-}
-
 func TestParseBool(t *testing.T) {
 	tests := []struct {
 		input string
