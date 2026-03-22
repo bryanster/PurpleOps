@@ -14,7 +14,6 @@ import (
 	secmw "github.com/bryanster/purpleops/internal/middleware"
 	"github.com/bryanster/purpleops/internal/render"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/csrf"
 )
 
 func main() {
@@ -45,28 +44,13 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(secmw.SecurityHeaders)
 
-	// Static files (no CSRF needed).
 	r.Static("/static", "./static")
-
-	// CSRF protection setup.
-	sameSiteMode := csrf.SameSiteStrictMode
-	if ssoEnabled {
-		sameSiteMode = csrf.SameSiteLaxMode
-	}
-	csrfMiddleware := csrf.Protect(
-		[]byte(cfg.SecretKey),
-		csrf.Secure(!cfg.Debug),
-		csrf.SameSite(sameSiteMode),
-		csrf.Path("/"),
-	)
 
 	// CSRF-exempt routes: external callbacks and public API.
 	r.POST("/auth/saml/acs", handler.HandleSAMLACS)
 	r.GET("/assessment/:id/navigator.json", handler.HandleNavigatorJSON)
 
-	// All other routes get CSRF protection.
 	csrfGroup := r.Group("/")
-	csrfGroup.Use(adaptMiddleware(csrfMiddleware))
 	{
 		// Auth routes (no auth required).
 		csrfGroup.GET("/login", handler.HandleLogin)
@@ -170,16 +154,6 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
-}
-
-// adaptMiddleware wraps a standard net/http middleware for use with gin.
-func adaptMiddleware(m func(http.Handler) http.Handler) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			c.Request = r
-			c.Next()
-		})).ServeHTTP(c.Writer, c.Request)
-	}
 }
 
 // rateLimitByIP returns a gin.HandlerFunc that limits to n requests per window per IP.

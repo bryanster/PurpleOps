@@ -31,7 +31,6 @@
     {% endif %}
     <h1 class="h3 mb-3 fw-normal">Sign in</h1>
     <form action="/login" method="POST" name="login_user_form">
-        {{ csrf_field|safe }}
         <div class="form-floating">
             <input id="email" name="email" required type="email" value="" class="form-control" >
             <label for="email">Email Address</label>

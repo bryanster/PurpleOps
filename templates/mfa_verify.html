@@ -30,7 +30,6 @@
 
     <h1 class="h3 mb-3 fw-normal">Multi-Factor Authentication</h1>
     <form action="/mfa/verify" method="POST" name="two_factor_verify_code_form">
-        {{ csrf_field|safe }}
         <div class="form-floating">
             <input id="code" name="code" placeholder="XXXXXX" type="text" value="" required class="form-control">
             <label for="code">Authentication Code</label>

@@ -60,7 +60,7 @@ func HandleOAuthLogin(c *gin.Context) {
 
 	sess := auth.GetSession(c.Request)
 	sess.Values["oauth_state"] = state
-	sess.Save(c.Request, c.Writer)
+	auth.SaveSession(c.Writer, c.Request, sess)
 
 	url := oauthConfig.AuthCodeURL(state)
 	c.Redirect(http.StatusFound, url)
@@ -78,7 +78,7 @@ func HandleOAuthCallback(c *gin.Context) {
 	setFlash := func(msg string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = "danger"
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/login")
 	}
 
@@ -89,7 +89,7 @@ func HandleOAuthCallback(c *gin.Context) {
 		return
 	}
 	delete(sess.Values, "oauth_state")
-	sess.Save(c.Request, c.Writer)
+	auth.SaveSession(c.Writer, c.Request, sess)
 
 	// Check for error from provider.
 	if errParam := c.Request.URL.Query().Get("error"); errParam != "" {

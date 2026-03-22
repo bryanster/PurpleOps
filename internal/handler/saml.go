@@ -117,7 +117,7 @@ func HandleSAMLACS(c *gin.Context) {
 	setFlash := func(msg string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = "danger"
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/login")
 	}
 

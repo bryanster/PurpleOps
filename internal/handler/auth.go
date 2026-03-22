@@ -29,7 +29,7 @@ func getFlashMessages(c *gin.Context) []FlashMessage {
 		category, _ := sess.Values["flash_category"].(string)
 		delete(sess.Values, "flash")
 		delete(sess.Values, "flash_category")
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		return []FlashMessage{{Category: category, Message: flash}}
 	}
 	return nil
@@ -63,7 +63,7 @@ func HandleLoginPost(c *gin.Context) {
 	setFlash := func(msg, category string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = category
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/login")
 	}
 
@@ -105,7 +105,7 @@ func HandleLoginPost(c *gin.Context) {
 	// If MFA is enabled globally and the user has a TOTP secret, redirect to verify.
 	if config.Cfg.MFA && user.TFSecret != "" {
 		sess.Values["mfa_user_id"] = user.ID.Hex()
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/mfa/verify")
 		return
 	}
@@ -151,7 +151,7 @@ func HandlePasswordChangePost(c *gin.Context) {
 	setFlash := func(msg, category string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = category
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/password/change")
 	}
 
@@ -226,7 +226,7 @@ func HandleMFARegisterPost(c *gin.Context) {
 		sess := auth.GetSession(c.Request)
 		sess.Values["flash"] = "Failed to generate MFA key."
 		sess.Values["flash_category"] = "danger"
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/mfa/register")
 		return
 	}
@@ -263,7 +263,7 @@ func HandleMFAVerifyPost(c *gin.Context) {
 	setFlash := func(msg, category string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = category
-		sess.Save(c.Request, c.Writer)
+		auth.SaveSession(c.Writer, c.Request, sess)
 		c.Redirect(http.StatusFound, "/mfa/verify")
 	}
 
@@ -298,7 +298,7 @@ func HandleMFAVerifyPost(c *gin.Context) {
 
 	// Clear the temporary MFA user ID and set the full session.
 	delete(sess.Values, "mfa_user_id")
-	sess.Save(c.Request, c.Writer)
+	auth.SaveSession(c.Writer, c.Request, sess)
 
 	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
 	c.Redirect(http.StatusFound, "/")

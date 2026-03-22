@@ -39,6 +39,7 @@ func AuthRequired(c *gin.Context) {
 		}
 	}
 	sess.Values["last_active"] = time.Now().Unix()
+	sess.Options.Secure = isSecureRequest(c.Request)
 	sess.Save(c.Request, c.Writer)
 
 	ctx := WithUser(c.Request.Context(), user)

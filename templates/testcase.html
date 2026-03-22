@@ -10,7 +10,6 @@
 {% block content %}
 {% include "testcase_modals.html" %}
 <form action="/testcase/{{ testcase.ID.Hex }}" method="Post" id="ttpform" value="{{ testcase.ID.Hex }}" style="max-width: 1600px; margin: 0 auto" enctype="multipart/form-data">
-    {{ csrf_field|safe }}
     <div class="container-fluid">
         <div class="row mt-3" style="margin: 0 -1px 0 -2px">
             <div class="col-7">

@@ -6,12 +6,9 @@ import (
 	"log"
 	"net/http"
 
-	"html/template"
-
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/flosch/pongo2/v6"
-	"github.com/gorilla/csrf"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -42,8 +39,7 @@ func Render(w http.ResponseWriter, r *http.Request, templateName string, ctx pon
 	}
 	ctx["current_user"] = &TemplateUser{user: user, ctx: r.Context()}
 	ctx["request"] = &TemplateRequest{r: r}
-	ctx["csrf_token"] = csrf.Token(r)
-	ctx["csrf_field"] = template.HTML(csrf.TemplateField(r)) //nolint:gosec // G203: csrf.TemplateField produces safe HTML
+
 
 	tpl, err := templateSet.FromFile(templateName)
 	if err != nil {
