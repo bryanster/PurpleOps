@@ -10,9 +10,6 @@ help:
 	@echo "  make prod      Run full production stack"
 	@echo "  make logs      Tail all running container logs"
 	@echo "  make test      Run Go unit tests"
-	@echo "  make e2e-seed  Seed E2E test database"
-	@echo "  make e2e       Run Playwright E2E tests (requires: make dev-db)"
-	@echo "  make install-hooks Install pre-commit hooks (requires: pip install pre-commit)"
 
 install-hooks:
 	pre-commit install
@@ -41,9 +38,3 @@ logs:
 
 test:
 	go test -v ./...
-
-e2e-seed:
-	go run ./cmd/e2e-seed
-
-e2e: db e2e-seed
-	cd e2e && npx playwright test
