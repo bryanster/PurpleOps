@@ -27,9 +27,6 @@
                 <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/templates">Testcase Templates</a></li>
                 {% endif %}
                 <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/navigator">ATT&amp;CK Navigator Layer</a></li>
-                {% if reports %}
-                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#exportReportModal">Generate Report</a></li>
-                {% endif %}
                 <li><a class="dropdown-item" href="/assessment/{{ assessment.ID.Hex }}/export/entire">Entire Assessment</a></li>
             </ul>
         </div>
