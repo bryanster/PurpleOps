@@ -283,14 +283,6 @@ func buildTestcaseTemplatesExport(ctx context.Context, id string, user *models.U
 	return records, nil
 }
 
-// HandleExportReport handles report export via docx template.
-// POST /assessment/{id}/export/report
-// TODO: Implement docxtpl equivalent in Go. The Python version uses python-docx-template
-// to render .docx reports with assessment data. No mature Go equivalent exists yet.
-func HandleExportReport(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Report export not implemented", http.StatusNotImplemented)
-}
-
 // HandleExportNavigator exports and serves the MITRE ATT&CK Navigator layer.
 // GET /assessment/{id}/export/navigator
 func HandleExportNavigator(w http.ResponseWriter, r *http.Request) {

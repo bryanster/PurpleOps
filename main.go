@@ -116,7 +116,6 @@ func main() {
 				r.Get("/export/{filetype}", handler.HandleExportAssessment)
 				r.Get("/export/campaign", handler.HandleExportCampaign)
 				r.Get("/export/templates", handler.HandleExportTestcases)
-				r.Post("/export/report", handler.HandleExportReport)
 				r.Get("/export/navigator", handler.HandleExportNavigator)
 				r.Get("/export/entire", handler.HandleExportEntire)
 

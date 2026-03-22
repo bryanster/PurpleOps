@@ -83,13 +83,14 @@ $ sudo docker compose up
 
 <details>
   <summary><h3>Manual</h3></summary>
-  
+
   ```bash
-  # Alternatively
+  # Alternatively, build and run the Go binaries
   $ sudo docker run --name mongodb -d -p 27017:27017 mongo
-  $ pip3 install -r requirements.txt
-  $ python3 seeder.py
-  $ python3 purpleops.py
+  $ go build -o purpleops .
+  $ go build -o seed ./cmd/seed
+  $ MONGO_HOST=localhost ./seed
+  $ MONGO_HOST=localhost ./purpleops
   ```
 </details>
 
@@ -135,10 +136,12 @@ $ sudo docker compose up
 
 <details>
   <summary><h3>Resetting MFA</h3></summary>
-  
+
   ```bash
-  sudo docker exec -it purpleops flask --app purpleops.py shell
-  from model import User; user = User.objects(email="userto@reset.here").first(); user.tf_totp_secret = None; user.save()
+  # Use MongoDB client directly to reset MFA for a user
+  sudo docker exec -it mongodb mongosh
+  use purpleops
+  db.users.updateOne({email: "userto@reset.here"}, {$set: {totp_secret: null}})
   ```
 </details>
 

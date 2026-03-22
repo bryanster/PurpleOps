@@ -198,18 +198,3 @@
 </div>
 {{ modalTail("managePreventionsources", "Cancel", "Save", "assessmentMultiButton") }}
 
-<!-- Template Modal -->
-<form action="/assessment/{{ assessment.ID.Hex }}/export/report" enctype="multipart/form-data" method="POST" class="m-0" id="exportReportForm">
-    {{ csrf_field|safe }}
-    {{ modalHead("exportReport", "Generate Engagement Report") }}
-    <div class="mb-3">
-        <p>Select the report below.</p>
-        <select id="report" name="report" class="form-label form-select" required autocomplete="off">
-            <option value="none" selected disabled hidden>Select...</option>
-            {% for report in reports %}
-            <option value="{{ report }}">{{ report }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    {{ modalTail("exportReport", "Close", "Generate") }}
-</form>
