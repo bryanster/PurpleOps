@@ -7,8 +7,21 @@ import (
 	"testing"
 
 	"github.com/bryanster/purpleops/internal/models"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
+// newAuthTestCtx creates a gin.Context wrapping the given request.
+func newAuthTestCtx(r *http.Request) (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = r
+	return c, w
+}
 
 func TestHashAndCheckPassword(t *testing.T) {
 	password := "securepassword123"
@@ -158,14 +171,10 @@ func TestSetAndClearSession(t *testing.T) {
 func TestAuthRequiredMiddleware(t *testing.T) {
 	InitSessions("test-secret-key", false, true)
 
-	handler := AuthRequired(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
 	// Without auth - should redirect
 	r := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	c, w := newAuthTestCtx(r)
+	AuthRequired(c)
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)
@@ -237,14 +246,9 @@ func TestIntersectIDs(t *testing.T) {
 // --- APIKeyAuth middleware ---
 
 func TestAPIKeyAuthMissingHeader(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := APIKeyAuth(next)
-
 	r := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	c, w := newAuthTestCtx(r)
+	APIKeyAuth(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
@@ -254,17 +258,10 @@ func TestAPIKeyAuthMissingHeader(t *testing.T) {
 func TestAPIKeyAuthXAPIKeyHeader(t *testing.T) {
 	// A key that won't be found in DB (no DB in unit tests) should still 401,
 	// but the middleware must reach the DB lookup — meaning the header was accepted.
-	// We verify it gets past the "empty header" check and reaches the lookup stage
-	// (which returns 401 from DB miss, not from "no header").
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := APIKeyAuth(next)
-
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("X-API-Key", "pops_notarealkey")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	c, w := newAuthTestCtx(r)
+	APIKeyAuth(c)
 
 	// Either 401 (key not found in DB) or 500 (no DB configured in test) — both
 	// indicate the header was read successfully and we didn't get a 200.
@@ -274,15 +271,10 @@ func TestAPIKeyAuthXAPIKeyHeader(t *testing.T) {
 }
 
 func TestAPIKeyAuthBearerFallback(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := APIKeyAuth(next)
-
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("Authorization", "Bearer pops_notarealkey")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	c, w := newAuthTestCtx(r)
+	APIKeyAuth(c)
 
 	// Bearer key was extracted — same as above: not 200
 	if w.Code == http.StatusOK {
@@ -292,15 +284,10 @@ func TestAPIKeyAuthBearerFallback(t *testing.T) {
 
 func TestAPIKeyAuthEmptyBearerPrefix(t *testing.T) {
 	// "Bearer " prefix without a key body → treated as empty → 401
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := APIKeyAuth(next)
-
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("Authorization", "Bearer ")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	c, w := newAuthTestCtx(r)
+	APIKeyAuth(c)
 
 	// Empty string after stripping "Bearer " → hits the empty-key 401 branch
 	if w.Code != http.StatusUnauthorized {
@@ -310,15 +297,10 @@ func TestAPIKeyAuthEmptyBearerPrefix(t *testing.T) {
 
 func TestAPIKeyAuthNonBearerAuthHeader(t *testing.T) {
 	// Authorization: Basic ... should not be accepted as a key
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := APIKeyAuth(next)
-
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	c, w := newAuthTestCtx(r)
+	APIKeyAuth(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for Basic auth header, got %d", w.Code)

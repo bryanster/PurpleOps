@@ -18,27 +18,27 @@ import (
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleAssessmentMulti updates embedded document lists on an assessment.
-// POST /assessment/{id}/multi/{field}
-func HandleAssessmentMulti(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	field := chi.URLParam(r, "field")
+// POST /assessment/:id/multi/:field
+func HandleAssessmentMulti(c *gin.Context) {
+	id := c.Param("id")
+	field := c.Param("field")
 
-	assessment, err := models.FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(c.Request.Context(), id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	var body struct {
 		Data []map[string]string `json:"data"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if err := json.NewDecoder(c.Request.Body).Decode(&body); err != nil {
+		c.String(http.StatusBadRequest, "Invalid JSON")
 		return
 	}
 
@@ -70,23 +70,22 @@ func HandleAssessmentMulti(w http.ResponseWriter, r *http.Request) {
 	case "preventionsources":
 		assessment.PreventionSources = updateItems(assessment.PreventionSources, body.Data, newDatasource)
 	default:
-		http.Error(w, "Invalid field", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid field")
 		return
 	}
 
-	_, err = db.Col(db.ColAssessment).UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col(db.ColAssessment).UpdateOne(c.Request.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{field: getFieldValue(assessment, field)},
 	})
 	if err != nil {
-		http.Error(w, "Failed to update assessment", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to update assessment")
 		return
 	}
 
 	// Return the updated field items as JSON.
 	result := assessment.MultiToJSON(field, false)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	c.JSON(http.StatusOK, result)
 }
 
 func getFieldValue(a *models.Assessment, field string) interface{} {
@@ -169,13 +168,13 @@ var ratingScores = map[string]int{
 }
 
 // HandleAssessmentNavigator renders the navigator export page.
-// GET /assessment/{id}/navigator
-func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// GET /assessment/:id/navigator
+func HandleAssessmentNavigator(c *gin.Context) {
+	id := c.Param("id")
 
-	assessment, err := models.FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(c.Request.Context(), id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
@@ -183,30 +182,30 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 	secretBytes := make([]byte, 16)
 	if _, err := rand.Read(secretBytes); err != nil {
 		slog.Error("navigator: failed to generate secret", "err", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Internal error")
 		return
 	}
 	secret := hex.EncodeToString(secretBytes)
 
 	// Store as "timestamp|ip|secret" in assessment.NavigatorExport.
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	ip := r.RemoteAddr
+	ip := c.Request.RemoteAddr
 	navigatorExport := fmt.Sprintf("%s|%s|%s", timestamp, ip, secret)
 
-	_, err = db.Col(db.ColAssessment).UpdateOne(r.Context(), bson.M{"_id": assessment.ID}, bson.M{
+	_, err = db.Col(db.ColAssessment).UpdateOne(c.Request.Context(), bson.M{"_id": assessment.ID}, bson.M{
 		"$set": bson.M{"navigatorexport": navigatorExport},
 	})
 	if err != nil {
-		http.Error(w, "Failed to update assessment", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to update assessment")
 		return
 	}
 
-	if _, err := ExportNavigatorFile(id, r); err != nil {
-		http.Error(w, "Failed to export navigator", http.StatusInternalServerError)
+	if _, err := ExportNavigatorFile(id, c.Request); err != nil {
+		c.String(http.StatusInternalServerError, "Failed to export navigator")
 		return
 	}
 
-	render.Render(w, r, "assessment_navigator.html", pongo2.Context{
+	render.Render(c.Writer, c.Request, "assessment_navigator.html", pongo2.Context{
 		"assessment": assessment,
 		"secret":     secret,
 	})
@@ -214,61 +213,61 @@ func HandleAssessmentNavigator(w http.ResponseWriter, r *http.Request) {
 
 // HandleNavigatorJSON serves the navigator JSON file. Unauthenticated but secret-gated.
 // The caller must supply ?secret=<value> matching the token stored in assessment.NavigatorExport.
-// GET /assessment/{id}/navigator.json?secret=<token>
-func HandleNavigatorJSON(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	secret := r.URL.Query().Get("secret")
+// GET /assessment/:id/navigator.json?secret=<token>
+func HandleNavigatorJSON(c *gin.Context) {
+	id := c.Param("id")
+	secret := c.Request.URL.Query().Get("secret")
 	if secret == "" {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		c.String(http.StatusForbidden, "Forbidden")
 		return
 	}
 
-	assessment, err := models.FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(c.Request.Context(), id)
 	if err != nil || assessment == nil {
-		http.Error(w, "Not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Not found")
 		return
 	}
 
 	// NavigatorExport is stored as "timestamp|ip|secret"
 	parts := strings.SplitN(assessment.NavigatorExport, "|", 3)
 	if len(parts) != 3 || parts[2] != secret {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		c.String(http.StatusForbidden, "Forbidden")
 		return
 	}
 
 	filePath := filepath.Join("files", id, "navigator.json")
-	origin := r.Header.Get("Origin")
+	origin := c.Request.Header.Get("Origin")
 	allowed := config.Cfg.NavigatorCORSOrigin
 	if origin != "" && allowed != "" && origin == allowed {
-		w.Header().Set("Access-Control-Allow-Origin", allowed)
+		c.Header("Access-Control-Allow-Origin", allowed)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	http.ServeFile(w, r, filePath)
+	c.Header("Content-Type", "application/json")
+	http.ServeFile(c.Writer, c.Request, filePath)
 }
 
 // HandleAssessmentStats renders the assessment statistics page.
-// GET /assessment/{id}/stats
-func HandleAssessmentStats(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// GET /assessment/:id/stats
+func HandleAssessmentStats(c *gin.Context) {
+	id := c.Param("id")
 
-	assessment, err := models.FindAssessment(r.Context(), id)
+	assessment, err := models.FindAssessment(c.Request.Context(), id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
-	testcases, err := models.GetTestCases(r.Context(), id)
+	testcases, err := models.GetTestCases(c.Request.Context(), id)
 	if err != nil {
-		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to load testcases")
 		return
 	}
 
 	// Determine if the user is blue-only (not Admin, not Red).
-	user := auth.UserFromContext(r.Context())
+	user := auth.UserFromContext(c.Request.Context())
 	blueOnly := false
 	if user != nil {
-		isAdmin := user.HasRole(r.Context(), "Admin")
-		isRed := user.HasRole(r.Context(), "Red")
+		isAdmin := user.HasRole(c.Request.Context(), "Admin")
+		isRed := user.HasRole(c.Request.Context(), "Red")
 		if !isAdmin && !isRed {
 			blueOnly = true
 		}
@@ -288,7 +287,7 @@ func HandleAssessmentStats(w http.ResponseWriter, r *http.Request) {
 
 	hexagons := RenderHexagons(id)
 
-	render.Render(w, r, "assessment_stats.html", pongo2.Context{
+	render.Render(c.Writer, c.Request, "assessment_stats.html", pongo2.Context{
 		"assessment": assessment,
 		"stats":      stats,
 		"hexagons":   hexagons,
@@ -379,12 +378,12 @@ func ratingToScore(rating string) int {
 }
 
 // HandleAssessmentHexagons serves the hexagon SVG visualization.
-// GET /assessment/{id}/assessment_hexagons.svg
-func HandleAssessmentHexagons(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// GET /assessment/:id/assessment_hexagons.svg
+func HandleAssessmentHexagons(c *gin.Context) {
+	id := c.Param("id")
 	svg := RenderHexagons(id)
-	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Write([]byte(svg))
+	c.Header("Content-Type", "image/svg+xml")
+	c.Writer.Write([]byte(svg))
 }
 
 // RenderHexagons generates an SVG hexagon visualization for the assessment.

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -12,11 +11,17 @@ import (
 
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/models"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// requestWithUser builds an httptest.Request with the given user in context.
-func requestWithUser(method, target string, body url.Values, user *models.User) *http.Request {
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
+// newGinContext creates a gin.Context for use in handler unit tests.
+func newGinContext(method, target string, body url.Values, user *models.User, params gin.Params) (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
 	var r *http.Request
 	if body != nil {
 		r = httptest.NewRequest(method, target, strings.NewReader(body.Encode()))
@@ -28,15 +33,19 @@ func requestWithUser(method, target string, body url.Values, user *models.User) 
 		ctx := auth.WithUser(r.Context(), user)
 		r = r.WithContext(ctx)
 	}
-	return r
+	c, _ := gin.CreateTestContext(w)
+	c.Request = r
+	if params != nil {
+		c.Params = params
+	}
+	return c, w
 }
 
 // --- HandleCreateAPIKey ---
 
 func TestHandleCreateAPIKey_NoAuth(t *testing.T) {
-	r := requestWithUser("POST", "/api-keys", nil, nil)
-	w := httptest.NewRecorder()
-	HandleCreateAPIKey(w, r)
+	c, w := newGinContext("POST", "/api-keys", nil, nil, nil)
+	HandleCreateAPIKey(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
@@ -48,9 +57,8 @@ func TestHandleCreateAPIKey_MissingName(t *testing.T) {
 	form := url.Values{}
 	// name intentionally omitted
 
-	r := requestWithUser("POST", "/api-keys", form, user)
-	w := httptest.NewRecorder()
-	HandleCreateAPIKey(w, r)
+	c, w := newGinContext("POST", "/api-keys", form, user, nil)
+	HandleCreateAPIKey(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
@@ -61,9 +69,8 @@ func TestHandleCreateAPIKey_BlankNameWhitespace(t *testing.T) {
 	user := &models.User{ID: bson.NewObjectID(), Active: true}
 	form := url.Values{"name": {"   "}}
 
-	r := requestWithUser("POST", "/api-keys", form, user)
-	w := httptest.NewRecorder()
-	HandleCreateAPIKey(w, r)
+	c, w := newGinContext("POST", "/api-keys", form, user, nil)
+	HandleCreateAPIKey(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for whitespace-only name, got %d", w.Code)
@@ -82,16 +89,11 @@ func TestHandleCreateAPIKey_RoleEscalationRejected(t *testing.T) {
 		"roles": {"Admin"}, // user doesn't have Admin
 	}
 
-	r := requestWithUser("POST", "/api-keys", form, user)
-	// FindRole will try to hit MongoDB, which isn't available in unit tests.
-	// If it errors (no DB), the role is silently skipped (err != nil continues).
-	// We just verify no escalation path returns 200 here without a DB;
-	// the 403 branch is exercised in TestHandleCreateAPIKey_RoleEscalation_DBMock.
-	w := httptest.NewRecorder()
-	HandleCreateAPIKey(w, r)
-
+	c, w := newGinContext("POST", "/api-keys", form, user, nil)
 	// Without DB the role lookup returns err, so the role is skipped and
 	// we proceed to DB insert which also fails → 500. Not 200.
+	HandleCreateAPIKey(c)
+
 	if w.Code == http.StatusOK {
 		t.Errorf("must not return 200 when role escalation attempted without DB, got %d", w.Code)
 	}
@@ -100,9 +102,8 @@ func TestHandleCreateAPIKey_RoleEscalationRejected(t *testing.T) {
 // --- HandleDeleteAPIKey ---
 
 func TestHandleDeleteAPIKey_NoAuth(t *testing.T) {
-	r := requestWithUser("DELETE", "/api-keys/"+bson.NewObjectID().Hex(), nil, nil)
-	w := httptest.NewRecorder()
-	HandleDeleteAPIKey(w, r)
+	c, w := newGinContext("DELETE", "/api-keys/"+bson.NewObjectID().Hex(), nil, nil, nil)
+	HandleDeleteAPIKey(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
@@ -112,42 +113,20 @@ func TestHandleDeleteAPIKey_NoAuth(t *testing.T) {
 func TestHandleDeleteAPIKey_InvalidID(t *testing.T) {
 	user := &models.User{ID: bson.NewObjectID(), Active: true}
 
-	// chi URLParam requires a real chi router context; simulate by using a plain
-	// request where URLParam returns "" — which bson.ObjectIDFromHex rejects.
-	r := requestWithUser("DELETE", "/api-keys/not-a-valid-objectid", nil, user)
-	// Inject a chi URL param manually via context.
-	rctx := setChiParam(r.Context(), "id", "not-a-valid-objectid")
-	r = r.WithContext(rctx)
-
-	w := httptest.NewRecorder()
-	HandleDeleteAPIKey(w, r)
+	c, w := newGinContext("DELETE", "/api-keys/not-a-valid-objectid", nil, user,
+		gin.Params{{Key: "id", Value: "not-a-valid-objectid"}})
+	HandleDeleteAPIKey(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for invalid ID, got %d", w.Code)
 	}
 }
 
-// setChiParam injects a chi URL parameter into the context without importing chi.
-// chi stores params in its own context key; we replicate just enough for URLParam.
-func setChiParam(ctx context.Context, key, value string) context.Context {
-	// chi.URLParam reads from chi.RouteContext; since we don't want to import chi
-	// in this test file, we use a thin wrapper: chi's RouteContext is accessible
-	// via the chi package itself in the handler under test, so we rely on the
-	// handler falling back gracefully when no chi context is present.
-	// For the InvalidID test the ID comes from the URL path directly via
-	// chi.URLParam — without a chi context it returns "". bson.ObjectIDFromHex("")
-	// returns an error, which triggers the 400 branch.
-	_ = key
-	_ = value
-	return ctx
-}
-
 // --- HandleAPIKeysPage ---
 
 func TestHandleAPIKeysPage_NoAuth(t *testing.T) {
-	r := requestWithUser("GET", "/api-keys", nil, nil)
-	w := httptest.NewRecorder()
-	HandleAPIKeysPage(w, r)
+	c, w := newGinContext("GET", "/api-keys", nil, nil, nil)
+	HandleAPIKeysPage(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)

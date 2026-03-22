@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,19 +9,19 @@ import (
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/db"
 	"github.com/bryanster/purpleops/internal/models"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleToggleVisibility toggles the visible flag on a testcase.
-// GET /testcase/{id}/toggle-visibility
-func HandleToggleVisibility(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+// GET /testcase/:id/toggle-visibility
+func HandleToggleVisibility(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
@@ -31,23 +30,22 @@ func HandleToggleVisibility(w http.ResponseWriter, r *http.Request) {
 	oid, _ := bson.ObjectIDFromHex(id)
 	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
-		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to update testcase")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tc.ToJSON(false))
+	c.JSON(http.StatusOK, tc.ToJSON(false))
 }
 
 // HandleCloneTestCase clones a testcase with selected fields.
-// GET /testcase/{id}/clone
-func HandleCloneTestCase(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+// GET /testcase/:id/clone
+func HandleCloneTestCase(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
@@ -69,30 +67,29 @@ func HandleCloneTestCase(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Col(db.ColTestCase).InsertOne(ctx, &clone)
 	if err != nil {
-		http.Error(w, "Failed to clone testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to clone testcase")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(clone.ToJSON(false))
+	c.JSON(http.StatusOK, clone.ToJSON(false))
 }
 
 // HandleDeleteTestCase deletes a testcase and its evidence directory.
-// GET /testcase/{id}/delete
-func HandleDeleteTestCase(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+// GET /testcase/:id/delete
+func HandleDeleteTestCase(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
 	oid, _ := bson.ObjectIDFromHex(id)
 	_, err = db.Col(db.ColTestCase).DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
-		http.Error(w, "Failed to delete testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to delete testcase")
 		return
 	}
 
@@ -100,33 +97,33 @@ func HandleDeleteTestCase(w http.ResponseWriter, r *http.Request) {
 	dir := filepath.Join("files", tc.AssessmentID, tc.ID.Hex())
 	os.RemoveAll(dir)
 
-	w.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
 }
 
 // HandleDeleteEvidence deletes a single evidence file.
-// DELETE /testcase/{id}/evidence/{colour}/{file}
-func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	colour := chi.URLParam(r, "colour")
-	filename := chi.URLParam(r, "file")
-	ctx := r.Context()
+// DELETE /testcase/:id/evidence/:colour/:file
+func HandleDeleteEvidence(c *gin.Context) {
+	id := c.Param("id")
+	colour := c.Param("colour")
+	filename := c.Param("file")
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 
 	if colour != "red" && colour != "blue" {
-		http.Error(w, "Invalid colour", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid colour")
 		return
 	}
 
 	// Blue users cannot delete red files
 	isBlue := user.HasRole(ctx, "Blue") && !user.HasRole(ctx, "Red") && !user.HasRole(ctx, "Admin")
 	if isBlue && colour == "red" {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		c.String(http.StatusForbidden, "Forbidden")
 		return
 	}
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
@@ -153,7 +150,7 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		http.Error(w, "File not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "File not found")
 		return
 	}
 
@@ -162,22 +159,22 @@ func HandleDeleteEvidence(w http.ResponseWriter, r *http.Request) {
 	oid, _ := bson.ObjectIDFromHex(id)
 	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
-		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to update testcase")
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }
 
 // HandleFetchEvidence serves an evidence file.
-// GET /testcase/{id}/evidence/{file}
-func HandleFetchEvidence(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	filename := chi.URLParam(r, "file")
+// GET /testcase/:id/evidence/:file
+func HandleFetchEvidence(c *gin.Context) {
+	id := c.Param("id")
+	filename := c.Param("file")
 
-	tc, err := models.FindTestCase(r.Context(), id)
+	tc, err := models.FindTestCase(c.Request.Context(), id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
@@ -185,35 +182,35 @@ func HandleFetchEvidence(w http.ResponseWriter, r *http.Request) {
 	filePath := filepath.Join("files", tc.AssessmentID, tc.ID.Hex(), safeName)
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		http.Error(w, "File not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "File not found")
 		return
 	}
 
 	// If download query param is present, set as attachment
-	if r.URL.Query().Has("download") {
-		w.Header().Set("Content-Disposition", "attachment; filename=\""+safeName+"\"")
+	if c.Request.URL.Query().Has("download") {
+		c.Header("Content-Disposition", "attachment; filename=\""+safeName+"\"")
 	}
 
-	http.ServeFile(w, r, filePath)
+	http.ServeFile(c.Writer, c.Request, filePath)
 }
 
 // HandleToggleTimer starts or stops the timer on a testcase.
-// GET /testcase/{id}/toggle-timer
-func HandleToggleTimer(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+// GET /testcase/:id/toggle-timer
+func HandleToggleTimer(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 
 	// Blue-only users cannot control the timer
 	isBlue := user.HasRole(ctx, "Blue") && !user.HasRole(ctx, "Red") && !user.HasRole(ctx, "Admin")
 	if isBlue {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		c.String(http.StatusForbidden, "Forbidden")
 		return
 	}
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
@@ -246,12 +243,11 @@ func HandleToggleTimer(w http.ResponseWriter, r *http.Request) {
 	oid, _ := bson.ObjectIDFromHex(id)
 	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
-		http.Error(w, "Failed to update testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to update testcase")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tc.ToJSON(false))
+	c.JSON(http.StatusOK, tc.ToJSON(false))
 }
 
 // sanitizeFilenameSafe provides simple filename sanitization for URL parameters.

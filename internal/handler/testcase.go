@@ -17,61 +17,60 @@ import (
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleNewTestCase creates a new testcase for the given assessment.
-// POST /testcase/{id}/single
-func HandleNewTestCase(w http.ResponseWriter, r *http.Request) {
-	assessmentID := chi.URLParam(r, "id")
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+// POST /testcase/:id/single
+func HandleNewTestCase(c *gin.Context) {
+	assessmentID := c.Param("id")
+	if err := c.Request.ParseForm(); err != nil {
+		c.String(http.StatusBadRequest, "Bad request")
 		return
 	}
 
 	tc := models.TestCase{
 		ID:           bson.NewObjectID(),
 		AssessmentID: assessmentID,
-		Name:         r.FormValue("name"),
-		MitreID:      r.FormValue("mitreid"),
-		Tactic:       r.FormValue("tactic"),
+		Name:         c.Request.FormValue("name"),
+		MitreID:      c.Request.FormValue("mitreid"),
+		Tactic:       c.Request.FormValue("tactic"),
 		State:        "Pending",
 		Visible:      true,
 	}
 
-	_, err := db.Col(db.ColTestCase).InsertOne(r.Context(), &tc)
+	_, err := db.Col(db.ColTestCase).InsertOne(c.Request.Context(), &tc)
 	if err != nil {
-		http.Error(w, "Failed to create testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create testcase")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tc.ToJSON(false))
+	c.JSON(http.StatusOK, tc.ToJSON(false))
 }
 
 // HandleLoadTestCase loads and renders a single testcase page.
-// GET /testcase/{id}
-func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+// GET /testcase/:id
+func HandleLoadTestCase(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
 	assessment, err := models.FindAssessment(ctx, tc.AssessmentID)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	// Blue users cannot see non-visible testcases
 	if !tc.Visible && user.HasRole(ctx, "Blue") && !user.HasRole(ctx, "Red") && !user.HasRole(ctx, "Admin") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		c.String(http.StatusForbidden, "Forbidden")
 		return
 	}
 
@@ -145,7 +144,7 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 	alertSeverities := []string{"Critical", "High", "Medium", "Low", "Informational"}
 	urgencyOptions := []string{"Critical", "High", "Medium", "Low"}
 
-	render.Render(w, r, "testcase.html", pongo2.Context{
+	render.Render(c.Writer, c.Request, "testcase.html", pongo2.Context{
 		"testcase":           tc,
 		"assessment":         assessment,
 		"testcases":          testcases,
@@ -164,29 +163,30 @@ func HandleLoadTestCase(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleSaveTestCase saves changes to an existing testcase.
-// POST /testcase/{id}
-func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	ctx := r.Context()
+// POST /testcase/:id
+func HandleSaveTestCase(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+	if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
+		c.String(http.StatusBadRequest, "Bad request")
 		return
 	}
 
 	tc, err := models.FindTestCase(ctx, id)
 	if err != nil {
-		http.Error(w, "Testcase not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Testcase not found")
 		return
 	}
 
 	assessment, err := models.FindAssessment(ctx, tc.AssessmentID)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
+	r := c.Request
 	isBlue := user.HasRole(ctx, "Blue") && !user.HasRole(ctx, "Red") && !user.HasRole(ctx, "Admin")
 
 	// Direct fields
@@ -304,11 +304,11 @@ func HandleSaveTestCase(w http.ResponseWriter, r *http.Request) {
 	oid, _ := bson.ObjectIDFromHex(id)
 	_, err = db.Col(db.ColTestCase).ReplaceOne(ctx, bson.M{"_id": oid}, tc)
 	if err != nil {
-		http.Error(w, "Failed to save testcase", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to save testcase")
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
 }
 
 // --- Helper functions ---

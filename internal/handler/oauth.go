@@ -16,6 +16,7 @@ import (
 	"github.com/bryanster/purpleops/internal/config"
 	"github.com/bryanster/purpleops/internal/db"
 	"github.com/bryanster/purpleops/internal/models"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"golang.org/x/oauth2"
 )
@@ -44,55 +45,55 @@ func InitOAuth(cfg *config.Config) {
 }
 
 // HandleOAuthLogin redirects the user to the OAuth2 provider's authorization page.
-func HandleOAuthLogin(w http.ResponseWriter, r *http.Request) {
+func HandleOAuthLogin(c *gin.Context) {
 	if oauthConfig == nil {
-		http.Error(w, "OAuth not configured", http.StatusNotFound)
+		c.String(http.StatusNotFound, "OAuth not configured")
 		return
 	}
 
 	// Generate a random state parameter to prevent CSRF.
 	state, err := randomState()
 	if err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Internal error")
 		return
 	}
 
-	sess := auth.GetSession(r)
+	sess := auth.GetSession(c.Request)
 	sess.Values["oauth_state"] = state
-	sess.Save(r, w)
+	sess.Save(c.Request, c.Writer)
 
 	url := oauthConfig.AuthCodeURL(state)
-	http.Redirect(w, r, url, http.StatusFound)
+	c.Redirect(http.StatusFound, url)
 }
 
 // HandleOAuthCallback processes the OAuth2 callback from the provider.
-func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+func HandleOAuthCallback(c *gin.Context) {
 	if oauthConfig == nil {
-		http.Error(w, "OAuth not configured", http.StatusNotFound)
+		c.String(http.StatusNotFound, "OAuth not configured")
 		return
 	}
 
-	sess := auth.GetSession(r)
+	sess := auth.GetSession(c.Request)
 
 	setFlash := func(msg string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = "danger"
-		sess.Save(r, w)
-		http.Redirect(w, r, "/login", http.StatusFound)
+		sess.Save(c.Request, c.Writer)
+		c.Redirect(http.StatusFound, "/login")
 	}
 
 	// Verify state parameter (validate before deleting to avoid race conditions).
 	expectedState, _ := sess.Values["oauth_state"].(string)
-	if expectedState == "" || r.URL.Query().Get("state") != expectedState {
+	if expectedState == "" || c.Request.URL.Query().Get("state") != expectedState {
 		setFlash("OAuth login failed: invalid state parameter.")
 		return
 	}
 	delete(sess.Values, "oauth_state")
-	sess.Save(r, w)
+	sess.Save(c.Request, c.Writer)
 
 	// Check for error from provider.
-	if errParam := r.URL.Query().Get("error"); errParam != "" {
-		desc := r.URL.Query().Get("error_description")
+	if errParam := c.Request.URL.Query().Get("error"); errParam != "" {
+		desc := c.Request.URL.Query().Get("error_description")
 		if desc == "" {
 			desc = errParam
 		}
@@ -101,13 +102,13 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Exchange authorization code for token.
-	code := r.URL.Query().Get("code")
+	code := c.Request.URL.Query().Get("code")
 	if code == "" {
 		setFlash("OAuth login failed: no authorization code received.")
 		return
 	}
 
-	token, err := oauthConfig.Exchange(r.Context(), code)
+	token, err := oauthConfig.Exchange(c.Request.Context(), code)
 	if err != nil {
 		log.Printf("OAuth token exchange failed: %v", err)
 		setFlash("OAuth login failed: could not exchange authorization code.")
@@ -115,7 +116,7 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch user info from the provider.
-	email, username, err := fetchOAuthUserInfo(r, token)
+	email, username, err := fetchOAuthUserInfo(c.Request, token)
 	if err != nil {
 		log.Printf("OAuth user info fetch failed: %v", err)
 		setFlash("OAuth login failed: could not retrieve user information.")
@@ -135,7 +136,7 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Find or create the user.
 	cfg := config.Cfg
-	user, err := models.FindOrCreateSSOUser(r.Context(), email, username, "oauth", cfg.SSODefaultRole, cfg.SSOAutoProvision)
+	user, err := models.FindOrCreateSSOUser(c.Request.Context(), email, username, "oauth", cfg.SSODefaultRole, cfg.SSOAutoProvision)
 	if err != nil {
 		log.Printf("OAuth user provisioning failed: %v", err)
 		setFlash("OAuth login failed: internal error.")
@@ -153,18 +154,18 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Update login tracking.
 	now := time.Now().UTC()
-	db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col(db.ColUser).UpdateOne(c.Request.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
 			"last_login_at":    user.CurrentLoginAt,
 			"last_login_ip":    user.CurrentLoginIP,
 			"current_login_at": &now,
-			"current_login_ip": r.RemoteAddr,
+			"current_login_ip": c.Request.RemoteAddr,
 		},
 		"$inc": bson.M{"login_count": 1},
 	})
 
-	auth.SetSessionUser(w, r, user.ID.Hex())
-	http.Redirect(w, r, "/", http.StatusFound)
+	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
+	c.Redirect(http.StatusFound, "/")
 }
 
 // fetchOAuthUserInfo calls the UserInfo endpoint and extracts email and name.

@@ -8,6 +8,7 @@ import (
 	"github.com/crewjam/saml"
 )
 
+
 // --- samlACSURL ---
 
 func TestSAMLACSURLNotSetByDefault(t *testing.T) {
@@ -24,8 +25,8 @@ func TestHandleSAMLMetadataNotConfigured(t *testing.T) {
 	samlSP = nil
 
 	r := httptest.NewRequest("GET", "/auth/saml/metadata", nil)
-	w := httptest.NewRecorder()
-	HandleSAMLMetadata(w, r)
+	c, w := ginCtx(r)
+	HandleSAMLMetadata(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 when SAML not configured, got %d", w.Code)
@@ -38,8 +39,8 @@ func TestHandleSAMLLoginNotConfigured(t *testing.T) {
 	samlSP = nil
 
 	r := httptest.NewRequest("GET", "/auth/saml/login", nil)
-	w := httptest.NewRecorder()
-	HandleSAMLLogin(w, r)
+	c, w := ginCtx(r)
+	HandleSAMLLogin(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 when SAML not configured, got %d", w.Code)
@@ -52,8 +53,8 @@ func TestHandleSAMLACSNotConfigured(t *testing.T) {
 	samlSP = nil
 
 	r := httptest.NewRequest("POST", "/auth/saml/acs", nil)
-	w := httptest.NewRecorder()
-	HandleSAMLACS(w, r)
+	c, w := ginCtx(r)
+	HandleSAMLACS(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 when SAML not configured, got %d", w.Code)

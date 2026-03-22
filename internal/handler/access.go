@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -23,8 +22,8 @@ type UserDisplay struct {
 
 // HandleAccessPage renders the user management page.
 // GET /manage/access
-func HandleAccessPage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func HandleAccessPage(c *gin.Context) {
+	ctx := c.Request.Context()
 
 	// Load all users.
 	var users []models.User
@@ -57,7 +56,7 @@ func HandleAccessPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	render.Render(w, r, "access.html", pongo2.Context{
+	render.Render(c.Writer, c.Request, "access.html", pongo2.Context{
 		"users":       displayUsers,
 		"assessments": assessments,
 		"roles":       roles,
@@ -66,32 +65,32 @@ func HandleAccessPage(w http.ResponseWriter, r *http.Request) {
 
 // HandleCreateUser creates a new user.
 // POST /manage/access/user
-func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func HandleCreateUser(c *gin.Context) {
+	ctx := c.Request.Context()
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+	if err := c.Request.ParseForm(); err != nil {
+		c.String(http.StatusBadRequest, "Bad request")
 		return
 	}
 
-	email := r.FormValue("email")
-	username := r.FormValue("username")
-	password := r.FormValue("password")
+	email := c.Request.FormValue("email")
+	username := c.Request.FormValue("username")
+	password := c.Request.FormValue("password")
 
 	if email == "" || username == "" || password == "" {
-		http.Error(w, "Email, username, and password are required", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Email, username, and password are required")
 		return
 	}
 
 	// Hash the password.
 	hashed, err := auth.HashPassword(password)
 	if err != nil {
-		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
 
 	// Resolve role names to IDs.
-	roleNames := r.Form["roles"]
+	roleNames := c.Request.Form["roles"]
 	var roleIDs []bson.ObjectID
 	for _, name := range roleNames {
 		role, err := models.FindRole(ctx, name)
@@ -101,7 +100,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve assessment names to IDs.
-	assessmentNames := r.Form["assessments"]
+	assessmentNames := c.Request.Form["assessments"]
 	var assessmentIDs []bson.ObjectID
 	for _, name := range assessmentNames {
 		var a models.Assessment
@@ -123,41 +122,40 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := db.Col(db.ColUser).InsertOne(ctx, &user); err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create user")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user.ToJSON(ctx, false))
+	c.JSON(http.StatusOK, user.ToJSON(ctx, false))
 }
 
 // HandleEditUser updates an existing user.
-// POST /manage/access/user/{id}
-func HandleEditUser(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
+// POST /manage/access/user/:id
+func HandleEditUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
 
 	user, err := models.FindUser(ctx, id)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "User not found")
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+	if err := c.Request.ParseForm(); err != nil {
+		c.String(http.StatusBadRequest, "Bad request")
 		return
 	}
 
 	// Can't rename the built-in admin.
-	newUsername := r.FormValue("username")
+	newUsername := c.Request.FormValue("username")
 	if user.Username == "admin" && newUsername != "admin" {
-		http.Error(w, "Cannot rename the built-in admin user", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Cannot rename the built-in admin user")
 		return
 	}
 
 	updates := bson.M{}
 
-	if email := r.FormValue("email"); email != "" {
+	if email := c.Request.FormValue("email"); email != "" {
 		updates["email"] = email
 	}
 	if newUsername != "" {
@@ -166,17 +164,17 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 
 	// Update password if provided and not blank.
 	// Note: editUserModal fills password with spaces to indicate "unchanged" — trim to detect this.
-	if password := strings.TrimSpace(r.FormValue("password")); password != "" {
+	if password := strings.TrimSpace(c.Request.FormValue("password")); password != "" {
 		hashed, err := auth.HashPassword(password)
 		if err != nil {
-			http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Failed to hash password")
 			return
 		}
 		updates["password"] = hashed
 	}
 
 	// Resolve role names to IDs.
-	roleNames := r.Form["roles"]
+	roleNames := c.Request.Form["roles"]
 	var roleIDs []bson.ObjectID
 	isAdmin := false
 	for _, name := range roleNames {
@@ -191,7 +189,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 
 	// Can't de-admin the built-in admin.
 	if user.Username == "admin" && !isAdmin {
-		http.Error(w, "Cannot remove Admin role from the built-in admin user", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Cannot remove Admin role from the built-in admin user")
 		return
 	}
 
@@ -202,7 +200,7 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 	if isAdmin {
 		updates["assessments"] = []bson.ObjectID{}
 	} else {
-		assessmentNames := r.Form["assessments"]
+		assessmentNames := c.Request.Form["assessments"]
 		var assessmentIDs []bson.ObjectID
 		for _, name := range assessmentNames {
 			var a models.Assessment
@@ -216,46 +214,45 @@ func HandleEditUser(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Col(db.ColUser).UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": updates})
 	if err != nil {
-		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to update user")
 		return
 	}
 
 	// Reload user to return updated data.
 	user, _ = models.FindUser(ctx, id)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user.ToJSON(ctx, false))
+	c.JSON(http.StatusOK, user.ToJSON(ctx, false))
 }
 
 // HandleDeleteUser deletes a user.
-// DELETE /manage/access/user/{id}
-func HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
+// DELETE /manage/access/user/:id
+func HandleDeleteUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
 
 	user, err := models.FindUser(ctx, id)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "User not found")
 		return
 	}
 
 	// Can't delete the built-in admin.
 	if user.Username == "admin" {
-		http.Error(w, "Cannot delete the built-in admin user", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Cannot delete the built-in admin user")
 		return
 	}
 
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	_, err = db.Col(db.ColUser).DeleteOne(ctx, bson.M{"_id": oid})
 	if err != nil {
-		http.Error(w, "Failed to delete user", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to delete user")
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
 }
