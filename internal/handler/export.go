@@ -16,27 +16,27 @@ import (
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/db"
 	"github.com/bryanster/purpleops/internal/models"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleExportAssessment exports testcases as JSON or CSV.
-// GET /assessment/{id}/export/{filetype}
-func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// GET /assessment/:id/export/:filetype
+func HandleExportAssessment(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
-	id := chi.URLParam(r, "id")
-	filetype := chi.URLParam(r, "filetype")
+	id := c.Param("id")
+	filetype := c.Param("filetype")
 
 	_, err := models.FindAssessment(ctx, id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
-		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to load testcases")
 		return
 	}
 
@@ -52,7 +52,7 @@ func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
 
 	filesDir := filepath.Join("files", id)
 	if err := os.MkdirAll(filesDir, DirPerm); err != nil {
-		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create directory")
 		return
 	}
 
@@ -61,29 +61,29 @@ func HandleExportAssessment(w http.ResponseWriter, r *http.Request) {
 		outPath := filepath.Join(filesDir, "export.json")
 		data, err := json.MarshalIndent(records, "", "  ")
 		if err != nil {
-			http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Failed to encode JSON")
 			return
 		}
 		if err := os.WriteFile(outPath, data, FilePerm); err != nil {
-			http.Error(w, "Failed to write file", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Failed to write file")
 			return
 		}
-		w.Header().Set("Content-Disposition", `attachment; filename="export.json"`)
-		w.Header().Set("Content-Type", "application/json")
-		http.ServeFile(w, r, outPath)
+		c.Header("Content-Disposition", `attachment; filename="export.json"`)
+		c.Header("Content-Type", "application/json")
+		http.ServeFile(c.Writer, c.Request, outPath)
 
 	case "csv":
 		outPath := filepath.Join(filesDir, "export.csv")
 		if err := writeCSVExport(outPath, records); err != nil {
-			http.Error(w, "Failed to write CSV", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Failed to write CSV")
 			return
 		}
-		w.Header().Set("Content-Disposition", `attachment; filename="export.csv"`)
-		w.Header().Set("Content-Type", "text/csv")
-		http.ServeFile(w, r, outPath)
+		c.Header("Content-Disposition", `attachment; filename="export.csv"`)
+		c.Header("Content-Type", "text/csv")
+		http.ServeFile(c.Writer, c.Request, outPath)
 
 	default:
-		http.Error(w, "Invalid filetype, must be json or csv", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid filetype, must be json or csv")
 	}
 }
 
@@ -163,38 +163,38 @@ func flattenValue(v interface{}) string {
 }
 
 // HandleExportCampaign exports campaign-relevant fields only.
-// GET /assessment/{id}/export/campaign
-func HandleExportCampaign(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// GET /assessment/:id/export/campaign
+func HandleExportCampaign(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
-	id := chi.URLParam(r, "id")
+	id := c.Param("id")
 
 	data, err := buildCampaignExport(ctx, id, user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	filesDir := filepath.Join("files", id)
 	if err := os.MkdirAll(filesDir, DirPerm); err != nil {
-		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create directory")
 		return
 	}
 
 	outPath := filepath.Join(filesDir, "campaign.json")
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to encode JSON")
 		return
 	}
 	if err := os.WriteFile(outPath, jsonData, FilePerm); err != nil {
-		http.Error(w, "Failed to write file", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to write file")
 		return
 	}
 
-	w.Header().Set("Content-Disposition", `attachment; filename="campaign.json"`)
-	w.Header().Set("Content-Type", "application/json")
-	http.ServeFile(w, r, outPath)
+	c.Header("Content-Disposition", `attachment; filename="campaign.json"`)
+	c.Header("Content-Type", "application/json")
+	http.ServeFile(c.Writer, c.Request, outPath)
 }
 
 // buildCampaignExport builds the campaign data for an assessment.
@@ -223,38 +223,38 @@ func buildCampaignExport(ctx context.Context, id string, user *models.User) ([]m
 }
 
 // HandleExportTestcases exports testcase templates with provider field.
-// GET /assessment/{id}/export/templates
-func HandleExportTestcases(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// GET /assessment/:id/export/templates
+func HandleExportTestcases(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
-	id := chi.URLParam(r, "id")
+	id := c.Param("id")
 
 	data, err := buildTestcaseTemplatesExport(ctx, id, user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	filesDir := filepath.Join("files", id)
 	if err := os.MkdirAll(filesDir, DirPerm); err != nil {
-		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create directory")
 		return
 	}
 
 	outPath := filepath.Join(filesDir, "testcases.json")
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to encode JSON")
 		return
 	}
 	if err := os.WriteFile(outPath, jsonData, FilePerm); err != nil {
-		http.Error(w, "Failed to write file", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to write file")
 		return
 	}
 
-	w.Header().Set("Content-Disposition", `attachment; filename="testcases.json"`)
-	w.Header().Set("Content-Type", "application/json")
-	http.ServeFile(w, r, outPath)
+	c.Header("Content-Disposition", `attachment; filename="testcases.json"`)
+	c.Header("Content-Type", "application/json")
+	http.ServeFile(c.Writer, c.Request, outPath)
 }
 
 // buildTestcaseTemplatesExport builds campaign export data with provider field added.
@@ -284,19 +284,19 @@ func buildTestcaseTemplatesExport(ctx context.Context, id string, user *models.U
 }
 
 // HandleExportNavigator exports and serves the MITRE ATT&CK Navigator layer.
-// GET /assessment/{id}/export/navigator
-func HandleExportNavigator(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// GET /assessment/:id/export/navigator
+func HandleExportNavigator(c *gin.Context) {
+	id := c.Param("id")
 
-	outPath, err := ExportNavigatorFile(id, r)
+	outPath, err := ExportNavigatorFile(id, c.Request)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Disposition", `attachment; filename="navigator.json"`)
-	w.Header().Set("Content-Type", "application/json")
-	http.ServeFile(w, r, outPath)
+	c.Header("Content-Disposition", `attachment; filename="navigator.json"`)
+	c.Header("Content-Type", "application/json")
+	http.ServeFile(c.Writer, c.Request, outPath)
 }
 
 // ExportNavigatorFile generates the MITRE ATT&CK Navigator layer JSON file.
@@ -415,21 +415,21 @@ func ExportNavigatorFile(id string, r *http.Request) (string, error) {
 }
 
 // HandleExportEntire exports the full assessment as a ZIP archive.
-// GET /assessment/{id}/export/entire
-func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// GET /assessment/:id/export/entire
+func HandleExportEntire(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
-	id := chi.URLParam(r, "id")
+	id := c.Param("id")
 
 	assessment, err := models.FindAssessment(ctx, id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	testcases, err := models.GetTestCases(ctx, id)
 	if err != nil {
-		http.Error(w, "Failed to load testcases", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to load testcases")
 		return
 	}
 
@@ -437,7 +437,7 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 
 	filesDir := filepath.Join("files", id)
 	if err := os.MkdirAll(filesDir, DirPerm); err != nil {
-		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create directory")
 		return
 	}
 
@@ -451,14 +451,14 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 	}
 	csvPath := filepath.Join(filesDir, "export.csv")
 	if err := writeCSVExport(csvPath, csvRecords); err != nil {
-		http.Error(w, "Failed to write CSV", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to write CSV")
 		return
 	}
 
 	// Run testcase templates export.
 	templateRecords, err := buildTestcaseTemplatesExport(ctx, id, user)
 	if err != nil {
-		http.Error(w, "Failed to build testcase templates", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to build testcase templates")
 		return
 	}
 	testcasesPath := filepath.Join(filesDir, "testcases.json")
@@ -467,13 +467,13 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 		slog.Error("export entire: failed to marshal testcases", "err", err)
 	}
 	if err := os.WriteFile(testcasesPath, testcasesData, FilePerm); err != nil {
-		http.Error(w, "Failed to write testcases export", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to write testcases export")
 		return
 	}
 
 	// Run navigator export.
-	if _, err := ExportNavigatorFile(id, r); err != nil {
-		http.Error(w, "Failed to export navigator", http.StatusInternalServerError)
+	if _, err := ExportNavigatorFile(id, c.Request); err != nil {
+		c.String(http.StatusInternalServerError, "Failed to export navigator")
 		return
 	}
 
@@ -484,7 +484,7 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 		slog.Error("export entire: failed to marshal assessment meta", "err", err)
 	}
 	if err := os.WriteFile(metaPath, metaData, FilePerm); err != nil {
-		http.Error(w, "Failed to write meta export", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to write meta export")
 		return
 	}
 
@@ -494,13 +494,13 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 		// Copy to tmp dir and remove non-visible testcase evidence directories.
 		tmpDir, err := os.MkdirTemp("", "purpleops-export-*")
 		if err != nil {
-			http.Error(w, "Failed to create temp directory", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Failed to create temp directory")
 			return
 		}
 		defer os.RemoveAll(tmpDir)
 
 		if err := copyDir(filesDir, tmpDir); err != nil {
-			http.Error(w, "Failed to copy files", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Failed to copy files")
 			return
 		}
 
@@ -518,14 +518,14 @@ func HandleExportEntire(w http.ResponseWriter, r *http.Request) {
 
 	zipPath := filepath.Join(os.TempDir(), assessment.Name+".zip")
 	if err := createZip(zipPath, zipDir); err != nil {
-		http.Error(w, "Failed to create ZIP", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create ZIP")
 		return
 	}
 	defer os.Remove(zipPath)
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, assessment.Name))
-	w.Header().Set("Content-Type", "application/zip")
-	http.ServeFile(w, r, zipPath)
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, assessment.Name))
+	c.Header("Content-Type", "application/zip")
+	http.ServeFile(c.Writer, c.Request, zipPath)
 }
 
 // createZip creates a ZIP archive of the given directory.

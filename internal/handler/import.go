@@ -14,27 +14,27 @@ import (
 
 	"github.com/bryanster/purpleops/internal/db"
 	"github.com/bryanster/purpleops/internal/models"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleImportTemplate creates testcases from testcase templates.
-// POST /assessment/{id}/import/template
-func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
+// POST /assessment/:id/import/template
+func HandleImportTemplate(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
 
 	_, err := models.FindAssessment(ctx, id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	var body struct {
 		IDs []string `json:"ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	if err := json.NewDecoder(c.Request.Body).Decode(&body); err != nil {
+		c.String(http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -86,26 +86,25 @@ func HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
 		results = append(results, tc.ToJSON(false))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	c.JSON(http.StatusOK, results)
 }
 
 // HandleImportNavigator imports testcases from a MITRE ATT&CK Navigator layer JSON file.
-// POST /assessment/{id}/import/navigator
-func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
+// POST /assessment/:id/import/navigator
+func HandleImportNavigator(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
 
 	_, err := models.FindAssessment(ctx, id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	// Parse the uploaded file.
-	file, _, err := r.FormFile("file")
+	file, _, err := c.Request.FormFile("file")
 	if err != nil {
-		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "No file uploaded")
 		return
 	}
 	defer file.Close()
@@ -117,7 +116,7 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		} `json:"techniques"`
 	}
 	if err := json.NewDecoder(file).Decode(&layer); err != nil {
-		http.Error(w, "Invalid navigator JSON", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid navigator JSON")
 		return
 	}
 
@@ -195,8 +194,7 @@ func HandleImportNavigator(w http.ResponseWriter, r *http.Request) {
 		results = append(results, tc.ToJSON(false))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	c.JSON(http.StatusOK, results)
 }
 
 // toTitleCase converts a hyphen-separated lowercase string to Title Case.
@@ -212,28 +210,28 @@ func toTitleCase(s string) string {
 }
 
 // HandleImportCampaign imports testcases from a campaign JSON file.
-// POST /assessment/{id}/import/campaign
-func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
+// POST /assessment/:id/import/campaign
+func HandleImportCampaign(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
 
 	assessment, err := models.FindAssessment(ctx, id)
 	if err != nil {
-		http.Error(w, "Assessment not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Assessment not found")
 		return
 	}
 
 	// Parse the uploaded file.
-	file, _, err := r.FormFile("file")
+	file, _, err := c.Request.FormFile("file")
 	if err != nil {
-		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "No file uploaded")
 		return
 	}
 	defer file.Close()
 
 	var entries []map[string]interface{}
 	if err := json.NewDecoder(file).Decode(&entries); err != nil {
-		http.Error(w, "Invalid campaign JSON", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid campaign JSON")
 		return
 	}
 
@@ -288,8 +286,7 @@ func HandleImportCampaign(w http.ResponseWriter, r *http.Request) {
 		results = append(results, tc.ToJSON(false))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	c.JSON(http.StatusOK, results)
 }
 
 // resolveMultiField resolves tool/tag names to IDs, creating new entries on the assessment if needed.
@@ -327,13 +324,13 @@ func resolveMultiField(ctx context.Context, assessment *models.Assessment, field
 
 // HandleImportEntire imports a full assessment from a ZIP archive.
 // POST /assessment/import/entire
-func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func HandleImportEntire(c *gin.Context) {
+	ctx := c.Request.Context()
 
 	// Parse the uploaded ZIP file.
-	file, _, err := r.FormFile("file")
+	file, _, err := c.Request.FormFile("file")
 	if err != nil {
-		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "No file uploaded")
 		return
 	}
 	defer file.Close()
@@ -341,21 +338,21 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	// Save uploaded file to a temporary location.
 	tmpFile, err := os.CreateTemp("", "purpleops-import-*.zip")
 	if err != nil {
-		http.Error(w, "Failed to create temp file", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create temp file")
 		return
 	}
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
 	if _, err := io.Copy(tmpFile, file); err != nil {
-		http.Error(w, "Failed to save uploaded file", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to save uploaded file")
 		return
 	}
 
 	// Open the ZIP.
 	zipReader, err := zip.OpenReader(tmpFile.Name())
 	if err != nil {
-		http.Error(w, "Invalid ZIP file", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid ZIP file")
 		return
 	}
 	defer zipReader.Close()
@@ -365,7 +362,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	filesDir := filepath.Join("files", newAssessmentID.Hex())
 	tmpExtractDir := filepath.Join(filesDir, "tmp")
 	if err := os.MkdirAll(tmpExtractDir, DirPerm); err != nil {
-		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create directory")
 		return
 	}
 
@@ -402,13 +399,13 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	metaPath := filepath.Join(tmpExtractDir, "meta.json")
 	metaData, err := os.ReadFile(metaPath)
 	if err != nil {
-		http.Error(w, "meta.json not found in archive", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "meta.json not found in archive")
 		return
 	}
 
 	var meta map[string]interface{}
 	if err := json.Unmarshal(metaData, &meta); err != nil {
-		http.Error(w, "Invalid meta.json", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid meta.json")
 		return
 	}
 
@@ -426,7 +423,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := db.Col(db.ColAssessment).InsertOne(ctx, &assessment); err != nil {
-		http.Error(w, "Failed to create assessment", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create assessment")
 		return
 	}
 
@@ -435,14 +432,13 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	exportData, err := os.ReadFile(exportPath)
 	if err != nil {
 		// No testcases to import, return the assessment.
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(assessment.ToJSON(false))
+		c.JSON(http.StatusOK, assessment.ToJSON(false))
 		return
 	}
 
 	var testcaseEntries []map[string]interface{}
 	if err := json.Unmarshal(exportData, &testcaseEntries); err != nil {
-		http.Error(w, "Invalid export.json", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid export.json")
 		return
 	}
 
@@ -572,8 +568,7 @@ func HandleImportEntire(w http.ResponseWriter, r *http.Request) {
 	// Clean up the tmp extraction directory.
 	os.RemoveAll(tmpExtractDir)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	c.JSON(http.StatusOK, results)
 }
 
 // rebuildMultiField recreates embedded document references on the assessment for imported testcases.

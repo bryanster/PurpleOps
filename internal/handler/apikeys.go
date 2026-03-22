@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -14,17 +13,17 @@ import (
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/bryanster/purpleops/internal/render"
 	"github.com/flosch/pongo2/v6"
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HandleAPIKeysPage renders the API key management page for the current user.
 // GET /api-keys
-func HandleAPIKeysPage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func HandleAPIKeysPage(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		c.String(http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
@@ -67,7 +66,7 @@ func HandleAPIKeysPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	render.Render(w, r, "apikeys.html", pongo2.Context{
+	render.Render(c.Writer, c.Request, "apikeys.html", pongo2.Context{
 		"api_keys":    displayKeys,
 		"roles":       allowedRoles,
 		"assessments": allowedAssessments,
@@ -76,22 +75,22 @@ func HandleAPIKeysPage(w http.ResponseWriter, r *http.Request) {
 
 // HandleCreateAPIKey creates a new API key for the authenticated user.
 // POST /api-keys
-func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func HandleCreateAPIKey(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		c.String(http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+	if err := c.Request.ParseForm(); err != nil {
+		c.String(http.StatusBadRequest, "Bad request")
 		return
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
+	name := strings.TrimSpace(c.Request.FormValue("name"))
 	if name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Name is required")
 		return
 	}
 
@@ -101,7 +100,7 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		userRoleSet[rid] = struct{}{}
 	}
 
-	roleNames := r.Form["roles"]
+	roleNames := c.Request.Form["roles"]
 	var roleIDs []bson.ObjectID
 	for _, rname := range roleNames {
 		role, err := models.FindRole(ctx, rname)
@@ -109,7 +108,7 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, ok := userRoleSet[role.ID]; !ok {
-			http.Error(w, "Cannot grant role not assigned to your account", http.StatusForbidden)
+			c.String(http.StatusForbidden, "Cannot grant role not assigned to your account")
 			return
 		}
 		roleIDs = append(roleIDs, role.ID)
@@ -121,7 +120,7 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		userAssessmentSet[aid] = struct{}{}
 	}
 
-	assessmentIDs := r.Form["assessments"]
+	assessmentIDs := c.Request.Form["assessments"]
 	var allowedAssessmentIDs []bson.ObjectID
 	for _, hexID := range assessmentIDs {
 		oid, err := bson.ObjectIDFromHex(hexID)
@@ -129,7 +128,7 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, ok := userAssessmentSet[oid]; !ok {
-			http.Error(w, "Cannot grant access to assessment not assigned to your account", http.StatusForbidden)
+			c.String(http.StatusForbidden, "Cannot grant access to assessment not assigned to your account")
 			return
 		}
 		allowedAssessmentIDs = append(allowedAssessmentIDs, oid)
@@ -138,7 +137,7 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	// Generate a cryptographically random key: prefix "pops_" + 32 random bytes hex-encoded.
 	rawBytes := make([]byte, 32)
 	if _, err := rand.Read(rawBytes); err != nil {
-		http.Error(w, "Failed to generate key", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
 	rawKey := "pops_" + hex.EncodeToString(rawBytes)
@@ -162,16 +161,15 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	col := db.Col(db.ColAPIKey)
 	if col == nil {
-		http.Error(w, "Failed to create API key", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create API key")
 		return
 	}
 	if _, err := col.InsertOne(ctx, &apiKey); err != nil {
-		http.Error(w, "Failed to create API key", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to create API key")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, map[string]interface{}{
 		"id":     apiKey.ID.Hex(),
 		"name":   apiKey.Name,
 		"key":    rawKey,
@@ -180,32 +178,32 @@ func HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleDeleteAPIKey revokes an API key owned by the current user.
-// DELETE /api-keys/{id}
-func HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// DELETE /api-keys/:id
+func HandleDeleteAPIKey(c *gin.Context) {
+	ctx := c.Request.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		c.String(http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
-	id := chi.URLParam(r, "id")
+	id := c.Param("id")
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
 	// Only delete keys owned by the current user.
 	result, err := db.Col(db.ColAPIKey).DeleteOne(ctx, bson.M{"_id": oid, "user_id": user.ID})
 	if err != nil {
-		http.Error(w, "Failed to delete API key", http.StatusInternalServerError)
+		c.String(http.StatusInternalServerError, "Failed to delete API key")
 		return
 	}
 	if result.DeletedCount == 0 {
-		http.Error(w, "Not found", http.StatusNotFound)
+		c.String(http.StatusNotFound, "Not found")
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	c.Status(http.StatusOK)
 }

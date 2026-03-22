@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/bryanster/purpleops/internal/auth"
@@ -12,9 +13,7 @@ import (
 	"github.com/bryanster/purpleops/internal/handler"
 	secmw "github.com/bryanster/purpleops/internal/middleware"
 	"github.com/bryanster/purpleops/internal/render"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/httprate"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/csrf"
 )
 
@@ -37,12 +36,19 @@ func main() {
 		log.Println("SAML SSO enabled")
 	}
 
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	if !cfg.Debug {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
 	r.Use(secmw.SecurityHeaders)
 
-	// CSRF protection for all routes except SAML ACS and navigator JSON.
+	// Static files (no CSRF needed).
+	r.Static("/static", "./static")
+
+	// CSRF protection setup.
 	sameSiteMode := csrf.SameSiteStrictMode
 	if ssoEnabled {
 		sameSiteMode = csrf.SameSiteLaxMode
@@ -54,108 +60,105 @@ func main() {
 		csrf.Path("/"),
 	)
 
-	// Static files (no CSRF needed)
-	fileServer := http.FileServer(http.Dir("static"))
-	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
+	// CSRF-exempt routes: external callbacks and public API.
+	r.POST("/auth/saml/acs", handler.HandleSAMLACS)
+	r.GET("/assessment/:id/navigator.json", handler.HandleNavigatorJSON)
 
-	// CSRF-exempt routes: external callbacks and public API
-	r.Post("/auth/saml/acs", handler.HandleSAMLACS)
-	r.Get("/assessment/{id}/navigator.json", handler.HandleNavigatorJSON)
+	// All other routes get CSRF protection.
+	csrfGroup := r.Group("/")
+	csrfGroup.Use(adaptMiddleware(csrfMiddleware))
+	{
+		// Auth routes (no auth required).
+		csrfGroup.GET("/login", handler.HandleLogin)
+		csrfGroup.POST("/login", rateLimitByIP(10, time.Minute), handler.HandleLoginPost)
+		csrfGroup.GET("/logout", handler.HandleLogout)
 
-	// All other routes get CSRF protection
-	r.Group(func(r chi.Router) {
-		r.Use(csrfMiddleware)
+		// OAuth SSO routes.
+		csrfGroup.GET("/auth/oauth/login", handler.HandleOAuthLogin)
+		csrfGroup.GET("/auth/oauth/callback", handler.HandleOAuthCallback)
 
-		// Auth routes (no auth required, rate limited)
-		r.Get("/login", handler.HandleLogin)
-		r.With(httprate.LimitByIP(10, time.Minute)).Post("/login", handler.HandleLoginPost)
-		r.Get("/logout", handler.HandleLogout)
+		// SAML SSO routes (login + metadata only; ACS is exempt above).
+		csrfGroup.GET("/auth/saml/login", handler.HandleSAMLLogin)
+		csrfGroup.GET("/auth/saml/metadata", handler.HandleSAMLMetadata)
 
-		// OAuth SSO routes
-		r.Get("/auth/oauth/login", handler.HandleOAuthLogin)
-		r.Get("/auth/oauth/callback", handler.HandleOAuthCallback)
+		// All authenticated routes.
+		authed := csrfGroup.Group("/")
+		authed.Use(auth.AuthRequired)
+		{
+			// Home / index.
+			authed.GET("/", handler.HandleIndex)
+			authed.GET("/index", handler.HandleIndex)
 
-		// SAML SSO routes (login + metadata only; ACS is exempt above)
-		r.Get("/auth/saml/login", handler.HandleSAMLLogin)
-		r.Get("/auth/saml/metadata", handler.HandleSAMLMetadata)
+			// Password management.
+			authed.GET("/password/change", handler.HandlePasswordChange)
+			authed.POST("/password/change", handler.HandlePasswordChangePost)
+			authed.GET("/password/changed", handler.HandlePasswordChanged)
 
-		// All authenticated routes
-		r.Group(func(r chi.Router) {
-			r.Use(auth.AuthRequired)
+			// MFA routes.
+			authed.GET("/mfa/register", handler.HandleMFARegister)
+			authed.POST("/mfa/register", handler.HandleMFARegisterPost)
+			authed.GET("/mfa/verify", handler.HandleMFAVerify)
+			authed.POST("/mfa/verify", rateLimitByIP(10, time.Minute), handler.HandleMFAVerifyPost)
 
-			// Home / index
-			r.Get("/", handler.HandleIndex)
-			r.Get("/index", handler.HandleIndex)
+			// Assessment import entire (no assessment ID in URL; register before :id group).
+			authed.POST("/assessment/import/entire", handler.HandleImportEntire)
 
-			// Password management
-			r.Get("/password/change", handler.HandlePasswordChange)
-			r.Post("/password/change", handler.HandlePasswordChangePost)
-			r.Get("/password/changed", handler.HandlePasswordChanged)
+			// Assessment CRUD.
+			authed.POST("/assessment", handler.HandleNewAssessment)
 
-			// MFA routes (verify POST is rate limited)
-			r.Get("/mfa/register", handler.HandleMFARegister)
-			r.Post("/mfa/register", handler.HandleMFARegisterPost)
-			r.Get("/mfa/verify", handler.HandleMFAVerify)
-			r.With(httprate.LimitByIP(10, time.Minute)).Post("/mfa/verify", handler.HandleMFAVerifyPost)
+			assessmentGroup := authed.Group("/assessment/:id")
+			assessmentGroup.Use(auth.UserAssignedAssessment)
+			{
+				assessmentGroup.GET("/", handler.HandleLoadAssessment)
+				assessmentGroup.POST("/", handler.HandleEditAssessment)
+				assessmentGroup.DELETE("/", handler.HandleDeleteAssessment)
 
-			// Assessment CRUD
-			r.Post("/assessment", handler.HandleNewAssessment)
-			r.Route("/assessment/{id}", func(r chi.Router) {
-				r.Use(auth.UserAssignedAssessment)
-				r.Get("/", handler.HandleLoadAssessment)
-				r.Post("/", handler.HandleEditAssessment)
-				r.Delete("/", handler.HandleDeleteAssessment)
+				// Assessment utils.
+				assessmentGroup.POST("/multi/:field", handler.HandleAssessmentMulti)
+				assessmentGroup.GET("/navigator", handler.HandleAssessmentNavigator)
+				assessmentGroup.GET("/stats", handler.HandleAssessmentStats)
+				assessmentGroup.GET("/assessment_hexagons.svg", handler.HandleAssessmentHexagons)
 
-				// Assessment utils
-				r.Post("/multi/{field}", handler.HandleAssessmentMulti)
-				r.Get("/navigator", handler.HandleAssessmentNavigator)
-				r.Get("/stats", handler.HandleAssessmentStats)
-				r.Get("/assessment_hexagons.svg", handler.HandleAssessmentHexagons)
+				// Assessment export.
+				assessmentGroup.GET("/export/:filetype", handler.HandleExportAssessment)
+				assessmentGroup.GET("/export/campaign", handler.HandleExportCampaign)
+				assessmentGroup.GET("/export/templates", handler.HandleExportTestcases)
+				assessmentGroup.GET("/export/navigator", handler.HandleExportNavigator)
+				assessmentGroup.GET("/export/entire", handler.HandleExportEntire)
 
-				// Assessment export
-				r.Get("/export/{filetype}", handler.HandleExportAssessment)
-				r.Get("/export/campaign", handler.HandleExportCampaign)
-				r.Get("/export/templates", handler.HandleExportTestcases)
-				r.Get("/export/navigator", handler.HandleExportNavigator)
-				r.Get("/export/entire", handler.HandleExportEntire)
+				// Assessment import.
+				assessmentGroup.POST("/import/template", handler.HandleImportTemplate)
+				assessmentGroup.POST("/import/navigator", handler.HandleImportNavigator)
+				assessmentGroup.POST("/import/campaign", handler.HandleImportCampaign)
+			}
 
-				// Assessment import
-				r.Post("/import/template", handler.HandleImportTemplate)
-				r.Post("/import/navigator", handler.HandleImportNavigator)
-				r.Post("/import/campaign", handler.HandleImportCampaign)
-			})
+			// Testcase routes.
+			testcaseGroup := authed.Group("/testcase/:id")
+			testcaseGroup.Use(auth.UserAssignedAssessment)
+			{
+				testcaseGroup.GET("/", handler.HandleLoadTestCase)
+				testcaseGroup.POST("/", handler.HandleSaveTestCase)
+				testcaseGroup.POST("/single", handler.HandleNewTestCase)
+				testcaseGroup.GET("/toggle-visibility", handler.HandleToggleVisibility)
+				testcaseGroup.GET("/toggle-timer", handler.HandleToggleTimer)
+				testcaseGroup.GET("/clone", handler.HandleCloneTestCase)
+				testcaseGroup.GET("/delete", handler.HandleDeleteTestCase)
+				testcaseGroup.DELETE("/evidence/:colour/:file", handler.HandleDeleteEvidence)
+				testcaseGroup.GET("/evidence/:file", handler.HandleFetchEvidence)
+			}
 
-			// Assessment import entire (no assessment ID in URL)
-			r.Post("/assessment/import/entire", handler.HandleImportEntire)
+			// Access control (admin only).
+			authed.GET("/manage/access", handler.HandleAccessPage)
+			authed.POST("/manage/access/user", handler.HandleCreateUser)
+			authed.POST("/manage/access/user/:id", handler.HandleEditUser)
+			authed.DELETE("/manage/access/user/:id", handler.HandleDeleteUser)
 
-			// Testcase routes
-			r.Route("/testcase/{id}", func(r chi.Router) {
-				r.Use(auth.UserAssignedAssessment)
-				r.Get("/", handler.HandleLoadTestCase)
-				r.Post("/", handler.HandleSaveTestCase)
-				r.Post("/single", handler.HandleNewTestCase)
-				r.Get("/toggle-visibility", handler.HandleToggleVisibility)
-				r.Get("/toggle-timer", handler.HandleToggleTimer)
-				r.Get("/clone", handler.HandleCloneTestCase)
-				r.Get("/delete", handler.HandleDeleteTestCase)
-				r.Delete("/evidence/{colour}/{file}", handler.HandleDeleteEvidence)
-				r.Get("/evidence/{file}", handler.HandleFetchEvidence)
-			})
-
-			// Access control (admin only)
-			r.Route("/manage/access", func(r chi.Router) {
-				r.Get("/", handler.HandleAccessPage)
-				r.Post("/user", handler.HandleCreateUser)
-				r.Post("/user/{id}", handler.HandleEditUser)
-				r.Delete("/user/{id}", handler.HandleDeleteUser)
-			})
-
-			// API key management (any authenticated user, for their own keys)
-			r.Get("/api-keys", handler.HandleAPIKeysPage)
-			r.Post("/api-keys", handler.HandleCreateAPIKey)
-			r.Delete("/api-keys/{id}", handler.HandleDeleteAPIKey)
-		})
-	})
+			// API key management.
+			authed.GET("/api-keys", handler.HandleAPIKeysPage)
+			authed.POST("/api-keys", handler.HandleCreateAPIKey)
+			authed.DELETE("/api-keys/:id", handler.HandleDeleteAPIKey)
+		}
+	}
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	log.Printf("PurpleOps starting on %s", addr)
@@ -167,4 +170,61 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
+}
+
+// adaptMiddleware wraps a standard net/http middleware for use with gin.
+func adaptMiddleware(m func(http.Handler) http.Handler) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c.Request = r
+			c.Next()
+		})).ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+// rateLimitByIP returns a gin.HandlerFunc that limits to n requests per window per IP.
+// Uses a simple fixed-window counter.
+func rateLimitByIP(n int, per time.Duration) gin.HandlerFunc {
+	type window struct {
+		count    int
+		windowAt time.Time
+	}
+	var mu sync.Mutex
+	windows := make(map[string]*window)
+
+	// Cleanup goroutine: remove stale entries.
+	go func() {
+		for range time.Tick(per) {
+			mu.Lock()
+			cutoff := time.Now().Add(-per)
+			for ip, w := range windows {
+				if w.windowAt.Before(cutoff) {
+					delete(windows, ip)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
+
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		now := time.Now()
+
+		mu.Lock()
+		w, ok := windows[ip]
+		if !ok || now.Sub(w.windowAt) >= per {
+			w = &window{windowAt: now}
+			windows[ip] = w
+		}
+		w.count++
+		count := w.count
+		mu.Unlock()
+
+		if count > n {
+			c.String(http.StatusTooManyRequests, "Too many requests")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }

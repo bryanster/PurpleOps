@@ -8,8 +8,17 @@ import (
 
 	"github.com/bryanster/purpleops/internal/auth"
 	"github.com/bryanster/purpleops/internal/config"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 )
+
+// ginCtx wraps an http.Request in a gin.Context for testing.
+func ginCtx(r *http.Request) (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = r
+	return c, w
+}
 
 func initTestSession() {
 	auth.InitSessions("test-secret-key-for-oauth", true, true)
@@ -68,8 +77,8 @@ func TestHandleOAuthLoginNotConfigured(t *testing.T) {
 	oauthConfig = nil
 
 	r := httptest.NewRequest("GET", "/auth/oauth/login", nil)
-	w := httptest.NewRecorder()
-	HandleOAuthLogin(w, r)
+	c, w := ginCtx(r)
+	HandleOAuthLogin(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 when OAuth not configured, got %d", w.Code)
@@ -90,8 +99,8 @@ func TestHandleOAuthLoginRedirects(t *testing.T) {
 	}
 
 	r := httptest.NewRequest("GET", "/auth/oauth/login", nil)
-	w := httptest.NewRecorder()
-	HandleOAuthLogin(w, r)
+	c, w := ginCtx(r)
+	HandleOAuthLogin(c)
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected 302 redirect, got %d", w.Code)
@@ -121,8 +130,8 @@ func TestHandleOAuthCallbackNotConfigured(t *testing.T) {
 	oauthConfig = nil
 
 	r := httptest.NewRequest("GET", "/auth/oauth/callback", nil)
-	w := httptest.NewRecorder()
-	HandleOAuthCallback(w, r)
+	c, w := ginCtx(r)
+	HandleOAuthCallback(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404 when OAuth not configured, got %d", w.Code)
@@ -142,13 +151,13 @@ func TestHandleOAuthCallbackInvalidState(t *testing.T) {
 
 	// Set a state in session but send a different one in the request.
 	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=wrong-state&code=test-code", nil)
-	w := httptest.NewRecorder()
+	c, w := ginCtx(r)
 
 	sess := auth.GetSession(r)
 	sess.Values["oauth_state"] = "correct-state"
 	sess.Save(r, w)
 
-	HandleOAuthCallback(w, r)
+	HandleOAuthCallback(c)
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)
@@ -172,9 +181,9 @@ func TestHandleOAuthCallbackMissingState(t *testing.T) {
 
 	// No state in session at all.
 	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=some-state&code=test-code", nil)
-	w := httptest.NewRecorder()
+	c, w := ginCtx(r)
 
-	HandleOAuthCallback(w, r)
+	HandleOAuthCallback(c)
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)
@@ -192,23 +201,14 @@ func TestHandleOAuthCallbackProviderError(t *testing.T) {
 		},
 	}
 
-	r := httptest.NewRequest("GET", "/auth/oauth/callback?error=access_denied&error_description=User+denied+access", nil)
-	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state&error=access_denied&error_description=User+denied+access", nil)
+	c, w := ginCtx(r)
 
-	// Set valid state so we get past state check.
 	sess := auth.GetSession(r)
 	sess.Values["oauth_state"] = "valid-state"
 	sess.Save(r, w)
 
-	// Re-create request with state matching.
-	r = httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state&error=access_denied&error_description=User+denied+access", nil)
-	w = httptest.NewRecorder()
-
-	sess = auth.GetSession(r)
-	sess.Values["oauth_state"] = "valid-state"
-	sess.Save(r, w)
-
-	HandleOAuthCallback(w, r)
+	HandleOAuthCallback(c)
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)
@@ -227,13 +227,13 @@ func TestHandleOAuthCallbackNoCode(t *testing.T) {
 	}
 
 	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state", nil)
-	w := httptest.NewRecorder()
+	c, w := ginCtx(r)
 
 	sess := auth.GetSession(r)
 	sess.Values["oauth_state"] = "valid-state"
 	sess.Save(r, w)
 
-	HandleOAuthCallback(w, r)
+	HandleOAuthCallback(c)
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)

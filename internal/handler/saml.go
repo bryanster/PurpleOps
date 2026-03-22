@@ -17,6 +17,7 @@ import (
 	"github.com/bryanster/purpleops/internal/models"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -87,46 +88,46 @@ func InitSAML(cfg *config.Config) error {
 }
 
 // HandleSAMLMetadata serves the SP metadata XML.
-func HandleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
+func HandleSAMLMetadata(c *gin.Context) {
 	if samlSP == nil {
-		http.Error(w, "SAML not configured", http.StatusNotFound)
+		c.String(http.StatusNotFound, "SAML not configured")
 		return
 	}
-	samlSP.ServeMetadata(w, r)
+	samlSP.ServeMetadata(c.Writer, c.Request)
 }
 
 // HandleSAMLLogin initiates SAML SP-initiated SSO by redirecting to the IdP.
-func HandleSAMLLogin(w http.ResponseWriter, r *http.Request) {
+func HandleSAMLLogin(c *gin.Context) {
 	if samlSP == nil {
-		http.Error(w, "SAML not configured", http.StatusNotFound)
+		c.String(http.StatusNotFound, "SAML not configured")
 		return
 	}
 	// The middleware's RequireAccount will trigger a redirect to the IdP.
-	samlSP.HandleStartAuthFlow(w, r)
+	samlSP.HandleStartAuthFlow(c.Writer, c.Request)
 }
 
 // HandleSAMLACS processes the SAML assertion from the IdP.
-func HandleSAMLACS(w http.ResponseWriter, r *http.Request) {
+func HandleSAMLACS(c *gin.Context) {
 	if samlSP == nil {
-		http.Error(w, "SAML not configured", http.StatusNotFound)
+		c.String(http.StatusNotFound, "SAML not configured")
 		return
 	}
 
-	sess := auth.GetSession(r)
+	sess := auth.GetSession(c.Request)
 	setFlash := func(msg string) {
 		sess.Values["flash"] = msg
 		sess.Values["flash_category"] = "danger"
-		sess.Save(r, w)
-		http.Redirect(w, r, "/login", http.StatusFound)
+		sess.Save(c.Request, c.Writer)
+		c.Redirect(http.StatusFound, "/login")
 	}
 
-	err := r.ParseForm()
+	err := c.Request.ParseForm()
 	if err != nil {
 		setFlash("SAML login failed: invalid response.")
 		return
 	}
 
-	assertion, err := samlSP.ServiceProvider.ParseResponse(r, []string{samlACSURL})
+	assertion, err := samlSP.ServiceProvider.ParseResponse(c.Request, []string{samlACSURL})
 	if err != nil {
 		log.Printf("SAML assertion parse error: %v", err)
 		setFlash("SAML login failed: could not validate assertion.")
@@ -166,7 +167,7 @@ func HandleSAMLACS(w http.ResponseWriter, r *http.Request) {
 
 	// Find or create user.
 	cfg := config.Cfg
-	user, err := models.FindOrCreateSSOUser(r.Context(), email, username, "saml", cfg.SSODefaultRole, cfg.SSOAutoProvision)
+	user, err := models.FindOrCreateSSOUser(c.Request.Context(), email, username, "saml", cfg.SSODefaultRole, cfg.SSOAutoProvision)
 	if err != nil {
 		log.Printf("SAML user provisioning failed: %v", err)
 		setFlash("SAML login failed: internal error.")
@@ -184,18 +185,18 @@ func HandleSAMLACS(w http.ResponseWriter, r *http.Request) {
 
 	// Update login tracking.
 	now := time.Now().UTC()
-	db.Col(db.ColUser).UpdateOne(r.Context(), bson.M{"_id": user.ID}, bson.M{
+	db.Col(db.ColUser).UpdateOne(c.Request.Context(), bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
 			"last_login_at":    user.CurrentLoginAt,
 			"last_login_ip":    user.CurrentLoginIP,
 			"current_login_at": &now,
-			"current_login_ip": r.RemoteAddr,
+			"current_login_ip": c.Request.RemoteAddr,
 		},
 		"$inc": bson.M{"login_count": 1},
 	})
 
-	auth.SetSessionUser(w, r, user.ID.Hex())
-	http.Redirect(w, r, "/", http.StatusFound)
+	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
+	c.Redirect(http.StatusFound, "/")
 }
 
 // getSAMLAttribute searches for a value across multiple attribute name variants.
