@@ -66,7 +66,7 @@ $("#newTestcaseForm").submit(function(e){
 // AJAX new testcase from template POST and table append
 $('#testcaseTemplatesButton').click(function() {
 	$.ajax({
-		url: `/assessment/${window.location.href.split("/").slice(-1)[0]}/import/template`,
+		url: `/assessment/${window.location.pathname.split("/").filter(Boolean)[1]}/import/template`,
 		type: 'POST',
 		headers: { 'X-CSRF-Token': csrfToken() },
 		data: JSON.stringify({
@@ -274,7 +274,7 @@ $('.multiNew').click(function(event) {
 $('.assessmentMultiButton').click(function(event) {
 	type = event.target.id.replace("manage", "").replace("Button", "").toLowerCase()
 	$.ajax({
-		url: `${window.location.href}/multi/${type}`,
+		url: `/assessment/${window.location.pathname.split("/").filter(Boolean)[1]}/multi/${type}`,
 		type: 'POST',
 		headers: { 'X-CSRF-Token': csrfToken() },
 		data: JSON.stringify({ data: $(`#${type}Table`).bootstrapTable("getData") }),
