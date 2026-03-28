@@ -50,23 +50,23 @@ func main() {
 	r.POST("/auth/saml/acs", handler.HandleSAMLACS)
 	r.GET("/assessment/:id/navigator.json", handler.HandleNavigatorJSON)
 
-	csrfGroup := r.Group("/")
+	unauth := r.Group("/")
 	{
 		// Auth routes (no auth required).
-		csrfGroup.GET("/login", handler.HandleLogin)
-		csrfGroup.POST("/login", rateLimitByIP(10, time.Minute), handler.HandleLoginPost)
-		csrfGroup.GET("/logout", handler.HandleLogout)
+		unauth.GET("/login", handler.HandleLogin)
+		unauth.POST("/login", rateLimitByIP(10, time.Minute), handler.HandleLoginPost)
+		unauth.GET("/logout", handler.HandleLogout)
 
 		// OAuth SSO routes.
-		csrfGroup.GET("/auth/oauth/login", handler.HandleOAuthLogin)
-		csrfGroup.GET("/auth/oauth/callback", handler.HandleOAuthCallback)
+		unauth.GET("/auth/oauth/login", handler.HandleOAuthLogin)
+		unauth.GET("/auth/oauth/callback", handler.HandleOAuthCallback)
 
 		// SAML SSO routes (login + metadata only; ACS is exempt above).
-		csrfGroup.GET("/auth/saml/login", handler.HandleSAMLLogin)
-		csrfGroup.GET("/auth/saml/metadata", handler.HandleSAMLMetadata)
+		unauth.GET("/auth/saml/login", handler.HandleSAMLLogin)
+		unauth.GET("/auth/saml/metadata", handler.HandleSAMLMetadata)
 
 		// All authenticated routes.
-		authed := csrfGroup.Group("/")
+		authed := unauth.Group("/")
 		authed.Use(auth.AuthRequired)
 		{
 			// Home / index.

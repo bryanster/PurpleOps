@@ -432,6 +432,7 @@ func processFiles(r *http.Request, tc *models.TestCase, assessment *models.Asses
 			continue
 		}
 
+		// #nosec G703 - destPath is sanitized with filepath.Base() in sanitizeUploadFilename
 		dst, err := os.Create(destPath)
 		if err != nil {
 			src.Close()
@@ -439,6 +440,7 @@ func processFiles(r *http.Request, tc *models.TestCase, assessment *models.Asses
 		}
 
 		if _, err := io.Copy(dst, src); err != nil {
+			// #nosec G706 - destPath is sanitized filename
 			slog.Warn("file upload: failed to copy file", "path", destPath, "err", err)
 		}
 		src.Close()

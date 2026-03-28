@@ -1,18 +1,16 @@
-.PHONY: help dev-db dev-db-rm dev prod logs build seed test e2e-seed e2e install-hooks
+.PHONY: help dev-db dev-db-rm dev prod logs build seed test install-hooks check
 
 help:
 	@echo "Usage:"
-	@echo "  make dev-db    Start MongoDB in Docker (exposes :27017)"
-	@echo "  make dev-db-rm Stop MongoDB container"
-	@echo "  make build     Build Go binaries"
-	@echo "  make seed      Run database seeder"
-	@echo "  make dev       Run app locally against Dockerised MongoDB"
-	@echo "  make prod      Run full production stack"
-	@echo "  make logs      Tail all running container logs"
-	@echo "  make test      Run Go unit tests"
-
-install-hooks:
-	pre-commit install
+	@echo "  make dev-db        Start MongoDB in Docker (exposes :27017)"
+	@echo "  make dev-db-rm     Stop MongoDB container"
+	@echo "  make build         Build Go binaries"
+	@echo "  make seed          Run database seeder"
+	@echo "  make dev           Run app locally against Dockerised MongoDB"
+	@echo "  make prod          Run full production stack"
+	@echo "  make logs          Tail all running container logs"
+	@echo "  make test          Run Go unit tests"
+	@echo "  make check         Run golangci-lint"
 
 dev-db:
 	docker-compose --profile dev up -d
@@ -38,3 +36,6 @@ logs:
 
 test:
 	go test -v ./...
+
+check: 
+	golangci-lint run
