@@ -8,7 +8,6 @@ import (
 	"github.com/crewjam/saml"
 )
 
-
 // --- samlACSURL ---
 
 func TestSAMLACSURLNotSetByDefault(t *testing.T) {

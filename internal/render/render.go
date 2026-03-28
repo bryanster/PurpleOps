@@ -40,7 +40,6 @@ func Render(w http.ResponseWriter, r *http.Request, templateName string, ctx pon
 	ctx["current_user"] = &TemplateUser{user: user, ctx: r.Context()}
 	ctx["request"] = &TemplateRequest{r: r}
 
-
 	tpl, err := templateSet.FromFile(templateName)
 	if err != nil {
 		log.Printf("Template error: %v", err)

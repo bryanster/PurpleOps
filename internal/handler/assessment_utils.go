@@ -466,7 +466,7 @@ func RenderHexagons(id string) string {
 	svgHeight := rows*hexHeight + 60
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, svgWidth, svgHeight, svgWidth, svgHeight))
+	fmt.Fprintf(&sb, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, svgWidth, svgHeight, svgWidth, svgHeight)
 	sb.WriteString("\n")
 
 	for i, h := range hexes {
@@ -485,11 +485,11 @@ func RenderHexagons(id string) string {
 			cx-hexQuarterW, cy+hexSideH,
 		)
 
-		sb.WriteString(fmt.Sprintf(`  <polygon points="%s" fill="%s" stroke="#333" stroke-width="2"/>`, points, h.Color))
+		fmt.Fprintf(&sb, `  <polygon points="%s" fill="%s" stroke="#333" stroke-width="2"/>`, points, h.Color)
 		sb.WriteString("\n")
-		sb.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" text-anchor="middle" font-size="10" font-family="Arial" fill="#333">%s</text>`, cx, cy-5, h.Name))
+		fmt.Fprintf(&sb, `  <text x="%d" y="%d" text-anchor="middle" font-size="10" font-family="Arial" fill="#333">%s</text>`, cx, cy-5, h.Name)
 		sb.WriteString("\n")
-		sb.WriteString(fmt.Sprintf(`  <text x="%d" y="%d" text-anchor="middle" font-size="12" font-weight="bold" font-family="Arial" fill="#333">%d</text>`, cx, cy+12, h.Count))
+		fmt.Fprintf(&sb, `  <text x="%d" y="%d" text-anchor="middle" font-size="12" font-weight="bold" font-family="Arial" fill="#333">%d</text>`, cx, cy+12, h.Count)
 		sb.WriteString("\n")
 	}
 

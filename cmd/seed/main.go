@@ -314,6 +314,7 @@ func seedSigma(db *mongo.Database) {
 			return nil
 		}
 
+		// #nosec G122 - path is from Walk on trusted git-cloned directory
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil
@@ -587,6 +588,7 @@ func generateSecrets() {
 		content += fmt.Sprintf("\nPASSWORD_SALT=%s", securitySalt)
 	}
 
+	// #nosec G703 - envPath is constant ".env"
 	if err := os.WriteFile(envPath, []byte(strings.TrimSpace(content)+"\n"), 0o600); err != nil {
 		log.Fatalf("Failed to write .env: %v", err)
 	}

@@ -557,6 +557,7 @@ func createZip(zipPath, sourceDir string) error {
 			return err
 		}
 
+		// #nosec G122 - path is from Walk on our own files directory
 		file, err := os.Open(path)
 		if err != nil {
 			return err
@@ -585,6 +586,7 @@ func copyDir(src, dst string) error {
 			return os.MkdirAll(dstPath, DirPerm)
 		}
 
+		// #nosec G122 - path is from Walk on our own files directory
 		srcFile, err := os.Open(path)
 		if err != nil {
 			return err
