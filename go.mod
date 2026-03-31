@@ -1,23 +1,19 @@
 module github.com/bryanster/purpleops
 
-go 1.23.0
-
-toolchain go1.24.7
+go 1.25.0
 
 require (
 	github.com/crewjam/saml v0.4.14
 	github.com/flosch/pongo2/v6 v6.0.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-git/go-git/v5 v5.13.2
-	github.com/google/uuid v1.6.0
 	github.com/gorilla/sessions v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/pquerna/otp v1.4.0
 	github.com/xuri/excelize/v2 v2.9.0
 	go.mongodb.org/mongo-driver/v2 v2.1.0
 	golang.org/x/crypto v0.33.0
-	golang.org/x/oauth2 v0.25.0
-	golang.org/x/sys v0.30.0
+	golang.org/x/oauth2 v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -80,6 +76,7 @@ require (
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
