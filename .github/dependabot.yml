@@ -4,6 +4,10 @@ updates:
     cooldown:
       default-days: 7
     directory: "/"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
     schedule:
       interval: "monthly"
     commit-message:
