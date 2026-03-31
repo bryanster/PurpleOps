@@ -29,10 +29,10 @@ dev: dev-db build seed
 	MONGO_HOST=localhost ./purpleops
 
 prod:
-	docker compose --profile prod up --build
+	docker-compose --profile prod up --build
 
 logs:
-	docker compose logs -f
+	docker-compose logs -f
 
 test:
 	go test -v ./...
