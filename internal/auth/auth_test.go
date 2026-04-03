@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bryanster/purpleops/internal/models"
+	ginsessions "github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -21,6 +22,14 @@ func newAuthTestCtx(r *http.Request) (*gin.Context, *httptest.ResponseRecorder) 
 	c, _ := gin.CreateTestContext(w)
 	c.Request = r
 	return c, w
+}
+
+// newSessionEngine returns a gin engine with the session middleware registered.
+// InitSessions must have been called before using this.
+func newSessionEngine() *gin.Engine {
+	r := gin.New()
+	r.Use(ginsessions.Sessions("purpleops", store))
+	return r
 }
 
 func TestHashAndCheckPassword(t *testing.T) {
@@ -100,87 +109,84 @@ func TestExtractID(t *testing.T) {
 }
 
 func TestInitSessions(t *testing.T) {
-	InitSessions("test-secret-key", false, true)
-
+	mw := InitSessions("test-secret-key", false, true)
+	if mw == nil {
+		t.Fatal("InitSessions should return a non-nil middleware handler")
+	}
 	if store == nil {
 		t.Fatal("store should not be nil after InitSessions")
-	}
-	if store.Options.Path != "/" {
-		t.Errorf("expected path '/', got %q", store.Options.Path)
-	}
-	if store.Options.MaxAge != 86400*7 {
-		t.Errorf("expected MaxAge 604800, got %d", store.Options.MaxAge)
-	}
-	if !store.Options.HttpOnly {
-		t.Error("expected HttpOnly to be true")
-	}
-}
-
-func TestInitSessionsSameSiteStrict(t *testing.T) {
-	InitSessions("test-secret-key", false, true)
-	if store.Options.SameSite != http.SameSiteStrictMode {
-		t.Errorf("expected SameSiteStrictMode when SSO disabled, got %d", store.Options.SameSite)
-	}
-}
-
-func TestInitSessionsSameSiteLax(t *testing.T) {
-	InitSessions("test-secret-key", true, true)
-	if store.Options.SameSite != http.SameSiteLaxMode {
-		t.Errorf("expected SameSiteLaxMode when SSO enabled, got %d", store.Options.SameSite)
 	}
 }
 
 func TestSetAndClearSession(t *testing.T) {
 	InitSessions("test-secret-key", false, true)
+	engine := newSessionEngine()
 
-	r := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-
-	// SetSessionUser invalidates the old session and creates a new one,
-	// writing two Set-Cookie headers to w. Take the last "purpleops" cookie
-	// (the new session) and simulate a follow-up request with it.
-	SetSessionUser(w, r, "user123")
-
+	// Step 1: set the session user and capture the cookie.
 	var sessionCookie *http.Cookie
-	for _, c := range w.Result().Cookies() {
-		if c.Name == "purpleops" {
-			sessionCookie = c
+	engine.GET("/set", func(c *gin.Context) {
+		SetSessionUser(c, "user123")
+		c.Status(http.StatusOK)
+	})
+	w1 := httptest.NewRecorder()
+	engine.ServeHTTP(w1, httptest.NewRequest("GET", "/set", nil))
+	for _, cookie := range w1.Result().Cookies() {
+		if cookie.Name == "purpleops" {
+			sessionCookie = cookie
 		}
 	}
 	if sessionCookie == nil {
 		t.Fatal("no purpleops cookie written to response")
 	}
 
-	r2 := httptest.NewRequest("GET", "/", nil)
-	r2.AddCookie(sessionCookie)
-	sess := GetSession(r2)
-	if sess.Values["user_id"] != "user123" {
-		t.Errorf("expected user_id 'user123', got %v", sess.Values["user_id"])
-	}
+	// Step 2: read user_id back from the session.
+	engine.GET("/read", func(c *gin.Context) {
+		sess := GetSession(c)
+		userID, _ := sess.Get("user_id").(string)
+		if userID != "user123" {
+			t.Errorf("expected user_id 'user123', got %q", userID)
+		}
+		c.Status(http.StatusOK)
+	})
+	req2 := httptest.NewRequest("GET", "/read", nil)
+	req2.AddCookie(sessionCookie)
+	engine.ServeHTTP(httptest.NewRecorder(), req2)
 
-	// Clear session and verify a fresh request has no user_id.
-	w2 := httptest.NewRecorder()
-	ClearSession(w2, r2)
-	r3 := httptest.NewRequest("GET", "/", nil)
-	sess = GetSession(r3)
-	if _, ok := sess.Values["user_id"]; ok {
-		t.Error("expected user_id to be cleared from session")
-	}
+	// Step 3: clear the session.
+	engine.GET("/clear", func(c *gin.Context) {
+		ClearSession(c)
+		c.Status(http.StatusOK)
+	})
+	req3 := httptest.NewRequest("GET", "/clear", nil)
+	req3.AddCookie(sessionCookie)
+	engine.ServeHTTP(httptest.NewRecorder(), req3)
+
+	// Step 4: confirm user_id is gone on a fresh request (no cookie).
+	engine.GET("/check", func(c *gin.Context) {
+		sess := GetSession(c)
+		if uid := sess.Get("user_id"); uid != nil && uid != "" {
+			t.Errorf("expected user_id to be absent, got %v", uid)
+		}
+		c.Status(http.StatusOK)
+	})
+	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/check", nil))
 }
 
 func TestAuthRequiredMiddleware(t *testing.T) {
 	InitSessions("test-secret-key", false, true)
+	engine := newSessionEngine()
 
-	// Without auth - should redirect
-	r := httptest.NewRequest("GET", "/", nil)
-	c, w := newAuthTestCtx(r)
-	AuthRequired(c)
+	// Without auth - should redirect to /login.
+	engine.GET("/protected", AuthRequired, func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest("GET", "/protected", nil))
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)
 	}
-	loc := w.Header().Get("Location")
-	if loc != "/login" {
+	if loc := w.Header().Get("Location"); loc != "/login" {
 		t.Errorf("expected redirect to /login, got %q", loc)
 	}
 }

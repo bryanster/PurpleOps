@@ -20,7 +20,7 @@ func main() {
 	cfg := config.LoadConfig()
 	db.InitDB(cfg)
 	ssoEnabled := cfg.OAuthEnabled || cfg.SAMLEnabled
-	auth.InitSessions(cfg.SecretKey, ssoEnabled, cfg.Debug)
+	sessionMiddleware := auth.InitSessions(cfg.SecretKey, ssoEnabled, cfg.Debug)
 	render.InitTemplates(cfg.Debug)
 
 	// Initialise SSO providers.
@@ -43,6 +43,7 @@ func main() {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 	r.Use(secmw.SecurityHeaders)
+	r.Use(sessionMiddleware)
 
 	r.Static("/static", "./static")
 

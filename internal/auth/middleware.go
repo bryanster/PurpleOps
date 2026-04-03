@@ -21,7 +21,7 @@ const idleTimeout = 30 * time.Minute
 // It also enforces an idle session timeout: if the user has been inactive for
 // longer than idleTimeout the session is cleared.
 func AuthRequired(c *gin.Context) {
-	user := GetCurrentUser(c.Request)
+	user := GetCurrentUser(c)
 	if user == nil {
 		c.Redirect(http.StatusFound, "/login")
 		c.Abort()
@@ -29,18 +29,17 @@ func AuthRequired(c *gin.Context) {
 	}
 
 	// Idle timeout check.
-	sess := GetSession(c.Request)
-	if lastActive, ok := sess.Values["last_active"].(int64); ok {
+	sess := GetSession(c)
+	if lastActive, ok := sess.Get("last_active").(int64); ok {
 		if time.Now().Unix()-lastActive > int64(idleTimeout.Seconds()) {
-			ClearSession(c.Writer, c.Request)
+			ClearSession(c)
 			c.Redirect(http.StatusFound, "/login")
 			c.Abort()
 			return
 		}
 	}
-	sess.Values["last_active"] = time.Now().Unix()
-	sess.Options.Secure = isSecureRequest(c.Request)
-	sess.Save(c.Request, c.Writer)
+	sess.Set("last_active", time.Now().Unix())
+	SaveSession(c, sess)
 
 	ctx := WithUser(c.Request.Context(), user)
 	c.Request = c.Request.WithContext(ctx)

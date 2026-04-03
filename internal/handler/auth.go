@@ -24,12 +24,12 @@ type FlashMessage struct {
 
 // getFlashMessages reads flash messages from the session and clears them.
 func getFlashMessages(c *gin.Context) []FlashMessage {
-	sess := auth.GetSession(c.Request)
-	if flash, ok := sess.Values["flash"].(string); ok && flash != "" {
-		category, _ := sess.Values["flash_category"].(string)
-		delete(sess.Values, "flash")
-		delete(sess.Values, "flash_category")
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+	sess := auth.GetSession(c)
+	if flash, ok := sess.Get("flash").(string); ok && flash != "" {
+		category, _ := sess.Get("flash_category").(string)
+		sess.Delete("flash")
+		sess.Delete("flash_category")
+		if err := auth.SaveSession(c, sess); err != nil {
 			return nil
 		}
 		return []FlashMessage{{Category: category, Message: flash}}
@@ -60,12 +60,12 @@ func HandleLoginPost(c *gin.Context) {
 	email := strings.TrimSpace(c.Request.FormValue("email"))
 	password := c.Request.FormValue("password")
 
-	sess := auth.GetSession(c.Request)
+	sess := auth.GetSession(c)
 
 	setFlash := func(msg, category string) {
-		sess.Values["flash"] = msg
-		sess.Values["flash_category"] = category
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess.Set("flash", msg)
+		sess.Set("flash_category", category)
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -109,8 +109,8 @@ func HandleLoginPost(c *gin.Context) {
 
 	// If MFA is enabled globally and the user has a TOTP secret, redirect to verify.
 	if config.Cfg.MFA && user.TFSecret != "" {
-		sess.Values["mfa_user_id"] = user.ID.Hex()
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess.Set("mfa_user_id", user.ID.Hex())
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -118,13 +118,13 @@ func HandleLoginPost(c *gin.Context) {
 		return
 	}
 
-	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
+	auth.SetSessionUser(c, user.ID.Hex())
 	c.Redirect(http.StatusFound, "/")
 }
 
 // HandleLogout clears the session and redirects to login.
 func HandleLogout(c *gin.Context) {
-	auth.ClearSession(c.Writer, c.Request)
+	auth.ClearSession(c)
 	c.Redirect(http.StatusFound, "/login")
 }
 
@@ -154,12 +154,12 @@ func HandlePasswordChangePost(c *gin.Context) {
 	newPassword := c.Request.FormValue("new_password")
 	confirmPassword := c.Request.FormValue("new_password_confirm")
 
-	sess := auth.GetSession(c.Request)
+	sess := auth.GetSession(c)
 
 	setFlash := func(msg, category string) {
-		sess.Values["flash"] = msg
-		sess.Values["flash_category"] = category
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess.Set("flash", msg)
+		sess.Set("flash_category", category)
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -234,10 +234,10 @@ func HandleMFARegisterPost(c *gin.Context) {
 		AccountName: user.Email,
 	})
 	if err != nil {
-		sess := auth.GetSession(c.Request)
-		sess.Values["flash"] = "Failed to generate MFA key."
-		sess.Values["flash_category"] = "danger"
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess := auth.GetSession(c)
+		sess.Set("flash", "Failed to generate MFA key.")
+		sess.Set("flash_category", "danger")
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -271,13 +271,13 @@ func HandleMFAVerifyPost(c *gin.Context) {
 		return
 	}
 
-	sess := auth.GetSession(c.Request)
+	sess := auth.GetSession(c)
 	code := strings.TrimSpace(c.Request.FormValue("code"))
 
 	setFlash := func(msg, category string) {
-		sess.Values["flash"] = msg
-		sess.Values["flash_category"] = category
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess.Set("flash", msg)
+		sess.Set("flash_category", category)
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -285,7 +285,7 @@ func HandleMFAVerifyPost(c *gin.Context) {
 	}
 
 	// Get the user ID stored during login.
-	userID, ok := sess.Values["mfa_user_id"].(string)
+	userID, ok := sess.Get("mfa_user_id").(string)
 	if !ok || userID == "" {
 		// Fall back to authenticated user (for post-login MFA setup verification).
 		user := auth.UserFromContext(c.Request.Context())
@@ -314,12 +314,12 @@ func HandleMFAVerifyPost(c *gin.Context) {
 	}
 
 	// Clear the temporary MFA user ID and set the full session.
-	delete(sess.Values, "mfa_user_id")
-	if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+	sess.Delete("mfa_user_id")
+	if err := auth.SaveSession(c, sess); err != nil {
 		c.String(http.StatusInternalServerError, "Internal error")
 		return
 	}
 
-	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
+	auth.SetSessionUser(c, user.ID.Hex())
 	c.Redirect(http.StatusFound, "/")
 }

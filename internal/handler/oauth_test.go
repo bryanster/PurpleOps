@@ -117,8 +117,8 @@ func TestHandleOAuthLoginRedirects(t *testing.T) {
 	}
 
 	// Verify the state was stored in the session.
-	sess := auth.GetSession(r)
-	state, ok := sess.Values["oauth_state"].(string)
+	sess := auth.GetSession(c)
+	state, ok := sess.Get("oauth_state").(string)
 	if !ok || state == "" {
 		t.Error("expected oauth_state to be set in session")
 	}
@@ -153,9 +153,9 @@ func TestHandleOAuthCallbackInvalidState(t *testing.T) {
 	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=wrong-state&code=test-code", nil)
 	c, w := ginCtx(r)
 
-	sess := auth.GetSession(r)
-	sess.Values["oauth_state"] = "correct-state"
-	sess.Save(r, w)
+	sess := auth.GetSession(c)
+	sess.Set("oauth_state", "correct-state")
+	sess.Save()
 
 	HandleOAuthCallback(c)
 
@@ -204,9 +204,9 @@ func TestHandleOAuthCallbackProviderError(t *testing.T) {
 	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state&error=access_denied&error_description=User+denied+access", nil)
 	c, w := ginCtx(r)
 
-	sess := auth.GetSession(r)
-	sess.Values["oauth_state"] = "valid-state"
-	sess.Save(r, w)
+	sess := auth.GetSession(c)
+	sess.Set("oauth_state", "valid-state")
+	sess.Save()
 
 	HandleOAuthCallback(c)
 
@@ -229,9 +229,9 @@ func TestHandleOAuthCallbackNoCode(t *testing.T) {
 	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state", nil)
 	c, w := ginCtx(r)
 
-	sess := auth.GetSession(r)
-	sess.Values["oauth_state"] = "valid-state"
-	sess.Save(r, w)
+	sess := auth.GetSession(c)
+	sess.Set("oauth_state", "valid-state")
+	sess.Save()
 
 	HandleOAuthCallback(c)
 

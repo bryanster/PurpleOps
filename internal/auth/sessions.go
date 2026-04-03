@@ -5,92 +5,95 @@ import (
 	"strings"
 
 	"github.com/bryanster/purpleops/internal/models"
-	"github.com/gorilla/sessions"
+	ginsessions "github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
 )
 
 // store is the package-level session store.
-var store *sessions.CookieStore
+var store ginsessions.Store
 
 // isSecureRequest determines if a request is over HTTPS.
 func isSecureRequest(r *http.Request) bool {
-	// Check if request is HTTPS
 	if r.TLS != nil {
 		return true
 	}
-	// Check for X-Forwarded-Proto header (common in proxied environments)
 	if proto := r.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
 		return true
 	}
 	return false
 }
 
-// InitSessions initialises the cookie-based session store.
+// InitSessions initialises the cookie-based session store and returns the Gin
+// middleware that must be registered on the router.
 // When ssoEnabled is true, SameSite is set to Lax (required for OAuth/SAML
 // redirects that return from an external IdP); otherwise Strict is used.
-func InitSessions(secretKey string, ssoEnabled, debug bool) {
-	store = sessions.NewCookieStore([]byte(secretKey))
+func InitSessions(secretKey string, ssoEnabled, debug bool) gin.HandlerFunc {
+	store = cookie.NewStore([]byte(secretKey))
 	sameSite := http.SameSiteStrictMode
 	if ssoEnabled {
 		sameSite = http.SameSiteLaxMode
 	}
-	// Note: Secure flag is set at save time in SetSessionUser to handle mixed
+	// Note: Secure flag is set at save time in SaveSession to handle mixed
 	// HTTP/HTTPS environments. Using !debug here breaks authentication over HTTP.
-	store.Options = &sessions.Options{
+	store.Options(ginsessions.Options{
 		Path:     "/",
 		MaxAge:   86400 * 7, // 1 week
 		HttpOnly: true,
 		Secure:   false, // Set per-request instead of globally
 		SameSite: sameSite,
-	}
+	})
+	return ginsessions.Sessions("purpleops", store)
 }
 
-// GetSession returns the named session from the request.
-func GetSession(r *http.Request) *sessions.Session {
-	sess, _ := store.Get(r, "purpleops")
-	return sess
+// GetSession returns the session from the Gin context.
+func GetSession(c *gin.Context) ginsessions.Session {
+	return ginsessions.Default(c)
 }
 
 // SaveSession saves the session, properly setting the Secure flag based on the request.
-func SaveSession(w http.ResponseWriter, r *http.Request, sess *sessions.Session) error {
-	sess.Options.Secure = isSecureRequest(r)
-	return sess.Save(r, w)
+func SaveSession(c *gin.Context, sess ginsessions.Session) error {
+	sess.Options(ginsessions.Options{Secure: isSecureRequest(c.Request)})
+	return sess.Save()
 }
 
 // SetSessionUser stores the user ID in a new session, invalidating the old one
 // to prevent session fixation attacks.
-func SetSessionUser(w http.ResponseWriter, r *http.Request, userID string) {
-	// Invalidate the pre-login session so a previously known session ID
-	// cannot be used by an attacker after the user authenticates.
-	old := GetSession(r)
-	old.Values = make(map[interface{}]interface{})
-	old.Options.MaxAge = -1
-	old.Options.Secure = isSecureRequest(r)
-	old.Save(r, w)
+func SetSessionUser(c *gin.Context, userID string) {
+	sess := GetSession(c)
+	// Expire the pre-login session so a previously known session ID cannot be
+	// used by an attacker after the user authenticates.
+	sess.Options(ginsessions.Options{MaxAge: -1, Secure: isSecureRequest(c.Request)})
+	sess.Save()
 
-	// Create a fresh session with a new ID.
-	newSess, _ := store.New(r, "purpleops")
-	newSess.Values["user_id"] = userID
-	newSess.Options.Secure = isSecureRequest(r)
-	newSess.Save(r, w)
+	// Clear values and write a fresh session with a new ID.
+	sess.Clear()
+	sess.Options(ginsessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7,
+		HttpOnly: true,
+		Secure:   isSecureRequest(c.Request),
+	})
+	sess.Set("user_id", userID)
+	sess.Save()
 }
 
 // ClearSession destroys the session.
-func ClearSession(w http.ResponseWriter, r *http.Request) {
-	sess := GetSession(r)
-	sess.Values = make(map[interface{}]interface{})
-	sess.Options.MaxAge = -1
-	sess.Options.Secure = isSecureRequest(r)
-	sess.Save(r, w)
+func ClearSession(c *gin.Context) {
+	sess := GetSession(c)
+	sess.Clear()
+	sess.Options(ginsessions.Options{MaxAge: -1, Secure: isSecureRequest(c.Request)})
+	sess.Save()
 }
 
 // GetCurrentUser looks up the authenticated user from the session.
-func GetCurrentUser(r *http.Request) *models.User {
-	sess := GetSession(r)
-	userID, ok := sess.Values["user_id"].(string)
+func GetCurrentUser(c *gin.Context) *models.User {
+	sess := GetSession(c)
+	userID, ok := sess.Get("user_id").(string)
 	if !ok || userID == "" {
 		return nil
 	}
-	user, err := models.FindUser(r.Context(), userID)
+	user, err := models.FindUser(c.Request.Context(), userID)
 	if err != nil {
 		return nil
 	}

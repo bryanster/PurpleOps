@@ -113,11 +113,11 @@ func HandleSAMLACS(c *gin.Context) {
 		return
 	}
 
-	sess := auth.GetSession(c.Request)
+	sess := auth.GetSession(c)
 	setFlash := func(msg string) {
-		sess.Values["flash"] = msg
-		sess.Values["flash_category"] = "danger"
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess.Set("flash", msg)
+		sess.Set("flash_category", "danger")
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -198,7 +198,7 @@ func HandleSAMLACS(c *gin.Context) {
 		"$inc": bson.M{"login_count": 1},
 	})
 
-	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
+	auth.SetSessionUser(c, user.ID.Hex())
 	c.Redirect(http.StatusFound, "/")
 }
 

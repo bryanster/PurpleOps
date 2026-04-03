@@ -34,9 +34,6 @@ func Render(w http.ResponseWriter, r *http.Request, templateName string, ctx pon
 
 	// Always inject current_user and request into template context.
 	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		user = auth.GetCurrentUser(r)
-	}
 	ctx["current_user"] = &TemplateUser{user: user, ctx: r.Context()}
 	ctx["request"] = &TemplateRequest{r: r}
 

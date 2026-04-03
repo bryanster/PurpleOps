@@ -58,9 +58,9 @@ func HandleOAuthLogin(c *gin.Context) {
 		return
 	}
 
-	sess := auth.GetSession(c.Request)
-	sess.Values["oauth_state"] = state
-	if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+	sess := auth.GetSession(c)
+	sess.Set("oauth_state", state)
+	if err := auth.SaveSession(c, sess); err != nil {
 		c.String(http.StatusInternalServerError, "Internal error")
 		return
 	}
@@ -76,12 +76,12 @@ func HandleOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	sess := auth.GetSession(c.Request)
+	sess := auth.GetSession(c)
 
 	setFlash := func(msg string) {
-		sess.Values["flash"] = msg
-		sess.Values["flash_category"] = "danger"
-		if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+		sess.Set("flash", msg)
+		sess.Set("flash_category", "danger")
+		if err := auth.SaveSession(c, sess); err != nil {
 			c.String(http.StatusInternalServerError, "Internal error")
 			return
 		}
@@ -89,13 +89,13 @@ func HandleOAuthCallback(c *gin.Context) {
 	}
 
 	// Verify state parameter (validate before deleting to avoid race conditions).
-	expectedState, _ := sess.Values["oauth_state"].(string)
+	expectedState, _ := sess.Get("oauth_state").(string)
 	if expectedState == "" || c.Request.URL.Query().Get("state") != expectedState {
 		setFlash("OAuth login failed: invalid state parameter.")
 		return
 	}
-	delete(sess.Values, "oauth_state")
-	if err := auth.SaveSession(c.Writer, c.Request, sess); err != nil {
+	sess.Delete("oauth_state")
+	if err := auth.SaveSession(c, sess); err != nil {
 		c.String(http.StatusInternalServerError, "Internal error")
 		return
 	}
@@ -173,7 +173,7 @@ func HandleOAuthCallback(c *gin.Context) {
 		"$inc": bson.M{"login_count": 1},
 	})
 
-	auth.SetSessionUser(c.Writer, c.Request, user.ID.Hex())
+	auth.SetSessionUser(c, user.ID.Hex())
 	c.Redirect(http.StatusFound, "/")
 }
 
