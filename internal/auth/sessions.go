@@ -64,7 +64,7 @@ func SetSessionUser(c *gin.Context, userID string) {
 	// Expire the pre-login session so a previously known session ID cannot be
 	// used by an attacker after the user authenticates.
 	sess.Options(ginsessions.Options{MaxAge: -1, Secure: isSecureRequest(c.Request)})
-	sess.Save()
+	_ = sess.Save()
 
 	// Clear values and write a fresh session with a new ID.
 	sess.Clear()
@@ -75,7 +75,7 @@ func SetSessionUser(c *gin.Context, userID string) {
 		Secure:   isSecureRequest(c.Request),
 	})
 	sess.Set("user_id", userID)
-	sess.Save()
+	_ = sess.Save()
 }
 
 // ClearSession destroys the session.
@@ -83,7 +83,7 @@ func ClearSession(c *gin.Context) {
 	sess := GetSession(c)
 	sess.Clear()
 	sess.Options(ginsessions.Options{MaxAge: -1, Secure: isSecureRequest(c.Request)})
-	sess.Save()
+	_ = sess.Save()
 }
 
 // GetCurrentUser looks up the authenticated user from the session.
