@@ -129,8 +129,8 @@ func TestHandlePasswordChangePost_ShortNewPassword(t *testing.T) {
 	engine.POST("/password/change", HandlePasswordChangePost)
 
 	form := url.Values{
-		"password":         {"currentpassword"},
-		"new_password":     {"short"},
+		"password":             {"currentpassword"},
+		"new_password":         {"short"},
 		"new_password_confirm": {"short"},
 	}
 	req := httptest.NewRequest("POST", "/password/change", strings.NewReader(form.Encode()))

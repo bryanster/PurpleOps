@@ -39,7 +39,9 @@ func AuthRequired(c *gin.Context) {
 		}
 	}
 	sess.Set("last_active", time.Now().Unix())
-	SaveSession(c, sess)
+	if err := SaveSession(c, sess); err != nil {
+		slog.Warn("auth: failed to save session", "err", err)
+	}
 
 	ctx := WithUser(c.Request.Context(), user)
 	c.Request = c.Request.WithContext(ctx)

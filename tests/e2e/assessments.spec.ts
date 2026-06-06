@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, Cookie } from '@playwright/test';
 
 const adminEmail = process.env.ADMIN_EMAIL || 'admin@admin.com';
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
@@ -7,7 +7,7 @@ async function loginAsAdmin(page: Page) {
   await page.goto('/login');
   await page.fill('input[name="email"]', adminEmail);
   await page.fill('input[name="password"]', adminPassword);
-  await page.click('button[type="submit"]');
+  await page.click('#submit');
   // Handle initpwd redirect.
   if (page.url().includes('/password/change')) {
     test.skip();
@@ -15,8 +15,18 @@ async function loginAsAdmin(page: Page) {
 }
 
 test.describe('Assessments', () => {
+  let savedCookies: Cookie[];
+
+  test.beforeAll(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const pg = await ctx.newPage();
+    await loginAsAdmin(pg);
+    savedCookies = await ctx.cookies();
+    await ctx.close();
+  });
+
   test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
+    await page.context().addCookies(savedCookies);
   });
 
   test('home page lists assessments', async ({ page }) => {

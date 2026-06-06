@@ -12,7 +12,7 @@ test.describe('Authentication', () => {
     await page.goto('/login');
     await page.fill('input[name="email"]', 'nobody@example.com');
     await page.fill('input[name="password"]', 'wrongpassword');
-    await page.click('button[type="submit"]');
+    await page.click('#submit');
     await expect(page).toHaveURL('/login');
     // Flash message with error class should appear.
     const flash = page.locator('.alert-danger, [class*="danger"]');
@@ -21,7 +21,7 @@ test.describe('Authentication', () => {
 
   test('login with empty fields shows error', async ({ page }) => {
     await page.goto('/login');
-    await page.click('button[type="submit"]');
+    await page.click('#submit');
     await expect(page).toHaveURL('/login');
   });
 
@@ -50,7 +50,7 @@ test.describe('Authentication - admin login', () => {
     await page.goto('/login');
     await page.fill('input[name="email"]', adminEmail);
     await page.fill('input[name="password"]', adminPassword);
-    await page.click('button[type="submit"]');
+    await page.click('#submit');
   });
 
   test('admin can log in and reach home', async ({ page }) => {
