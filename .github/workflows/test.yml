@@ -1,0 +1,94 @@
+name: Test
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  go-tests:
+    name: Go unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
+
+  playwright-tests:
+    name: Playwright E2E tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download Go modules
+        run: go mod download
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed E2E database
+        run: go run ./cmd/e2e-seed/...
+        env:
+          MONGO_HOST: localhost
+          MONGO_PORT: "27017"
+          MONGO_DB: purpleops_e2e
+
+      - name: Start app
+        run: go run . &
+        env:
+          MONGO_HOST: localhost
+          MONGO_PORT: "27017"
+          MONGO_DB: purpleops_e2e
+          SECRET_KEY: ci-test-secret-key
+          HOST: localhost
+          PORT: "8888"
+          DEBUG: "true"
+
+      - name: Wait for app to be ready
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8888/login && break
+            sleep 1
+          done
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:8888
+          ADMIN_EMAIL: admin@purpleops.com
+          ADMIN_PASSWORD: testpassword123
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

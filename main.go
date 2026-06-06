@@ -76,7 +76,7 @@ func main() {
 
 			// Password management.
 			authed.GET("/password/change", handler.HandlePasswordChange)
-			authed.POST("/password/change", handler.HandlePasswordChangePost)
+			authed.POST("/password/change", rateLimitByIP(10, time.Minute), handler.HandlePasswordChangePost)
 			authed.GET("/password/changed", handler.HandlePasswordChanged)
 
 			// MFA routes.
@@ -140,7 +140,7 @@ func main() {
 
 			// API key management.
 			authed.GET("/api-keys", handler.HandleAPIKeysPage)
-			authed.POST("/api-keys", handler.HandleCreateAPIKey)
+			authed.POST("/api-keys", rateLimitByIP(10, time.Minute), handler.HandleCreateAPIKey)
 			authed.DELETE("/api-keys/:id", handler.HandleDeleteAPIKey)
 		}
 	}
