@@ -100,7 +100,7 @@ func HandleLoginPost(c *gin.Context) {
 			"last_login_at":    user.CurrentLoginAt,
 			"last_login_ip":    user.CurrentLoginIP,
 			"current_login_at": &now,
-			"current_login_ip": c.Request.RemoteAddr,
+			"current_login_ip": c.ClientIP(),
 		},
 		"$inc": bson.M{
 			"login_count": 1,

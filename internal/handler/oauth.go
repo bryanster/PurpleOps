@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -119,7 +119,7 @@ func HandleOAuthCallback(c *gin.Context) {
 
 	token, err := oauthConfig.Exchange(c.Request.Context(), code)
 	if err != nil {
-		log.Printf("OAuth token exchange failed: %v", err)
+		slog.Error("OAuth token exchange failed", "error", err)
 		setFlash("OAuth login failed: could not exchange authorization code.")
 		return
 	}
@@ -127,7 +127,7 @@ func HandleOAuthCallback(c *gin.Context) {
 	// Fetch user info from the provider.
 	email, username, err := fetchOAuthUserInfo(c.Request, token)
 	if err != nil {
-		log.Printf("OAuth user info fetch failed: %v", err)
+		slog.Error("OAuth user info fetch failed", "error", err)
 		setFlash("OAuth login failed: could not retrieve user information.")
 		return
 	}
@@ -147,7 +147,7 @@ func HandleOAuthCallback(c *gin.Context) {
 	cfg := config.Cfg
 	user, err := models.FindOrCreateSSOUser(c.Request.Context(), email, username, "oauth", cfg.SSODefaultRole, cfg.SSOAutoProvision)
 	if err != nil {
-		log.Printf("OAuth user provisioning failed: %v", err)
+		slog.Error("OAuth user provisioning failed", "error", err)
 		setFlash("OAuth login failed: internal error.")
 		return
 	}

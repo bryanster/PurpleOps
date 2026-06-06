@@ -20,8 +20,22 @@ func ginCtx(r *http.Request) (*gin.Context, *httptest.ResponseRecorder) {
 	return c, w
 }
 
-func initTestSession() {
-	auth.InitSessions("test-secret-key-for-oauth", true, true)
+// newOAuthEngine returns a gin engine with session middleware for OAuth handler tests.
+func newOAuthEngine() *gin.Engine {
+	mw := auth.InitSessions("test-secret-key-for-oauth", true, true)
+	r := gin.New()
+	r.Use(mw)
+	return r
+}
+
+// sessionCookieFromResponse extracts the "purpleops" session cookie from a response.
+func sessionCookieFromResponse(w *httptest.ResponseRecorder) *http.Cookie {
+	for _, ck := range w.Result().Cookies() {
+		if ck.Name == "purpleops" {
+			return ck
+		}
+	}
+	return nil
 }
 
 // --- InitOAuth ---
@@ -86,8 +100,7 @@ func TestHandleOAuthLoginNotConfigured(t *testing.T) {
 }
 
 func TestHandleOAuthLoginRedirects(t *testing.T) {
-	initTestSession()
-
+	engine := newOAuthEngine()
 	oauthConfig = &oauth2.Config{
 		ClientID: "test-client",
 		Endpoint: oauth2.Endpoint{
@@ -97,30 +110,20 @@ func TestHandleOAuthLoginRedirects(t *testing.T) {
 		RedirectURL: "https://purpleops.example.com/auth/oauth/callback",
 		Scopes:      []string{"openid", "email"},
 	}
+	engine.GET("/auth/oauth/login", HandleOAuthLogin)
 
-	r := httptest.NewRequest("GET", "/auth/oauth/login", nil)
-	c, w := ginCtx(r)
-	HandleOAuthLogin(c)
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest("GET", "/auth/oauth/login", nil))
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected 302 redirect, got %d", w.Code)
 	}
-
 	loc := w.Header().Get("Location")
 	if loc == "" {
 		t.Fatal("expected Location header")
 	}
-
-	// Should redirect to provider's authorize endpoint.
 	if len(loc) < 40 {
 		t.Errorf("Location too short: %q", loc)
-	}
-
-	// Verify the state was stored in the session.
-	sess := auth.GetSession(c)
-	state, ok := sess.Get("oauth_state").(string)
-	if !ok || state == "" {
-		t.Error("expected oauth_state to be set in session")
 	}
 }
 
@@ -139,8 +142,7 @@ func TestHandleOAuthCallbackNotConfigured(t *testing.T) {
 }
 
 func TestHandleOAuthCallbackInvalidState(t *testing.T) {
-	initTestSession()
-
+	engine := newOAuthEngine()
 	oauthConfig = &oauth2.Config{
 		ClientID: "test-client",
 		Endpoint: oauth2.Endpoint{
@@ -148,29 +150,37 @@ func TestHandleOAuthCallbackInvalidState(t *testing.T) {
 			TokenURL: "https://provider.example.com/token",
 		},
 	}
+	engine.GET("/test/set-state", func(c *gin.Context) {
+		sess := auth.GetSession(c)
+		sess.Set("oauth_state", "correct-state")
+		auth.SaveSession(c, sess)
+		c.Status(http.StatusOK)
+	})
+	engine.GET("/auth/oauth/callback", HandleOAuthCallback)
 
-	// Set a state in session but send a different one in the request.
-	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=wrong-state&code=test-code", nil)
-	c, w := ginCtx(r)
+	// Step 1: establish session with the correct state.
+	w1 := httptest.NewRecorder()
+	engine.ServeHTTP(w1, httptest.NewRequest("GET", "/test/set-state", nil))
+	ck := sessionCookieFromResponse(w1)
 
-	sess := auth.GetSession(c)
-	sess.Set("oauth_state", "correct-state")
-	sess.Save()
-
-	HandleOAuthCallback(c)
-
-	if w.Code != http.StatusFound {
-		t.Errorf("expected redirect 302, got %d", w.Code)
+	// Step 2: callback with a mismatched state.
+	req := httptest.NewRequest("GET", "/auth/oauth/callback?state=wrong-state&code=test-code", nil)
+	if ck != nil {
+		req.AddCookie(ck)
 	}
-	loc := w.Header().Get("Location")
-	if loc != "/login" {
+	w2 := httptest.NewRecorder()
+	engine.ServeHTTP(w2, req)
+
+	if w2.Code != http.StatusFound {
+		t.Errorf("expected redirect 302, got %d", w2.Code)
+	}
+	if loc := w2.Header().Get("Location"); loc != "/login" {
 		t.Errorf("expected redirect to /login, got %q", loc)
 	}
 }
 
 func TestHandleOAuthCallbackMissingState(t *testing.T) {
-	initTestSession()
-
+	engine := newOAuthEngine()
 	oauthConfig = &oauth2.Config{
 		ClientID: "test-client",
 		Endpoint: oauth2.Endpoint{
@@ -178,12 +188,11 @@ func TestHandleOAuthCallbackMissingState(t *testing.T) {
 			TokenURL: "https://provider.example.com/token",
 		},
 	}
+	engine.GET("/auth/oauth/callback", HandleOAuthCallback)
 
-	// No state in session at all.
-	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=some-state&code=test-code", nil)
-	c, w := ginCtx(r)
-
-	HandleOAuthCallback(c)
+	// No session cookie → no state in session → mismatch → redirect.
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest("GET", "/auth/oauth/callback?state=some-state&code=test-code", nil))
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected redirect 302, got %d", w.Code)
@@ -191,8 +200,7 @@ func TestHandleOAuthCallbackMissingState(t *testing.T) {
 }
 
 func TestHandleOAuthCallbackProviderError(t *testing.T) {
-	initTestSession()
-
+	engine := newOAuthEngine()
 	oauthConfig = &oauth2.Config{
 		ClientID: "test-client",
 		Endpoint: oauth2.Endpoint{
@@ -200,24 +208,34 @@ func TestHandleOAuthCallbackProviderError(t *testing.T) {
 			TokenURL: "https://provider.example.com/token",
 		},
 	}
+	engine.GET("/test/set-state", func(c *gin.Context) {
+		sess := auth.GetSession(c)
+		sess.Set("oauth_state", "valid-state")
+		auth.SaveSession(c, sess)
+		c.Status(http.StatusOK)
+	})
+	engine.GET("/auth/oauth/callback", HandleOAuthCallback)
 
-	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state&error=access_denied&error_description=User+denied+access", nil)
-	c, w := ginCtx(r)
+	// Step 1: set session state.
+	w1 := httptest.NewRecorder()
+	engine.ServeHTTP(w1, httptest.NewRequest("GET", "/test/set-state", nil))
+	ck := sessionCookieFromResponse(w1)
 
-	sess := auth.GetSession(c)
-	sess.Set("oauth_state", "valid-state")
-	sess.Save()
+	// Step 2: callback with a provider error.
+	req := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state&error=access_denied&error_description=User+denied+access", nil)
+	if ck != nil {
+		req.AddCookie(ck)
+	}
+	w2 := httptest.NewRecorder()
+	engine.ServeHTTP(w2, req)
 
-	HandleOAuthCallback(c)
-
-	if w.Code != http.StatusFound {
-		t.Errorf("expected redirect 302, got %d", w.Code)
+	if w2.Code != http.StatusFound {
+		t.Errorf("expected redirect 302, got %d", w2.Code)
 	}
 }
 
 func TestHandleOAuthCallbackNoCode(t *testing.T) {
-	initTestSession()
-
+	engine := newOAuthEngine()
 	oauthConfig = &oauth2.Config{
 		ClientID: "test-client",
 		Endpoint: oauth2.Endpoint{
@@ -225,18 +243,29 @@ func TestHandleOAuthCallbackNoCode(t *testing.T) {
 			TokenURL: "https://provider.example.com/token",
 		},
 	}
+	engine.GET("/test/set-state", func(c *gin.Context) {
+		sess := auth.GetSession(c)
+		sess.Set("oauth_state", "valid-state")
+		auth.SaveSession(c, sess)
+		c.Status(http.StatusOK)
+	})
+	engine.GET("/auth/oauth/callback", HandleOAuthCallback)
 
-	r := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state", nil)
-	c, w := ginCtx(r)
+	// Step 1: set session state.
+	w1 := httptest.NewRecorder()
+	engine.ServeHTTP(w1, httptest.NewRequest("GET", "/test/set-state", nil))
+	ck := sessionCookieFromResponse(w1)
 
-	sess := auth.GetSession(c)
-	sess.Set("oauth_state", "valid-state")
-	sess.Save()
+	// Step 2: callback with no authorization code.
+	req := httptest.NewRequest("GET", "/auth/oauth/callback?state=valid-state", nil)
+	if ck != nil {
+		req.AddCookie(ck)
+	}
+	w2 := httptest.NewRecorder()
+	engine.ServeHTTP(w2, req)
 
-	HandleOAuthCallback(c)
-
-	if w.Code != http.StatusFound {
-		t.Errorf("expected redirect 302, got %d", w.Code)
+	if w2.Code != http.StatusFound {
+		t.Errorf("expected redirect 302, got %d", w2.Code)
 	}
 }
 

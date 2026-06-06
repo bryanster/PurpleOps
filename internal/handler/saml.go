@@ -5,7 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -83,7 +83,7 @@ func InitSAML(cfg *config.Config) error {
 	// Store the ACS URL for recipient validation during assertion parsing.
 	samlACSURL = cfg.SAMLRootURL + "/auth/saml/acs"
 
-	log.Printf("SAML SP initialized: acs=%s", samlACSURL)
+	slog.Info("SAML SP initialized", "acs", samlACSURL)
 	return nil
 }
 
@@ -132,7 +132,7 @@ func HandleSAMLACS(c *gin.Context) {
 
 	assertion, err := samlSP.ServiceProvider.ParseResponse(c.Request, []string{samlACSURL})
 	if err != nil {
-		log.Printf("SAML assertion parse error: %v", err)
+		slog.Error("SAML assertion parse error", "error", err)
 		setFlash("SAML login failed: could not validate assertion.")
 		return
 	}
@@ -172,7 +172,7 @@ func HandleSAMLACS(c *gin.Context) {
 	cfg := config.Cfg
 	user, err := models.FindOrCreateSSOUser(c.Request.Context(), email, username, "saml", cfg.SSODefaultRole, cfg.SSOAutoProvision)
 	if err != nil {
-		log.Printf("SAML user provisioning failed: %v", err)
+		slog.Error("SAML user provisioning failed", "error", err)
 		setFlash("SAML login failed: internal error.")
 		return
 	}

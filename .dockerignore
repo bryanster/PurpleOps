@@ -1,0 +1,72 @@
+# =============================================================================
+# .dockerignore — Reduce build context size and prevent sensitive files from
+# being sent to the Docker daemon.
+#
+# The Dockerfile builder stage runs `go mod download` (not `-mod=vendor`),
+# so the vendored module cache is not needed. The final stage only copies
+# compiled binaries, templates/, static/, custom/, and entrypoint.sh.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Version control
+# -----------------------------------------------------------------------------
+.git/
+.github/
+
+# -----------------------------------------------------------------------------
+# Go vendor directory — the builder uses `go mod download` instead of
+# `-mod=vendor`, so the local vendor tree is not required in the build context.
+# -----------------------------------------------------------------------------
+vendor/
+
+# -----------------------------------------------------------------------------
+# Pre-built binaries — these are compiled fresh inside the builder stage and
+# should never shadow the build output.
+# -----------------------------------------------------------------------------
+purpleops
+seed
+
+# -----------------------------------------------------------------------------
+# Environment / secrets — never bake credentials into the image.
+# .env.example is safe to keep as documentation reference.
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# -----------------------------------------------------------------------------
+# Runtime evidence storage — populated at run-time, not needed at build time.
+# -----------------------------------------------------------------------------
+files/
+
+# -----------------------------------------------------------------------------
+# Development tooling and IDE config
+# -----------------------------------------------------------------------------
+.devcontainer/
+.vscode/
+.claude/
+.golangci.yml
+
+# -----------------------------------------------------------------------------
+# Documentation and repo meta-files
+# -----------------------------------------------------------------------------
+*.md
+LICENSE
+Makefile
+compose.yml
+
+# -----------------------------------------------------------------------------
+# Test helpers and test data (source files ending in _test.go are compiled
+# only during `go test` — excluding them avoids sending them to the daemon,
+# but the Go toolchain will still skip them during a plain `go build`).
+# Exclude any e2e test infrastructure.
+# -----------------------------------------------------------------------------
+**/*_test.go
+e2e/
+sampledata/
+
+# -----------------------------------------------------------------------------
+# Misc data files
+# -----------------------------------------------------------------------------
+*.xlsx
+INITIAL_ADMIN_PASSWORD.TXT

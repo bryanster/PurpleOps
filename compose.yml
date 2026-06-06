@@ -1,6 +1,6 @@
 services:
   mongodb:
-    image: mongo:8.0
+    image: mongo:8.2
     container_name: mongodb
     volumes:
       - mongodb_data:/data/db
@@ -15,6 +15,8 @@ services:
       - dev
       - prod
 
+  # Development only — do not expose in production.
+  # Set ME_BASICAUTH_PASSWORD env var to override the default password.
   mongo-express:
     image: mongo-express:latest
     container_name: mongo-express
@@ -22,7 +24,25 @@ services:
       - "8081:8081"
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
-      ME_CONFIG_BASICAUTH: false
+      ME_CONFIG_BASICAUTH: true
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: ${ME_BASICAUTH_PASSWORD:-changeme-mongoexpress}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    profiles:
+      - dev
+
+  devcontainer:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    container_name: purpleops-devcontainer
+    volumes:
+      - .:/workspaces/purpleops:cached
+    command: sleep infinity
+    environment:
+      - ANTHROPIC_API_KEY
     depends_on:
       mongodb:
         condition: service_healthy
