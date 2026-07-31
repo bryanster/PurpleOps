@@ -38,5 +38,10 @@
 // deadlines and traces all stop being the caller's. The lock keeps writes on the
 // calling goroutine.
 //
-// Migrations arrive in M0B-004; repositories with M1 and later.
+// # Schema
+//
+// The schema is owned by [github.com/bryanster/purpleops/internal/store/migrate],
+// which applies the SQL migrations embedded in the binary. A server calls
+// migrate.Up once at startup, after Open and before it accepts a request.
+// Repositories arrive with M1 and later.
 package store
