@@ -7,15 +7,15 @@
   "dockerComposeRunArgs": ["--profile", "dev"],
   "shutdownAction": "stopCompose",
   "remoteUser": "root",
+  // The local ssh-agent is forwarded automatically by the Dev Containers
+  // extension. Do not bind-mount ${localEnv:SSH_AUTH_SOCK}: agents such as
+  // Secretive keep their socket under ~/Library/Containers, which Docker
+  // Desktop cannot share.
   "mounts": [
     "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
-    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
   ],
-  "remoteEnv": {
-    "SSH_AUTH_SOCK": "/ssh-agent"
-  },
   "forwardPorts": [8080, 8081, 27017],
   "postCreateCommand": "go mod download && pre-commit install",
   "customizations": {
