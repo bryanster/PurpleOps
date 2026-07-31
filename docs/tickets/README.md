@@ -55,7 +55,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | Milestone | State | Tickets |
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
-| **M0b — Foundations** | in progress — 1/14 done | [14 tickets](#m0b--foundations) |
+| **M0b — Foundations** | in progress — 2/14 done | [14 tickets](#m0b--foundations) |
 | **M1 — Identity & access** | ready to implement | [17 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
@@ -81,7 +81,7 @@ Build in this order — the dependency chain is real.
 | ID | Title | Size |
 |---|---|---|
 | [M0B-001](done/M0B-001-repo-skeleton-and-tooling.md) ✅ | Repo skeleton, Go module, Makefile, pinned tooling | M |
-| [M0B-002](M0B-002-config.md) | Typed configuration from environment | S |
+| [M0B-002](done/M0B-002-config.md) ✅ | Typed configuration from environment | S |
 | [M0B-003](M0B-003-duckdb-store-and-serialized-writer.md) | DuckDB connection, pools, serialized writer | L |
 | [M0B-004](M0B-004-migrator.md) | Embedded SQL migrator + `schema_migrations` | M |
 | [M0B-005](M0B-005-openapi-and-server-codegen.md) | `api/openapi.yaml` + oapi-codegen strict server | M |
