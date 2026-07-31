@@ -62,11 +62,19 @@ ifneq ($(HAS_WEB),)
 endif
 
 .PHONY: lint
-lint: $(BIN_DIR)/golangci-lint ## Lint Go and web sources
+lint: $(BIN_DIR)/golangci-lint lint-spec ## Lint Go sources, the API spec, and web sources
 	$(BIN_DIR)/golangci-lint run
 ifneq ($(HAS_WEB),)
 	npm --prefix $(WEB_DIR) run lint
 endif
+
+# The API spec's linter is a Go test rather than a second toolchain: the rules
+# need the parsed document, which `go test ./api` already has. It runs here as
+# well as in `test` because a spec that breaks its own conventions is a lint
+# failure — see docs/api.md.
+.PHONY: lint-spec
+lint-spec: ## Check api/openapi.yaml is valid and follows the API conventions
+	go test -count=1 ./api
 
 .PHONY: test
 test: ## Run Go and web tests

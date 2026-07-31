@@ -4,6 +4,8 @@ go 1.25.0
 
 require (
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
+	github.com/getkin/kin-openapi v0.142.0
+	github.com/go-chi/chi/v5 v5.3.1
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0
 )
 
@@ -16,7 +18,6 @@ require (
 	github.com/duckdb/duckdb-go-bindings/lib/linux-amd64 v0.10505.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/linux-arm64 v0.10505.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/windows-amd64 v0.10505.0 // indirect
-	github.com/getkin/kin-openapi v0.142.0 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect
 	github.com/go-openapi/swag/jsonname v0.26.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
