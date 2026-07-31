@@ -1,0 +1,66 @@
+# golangci-lint v2 configuration. The version is pinned in the Makefile
+# (GOLANGCI_LINT_VERSION) so local runs and CI agree on what "green" means.
+version: "2"
+
+linters:
+  # `standard` is errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+  enable:
+    - bodyclose # an unclosed response body leaks a connection per request
+    - contextcheck # a request-scoped context must reach the database call
+    - copyloopvar
+    - errorlint # %w and errors.As, so error wrapping survives refactors
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - rowserrcheck # rows.Err() after iteration, or a partial result reads as complete
+    - sqlclosecheck
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # readability of a struct beats a few bytes of padding
+        - shadow # flags `if err := f(); err != nil`, which is the idiom, not a bug
+    staticcheck:
+      checks:
+        - all
+    gosec:
+      excludes:
+        # G104 duplicates errcheck, which is configured more strictly above.
+        - G104
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Tests may shell out and assert on fixture paths; the security linters
+      # flag both, and neither is a risk in a test binary.
+      - path: _test\.go$
+        linters:
+          - gosec
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/bryanster/purpleops
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

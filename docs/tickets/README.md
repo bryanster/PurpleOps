@@ -17,6 +17,11 @@ Each ticket is one file, named `<ID>-<slug>.md`, and contains:
 | **Depends on** | Tickets that must be merged first. |
 | **Size** | S ≈ half a day, M ≈ 1–2 days, L ≈ 3–5 days, for someone new to the codebase. |
 
+A finished ticket moves to [`done/`](done/) with its acceptance criteria ticked, and is marked ✅ in
+the tables below. Where the implementation had to deviate from the ticket, the reason is appended to
+the moved file under **Implementation notes** — read those before starting a ticket that depends
+on it.
+
 ## Definition of done (applies to every ticket)
 
 A ticket is done when **all** of the following are true. Tickets do not restate these.
@@ -50,7 +55,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | Milestone | State | Tickets |
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
-| **M0b — Foundations** | ready to implement | [14 tickets](#m0b--foundations) |
+| **M0b — Foundations** | in progress — 1/14 done | [14 tickets](#m0b--foundations) |
 | **M1 — Identity & access** | ready to implement | [17 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
@@ -75,7 +80,7 @@ Build in this order — the dependency chain is real.
 
 | ID | Title | Size |
 |---|---|---|
-| [M0B-001](M0B-001-repo-skeleton-and-tooling.md) | Repo skeleton, Go module, Makefile, pinned tooling | M |
+| [M0B-001](done/M0B-001-repo-skeleton-and-tooling.md) ✅ | Repo skeleton, Go module, Makefile, pinned tooling | M |
 | [M0B-002](M0B-002-config.md) | Typed configuration from environment | S |
 | [M0B-003](M0B-003-duckdb-store-and-serialized-writer.md) | DuckDB connection, pools, serialized writer | L |
 | [M0B-004](M0B-004-migrator.md) | Embedded SQL migrator + `schema_migrations` | M |

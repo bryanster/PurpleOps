@@ -1,0 +1,26 @@
+# Build output
+/bin/
+/web/dist/
+/web/node_modules/
+
+# Local runtime state: the embedded database, its WAL, and uploaded evidence.
+*.duckdb*
+/evidence/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Test and coverage output
+*.out
+/coverage/
+/web/test-results/
+/web/playwright-report/
+
+# Editor and OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -64,15 +64,15 @@ Each must work from a clean checkout on Linux with Go and Node installed.
 
 ## Acceptance criteria
 
-- [ ] `go build ./...` and `go vet ./...` pass on a clean clone.
-- [ ] `make tools && make generate` leaves the working tree unchanged (`git diff --exit-code`).
-- [ ] Running `make generate` twice in a row produces identical output both times.
-- [ ] `./bin/purpleops --version` prints a version, commit SHA and build date populated by ldflags,
+- [x] `go build ./...` and `go vet ./...` pass on a clean clone.
+- [x] `make tools && make generate` leaves the working tree unchanged (`git diff --exit-code`).
+- [x] Running `make generate` twice in a row produces identical output both times.
+- [x] `./bin/purpleops --version` prints a version, commit SHA and build date populated by ldflags,
       not placeholder strings.
-- [ ] `.golangci.yml` enables at minimum: `errcheck`, `govet`, `staticcheck`, `ineffassign`,
+- [x] `.golangci.yml` enables at minimum: `errcheck`, `govet`, `staticcheck`, `ineffassign`,
       `unused`, `gosec`, `bodyclose`, `sqlclosecheck`, `rowserrcheck`, `contextcheck`.
-- [ ] `.gitignore` covers `bin/`, `web/node_modules/`, `web/dist/`, `*.duckdb*`, `evidence/`, `.env`.
-- [ ] No directory in the tree is empty.
+- [x] `.gitignore` covers `bin/`, `web/node_modules/`, `web/dist/`, `*.duckdb*`, `evidence/`, `.env`.
+- [x] No directory in the tree is empty.
 
 ## Tests
 
@@ -90,3 +90,31 @@ Each must work from a clean checkout on Linux with Go and Node installed.
   This is how the generator version lives in `go.mod` instead of in someone's `$PATH`.
 - Do **not** add `github.com/duckdb/duckdb-go/v2` yet — `M0B-003` owns that dependency and its
   build constraints.
+
+---
+
+## Implementation notes (added on completion)
+
+Three decisions deviate from the text above. Later tickets depend on them.
+
+1. **`go.mod` says `go 1.25.0`, not 1.24.** `oapi-codegen` v2.8.0 and its whole transitive tree
+   (`kin-openapi`, `x/tools`, `x/net`) declare `go 1.25`, so `go mod tidy` raises the directive.
+   Holding at 1.24 would have meant pinning the generator several releases back. `PLAN.md` does not
+   name a Go version, so there is no conflict with it. **`M0B-011` (Docker base image) and
+   `M0B-012` (CI build matrix) must use 1.25.**
+2. **`golangci-lint` is pinned in the Makefile (`GOLANGCI_LINT_VERSION`), not in `tools/tools.go`.**
+   It is a linter, not a generator, so it does not need to produce byte-identical output across
+   machines, and its dependency tree is large enough to constrain ordinary library upgrades if it
+   sits in `go.mod`. It is installed with an explicit `@version`, which keeps CI reproducible.
+   `tools/tools.go` holds generators only.
+3. **`govet`'s `shadow` check is disabled** in `.golangci.yml`. It flags `if err := f(); err != nil`,
+   which is the idiom rather than a defect. `fieldalignment` is disabled for the same class of
+   reason. Every other `govet` analyser is on.
+
+`make generate` depends on the generator binaries rather than on `make tools`, so a present and
+up-to-date `./bin` is used offline and only a missing or stale one triggers a fetch.
+
+The ldflags test (`TestLDFlagsPopulateInfo`) reads the flags from `make print-ldflags` so the
+Makefile stays the single source of truth for how a build is stamped. Both halves were verified to
+fail on purpose: a typo'd `-X` path fails the static check, and renaming a stamped variable — which
+the linker ignores silently — fails the probe assertion.
