@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
@@ -158,6 +159,91 @@ func (u *URL) UnmarshalText(text []byte) error {
 	parsed.RawPath = ""
 	u.URL = parsed
 	return nil
+}
+
+// CIDRs is a set of network ranges, parsed from a comma-separated list.
+//
+// It exists for one job — deciding whether the peer on the other end of a
+// connection is a reverse proxy this deployment installed — so it answers
+// "does this set contain this address" and nothing else. An empty set contains
+// nothing, which is the safe answer for a server reachable directly.
+//
+// A bare address is accepted and means that address alone: an operator naming
+// one proxy should not have to remember to write "/32".
+type CIDRs struct {
+	prefixes []netip.Prefix
+}
+
+// IsZero reports whether the set is empty — no proxy is trusted.
+func (c CIDRs) IsZero() bool { return len(c.prefixes) == 0 }
+
+// Contains reports whether addr falls in any of the ranges.
+//
+// The address is unmapped first, so a peer that arrives on a dual-stack
+// listener as ::ffff:10.0.0.1 is matched by the 10.0.0.0/8 an operator wrote,
+// rather than silently failing to be a trusted proxy.
+func (c CIDRs) Contains(addr netip.Addr) bool {
+	if !addr.IsValid() {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, prefix := range c.prefixes {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// String renders the set the way it is written in the environment.
+func (c CIDRs) String() string {
+	parts := make([]string, len(c.prefixes))
+	for i, prefix := range c.prefixes {
+		parts[i] = prefix.String()
+	}
+	return strings.Join(parts, ",")
+}
+
+// MarshalText is the inverse of UnmarshalText, so a config dumped to JSON shows
+// the list rather than the internals of netip.Prefix.
+func (c CIDRs) MarshalText() ([]byte, error) { return []byte(c.String()), nil }
+
+func (c *CIDRs) UnmarshalText(text []byte) error {
+	var prefixes []netip.Prefix
+	for _, field := range strings.Split(string(text), ",") {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue // a trailing comma, or "a, b" — not worth an error
+		}
+		prefix, err := parsePrefix(field)
+		if err != nil {
+			return err
+		}
+		prefixes = append(prefixes, prefix)
+	}
+	if len(prefixes) == 0 {
+		return errors.New("must list at least one address or CIDR range, or be left unset")
+	}
+	c.prefixes = prefixes
+	return nil
+}
+
+// parsePrefix reads one entry of a [CIDRs] list.
+func parsePrefix(field string) (netip.Prefix, error) {
+	if prefix, err := netip.ParsePrefix(field); err == nil {
+		// Masked: 10.0.0.1/8 is a range with a host address written in it, and
+		// Prefix.Contains reports false for every address unless the bits
+		// outside the mask are clear.
+		return prefix.Masked(), nil
+	}
+	addr, err := netip.ParseAddr(field)
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf(
+			"must be a comma-separated list of addresses or CIDR ranges, such as "+
+				`"10.0.0.0/8,192.168.1.7", but %s is neither`, strconv.Quote(field))
+	}
+	addr = addr.Unmap()
+	return netip.PrefixFrom(addr, addr.BitLen()), nil
 }
 
 // Redacted placeholders. They are what a [Secret] renders as everywhere a

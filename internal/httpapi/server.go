@@ -1,0 +1,156 @@
+package httpapi
+
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/go-chi/chi/v5"
+
+	"github.com/bryanster/purpleops/api"
+	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/purpleops/internal/store"
+)
+
+// BasePath is where the generated routes are mounted. It is the one server
+// declared in api/openapi.yaml, so the spec, the router and the SPA's fetch
+// calls all agree by construction rather than by three people remembering.
+const BasePath = "/api/v1"
+
+// Deps is everything the server needs from the process around it. It is a
+// struct rather than a list of arguments so that adding a dependency in M1 is
+// an additive change at every call site — and it is explicit rather than a
+// package-level global, which is what PLAN.md §6 requires.
+type Deps struct {
+	// Config is the whole configuration. Only the Server section is read today;
+	// the rest is here so that a handler added later — one that needs the
+	// evidence directory, or the session secret — does not change this
+	// signature or every call site with it.
+	Config config.Config
+
+	// Store is the database. Required — a server that cannot answer /healthz
+	// truthfully has nothing to offer an orchestrator.
+	Store store.Store
+
+	// Logger receives the request log and everything the middleware reports. A
+	// nil logger means slog.Default(), for a test that does not care.
+	Logger *slog.Logger
+}
+
+// NewServer builds the HTTP handler: the middleware chain, the routes
+// generated from api/openapi.yaml, and the problem responses for everything
+// that does not reach a handler.
+//
+// It returns an error rather than panicking, because the specification it
+// loads is a file that can be wrong; a server that cannot be built is a startup
+// failure with a message, not a stack trace.
+func NewServer(deps Deps) (http.Handler, error) {
+	doc, err := api.Load()
+	if err != nil {
+		return nil, fmt.Errorf("httpapi: load the API specification: %w", err)
+	}
+	return newServer(deps, doc, nil)
+}
+
+// newServer is the body of [NewServer] with two things passed in that the
+// process never varies.
+//
+// doc is the specification the request validator enforces. extraRoutes
+// registers handlers on the API router, behind that validator, alongside the
+// generated ones. Both exist for the tests: api/openapi.yaml describes no
+// request body until M1, so proving that a bad body is rejected before a
+// handler runs needs an operation that takes one — and a handler that records
+// whether it ran. Production passes nil for both.
+func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.Handler, error) {
+	if deps.Store == nil {
+		return nil, errors.New("httpapi: no store; the health check has nothing to report on")
+	}
+	log := deps.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+	responder := apierr.NewResponder(log)
+
+	validate, err := requestValidator(doc, responder)
+	if err != nil {
+		return nil, err
+	}
+
+	router := chi.NewRouter()
+
+	// The order is the design, outermost first — the order a request meets them:
+	//
+	//  1. requestID     — every line below it, and every response, carries one.
+	//  2. realIP        — so the log and (M1-004) the throttler agree on who
+	//                     this is, before anything records it.
+	//  3. requestLogger — outside the recoverer, so the line it writes reports
+	//                     the 500 the recoverer produced rather than the status
+	//                     of a request that never finished. See its comment;
+	//                     this is the one place the chain deviates from the
+	//                     order M0B-006 suggested, and there is a test for it.
+	//  4. recoverer     — a panic becomes a problem document and a logged stack.
+	//  5. timeout       — the per-request deadline, inside recovery so that a
+	//                     handler panicking on a cancelled context is caught.
+	//  6. security headers.
+	//  7. request validation, mounted on the API router below: it needs the
+	//     path to be one the specification describes, which /healthz under any
+	//     other prefix is not.
+	//
+	// M1 inserts authentication and then authorization between 7 and the
+	// handlers, on the API router — one chain, so there is no route that can
+	// quietly avoid them (M1-013).
+	router.Use(
+		requestID,
+		realIP(deps.Config.Server.TrustedProxies),
+		requestLogger(log),
+		recoverer(log, responder),
+		timeout(deps.Config.Server.RequestTimeout),
+		securityHeaders(deps.Config.Server.BaseURL),
+	)
+
+	// chi answers an unrouted request with plain text by default. Everything
+	// this server says about a failure is a problem document, including the
+	// failures that never reach a handler.
+	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		responder.Write(w, r, apierr.NotFound("endpoint", r.URL.Path))
+	})
+	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		responder.Write(w, r, apierr.MethodNotAllowed(r.Method))
+	})
+
+	apiRouter := chi.NewRouter()
+	apiRouter.Use(validate)
+	gen.HandlerWithOptions(strictHandler(deps.Store, log, responder), gen.ChiServerOptions{
+		BaseRouter: apiRouter,
+		// Reached when the generated wrapper cannot bind a parameter. The
+		// validator rejects those first, so this is a belt-and-braces path —
+		// but its default writes http.Error, which would be the one response in
+		// the application that is not a problem document.
+		ErrorHandlerFunc: responder.Write,
+	})
+	if extraRoutes != nil {
+		extraRoutes(apiRouter)
+	}
+	router.Mount(BasePath, apiRouter)
+
+	return router, nil
+}
+
+// strictHandler wraps the handlers in the generated strict-mode adapter, with
+// both of its error hooks pointed at the one responder. An error returned by a
+// handler, and a response that will not serialize, then produce the same shape
+// as everything else (M0B-007).
+func strictHandler(db store.Store, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+	return gen.NewStrictHandlerWithOptions(
+		&handlers{store: db, log: log},
+		nil, // No strict middleware: the chain is chi's, so there is one of them.
+		gen.StrictHTTPServerOptions{
+			RequestErrorHandlerFunc:  responder.Write,
+			ResponseErrorHandlerFunc: responder.Write,
+		},
+	)
+}

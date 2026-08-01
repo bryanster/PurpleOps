@@ -139,3 +139,4 @@ accept and add the reason to this list.
 | `internal/httpapi/gen/server.gen.go` | Generated. Do not edit |
 | `internal/httpapi/gen/strictmode_test.go` | Asserts the generator was asked for a strict chi server |
 | `internal/httpapi/apierr` | The error vocabulary, the code/status table, and the one place a Go error becomes a response |
+| [`docs/http.md`](http.md) | How the server runs it: the middleware chain, headers, proxies, timeouts and shutdown |

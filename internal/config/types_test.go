@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
@@ -249,5 +250,93 @@ func TestLogLevelMapsToSlog(t *testing.T) {
 	if len(tests) != len(logLevels) {
 		t.Errorf("%d levels are mapped but %d are accepted; every level needs a slog equivalent",
 			len(tests), len(logLevels))
+	}
+}
+
+func TestCIDRsAcceptsRangesAndBareAddresses(t *testing.T) {
+	var trusted CIDRs
+	if err := trusted.UnmarshalText([]byte("10.0.0.0/8, 192.168.1.7,2001:db8::/32")); err != nil {
+		t.Fatalf("UnmarshalText: %v", err)
+	}
+
+	tests := map[string]bool{
+		"10.4.5.6":    true,
+		"10.0.0.0":    true,
+		"192.168.1.7": true,
+		"192.168.1.8": false,
+		"2001:db8::1": true,
+		"2001:db9::1": false,
+		"172.16.0.1":  false,
+		"127.0.0.1":   false,
+		// A dual-stack listener reports an IPv4 peer in this form. An operator
+		// who wrote 10.0.0.0/8 means this address too.
+		"::ffff:10.4.5.6": true,
+	}
+	for addr, want := range tests {
+		parsed, err := netip.ParseAddr(addr)
+		if err != nil {
+			t.Fatalf("netip.ParseAddr(%q): %v", addr, err)
+		}
+		if got := trusted.Contains(parsed); got != want {
+			t.Errorf("Contains(%s) = %t, want %t", addr, got, want)
+		}
+	}
+}
+
+// TestCIDRsMasksAHostAddressWrittenAsARange covers the typo that would
+// otherwise trust nothing at all: netip.Prefix.Contains reports false for every
+// address when the bits outside the mask are set.
+func TestCIDRsMasksAHostAddressWrittenAsARange(t *testing.T) {
+	var trusted CIDRs
+	if err := trusted.UnmarshalText([]byte("10.1.2.3/8")); err != nil {
+		t.Fatalf("UnmarshalText: %v", err)
+	}
+	if !trusted.Contains(netip.MustParseAddr("10.9.9.9")) {
+		t.Error(`Contains(10.9.9.9) = false for "10.1.2.3/8"; the range was not masked`)
+	}
+}
+
+func TestEmptyCIDRsTrustsNobody(t *testing.T) {
+	var trusted CIDRs
+
+	if !trusted.IsZero() {
+		t.Error("IsZero() = false for an unset list")
+	}
+	if trusted.Contains(netip.MustParseAddr("10.0.0.1")) {
+		t.Error("an unset list contains an address; an unproxied deployment would trust its clients")
+	}
+	if trusted.Contains(netip.Addr{}) {
+		t.Error("an invalid address is contained; a peer whose address did not parse must not be trusted")
+	}
+}
+
+func TestCIDRsRejectsWhatIsNotAnAddress(t *testing.T) {
+	for _, raw := range []string{"not-an-address", "10.0.0.0/33", "10.0.0.0/8,nonsense", ""} {
+		var trusted CIDRs
+		if err := trusted.UnmarshalText([]byte(raw)); err == nil {
+			t.Errorf("UnmarshalText(%q) = nil, want an error", raw)
+		}
+	}
+}
+
+func TestCIDRsRoundTripsThroughText(t *testing.T) {
+	var trusted CIDRs
+	if err := trusted.UnmarshalText([]byte("10.0.0.0/8,192.168.1.7")); err != nil {
+		t.Fatalf("UnmarshalText: %v", err)
+	}
+
+	text, err := trusted.MarshalText()
+	if err != nil {
+		t.Fatalf("MarshalText: %v", err)
+	}
+	var again CIDRs
+	if err := again.UnmarshalText(text); err != nil {
+		t.Fatalf("UnmarshalText(%q): %v", text, err)
+	}
+	if got, want := again.String(), trusted.String(); got != want {
+		t.Errorf("round trip = %q, want %q", got, want)
+	}
+	if got, want := trusted.String(), "10.0.0.0/8,192.168.1.7/32"; got != want {
+		t.Errorf("String() = %q, want %q", got, want)
 	}
 }

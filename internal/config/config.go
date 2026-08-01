@@ -19,7 +19,9 @@ const (
 	envEnv             = prefix + "ENV"
 	envAddr            = prefix + "ADDR"
 	envBaseURL         = prefix + "BASE_URL"
+	envRequestTimeout  = prefix + "REQUEST_TIMEOUT"
 	envShutdownTimeout = prefix + "SHUTDOWN_TIMEOUT"
+	envTrustedProxies  = prefix + "TRUSTED_PROXIES"
 	envDBPath          = prefix + "DB_PATH"
 	envEvidenceDir     = prefix + "EVIDENCE_DIR"
 	envSessionSecret   = prefix + "SESSION_SECRET"
@@ -56,9 +58,20 @@ type Server struct {
 	// configured rather than guessed.
 	BaseURL URL
 
+	// RequestTimeout is the deadline put on the context of every request. A
+	// handler that respects its context gives up at that point and the caller
+	// gets an error rather than a connection that never answers.
+	RequestTimeout time.Duration
+
 	// ShutdownTimeout is how long in-flight requests get to finish after a
 	// termination signal before the process exits anyway.
 	ShutdownTimeout time.Duration
+
+	// TrustedProxies are the peers whose forwarded-for headers this server
+	// believes. Empty — the default — means the client address is always the
+	// address the connection came from, so nobody can change what is throttled
+	// (M1-004) or logged by sending a header.
+	TrustedProxies CIDRs
 }
 
 // Database locates the embedded DuckDB database.
@@ -113,7 +126,9 @@ func (c *Config) bindings() []binding {
 		{name: envEnv, target: &c.Env, def: string(EnvProduction)},
 		{name: envAddr, target: &c.Server.Addr, def: ":8080"},
 		{name: envBaseURL, target: &c.Server.BaseURL, required: true},
+		{name: envRequestTimeout, target: &c.Server.RequestTimeout, def: "30s"},
 		{name: envShutdownTimeout, target: &c.Server.ShutdownTimeout, def: "15s"},
+		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
 		{name: envDBPath, target: &c.Database.Path, def: "./purpleops.duckdb"},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
