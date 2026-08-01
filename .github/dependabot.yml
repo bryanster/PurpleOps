@@ -1,0 +1,82 @@
+# Dependency updates, batched into one pull request per ecosystem per month.
+#
+# Grouped rather than one PR per package: an ungrouped Go tree here opens a
+# dozen PRs a month, each of which has to pass the same eight-minute pipeline,
+# and the review that matters (does the suite still pass) is identical for all
+# of them. `cooldown` holds a release for a week so a bad publish is yanked
+# before it reaches a branch here.
+#
+# The github-actions ecosystem is the one that keeps the SHA pins in
+# .github/workflows/ci.yml current — Dependabot rewrites both the SHA and the
+# `# vX.Y.Z` comment beside it, which is the only sustainable way to run
+# commit-pinned actions.
+
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+    pull-request-branch-name:
+      separator: "/"
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "go"
+
+  # web/, not the repository root: package.json lives with the SPA.
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      # Split so a routine patch bump is not held up by a major React or Vite
+      # release, which needs a human to read the migration notes.
+      npm-development:
+        dependency-type: "development"
+        patterns:
+          - "*"
+      npm-production:
+        dependency-type: "production"
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+    pull-request-branch-name:
+      separator: "/"
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+    pull-request-branch-name:
+      separator: "/"
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "ci"

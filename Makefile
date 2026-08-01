@@ -104,6 +104,16 @@ ifneq ($(HAS_WEB),)
 	npm --prefix $(WEB_DIR) test
 endif
 
+# What CI runs for the Go half (.github/workflows/ci.yml). Separate from `test`
+# because -race roughly triples the wall clock, which is the wrong default for
+# the loop you run every few minutes — but the right one before merging. The
+# profile is a build artifact, so *.out is gitignored.
+COVERPROFILE ?= coverage.out
+
+.PHONY: test-race
+test-race: ## Run the Go tests with the race detector and a coverage profile
+	go test -race -covermode=atomic -coverprofile=$(COVERPROFILE) $(GO_PACKAGES)
+
 .PHONY: build
 build: ## Build the SPA and the server and CLI binaries into ./bin
 ifneq ($(HAS_WEB),)
@@ -157,3 +167,10 @@ clean: ## Remove build output
 .PHONY: print-ldflags
 print-ldflags:
 	@echo '$(LDFLAGS)'
+
+# Consumed by the CI lint job, which installs golangci-lint from a prebuilt
+# release rather than with `go install`. This keeps the version pinned in one
+# place instead of two that drift apart quietly.
+.PHONY: print-golangci-version
+print-golangci-version:
+	@echo '$(GOLANGCI_LINT_VERSION)'

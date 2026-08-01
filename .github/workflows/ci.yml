@@ -1,0 +1,285 @@
+# PurpleOps v2 — the pipeline that decides whether a change is mergeable.
+#
+# Two of these jobs exist because of named v1 failures (PLAN.md §4, §8):
+#
+#   codegen  generated code is committed, so it can go stale. This job is the
+#            only thing that notices.
+#   build    the binary needs CGO, so "it compiles" is architecture-specific.
+#            PLAN.md §8 accepts that risk *because* CI proves both builds work.
+#
+# Everything here runs without secrets, so a pull request from a fork gets the
+# same verdict as a branch on this repository.
+#
+# Branch protection, and which of these checks is required, is documented in
+# docs/contributing.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main, v2]
+  pull_request:
+
+# A newer push to the same branch makes the older run's answer irrelevant, so
+# cancel it. Runs on a long-lived branch are kept: those are the ones a bisect
+# or a badge reads later.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v2' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # ── lint ────────────────────────────────────────────────────────────────────
+  #
+  # `make lint` in three steps rather than one call, because the Makefile
+  # installs golangci-lint with `go install` — correct locally, but two or three
+  # minutes of compiling a large dependency tree on a cold runner. The action
+  # downloads the same pinned release as a prebuilt binary and caches its
+  # analysis results between runs. The version still comes from the Makefile.
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Read the pinned golangci-lint version
+        id: golangci
+        run: echo "version=$(make print-golangci-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ steps.golangci.outputs.version }}
+
+      # api/conventions_test.go is the spec linter — the rules need the parsed
+      # document, which `go test ./api` already has. docs/api.md says why.
+      - name: OpenAPI spec conventions
+        run: make lint-spec
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm --prefix web ci
+
+      # tsc --noEmit, eslint and prettier --check, in that order.
+      - name: Web lint
+        run: npm --prefix web run lint
+
+  # ── Go tests ────────────────────────────────────────────────────────────────
+  test-go:
+    name: Go tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # -race, not plain `go test`: the store's serialized writer (M0B-003) is
+      # the kind of code where a data race is the whole class of bug.
+      - name: go test -race
+        run: make test-race
+
+      # Published, not gated. A percentage threshold makes people test getters;
+      # the per-layer requirements in PLAN.md §9 are the real bar.
+      - name: Report coverage
+        run: |
+          total="$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')"
+          echo "Go statement coverage: **${total}**" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-coverage
+          path: coverage.out
+          retention-days: 7
+
+  # ── web tests ───────────────────────────────────────────────────────────────
+  test-web:
+    name: Web tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm --prefix web ci
+
+      - run: npm --prefix web test
+
+  # ── codegen drift ───────────────────────────────────────────────────────────
+  #
+  # PLAN.md §4: "CI fails if generated code is stale." Editing api/openapi.yaml
+  # without committing the regenerated server and TypeScript types is the
+  # failure mode; it is silent everywhere else, because the stale files still
+  # compile.
+  codegen:
+    name: Generated code is current
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm --prefix web ci
+
+      # Generator versions come from go.mod and web/package-lock.json, never
+      # from the runner's PATH — see tools/tools.go.
+      - run: make generate
+
+      # `git diff` alone would miss a generator that starts emitting a *new*
+      # file, so the untracked half is checked too.
+      - name: Fail if regenerating changed anything
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "generated code matches api/openapi.yaml"
+            exit 0
+          fi
+          echo "::error::Generated code is stale. Run 'make generate' and commit the result."
+          git status --porcelain
+          git --no-pager diff
+          exit 1
+
+  # ── build matrix ────────────────────────────────────────────────────────────
+  #
+  # CGO is on, so this is a real cross-compile and not a GOOS/GOARCH flag.
+  # Cross-compiling from one amd64 runner rather than using a native arm64
+  # runner, because that is exactly what deploy/Dockerfile does (see its
+  # implementation notes in M0B-011: emulated builds segfault the Go
+  # toolchain), so a green matrix here is evidence about the artifact we ship.
+  # g++ as well as gcc: the DuckDB engine is a C++ static archive and the link
+  # needs the target's libstdc++.
+  build:
+    name: Build linux/${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            cc: gcc
+            cxx: g++
+            elf: x86-64
+          - arch: arm64
+            cc: aarch64-linux-gnu-gcc
+            cxx: aarch64-linux-gnu-g++
+            elf: ARM aarch64
+            packages: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm --prefix web ci
+
+      - name: Install the cross toolchain
+        if: matrix.packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ${{ matrix.packages }}
+
+      # `make build` and not a bare `go build`, so CI cannot drift from the
+      # flags a developer gets: -tags spa, the version ldflags, both binaries.
+      - name: make build
+        env:
+          GOARCH: ${{ matrix.arch }}
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: make build
+
+      # The point of the matrix. Without this, a toolchain that quietly ignored
+      # GOARCH would produce two green amd64 builds and nobody would know until
+      # an arm64 operator ran the image.
+      - name: The binaries really are linux/${{ matrix.arch }}
+        run: |
+          {
+            echo '### linux/${{ matrix.arch }}'
+            echo '```'
+            file bin/purpleops bin/popsctl
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for binary in bin/purpleops bin/popsctl; do
+            described="$(file "${binary}")"
+            echo "${described}"
+            case "${described}" in
+              *'${{ matrix.elf }}'*) ;;
+              *) echo "::error::${binary} is not ${{ matrix.arch }}"; exit 1 ;;
+            esac
+          done
+
+      # Asserts the binary embeds the Vite build rather than the placeholder
+      # page (M0B-010). Native architecture only — the test has to run.
+      - name: The embedded SPA is the real build
+        if: matrix.arch == 'amd64'
+        run: make test-spa
+
+  # ── container ───────────────────────────────────────────────────────────────
+  #
+  # deploy/smoke.sh is the same script `make docker-smoke` runs locally; it
+  # makes 14 assertions about the image, starting with a first boot on
+  # --network none. The image is the supported artifact (PLAN.md §8), so it is
+  # verified on every change rather than at release time.
+  docker:
+    name: Container smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the image and smoke-test it
+        run: make docker-smoke IMAGE_TAG=ci
+
+  # ── the required check ──────────────────────────────────────────────────────
+  #
+  # One name for branch protection to require, so adding a job (M0B-013 adds
+  # e2e) does not mean editing the repository settings — and, more importantly,
+  # so a job that fails to *start* cannot be mistaken for a job that passed.
+  # `needs` + `if: always()` is what makes a skipped or cancelled job visible
+  # here.
+  ci:
+    name: CI
+    if: always()
+    needs: [lint, test-go, test-web, codegen, build, docker]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every job succeeded
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "job results: ${results}"
+          for result in ${results}; do
+            if [[ "${result}" != "success" ]]; then
+              echo "::error::a required job reported '${result}'"
+              exit 1
+            fi
+          done
