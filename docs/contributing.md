@@ -19,6 +19,16 @@ make test-race      # what CI runs: -race and a coverage profile. Slower.
 make generate       # then `git status` — a dirty tree here fails CI
 ```
 
+If you touched anything a browser sees — a route, a screen, the shell, the API behind one — run the
+end-to-end suite too. It drives the real binary against a real database:
+
+```sh
+make e2e-browsers   # once, and again after a Playwright upgrade
+make e2e            # builds, then runs the Playwright suite
+```
+
+[`docs/testing.md`](testing.md) covers headed runs, the trace viewer, and how to seed a spec.
+
 `make generate` is not optional bookkeeping. `internal/httpapi/gen/server.gen.go` and
 `web/src/api/schema.d.ts` are committed, so editing [`api/openapi.yaml`](../api/openapi.yaml)
 without regenerating leaves a tree that still compiles and is still wrong. See
@@ -45,6 +55,7 @@ a branch here.
 | `Generated code is current` | `make generate` leaves the tree clean |
 | `Build linux/amd64`, `Build linux/arm64` | The CGO build works on both, and produces a binary of the architecture it claims |
 | `Container smoke test` | The image builds, boots with no network, persists data, and still has a working Chromium |
+| `End-to-end` | A browser reaches the real binary's UI and the API behind it — and the run fails, rather than skipping, if no server ever answers |
 | `CI` | Every job above succeeded |
 
 Coverage is reported, never gated. A percentage target makes people test getters; the per-layer
@@ -84,8 +95,8 @@ The backlog in [`docs/tickets/`](tickets/) is the unit of work. Its
 the ticket file itself has the acceptance criteria a reviewer will run down.
 
 A pull request description says **what was tested and how**, and links the ticket file. "CI is
-green" is not an answer to that question — CI runs unit tests and a container smoke test, and knows
-nothing about whether the feature does what the ticket asked for.
+green" is not an answer to that question — CI runs unit tests, a container smoke test and an
+end-to-end suite, and none of them knows whether the feature does what the ticket asked for.
 
 When the implementation had to deviate from the ticket, the reason goes in the ticket file under
 **Implementation notes** before it moves to `tickets/done/`. The next person to touch that area

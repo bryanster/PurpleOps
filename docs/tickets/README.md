@@ -55,7 +55,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | Milestone | State | Tickets |
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
-| **M0b — Foundations** | in progress — 12/14 done | [14 tickets](#m0b--foundations) |
+| **M0b — Foundations** | in progress — 13/14 done | [14 tickets](#m0b--foundations) |
 | **M1 — Identity & access** | ready to implement | [17 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
@@ -92,7 +92,7 @@ Build in this order — the dependency chain is real.
 | [M0B-010](done/M0B-010-embed-spa.md) ✅ | Embed `web/dist` in the binary, SPA fallback routing | S |
 | [M0B-011](done/M0B-011-docker.md) ✅ | Dockerfile (CGO + Chromium) and compose | M |
 | [M0B-012](done/M0B-012-ci.md) ✅ | CI: lint, test, build matrix, codegen-drift gate | M |
-| [M0B-013](M0B-013-e2e-harness.md) | Playwright harness that fails loudly | M |
+| [M0B-013](done/M0B-013-e2e-harness.md) ✅ | Playwright harness that fails loudly | M |
 | [M0B-014](M0B-014-popsctl-skeleton.md) | `popsctl` admin CLI skeleton | S |
 
 ## M1 — Identity & access

@@ -32,7 +32,8 @@ make run       # build, then start the server
 `make help` lists every target. There is a dev container with the toolchain already pinned and
 installed — see [`.devcontainer/`](.devcontainer/).
 [`docs/contributing.md`](docs/contributing.md) has the development loop, what CI checks, and the
-branch-protection rules.
+branch-protection rules; [`docs/testing.md`](docs/testing.md) has the test layers and how to run and
+debug the end-to-end suite.
 
 > **Status:** v2 is under construction on the `v2` branch and is not yet usable. The full
 > installation and operation guide is rewritten in M7; until then, the ticket backlog is the

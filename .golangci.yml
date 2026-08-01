@@ -43,7 +43,9 @@ linters:
       # npm packages occasionally ship Go sources of their own (flatted, at the
       # time of writing). They are third-party, not built by anything here, and
       # linting them fails the build over code nobody in this repo can fix.
+      # Both npm projects in the module get the same treatment.
       - web/node_modules
+      - e2e/node_modules
     presets:
       - comments
       - common-false-positives

@@ -61,6 +61,30 @@ updates:
       - "dependencies"
       - "javascript"
 
+  # The Playwright suite is a third npm project (M0B-013). Ungrouped from web/
+  # on purpose: a Playwright bump usually needs its browsers redownloaded and is
+  # worth reading on its own, and it must never be able to hold up a security
+  # patch for the SPA.
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      e2e-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+    pull-request-branch-name:
+      separator: "/"
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "javascript"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

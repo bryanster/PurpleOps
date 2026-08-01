@@ -66,9 +66,10 @@
         "go.alternateTools": {
           "golangci-lint": "${workspaceFolder}/bin/golangci-lint"
         },
-        // web/ is a separate npm project inside the Go module; eslint has to be
-        // told, or it looks for a config at the repository root and finds none.
-        "eslint.workingDirectories": ["web"],
+        // web/ and e2e/ are separate npm projects inside the Go module; eslint
+        // has to be told, or it looks for a config at the repository root and
+        // finds none.
+        "eslint.workingDirectories": ["web", "e2e"],
         "[go]": {
           "editor.formatOnSave": true,
           "editor.defaultFormatter": "golang.go"

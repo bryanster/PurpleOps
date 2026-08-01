@@ -37,11 +37,11 @@ evidence/
 .gitattributes
 .github/
 
-# Test, coverage and editor noise.
+# Test, coverage and editor noise. The end-to-end suite drives the image's
+# binary from outside it; nothing in the image runs Playwright.
 **/*.out
 coverage/
-web/test-results/
-web/playwright-report/
+e2e/
 **/.DS_Store
 **/*.swp
 .idea/
