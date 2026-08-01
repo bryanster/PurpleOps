@@ -108,7 +108,7 @@ paths:
 
   /version:
     get:
-      operationId: getVersion
+      operationId: getVersionInfo
       summary: Return the build identity of the running binary.
       description: |
         Public: the SPA shows it in the footer and on the login page, and support
