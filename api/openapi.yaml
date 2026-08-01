@@ -202,6 +202,19 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    MethodNotAllowed:
+      description: |
+        The path exists but not with this method. `code` is `method_not_allowed`.
+
+        No operation references this response, and none can: a 405 is decided
+        before a request matches an operation, by the request validator that
+        looked the path up in this document (M0B-006). It is declared here
+        anyway so that every problem code has a response describing its shape —
+        the pairing TestEveryProblemCodeHasASharedResponse checks.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     Conflict:
       description: The request contradicts the current state of the resource. `code` is `conflict`.
       content:
@@ -297,6 +310,7 @@ components:
         - validation_failed
         - forbidden
         - not_found
+        - method_not_allowed
         - conflict
         - rate_limited
         - internal

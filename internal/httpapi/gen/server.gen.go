@@ -36,6 +36,7 @@ const (
 	ProblemCodeConflict         ProblemCode = "conflict"
 	ProblemCodeForbidden        ProblemCode = "forbidden"
 	ProblemCodeInternal         ProblemCode = "internal"
+	ProblemCodeMethodNotAllowed ProblemCode = "method_not_allowed"
 	ProblemCodeNotFound         ProblemCode = "not_found"
 	ProblemCodeRateLimited      ProblemCode = "rate_limited"
 	ProblemCodeValidationFailed ProblemCode = "validation_failed"
@@ -49,6 +50,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeForbidden:
 		return true
 	case ProblemCodeInternal:
+		return true
+	case ProblemCodeMethodNotAllowed:
 		return true
 	case ProblemCodeNotFound:
 		return true

@@ -40,6 +40,11 @@ var nonProblemErrorResponses = map[string]string{
 	"getHealth 503": "the degraded health report is the point of the endpoint",
 }
 
+// declaredCodePattern picks the problem code out of a shared response's
+// description — "`code` is `not_found`" — which is where a reader of the
+// document finds out which code goes with which status.
+var declaredCodePattern = regexp.MustCompile("`code` is `([a-z_]+)`")
+
 // operationIDPattern is camelCase, verb-first: getEngagement, listSteps,
 // patchExecutionDetection. It becomes a Go method name and a TypeScript hook
 // name, so anything else produces an identifier someone has to look up.
@@ -151,6 +156,62 @@ func TestEveryOperationDocumentsItsErrors(t *testing.T) {
 
 		if problems == 0 {
 			t.Errorf("%s documents no problem response at all; a caller has nothing to handle when it fails", o)
+		}
+	}
+}
+
+// TestEveryProblemCodeHasASharedResponse is the document's half of the pairing
+// in internal/httpapi/apierr: a code with no response describing it is a status
+// no operation can document, and a response naming a code the enum does not
+// declare is a status a generated client has no type for.
+//
+// The tests in that package cover the other half — that every code in the enum
+// has a status, and that no two share one.
+func TestEveryProblemCodeHasASharedResponse(t *testing.T) {
+	doc := mustLoad(t)
+
+	schema := doc.Components.Schemas["ProblemCode"]
+	if schema == nil || schema.Value == nil || len(schema.Value.Enum) == 0 {
+		t.Fatal("components.schemas.ProblemCode declares no enum; it is the set of failures a client has to handle")
+	}
+
+	described := map[string]string{}
+	for _, name := range sortedKeys(doc.Components.Responses) {
+		response := doc.Components.Responses[name]
+		if response.Value == nil || response.Value.Content[problemMediaType] == nil {
+			continue
+		}
+		description := ""
+		if response.Value.Description != nil {
+			description = *response.Value.Description
+		}
+		match := declaredCodePattern.FindStringSubmatch(description)
+		if match == nil {
+			t.Errorf("components.responses.%s is a problem response whose description does not say which code it carries; write \"`code` is `some_code`\"", name)
+			continue
+		}
+		if first, taken := described[match[1]]; taken {
+			t.Errorf("components.responses.%s and .%s both claim the code %q; the code/status pairing is 1:1", first, name, match[1])
+			continue
+		}
+		described[match[1]] = name
+	}
+
+	declared := map[string]bool{}
+	for _, value := range schema.Value.Enum {
+		code, ok := value.(string)
+		if !ok {
+			t.Errorf("the ProblemCode enum contains %v (%T), want a string", value, value)
+			continue
+		}
+		declared[code] = true
+		if _, ok := described[code]; !ok {
+			t.Errorf("the code %q has no response in components.responses describing it; no operation can document the status it is reported with", code)
+		}
+	}
+	for code, name := range described {
+		if !declared[code] {
+			t.Errorf("components.responses.%s carries the code %q, which the ProblemCode enum does not declare; a generated client has no type for it", name, code)
 		}
 	}
 }

@@ -10,5 +10,10 @@
 // The generated half is the gen subpackage, produced from api/openapi.yaml by
 // `make generate`. Adding an endpoint starts there and not here: see docs/api.md.
 //
-// Implemented by M0B-005 (generated server) and M0B-006 (routing, middleware).
+// Errors are the apierr subpackage: the vocabulary a handler returns, and the
+// single point where any error becomes a response. Nothing here writes an error
+// body of its own.
+//
+// Implemented by M0B-005 (generated server), M0B-007 (errors) and M0B-006
+// (routing, middleware).
 package httpapi

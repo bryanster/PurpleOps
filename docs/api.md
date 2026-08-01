@@ -37,6 +37,7 @@ costs; if one is wrong, argue with the message.
 | Explicit status codes, no `default` response | So the generated client has a type per outcome |
 | Every operation documents a 500 and at least one problem response | A caller with no error type cannot handle a failure |
 | Error responses `$ref` a shared response in `components/responses` | One error shape; the code/status pairing stays 1:1 with `internal/httpapi/apierr` |
+| Every `ProblemCode` has one shared response whose description says "`` `code` is `x` ``" | A code with no response is a status no operation can document |
 | Every schema declares a `type` | An untyped schema generates as `interface{}` in Go and `unknown` in TypeScript |
 | Nullable is `type: [string, "null"]`, never `nullable: true` | The latter is OpenAPI 3.0 and a 3.1 reader ignores it |
 | No `additionalProperties: true` on a request body | A request type that accepts unknown fields is how a caller writes a field it has no right to (`PLAN.md` §4) |
@@ -76,8 +77,41 @@ Every error is an RFC 9457 problem document, served as `application/problem+json
 Clients switch on `code`, never on `detail` (prose, may be reworded) and never on the status alone.
 `instance` is the request ID, so a user can quote it and an operator can find the log line.
 
-`ProblemCode` in the spec and the code/status table in `internal/httpapi/apierr` are two halves of
-one thing: adding a code means editing both in the same change (M0B-007).
+| `code` | Status | Raised by |
+|---|---|---|
+| `validation_failed` | 400 | The request validator, or `apierr.Validation(...)` for a rule the spec cannot express |
+| `forbidden` | 403 | `apierr.Forbidden(...)`, and the authorization middleware (M1-013) |
+| `not_found` | 404 | `apierr.NotFound(...)`, and a path that is not in the spec |
+| `method_not_allowed` | 405 | The request validator, for a path that exists with other methods |
+| `conflict` | 409 | `apierr.Conflict(...)` |
+| `rate_limited` | 429 | Login throttling (M1-004) |
+| `internal` | 500 | Anything else at all — see below |
+
+`ProblemCode` in the spec and that table (`internal/httpapi/apierr/codes.go`) are two halves of one
+thing: adding a code means editing both in the same change, plus a `components/responses` entry
+describing it. Three tests fail if you do less than that.
+
+### Returning an error from a handler
+
+Return an `apierr` value and wrap it as you normally would; translation uses `errors.As`, so
+wrapping does not change the answer.
+
+```go
+engagement, err := s.engagements.Get(ctx, id)
+if err != nil {
+    return nil, fmt.Errorf("get engagement: %w", err) // still a 404 if Get returned apierr.NotFound
+}
+```
+
+**An error this vocabulary does not recognise becomes a 500 with `code: "internal"` and a generic
+detail.** The real error goes to the log with the request ID; it never reaches the client. v1
+returned raw driver errors to the browser, and this is the structural answer to that — so an error
+that should tell the caller something has to say so through a constructor. There is no path by which
+an unclassified error surfaces in a response.
+
+The same split applies inside a constructor: `apierr.NotFound("engagement", id)` tells the client
+"no such engagement" and tells the log which id. `apierr.Forbidden(action)` tells the client nothing
+about what was attempted.
 
 ## OpenAPI 3.1, and where the tools disagree
 
@@ -104,3 +138,4 @@ accept and add the reason to this list.
 | `api/spec_test.go`, `api/conventions_test.go` | The spec's validity and its conventions |
 | `internal/httpapi/gen/server.gen.go` | Generated. Do not edit |
 | `internal/httpapi/gen/strictmode_test.go` | Asserts the generator was asked for a strict chi server |
+| `internal/httpapi/apierr` | The error vocabulary, the code/status table, and the one place a Go error becomes a response |

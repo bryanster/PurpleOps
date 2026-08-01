@@ -55,7 +55,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | Milestone | State | Tickets |
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
-| **M0b — Foundations** | in progress — 5/14 done | [14 tickets](#m0b--foundations) |
+| **M0b — Foundations** | in progress — 6/14 done | [14 tickets](#m0b--foundations) |
 | **M1 — Identity & access** | ready to implement | [17 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
@@ -85,8 +85,8 @@ Build in this order — the dependency chain is real.
 | [M0B-003](done/M0B-003-duckdb-store-and-serialized-writer.md) ✅ | DuckDB connection, pools, serialized writer | L |
 | [M0B-004](done/M0B-004-migrator.md) ✅ | Embedded SQL migrator + `schema_migrations` | M |
 | [M0B-005](done/M0B-005-openapi-and-server-codegen.md) ✅ | `api/openapi.yaml` + oapi-codegen strict server | M |
+| [M0B-007](done/M0B-007-error-model.md) ✅ | One error/problem model, end to end | S |
 | [M0B-006](M0B-006-http-server.md) | chi server, middleware chain, request validation, shutdown | M |
-| [M0B-007](M0B-007-error-model.md) | One error/problem model, end to end | S |
 | [M0B-008](M0B-008-spa-scaffold.md) | React + Vite + TS + Tailwind + shadcn/ui scaffold | M |
 | [M0B-009](M0B-009-typed-api-client.md) | Generated TS client + TanStack Query wiring | M |
 | [M0B-010](M0B-010-embed-spa.md) | Embed `web/dist` in the binary, SPA fallback routing | S |
