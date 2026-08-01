@@ -27,7 +27,8 @@ make build     # build the SPA and the binaries
 make run       # build, then start the server
 ```
 
-`make lint test` is what CI runs. `make help` lists every target.
+`make lint test` is what CI runs. `make help` lists every target. There is a dev container with the
+toolchain already pinned and installed — see [`.devcontainer/`](.devcontainer/).
 
 > **Status:** v2 is under construction on the `v2` branch and is not yet usable. The full
 > installation and operation guide is rewritten in M7; until then, the ticket backlog is the

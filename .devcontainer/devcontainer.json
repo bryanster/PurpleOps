@@ -1,12 +1,32 @@
 {
   "name": "PurpleOps",
-  "dockerComposeFile": "../compose.yml",
-  "service": "devcontainer",
-  "workspaceFolder": "/workspaces/purpleops",
-  "runServices": ["mongodb"],
-  "dockerComposeRunArgs": ["--profile", "dev"],
-  "shutdownAction": "stopCompose",
+
+  // Plain Dockerfile, not docker-compose. v1 needed compose because it needed a
+  // MongoDB container alongside; v2's database is a file inside the process, so
+  // there is nothing left to orchestrate and no `--profile dev` to remember.
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+
+  "features": {
+    // The container image is the supported artefact, so `make docker-build` and
+    // `make docker-smoke` have to work from in here. Outside-of-docker rather
+    // than docker-in-docker: it hands over the host's daemon, so a build shares
+    // the host's layer cache instead of starting cold in a nested one.
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+
+  // Installs the pinned generators and linter into ./bin and runs `npm ci`.
+  // The one command in the Makefile that needs the network.
+  "postCreateCommand": "make tools",
+
+  "forwardPorts": [
+    8080, // the server — PURPLEOPS_ADDR
+    5173 // `npm --prefix web run dev`, which proxies /api to 8080
+  ],
+
   "remoteUser": "root",
+
   // The local ssh-agent is forwarded automatically by the Dev Containers
   // extension. Do not bind-mount ${localEnv:SSH_AUTH_SOCK}: agents such as
   // Secretive keep their socket under ~/Library/Containers, which Docker
@@ -14,25 +34,52 @@
   "mounts": [
     "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
+
+    // Named volumes, so a container rebuild does not re-download every module
+    // and recompile every package. Both are caches: deleting them costs time
+    // and nothing else.
+    "source=purpleops-go-mod,target=/go/pkg/mod,type=volume",
+    "source=purpleops-go-build,target=/root/.cache/go-build,type=volume"
   ],
-  "forwardPorts": [8080, 8081, 27017],
-  "postCreateCommand": "go mod download && pre-commit install",
+
   "customizations": {
     "vscode": {
       "extensions": [
         "golang.go",
         "ms-azuretools.vscode-docker",
-        "mongodb.mongodb-vscode"
+        // The v2 frontend: the repo's own eslint and prettier configs, and the
+        // Tailwind v4 class completion that shadcn/ui components rely on.
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
       ],
       "settings": {
         "go.useLanguageServer": true,
         "go.gopath": "/go",
         "go.goroot": "/usr/local/go",
         "go.toolsManagement.checkForUpdates": "local",
+        // The Makefile's own linter, at the Makefile's own pinned version,
+        // rather than whichever one gopls finds first.
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["--path-mode=abs"],
+        "go.alternateTools": {
+          "golangci-lint": "${workspaceFolder}/bin/golangci-lint"
+        },
+        // web/ is a separate npm project inside the Go module; eslint has to be
+        // told, or it looks for a config at the repository root and finds none.
+        "eslint.workingDirectories": ["web"],
         "[go]": {
           "editor.formatOnSave": true,
           "editor.defaultFormatter": "golang.go"
+        },
+        "[typescript]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescriptreact]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
         }
       }
     }
