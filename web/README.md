@@ -22,14 +22,15 @@ both same-origin and neither side has any CORS configuration. Point it elsewhere
 go run ./cmd/purpleops     # needs PURPLEOPS_BASE_URL and friends — see ../.env.example
 ```
 
-| Command              | What it does                                 |
-| -------------------- | -------------------------------------------- |
-| `npm run dev`        | Vite dev server with the `/api` proxy        |
-| `npm run build`      | Type-check, then build to `dist/`            |
-| `npm run lint`       | `tsc --noEmit`, ESLint, and a Prettier check |
-| `npm run format`     | Rewrite files with Prettier                  |
-| `npm test`           | Vitest, once                                 |
-| `npm run test:watch` | Vitest, watching                             |
+| Command              | What it does                                             |
+| -------------------- | -------------------------------------------------------- |
+| `npm run dev`        | Vite dev server with the `/api` proxy                    |
+| `npm run build`      | Type-check, then build to `dist/`                        |
+| `npm run lint`       | `tsc --noEmit`, ESLint, and a Prettier check             |
+| `npm run format`     | Rewrite files with Prettier                              |
+| `npm run generate`   | Regenerate `src/api/schema.d.ts` from `api/openapi.yaml` |
+| `npm test`           | Vitest, once                                             |
+| `npm run test:watch` | Vitest, watching                                         |
 
 `make lint test build` at the repo root runs the Go and web halves together, which is what CI does.
 
@@ -40,12 +41,30 @@ Organised by feature, not by file type — the domain in `PLAN.md` §2 is large 
 
 ```
 public/theme-bootstrap.js   Sets the theme before first paint (see "Theming")
+src/api/                    The generated client — see src/api/README.md
 src/app/                    The application shell: nav, layout, theme, error boundary, routes
 src/components/ui/          Vendored shadcn/ui primitives — see below
 src/features/<feature>/     One directory per feature. Screens, and the data they need
 src/lib/                    Small shared helpers with no feature knowledge
-src/test/                   Vitest setup and shared test utilities
+src/test/                   Vitest setup, the MSW fixture library, shared test utilities
 ```
+
+## Talking to the API
+
+Read [`src/api/README.md`](src/api/README.md) before writing a screen that loads anything. The short
+version:
+
+- `src/api/schema.d.ts` is generated from `../api/openapi.yaml` by `npm run generate`, which
+  `make generate` runs and CI compares against a fresh run. Never edit it.
+- **No component calls the API.** A feature exports `queryOptions()` factories and hooks from its
+  `queries.ts`, and components import the hook.
+- **No file writes an API URL.** `src/api/client.ts` is the only one that knows what one looks like,
+  and ESLint rejects an `/api/…` literal or a bare `fetch` anywhere else.
+- Errors arrive as `ApiError` with the problem document's `code`; a 401 and a 5xx are handled once,
+  globally, in `src/api/query-provider.tsx`.
+
+Tests run against MSW handlers built from the same generated types (`src/test/msw/`), so a fixture
+cannot describe a response the real server would not send. An unhandled request fails the test.
 
 ## shadcn/ui
 
@@ -75,6 +94,6 @@ a few constants from `src/app/theme/theme.ts`, and `theme-bootstrap.test.ts` fai
 - **TypeScript is pinned to `~6.0`**, not the current 7.x: `typescript-eslint` supports `<6.1.0`.
   Lift the pin when it supports 7.
 - **No `eslint-plugin-jsx-a11y`**: it does not support ESLint 10 yet. Worth adding when it does.
-- **`src/features/system/api.ts` and `src/lib/use-async.ts` are temporary.** M0B-009 replaces them
-  with a client generated from `api/openapi.yaml` and TanStack Query. Nothing outside those two
-  files' own directories imports them, so that replacement stays local.
+- **`openapi-typescript` peers on `typescript@^5.x`** and this repo is on 6. `package.json` overrides
+  that peer to the repo's own TypeScript; the generator uses the compiler API and runs fine on it.
+  Drop the override when upstream widens the range.

@@ -1,9 +1,27 @@
 import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup } from '@testing-library/react'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest'
 
 import { DARK_QUERY } from '@/app/theme/theme'
+
+import { server } from './msw/server'
+
+/**
+ * Every test runs against the MSW fake server (`src/test/msw/handlers.ts`).
+ *
+ * `onUnhandledRequest: 'error'` is the point: a request to an endpoint no
+ * handler describes fails the test rather than hanging or silently returning
+ * nothing, so a component that starts calling something new cannot do it
+ * unnoticed.
+ */
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: 'error' })
+})
+
+afterAll(() => {
+  server.close()
+})
 
 const noop = (): void => {}
 
@@ -88,6 +106,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  server.resetHandlers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })

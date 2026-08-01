@@ -12,8 +12,8 @@ is a review rejection.
 1. **Edit `api/openapi.yaml`.** Add the path, its `operationId`, `summary`, `tags`, request body if
    any, every response you intend to return, and the problem responses it can fail with.
 2. **`make generate`.** `oapi-codegen` rewrites `internal/httpapi/gen/server.gen.go` from
-   `api/codegen-server.yaml`. Never edit that file; it is overwritten and CI compares it against a
-   fresh run.
+   `api/codegen-server.yaml`, and `openapi-typescript` rewrites `web/src/api/schema.d.ts`. Never
+   edit either; both are overwritten and CI compares them against a fresh run.
 3. **Implement the new method** on the handler type that satisfies `gen.StrictServerInterface`. It
    takes a typed request and returns a typed response, one implementation per documented status
    code — there is no `http.ResponseWriter` to write something undocumented to.
@@ -21,9 +21,13 @@ is a review rejection.
    fails there with the rule it broke.
 5. The route is served automatically. Registration is generated too, so there is no router to
    update — if the operation is in the spec, it is mounted under `/api/v1`.
+6. **On the frontend**, add a `queryOptions()` factory and a hook to the feature's `queries.ts` and
+   call `api.GET("/your-path")`. The path and both bodies are checked against the regenerated
+   schema. See [`web/src/api/README.md`](../web/src/api/README.md).
 
 Removing or renaming an operation is the same loop. The generated method disappears, and the
-handler that still implements it stops compiling: that is the drift check working.
+handler that still implements it stops compiling — as does the TypeScript that read the field that
+went away. That is the drift check working, on both sides.
 
 ## Conventions
 
@@ -125,8 +129,9 @@ in both cases, so it agrees with itself. Known constraints, worth knowing before
 - **Type arrays are how nullability is spelled**, and `nullable-type` in the codegen config turns
   them into a wrapper that distinguishes "absent" from "explicitly null".
 
-When the TypeScript generator lands (M0B-009) and disagrees with a construct, prefer the subset both
-accept and add the reason to this list.
+The TypeScript side is `openapi-typescript`, which reads 3.1 natively and has so far agreed with
+`kin-openapi` on every construct in this document. Where the two ever disagree, prefer the subset
+both accept and add the reason to this list.
 
 ## Files
 
@@ -139,4 +144,6 @@ accept and add the reason to this list.
 | `internal/httpapi/gen/server.gen.go` | Generated. Do not edit |
 | `internal/httpapi/gen/strictmode_test.go` | Asserts the generator was asked for a strict chi server |
 | `internal/httpapi/apierr` | The error vocabulary, the code/status table, and the one place a Go error becomes a response |
+| `web/src/api/schema.d.ts` | Generated. Do not edit |
+| `web/src/api/` | The typed client, the `ApiError` model and the query defaults — see its `README.md` |
 | [`docs/http.md`](http.md) | How the server runs it: the middleware chain, headers, proxies, timeouts and shutdown |

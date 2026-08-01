@@ -6,7 +6,10 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'node_modules'] },
+  // schema.d.ts is generated from api/openapi.yaml on every `make generate`.
+  // It is still type-checked by tsc; it is just not ours to hold to style
+  // rules, and reformatting it would make the codegen-drift gate fail.
+  { ignores: ['dist', 'coverage', 'node_modules', 'src/api/schema.d.ts'] },
 
   // Not type-checked and not our code: the file runs in the browser before any
   // module loads, which is the whole reason it is plain JS in public/.
@@ -71,6 +74,40 @@ export default tseslint.config(
     },
   },
 
+  // M0B-009: one module knows what an API URL looks like.
+  //
+  // A hand-written URL is a route the spec cannot check and the generator
+  // cannot rename — the drift v1 accumulated for months. Everything goes
+  // through `api/client.ts`, whose paths come from the generated schema, so a
+  // path that is not in api/openapi.yaml fails to compile.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/api/client.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/^\\/api(\\/|$)/]',
+          message:
+            'Do not write API URLs. Call the generated client (src/api/client.ts) or apiUrl(path).',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/\\/api\\//]',
+          message:
+            'Do not write API URLs. Call the generated client (src/api/client.ts) or apiUrl(path).',
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'fetch',
+          message:
+            'Use the generated client (src/api/client.ts): it types the request and the response, and turns a problem document into an ApiError.',
+        },
+      ],
+    },
+  },
+
   // The vendored shadcn/ui components are upstream's code, kept close to
   // upstream so their diffs stay readable (M0B-008). They are still
   // type-checked by tsc; they are just not held to our stylistic rules.
@@ -86,11 +123,15 @@ export default tseslint.config(
   },
 
   {
-    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.ts'],
+    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
       // Test doubles are allowed to be partial: a fake that satisfies the whole
       // of a DOM interface is not a clearer test.
       '@typescript-eslint/unbound-method': 'off',
+      // Fast refresh has nothing to do with test files, and the render helpers
+      // in src/test export a wrapper component beside the factory that builds
+      // its client.
+      'react-refresh/only-export-components': 'off',
     },
   },
 

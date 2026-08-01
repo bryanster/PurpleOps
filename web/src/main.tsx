@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 
+import { QueryProvider } from '@/api/query-provider'
 import { ErrorBoundary } from '@/app/error/error-boundary'
 import { AppRoutes } from '@/app/routes/app-routes'
 import { applyTheme, readStoredPreference, resolveTheme } from '@/app/theme/theme'
@@ -26,9 +27,14 @@ createRoot(container).render(
         still renders something rather than a blank document. */}
     <ErrorBoundary>
       <ThemeProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        {/* Above the router and the shell: the query cache outlives every
+            navigation, and a screen unmounting mid-request does not take it
+            with it. */}
+        <QueryProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </QueryProvider>
       </ThemeProvider>
     </ErrorBoundary>
   </StrictMode>,

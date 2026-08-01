@@ -1,0 +1,144 @@
+import type { components } from './schema'
+
+/**
+ * The error half of the API contract, as types generated from
+ * `api/openapi.yaml`. Every failure this API can produce is one of these
+ * documents (M0B-007); nothing here is hand-written from a screenshot of a
+ * response.
+ */
+export type Problem = components['schemas']['Problem']
+export type ProblemCode = components['schemas']['ProblemCode']
+export type FieldError = components['schemas']['FieldError']
+
+/** The media type every error is served as. Not `application/json`. */
+export const PROBLEM_MEDIA_TYPE = 'application/problem+json'
+
+/** Where the server echoes the request ID (`internal/httpapi.RequestIDHeader`). */
+export const REQUEST_ID_HEADER = 'X-Request-Id'
+
+/**
+ * Every code in the spec, so an unrecognised one can be rejected at runtime
+ * rather than typed optimistically.
+ *
+ * `Record<ProblemCode, true>` is exhaustive in both directions: adding a code to
+ * `api/openapi.yaml` fails to compile here until it is listed, and a code listed
+ * here that the spec does not have fails too.
+ */
+const PROBLEM_CODES: Record<ProblemCode, true> = {
+  validation_failed: true,
+  forbidden: true,
+  not_found: true,
+  method_not_allowed: true,
+  conflict: true,
+  rate_limited: true,
+  internal: true,
+}
+
+export function isProblemCode(value: unknown): value is ProblemCode {
+  return typeof value === 'string' && Object.hasOwn(PROBLEM_CODES, value)
+}
+
+/**
+ * A failed API call, carrying the machine-readable half of the problem document
+ * that caused it.
+ *
+ * Callers branch on `code`, never on `message` — that is prose for a human and
+ * the server is free to reword it. `requestId` is what a user quotes in a bug
+ * report and an operator greps the log for.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly code: ProblemCode | undefined
+  readonly detail: string | undefined
+  readonly errors: readonly FieldError[]
+  readonly requestId: string | undefined
+
+  constructor(
+    message: string,
+    init: {
+      status: number
+      code?: ProblemCode
+      detail?: string
+      errors?: readonly FieldError[]
+      requestId?: string
+    },
+  ) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = init.status
+    this.code = init.code
+    this.detail = init.detail
+    this.errors = init.errors ?? []
+    this.requestId = init.requestId
+  }
+}
+
+/** True when `error` is an [ApiError], optionally one carrying a specific code. */
+export function isApiError(error: unknown, code?: ProblemCode): error is ApiError {
+  return error instanceof ApiError && (code === undefined || error.code === code)
+}
+
+/**
+ * Build an [ApiError] from a failed response.
+ *
+ * Anything that is not a well-formed problem document still has to produce a
+ * usable error: a gateway in front of the server returning an HTML page, a
+ * truncated body, a 502 with nothing in it. Those become an ApiError with a
+ * status and no code — never a `SyntaxError` from the JSON parser, which tells
+ * the user nothing and hides the status that would have.
+ *
+ * The response body is read from a clone, so the caller still holds an unread
+ * one if it decides not to throw this.
+ */
+export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
+  const requestId = response.headers.get(REQUEST_ID_HEADER) ?? undefined
+  const fallback = `${String(response.status)} ${response.statusText}`.trim()
+
+  const problem = await readProblem(response)
+  if (!problem) {
+    return new ApiError(fallback, { status: response.status, requestId })
+  }
+
+  const detail = nonEmptyString(problem.detail)
+  return new ApiError(detail ?? nonEmptyString(problem.title) ?? fallback, {
+    status: response.status,
+    code: isProblemCode(problem.code) ? problem.code : undefined,
+    detail,
+    errors: readFieldErrors(problem.errors),
+    // The header is authoritative — it is set by the middleware that owns the
+    // ID — but a problem document forwarded without its headers still has it.
+    requestId: requestId ?? nonEmptyString(problem.instance),
+  })
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+/** The parsed body, as far as it can be trusted: every member is `unknown`. */
+type UntrustedProblem = Partial<Record<keyof Problem, unknown>>
+
+async function readProblem(response: Response): Promise<UntrustedProblem | undefined> {
+  if (!response.headers.get('content-type')?.includes('json')) {
+    return undefined
+  }
+  try {
+    const body: unknown = await response.clone().json()
+    return typeof body === 'object' && body !== null ? body : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function readFieldErrors(value: unknown): readonly FieldError[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter(
+    (entry: unknown): entry is FieldError =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as FieldError).field === 'string' &&
+      typeof (entry as FieldError).message === 'string',
+  )
+}

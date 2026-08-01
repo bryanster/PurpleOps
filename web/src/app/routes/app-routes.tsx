@@ -5,6 +5,7 @@ import { AppShell } from '@/app/shell/app-shell'
 import { HealthPage } from '@/features/system/health-page'
 import { VersionPage } from '@/features/system/version-page'
 
+import { LoginPlaceholderPage } from './login-placeholder'
 import { NotFoundPage } from './not-found'
 
 /**
@@ -19,6 +20,7 @@ export function AppRoutes(): ReactNode {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/system/version" replace />} />
+        <Route path="login" element={<LoginPlaceholderPage />} />
         <Route path="system/version" element={<VersionPage />} />
         <Route path="system/health" element={<HealthPage />} />
         <Route path="*" element={<NotFoundPage />} />
