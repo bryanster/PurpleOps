@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -39,6 +40,15 @@ type Deps struct {
 	// Logger receives the request log and everything the middleware reports. A
 	// nil logger means slog.Default(), for a test that does not care.
 	Logger *slog.Logger
+
+	// UI is the built single-page app: index.html and the assets it loads,
+	// served on every path the API does not own (M0B-010). cmd/purpleops passes
+	// web.Dist(), which is either the embedded frontend or a placeholder page.
+	//
+	// Nil serves no UI at all — every unknown path is then the JSON 404 it was
+	// before this existed, which is what the tests in this package that are
+	// about the API want.
+	UI fs.FS
 }
 
 // NewServer builds the HTTP handler: the middleware chain, the routes
@@ -115,14 +125,24 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	// chi answers an unrouted request with plain text by default. Everything
 	// this server says about a failure is a problem document, including the
 	// failures that never reach a handler.
-	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	notFound := func(w http.ResponseWriter, r *http.Request) {
 		responder.Write(w, r, apierr.NotFound("endpoint", r.URL.Path))
-	})
-	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+	}
+	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		responder.Write(w, r, apierr.MethodNotAllowed(r.Method))
-	})
+	}
+	router.NotFound(notFound)
+	router.MethodNotAllowed(methodNotAllowed)
 
 	apiRouter := chi.NewRouter()
+	// Set explicitly rather than inherited. chi.Mount gives a sub-router the
+	// parent's handlers only when it has none of its own and the parent already
+	// has them — a rule that depends on the order of two calls in this function.
+	// Saying it here means an unknown path under /api/v1 answers with a problem
+	// document because this line says so, not because of where a later edit
+	// puts the SPA's catch-all.
+	apiRouter.NotFound(notFound)
+	apiRouter.MethodNotAllowed(methodNotAllowed)
 	apiRouter.Use(validate)
 	gen.HandlerWithOptions(strictHandler(deps.Store, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,
@@ -136,6 +156,23 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		extraRoutes(apiRouter)
 	}
 	router.Mount(BasePath, apiRouter)
+
+	// After the mount: chi matches the more specific pattern, so /api/v1/… goes
+	// to the router above and never to the catch-all, but registering the
+	// catch-all first would make Mount's own conflict check the thing standing
+	// between the two — and it is checking for a different mistake.
+	if deps.UI != nil {
+		ui, err := newSPA(deps.UI, responder)
+		if err != nil {
+			return nil, err
+		}
+		// GET and HEAD only. A POST to a path the SPA owns is a client bug or a
+		// probe, and chi answers a registered path with an unregistered method
+		// with the 405 problem — rather than 200 and a page of HTML, which is
+		// what a plain http.FileServer under a wildcard would do.
+		router.Method(http.MethodGet, "/*", ui)
+		router.Method(http.MethodHead, "/*", ui)
+	}
 
 	return router, nil
 }

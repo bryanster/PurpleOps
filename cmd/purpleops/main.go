@@ -22,6 +22,7 @@ import (
 	"github.com/bryanster/purpleops/internal/store"
 	"github.com/bryanster/purpleops/internal/store/migrate"
 	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/purpleops/web"
 )
 
 func main() {
@@ -89,10 +90,19 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err erro
 		return err
 	}
 
+	ui, embedded := web.Dist()
+	if !embedded {
+		// Loud, because the symptom is otherwise a mystery: the API answers,
+		// the health check is green, and the browser shows a page nobody wrote.
+		log.WarnContext(ctx, "this binary carries a placeholder instead of the user interface; "+
+			"it was built without the `spa` build tag — use `make build`")
+	}
+
 	handler, err := httpapi.NewServer(httpapi.Deps{
 		Config: cfg,
 		Store:  db,
 		Logger: log,
+		UI:     ui,
 	})
 	if err != nil {
 		return err

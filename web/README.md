@@ -3,6 +3,13 @@
 The single-page app: React, Vite, TypeScript, Tailwind and shadcn/ui. `web/dist` is embedded into
 the server binary via `embed.FS` (M0B-010), so a release is one file.
 
+`dist.go` is the Go half of that. `dist` is build output and is not committed, and `//go:embed` will
+not compile without it, so the embed is behind the **`spa` build tag**: `make build` builds the app
+and then passes `-tags spa`, while a plain `go build ./...` compiles the placeholder page in
+`placeholder/` and still works in a checkout where the frontend has never been built. `make test-spa`
+checks the real thing was embedded — run it after `make build`. How the server then serves it —
+fallback routing, caching, ETags — is in [`../docs/http.md`](../docs/http.md).
+
 ## Running it
 
 Node is pinned in [`../.prototools`](../.prototools) and [`.nvmrc`](.nvmrc), and stated again as an
@@ -40,6 +47,7 @@ Organised by feature, not by file type — the domain in `PLAN.md` §2 is large 
 `components/` directory stops scaling around M3.
 
 ```
+dist.go, placeholder/       Embedding the build into the server binary — see above
 public/theme-bootstrap.js   Sets the theme before first paint (see "Theming")
 src/api/                    The generated client — see src/api/README.md
 src/app/                    The application shell: nav, layout, theme, error boundary, routes

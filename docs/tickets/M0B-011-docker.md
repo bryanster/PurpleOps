@@ -56,6 +56,9 @@ git-clone-on-first-boot seeder.
 
 ## Notes for the implementer
 
+- The Go stage must build with `-tags spa`, or the image ships the placeholder page instead of the
+  UI and everything else here still passes. `M0B-010`'s implementation notes say why the tag exists;
+  `make build` is the reference for what the flags are.
 - CGO means you cannot use `scratch` or plain `alpine` without matching musl. Debian slim in both
   build and runtime stages is the boring, correct choice — take it.
 - Chromium in a container needs `--no-sandbox` or a seccomp profile. Prefer keeping the default

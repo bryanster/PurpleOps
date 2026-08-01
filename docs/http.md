@@ -31,6 +31,48 @@ success. `TestALoggedPanicReportsTheStatusTheClientSaw` is the test that says so
 
 M1 inserts authentication and then authorization between 7 and the handlers, on the API router.
 
+## Serving the app
+
+The frontend is in the binary: `web/dist` is embedded as an `fs.FS` (`web/dist.go`) and handed to
+`NewServer` as `Deps.UI`. A release is one file, and there is no static file server to deploy beside
+it.
+
+| Request | Answer |
+|---|---|
+| `GET /` | `index.html`, 200 |
+| `GET /engagements/123` — a route that only exists in the browser | `index.html`, 200. Otherwise every deep link and every page refresh is a 404 |
+| `GET /assets/index-<hash>.js` | The asset, `Cache-Control: public, max-age=31536000, immutable` |
+| `GET /theme-bootstrap.js` — a name with no hash in it | The file, `Cache-Control: no-cache` and an ETag |
+| A conditional request whose `If-None-Match` matches | 304, keeping the caching headers |
+| `GET /api/…` matching no endpoint | **A `problem+json` 404**, never `index.html` |
+| `POST /engagements/123` | 405. Only GET and HEAD fall back to the app |
+
+The `/api/` rule is the point of the whole arrangement. A client that asks for an endpoint this
+server does not have — a typo, or a build against a later version — must get a document it can
+read; 200 and a page of HTML makes its error handling fail somewhere unrelated to the mistake.
+The prefix is wider than the `/api/v1` the API is mounted at, so `/api/v2/engagements` is JSON too.
+
+Content types come from a table in `spa.go` rather than from `mime.TypeByExtension`, which reads
+`/etc/mime.types` and so answers differently depending on the machine. ETags are the SHA-256 of the
+contents, computed once at startup. Path traversal is not a special case: the lookup is a map of the
+files that exist, so `/../go.mod` matches nothing and gets `index.html` like any other unknown path.
+
+### The `spa` build tag
+
+`web/dist` is build output — gitignored, and absent from a fresh checkout — but `//go:embed` does
+not compile when its pattern matches nothing. So the real embed is behind the `spa` build tag:
+
+- `make build` runs `npm run build` first and passes `-tags spa`. This is the release build.
+- `go build ./...` without it compiles a placeholder page that says so, so a Go-only checkout, a
+  container stage that never copies `web/`, and `go test ./...` all still work. The server logs a
+  warning at startup when it is carrying the placeholder.
+- `make test-spa` runs the embed's own tests against a real `web/dist` — run it after `make build`.
+
+There is deliberately **no** development mode that serves `web/dist` from disk. Frontend work runs
+`npm run dev`, which has hot reload and proxies `/api` to this server (`web/vite.config.ts`); a
+disk-serving mode would be a second, worse version of that, and a second code path in the thing that
+decides what `/api/…` means.
+
 ## Behind a reverse proxy
 
 `X-Forwarded-For` and `X-Real-IP` are ignored unless the peer that opened the connection is listed

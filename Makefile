@@ -17,7 +17,9 @@ WEB_DIR  := $(CURDIR)/web
 # their own — `./...` compiles and vets those, so a dependency nobody here
 # controls could fail the build. golangci-lint is told the same thing in
 # .golangci.yml.
-GO_PACKAGES := ./api/... ./cmd/... ./internal/... ./tools/...
+#
+# ./web (without /...) is the embed package in web/, and nothing below it.
+GO_PACKAGES := ./api/... ./cmd/... ./internal/... ./tools/... ./web
 
 # Pinned outside go.mod deliberately: golangci-lint's dependency tree is large
 # and conflicts with ordinary library upgrades, so it is installed with an
@@ -44,6 +46,14 @@ export PATH := $(BIN_DIR):$(PATH)
 # Node is pinned in .prototools and web/.nvmrc; web/package.json states the same
 # range in `engines`, so npm fails loudly rather than subtly on an older one.
 HAS_WEB := $(wildcard $(WEB_DIR)/package.json)
+
+# The frontend is embedded in the binary behind the `spa` build tag (web/dist.go
+# says why). Only the build that has just run `npm run build` sets it: web/dist
+# is gitignored build output, and //go:embed will not compile without it — so
+# `go build ./...` in a fresh checkout, and every Go-only stage, must not.
+ifneq ($(HAS_WEB),)
+GO_TAGS := spa
+endif
 
 .PHONY: help
 help: ## Show this help
@@ -99,8 +109,15 @@ build: ## Build the SPA and the server and CLI binaries into ./bin
 ifneq ($(HAS_WEB),)
 	npm --prefix $(WEB_DIR) run build
 endif
-	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/purpleops ./cmd/purpleops
+	CGO_ENABLED=1 go build -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/purpleops ./cmd/purpleops
+	# No tag: popsctl does not import web, so it embeds nothing either way.
 	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/popsctl ./cmd/popsctl
+
+# Separate from `test` because it only compiles once web/dist exists. CI runs it
+# after `make build`; locally, so can you.
+.PHONY: test-spa
+test-spa: ## Check the built web/dist is what got embedded (run after `make build`)
+	go test -count=1 -tags spa ./web
 
 .PHONY: run
 run: build ## Build, then run the server
