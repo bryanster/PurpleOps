@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }],
+
+  /* Compiles nothing — `files` is empty and the real settings live in the two
+     referenced projects. The alias is repeated here because tools that read
+     only the root tsconfig.json resolve `@/` from it: the shadcn/ui CLI writes
+     components into a literal `@/` directory without it. */
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}

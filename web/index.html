@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PurpleOps</title>
+    <!--
+      Synchronous and ahead of the bundle on purpose: it stamps the saved theme
+      onto <html> before the first paint, so a dark-mode user never sees a white
+      flash. It is an external file, not an inline script, because the server
+      sends `script-src 'self'`. See public/theme-bootstrap.js.
+    -->
+    <script src="/theme-bootstrap.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

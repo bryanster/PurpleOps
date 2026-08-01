@@ -1,0 +1,9 @@
+dist
+coverage
+node_modules
+package-lock.json
+
+# Vendored from the shadcn/ui registry and reformatted only when upstream does.
+# Running Prettier over them would rewrite every file on the first `add` and
+# make the next upstream diff unreadable.
+src/components/ui

@@ -12,6 +12,13 @@ MODULE   := github.com/bryanster/purpleops
 BIN_DIR  := $(CURDIR)/bin
 WEB_DIR  := $(CURDIR)/web
 
+# The Go half of the repo, listed rather than `./...`. web/node_modules is
+# inside the module directory and npm packages sometimes ship Go sources of
+# their own — `./...` compiles and vets those, so a dependency nobody here
+# controls could fail the build. golangci-lint is told the same thing in
+# .golangci.yml.
+GO_PACKAGES := ./api/... ./cmd/... ./internal/... ./tools/...
+
 # Pinned outside go.mod deliberately: golangci-lint's dependency tree is large
 # and conflicts with ordinary library upgrades, so it is installed with an
 # explicit @version instead of via tools/tools.go. Generators, whose output must
@@ -30,8 +37,12 @@ LDFLAGS := -X $(MODULE)/internal/version.version=$(VERSION) \
 # Generators resolve from ./bin before anything in the developer's PATH.
 export PATH := $(BIN_DIR):$(PATH)
 
-# web/ is scaffolded in M0B-008. Until it has a package.json the web half of
-# each target is skipped rather than failing the whole build.
+# The web half of each target is skipped when web/package.json is absent — a
+# Go-only checkout, or a container stage that never copies web/, still builds.
+# The SPA landed in M0B-008, so in a normal checkout this is always set.
+#
+# Node is pinned in .prototools and web/.nvmrc; web/package.json states the same
+# range in `engines`, so npm fails loudly rather than subtly on an older one.
 HAS_WEB := $(wildcard $(WEB_DIR)/package.json)
 
 .PHONY: help
@@ -56,7 +67,7 @@ $(BIN_DIR)/golangci-lint:
 # up-to-date ./bin is used offline and only a missing or stale one is fetched.
 .PHONY: generate
 generate: $(BIN_DIR)/oapi-codegen ## Run every code generator (idempotent, offline after `make tools`)
-	go generate ./...
+	go generate $(GO_PACKAGES)
 ifneq ($(HAS_WEB),)
 	npm --prefix $(WEB_DIR) run generate
 endif
@@ -78,7 +89,7 @@ lint-spec: ## Check api/openapi.yaml is valid and follows the API conventions
 
 .PHONY: test
 test: ## Run Go and web tests
-	go test ./...
+	go test $(GO_PACKAGES)
 ifneq ($(HAS_WEB),)
 	npm --prefix $(WEB_DIR) test
 endif
