@@ -12,6 +12,16 @@ React SPA, backed by an embedded DuckDB database. See [`PLAN.md`](PLAN.md) for t
 ## Running it
 
 ```sh
+docker compose up --build
+```
+
+Then <http://localhost:8080>. Nothing is fetched at first boot, and the image carries the database,
+the UI and the headless Chromium that renders reports. [`docs/deploy.md`](docs/deploy.md) covers
+configuration, where the data lives, and how to back it up.
+
+From source instead:
+
+```sh
 make tools     # once: install pinned generators into ./bin
 make build     # build the SPA and the binaries
 make run       # build, then start the server

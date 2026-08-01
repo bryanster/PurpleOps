@@ -1,0 +1,56 @@
+# What never belongs in the build context.
+#
+# Two reasons to keep this tight. Size: every excluded path is one the daemon
+# does not have to receive before the first instruction runs. Correctness: a
+# host artefact copied into an image silently shadows the one the build was
+# supposed to produce — a stale web/dist embedded instead of the freshly
+# compiled SPA, a host-built binary of the wrong architecture, or a developer's
+# live database shipped to a registry.
+#
+# Patterns are matched against the path from the context root, and `*` does not
+# cross a `/` — so `**/` is used wherever a name can occur at any depth.
+
+# Build output. web/dist is rebuilt in the node stage and copied across
+# explicitly; node_modules is reinstalled from package-lock.json, and the host's
+# copy is both large and, on a mac, the wrong platform's binaries.
+bin/
+web/dist/
+**/node_modules/
+
+# Local runtime state. A developer's database and evidence must never end up in
+# an image — see docs/deploy.md for where the container keeps its own.
+**/*.duckdb
+**/*.duckdb.wal
+**/*.duckdb.tmp/
+evidence/
+
+# Local configuration and secrets. The container is configured through the
+# environment; a baked-in .env would override it invisibly.
+.env
+.env.*
+!.env.example
+
+# History. The build stamps its version through --build-arg (see the Makefile's
+# docker-build target), so it never needs to run git.
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Test, coverage and editor noise.
+**/*.out
+coverage/
+web/test-results/
+web/playwright-report/
+**/.DS_Store
+**/*.swp
+.idea/
+.vscode/
+.devcontainer/
+
+# Documentation and the backlog: nothing in the image reads them, and a docs
+# edit should not invalidate a build layer. deploy/ is *not* excluded — the
+# entrypoint and health-check scripts are copied from it.
+docs/
+*.md
+LICENSE

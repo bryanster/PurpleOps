@@ -1,0 +1,66 @@
+# PurpleOps, as one container.
+#
+#     docker compose up --build
+#
+# That works from a clean clone with no further setup: the image carries the
+# database, the UI and Chromium, and the entrypoint generates a session secret
+# on first boot if you have not supplied one. Nothing is fetched at runtime.
+#
+# For anything beyond a laptop, read docs/deploy.md first — at minimum you must
+# set PURPLEOPS_BASE_URL and PURPLEOPS_SESSION_SECRET.
+
+name: purpleops
+
+services:
+  purpleops:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        # Overridable so a release build can stamp real values; the Makefile's
+        # docker-build target passes what `git describe` says.
+        VERSION: ${PURPLEOPS_VERSION:-v2-dev}
+        COMMIT: ${PURPLEOPS_COMMIT:-unknown}
+        BUILD_DATE: ${PURPLEOPS_BUILD_DATE:-unknown}
+    image: purpleops:local
+
+    # Optional, and optional on purpose: `docker compose up` must work on a
+    # clean clone, where .env does not exist. Copy .env.example to .env when you
+    # want to configure anything.
+    env_file:
+      - path: .env
+        required: false
+
+    # Change the left-hand side to move the published port. PURPLEOPS_BASE_URL
+    # has to agree with whatever a browser types — OIDC redirect URIs and report
+    # share links are built from it — so if you move this, set that too.
+    ports:
+      - "${PURPLEOPS_HOST_PORT:-8080}:8080"
+
+    # Everything that must survive the container. The DuckDB file, its WAL, the
+    # generated session secret and uploaded evidence all live here; the image
+    # creates the directory owned by uid 10001, and Docker seeds a new named
+    # volume with that ownership, so the non-root user can write to it.
+    #
+    # `docker compose down` keeps this volume. `docker compose down -v` deletes
+    # it, and with it every engagement in the deployment.
+    volumes:
+      - purpleops-data:/var/lib/purpleops
+
+    # Chromium's renderer processes use shared memory and the 64 MB default is
+    # not enough; a starved renderer crashes mid-render (M6). Cheap insurance —
+    # it is an upper bound, not an allocation.
+    shm_size: 512mb
+
+    # Chromium leaves zombie children behind when it is killed, and PID 1 in a
+    # container reaps nothing by default. `init: true` inserts a real init.
+    init: true
+
+    restart: unless-stopped
+
+    # No healthcheck: block. It is defined in the image (deploy/Dockerfile) so
+    # that `docker run` and any other compose file get it too, and compose
+    # inherits it from there. `docker compose ps` shows the state.
+
+volumes:
+  purpleops-data:

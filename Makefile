@@ -123,6 +123,31 @@ test-spa: ## Check the built web/dist is what got embedded (run after `make buil
 run: build ## Build, then run the server
 	$(BIN_DIR)/purpleops
 
+# --- Container ---------------------------------------------------------------
+#
+# The image is the supported deployment artifact (PLAN.md §8), so it is built
+# from here rather than only by CI. It needs no other target to have run: the
+# build context is the repository, and both the SPA and the binary are compiled
+# inside it. docs/deploy.md is the operator-facing half of this.
+
+IMAGE     ?= purpleops
+IMAGE_TAG ?= local
+
+.PHONY: docker-build
+docker-build: ## Build the container image (IMAGE, IMAGE_TAG, PLATFORM override)
+	docker build \
+		--file deploy/Dockerfile \
+		--tag $(IMAGE):$(IMAGE_TAG) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		$(if $(PLATFORM),--platform $(PLATFORM) --load,) \
+		.
+
+.PHONY: docker-smoke
+docker-smoke: ## Build the image, run it, and check it answers (CI runs this too)
+	IMAGE=$(IMAGE):$(IMAGE_TAG) deploy/smoke.sh
+
 .PHONY: clean
 clean: ## Remove build output
 	rm -rf $(BIN_DIR) $(WEB_DIR)/dist
