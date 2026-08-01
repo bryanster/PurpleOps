@@ -11,12 +11,12 @@ import { expect, test } from '../harness/test'
  * *believes* it is isolated behaves exactly like one that is — right up until a
  * spec starts failing depending on which file ran before it.
  *
- * `--version` is the only command `popsctl` has until M0B-014 builds its
- * subcommand tree. It is a real seed step regardless: it proves the hook runs,
- * in order, before the server boots, with the environment naming this spec
- * file's database.
+ * `version` is the seed step because it is the one command that changes
+ * nothing: this file is checking the harness, not the CLI. It is a real seed
+ * step regardless — it proves the hook runs, in order, before the server boots,
+ * with the environment naming this spec file's database.
  */
-test.use({ seed: [['--version']] })
+test.use({ seed: [['version']] })
 
 // The only claims this file makes are about a database the harness created. An
 // external server has none, so there is nothing here to check — and inventing

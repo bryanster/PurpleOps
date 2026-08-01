@@ -88,8 +88,8 @@ database **before its server boots**:
 ```ts
 test.use({
   seed: [
-    ['users', 'create', '--email', 'red@example.test', '--role', 'red'],
-    ['content', 'install', '--source', 'attack'],
+    ['user', 'create', '--email', 'red@example.test', '--role', 'red'],
+    ['content', 'sync', '--source', 'attack'],
   ],
 })
 ```
@@ -103,7 +103,10 @@ the only correct place.
 A failing seed step fails the spec file loudly. It never runs the tests against a half-seeded
 database.
 
-`popsctl`'s subcommand tree arrives in `M0B-014`; until then `--version` is all it has.
+`popsctl` has the subcommand tree since `M0B-014` — `popsctl --help` lists it, and
+[`docs/cli.md`](cli.md) explains it. The two commands above are registered but not implemented
+yet: they arrive with M1 and M2, and a seed step that uses one fails loudly today, which is the
+correct outcome for a spec that depends on a feature nobody has built.
 
 ## Debugging a failure
 

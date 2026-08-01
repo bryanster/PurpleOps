@@ -184,6 +184,24 @@ check "the embedded SPA is served" 'id="root"' get /
 check_fails "the SPA is the real build, not the no-frontend placeholder" \
 	sh -c "docker exec $CONTAINER curl -fsS http://127.0.0.1:8080/ | grep -q 'not built'"
 
+# ── the admin CLI ─────────────────────────────────────────────────────────────
+#
+# `docker exec` is what `docker compose exec purpleops …` does, so these run the
+# CLI exactly the way docs/cli.md tells an operator to.
+#
+# The refusal is as much the point as the version: the server in this container
+# holds the database, DuckDB admits one process — being in the same container
+# does not change that — and an operator who runs a command anyway must get an
+# instruction rather than a driver error about locks.
+info "popsctl, the admin CLI"
+check "popsctl is on PATH and reports the same build as the server" \
+	"$(get /api/v1/version | sed 's/.*"version":"\([^"]*\)".*/\1/')" \
+	in_container popsctl version
+check_fails "popsctl refuses the database the running server holds" \
+	in_container popsctl db info
+check "...and says which process to stop and how to run the command anyway" "docker compose run" \
+	in_container sh -c 'popsctl db info 2>&1 || true'
+
 # ── Chromium ──────────────────────────────────────────────────────────────────
 
 #

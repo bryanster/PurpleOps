@@ -15,6 +15,21 @@ Bookkeeping is a single table, `schema_migrations`, in the database's default sc
 
 It is not in `app` or `content` because migration `0001` is what creates those schemas.
 
+## Seeing where a database is
+
+`popsctl` reports the same bookkeeping without starting a server ([`docs/cli.md`](cli.md)):
+
+```sh
+popsctl migrate status          # every migration, applied or pending, with timestamps
+popsctl migrate up              # apply the pending ones and stop
+popsctl db info                 # schema version, file size, row counts
+```
+
+The server still migrates at startup, so this is for the deployment where you want the schema
+change to happen before the new binary serves anything — and for finding out what a release is
+about to do. It needs the server stopped: one process holds the database, which is the same rule as
+[Two servers, one database](#two-servers-one-database) below.
+
 ## Adding a migration
 
 1. Create `internal/store/migrate/sql/NNNN_lower_snake_case.sql`, where `NNNN` is the next version,

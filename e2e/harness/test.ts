@@ -8,7 +8,7 @@ import type { Server } from './server'
 export { expect } from '@playwright/test'
 
 /**
- * A `popsctl` argument vector, e.g. `['users', 'create', '--email', 'red@x']`.
+ * A `popsctl` argument vector, e.g. `['user', 'create', '--email', 'red@x']`.
  */
 export type SeedCommand = readonly string[]
 
@@ -18,7 +18,7 @@ export interface HarnessOptions {
    * server boots. Declare them at the top of a spec file:
    *
    * ```ts
-   * test.use({ seed: [['users', 'create', '--email', 'red@example.test']] })
+   * test.use({ seed: [['user', 'create', '--email', 'red@example.test']] })
    * ```
    *
    * Before boot, not inside a test: DuckDB admits one writer to a file at a

@@ -106,6 +106,18 @@ type Report struct {
 	ChromePath string
 }
 
+// Tool is the configuration of an administrative process — popsctl, which
+// shares this repository's packages with the server but serves no HTTP and
+// holds no sessions.
+//
+// It is a separate type rather than a half-filled [Config] because this package
+// promises never to hand back a partially valid configuration: every field of a
+// Tool is one [LoadTool] actually read and validated.
+type Tool struct {
+	Database Database
+	Log      Log
+}
+
 // binding is one environment variable and the field it fills.
 type binding struct {
 	name     string
@@ -116,6 +128,12 @@ type binding struct {
 	// Only secrets set it — a redacted error is harder to act on, so it is not
 	// the default.
 	sensitive bool
+	// tool marks a variable the admin CLI reads as well as the server, and so
+	// the fields [Tool] carries. It is a small list on purpose: requiring a
+	// base URL and a session secret before `popsctl db info` will open a file
+	// is a checklist with nothing behind it, and an operator who hits it once
+	// learns to export junk values, which is worse than not asking.
+	tool bool
 }
 
 // bindings is the single source of truth for what this package reads: every
@@ -129,11 +147,11 @@ func (c *Config) bindings() []binding {
 		{name: envRequestTimeout, target: &c.Server.RequestTimeout, def: "30s"},
 		{name: envShutdownTimeout, target: &c.Server.ShutdownTimeout, def: "15s"},
 		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
-		{name: envDBPath, target: &c.Database.Path, def: "./purpleops.duckdb"},
+		{name: envDBPath, target: &c.Database.Path, def: "./purpleops.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
-		{name: envLogLevel, target: &c.Log.Level, def: string(LevelInfo)},
-		{name: envLogFormat, target: &c.Log.Format, def: string(FormatJSON)},
+		{name: envLogLevel, target: &c.Log.Level, def: string(LevelInfo), tool: true},
+		{name: envLogFormat, target: &c.Log.Format, def: string(FormatJSON), tool: true},
 		{name: envChromePath, target: &c.Report.ChromePath},
 	}
 }
@@ -157,6 +175,22 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
+// LoadTool reads and validates the settings an administrative process shares
+// with the server — the database it opens and the log it writes — from the same
+// environment, parsed by the same code. A non-nil error is always a [LoadError].
+//
+// It deliberately does less than [Load]. It ignores the variables only a server
+// uses, so a CLI invocation is not held up by a missing base URL or session
+// secret, and it creates nothing: an admin command that made a directory as a
+// side effect of starting up would be a surprising way to typo a path.
+func LoadTool() (Tool, error) {
+	cfg, errs := parseTool(environ())
+	if len(errs) > 0 {
+		return Tool{}, &LoadError{Errs: errs}
+	}
+	return cfg, nil
+}
+
 // environ snapshots the process environment. It is the only place in the tree
 // that touches it; TestOnlyConfigReadsTheEnvironment keeps it that way.
 func environ() map[string]string {
@@ -173,10 +207,32 @@ func environ() map[string]string {
 // without touching the filesystem. It has no side effects, so a caller that is
 // going to reject the result has not already changed the machine.
 func parse(env map[string]string) (Config, []error) {
+	cfg, errs := bind(env, func(binding) bool { return true })
+	return cfg, append(errs, cfg.validate()...)
+}
+
+// parseTool is parse for an administrative process: the variables marked
+// binding.tool, and only those.
+//
+// It runs no cross-field validation, because every check in validate() is about
+// a variable a tool does not read — a listen address, a base URL, a browser to
+// render PDFs with. Adding a tool-visible check means calling it from here too.
+func parseTool(env map[string]string) (Tool, []error) {
+	cfg, errs := bind(env, func(b binding) bool { return b.tool })
+	return Tool{Database: cfg.Database, Log: cfg.Log}, errs
+}
+
+// bind fills the fields whose bindings want accepts, and reports every problem
+// it found with them. A binding want rejects is not read, so an invalid value
+// in a variable this process does not use cannot stop it starting.
+func bind(env map[string]string, want func(binding) bool) (Config, []error) {
 	var cfg Config
 	var errs []error
 
 	for _, b := range cfg.bindings() {
+		if !want(b) {
+			continue
+		}
 		raw, ok := lookup(env, b.name)
 		if !ok {
 			if b.required {
@@ -197,7 +253,7 @@ func parse(env map[string]string) (Config, []error) {
 		}
 	}
 
-	return cfg, append(errs, cfg.validate()...)
+	return cfg, errs
 }
 
 // lookup returns the value of name, treating set-but-empty as unset. An empty

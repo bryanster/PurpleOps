@@ -321,6 +321,38 @@ func checkPath(path string) error {
 
 // openError names the file in every failure to open it. An operator reading a
 // log line needs to know which database, and the driver only sometimes says.
+//
+// A lock conflict is additionally tagged with [ErrLocked], so a caller can
+// recognise the one open failure that is not a fault — a second process on a
+// perfectly healthy database — and say what to do about it. The driver's own
+// message is kept: it carries the command and the PID holding the lock.
 func openError(path string, err error) error {
+	if isLockConflict(err) {
+		return fmt.Errorf("store: open database %q: %w: %w", path, ErrLocked, err)
+	}
 	return fmt.Errorf("store: open database %q: %w", path, err)
+}
+
+// lockConflictMarker appears in the DuckDB message for exactly one condition:
+// the database file is held by another process. The full text is
+//
+//	IO Error: Could not set lock on file "x.duckdb": Conflicting lock is held
+//	in /usr/local/bin/purpleops (PID 1) by user purpleops.
+const lockConflictMarker = "Conflicting lock is held"
+
+// isLockConflict reports whether err is DuckDB refusing to open a file another
+// process already has open.
+//
+// The driver exposes a category ([duckdb.Error.Type]) but no code, and the
+// category is IO — shared with a missing directory and a full disk. So the
+// category narrows it and the message decides. Matching on message text is
+// fragile by nature, which is why getting it wrong is survivable here: the
+// error is still returned, still names the file, and still carries DuckDB's
+// explanation. Only the extra sentence advising which process to stop is lost.
+func isLockConflict(err error) bool {
+	var dbErr *duckdb.Error
+	if !errors.As(err, &dbErr) || dbErr.Type != duckdb.ErrorTypeIO {
+		return false
+	}
+	return strings.Contains(dbErr.Msg, lockConflictMarker)
 }

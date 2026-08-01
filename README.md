@@ -29,6 +29,11 @@ make build     # build the SPA and the binaries
 make run       # build, then start the server
 ```
 
+Both builds produce a second binary, `popsctl`, which administers a deployment from the command
+line — migrations, database inspection, and the user and content management that arrive with M1 and
+M2. It is in the container image too: `docker compose exec purpleops popsctl --help`, and
+[`docs/cli.md`](docs/cli.md) for the rest.
+
 `make help` lists every target. There is a dev container with the toolchain already pinned and
 installed — see [`.devcontainer/`](.devcontainer/).
 [`docs/contributing.md`](docs/contributing.md) has the development loop, what CI checks, and the

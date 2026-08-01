@@ -146,6 +146,27 @@ process".
 
 ---
 
+## Administering it: `popsctl`
+
+The image carries a second binary, `popsctl`, on `PATH`. It is how you migrate a database by hand,
+look inside one, and — as the milestones land — create the first user, sync content and take
+backups. [`docs/cli.md`](cli.md) is the reference; the short version:
+
+```sh
+docker compose exec purpleops popsctl version      # is the CLI the same build as the server?
+docker compose stop                                # DuckDB admits one process at a time
+docker compose run --rm purpleops popsctl db info  # …so a command needs the server down
+docker compose start
+```
+
+`popsctl` reads the same environment and the same `PURPLEOPS_DB_PATH` as the server, so inside the
+image it already points at the right file. Anything that opens the database needs the server
+stopped, `docker compose exec` included: DuckDB admits one process per file, and a command that
+tries anyway fails with a message saying so rather than corrupting anything. `popsctl version` is
+the exception, because it opens nothing.
+
+---
+
 ## Backup and restore
 
 DuckDB writes through a WAL, so copying the files out from under a running process can capture a
@@ -283,6 +304,9 @@ Notes that bite people:
   `PURPLEOPS_SHUTDOWN_TIMEOUT` to finish, so `Restart=on-failure` and a normal `systemctl restart`
   behave.
 - **There is no static asset directory to deploy.** The binary is the whole application.
+- **`make build` also produces `./bin/popsctl`**, the admin CLI ([`docs/cli.md`](cli.md)). Install it
+  beside the server and give it the same environment; it needs the service stopped, because DuckDB
+  gives the database file to one process at a time.
 
 ---
 

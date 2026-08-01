@@ -11,6 +11,12 @@
 //   - A [Config] is a value. It is passed to constructors; nothing reaches
 //     back into this package at runtime.
 //
+// The admin CLI shares the environment and the parsing but not the whole of it:
+// [LoadTool] returns a [Tool], the two sections a process that opens the
+// database without serving HTTP actually uses. It is a distinct type so that
+// the guarantee above still holds — every field of what you are handed was
+// read and validated.
+//
 // Every variable is documented in .env.example at the repository root, which
 // TestEnvExampleDocumentsEveryVariable keeps in step with the code.
 package config

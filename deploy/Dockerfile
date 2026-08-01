@@ -105,6 +105,11 @@ ARG BUILD_DATE=unknown
 # The compilation cache is keyed by architecture, so that `--platform
 # linux/amd64,linux/arm64` runs the two builds in parallel instead of queueing
 # on one lock. The module cache is architecture-independent and stays shared.
+#
+# Both binaries, in one layer: popsctl is how an operator migrates, inspects and
+# (from M1) creates the first user, and an image without it means reaching for
+# `docker run` with a second image that has the same DuckDB version. It does not
+# import web/, so it gets no `spa` tag and embeds no frontend.
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,target=/root/.cache/go-build,id=go-build-$TARGETARCH,sharing=locked \
@@ -116,12 +121,12 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
         arm64) export CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ;; \
       esac; \
     fi; \
-    go build -tags spa -trimpath \
-      -ldflags "-s -w \
+    ldflags="-s -w \
         -X ${MODULE}/internal/version.version=${VERSION} \
         -X ${MODULE}/internal/version.commit=${COMMIT} \
-        -X ${MODULE}/internal/version.buildDate=${BUILD_DATE}" \
-      -o /out/purpleops ./cmd/purpleops
+        -X ${MODULE}/internal/version.buildDate=${BUILD_DATE}"; \
+    go build -tags spa -trimpath -ldflags "$ldflags" -o /out/purpleops ./cmd/purpleops; \
+    go build -trimpath -ldflags "$ldflags" -o /out/popsctl ./cmd/popsctl
 
 # ─── Stage 3 · runtime ────────────────────────────────────────────────────────
 FROM debian:${DEBIAN_RELEASE}-slim AS runtime
@@ -211,6 +216,10 @@ ENV PURPLEOPS_ADDR=:8080 \
     PURPLEOPS_CHROME_PATH=/usr/bin/chromium
 
 COPY --from=build /out/purpleops /usr/local/bin/purpleops
+# On PATH, so `docker compose exec purpleops popsctl db info` is the whole
+# command. It runs as the same user against the same volume, which is what
+# makes it the supported way to touch a running deployment's database.
+COPY --from=build /out/popsctl /usr/local/bin/popsctl
 COPY --chmod=0755 deploy/entrypoint.sh /usr/local/bin/purpleops-entrypoint
 COPY --chmod=0755 deploy/healthcheck.sh /usr/local/bin/purpleops-healthcheck
 

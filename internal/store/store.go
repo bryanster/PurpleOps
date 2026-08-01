@@ -11,6 +11,14 @@ import (
 // answered with "try again" rather than reported as a database fault.
 var ErrClosed = errors.New("store: database is closed")
 
+// ErrLocked wraps the error from [Open] when another *process* already holds
+// the database file. DuckDB admits one process to a database at a time, so this
+// is what an operator running the admin CLI against a live deployment's
+// database gets — a normal thing to do by mistake, and worth a better answer
+// than the driver's own. Within one process a second [Open] of the same file
+// succeeds and shares the instance; this is only ever about two processes.
+var ErrLocked = errors.New("another process has this database open")
+
 // Reader is the read surface of the database: statements that return rows, and
 // nothing else. It has no Exec, no Begin and no Prepare, so that the only way to
 // write is [DB.Write] — see the package comment for why that matters.
