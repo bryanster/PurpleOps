@@ -88,6 +88,17 @@ If you do not set it, the container's entrypoint generates one on first boot and
 Set the variable yourself for anything you would be upset to lose. Rotating it — either variable or
 file — logs everybody out, which is also how you revoke every session at once.
 
+### The one that is gone: `PASSWORD_SALT`
+
+v1 read a single site-wide salt from the environment and mixed it into every password. There is no
+equivalent here and nothing to set: passwords are hashed with Argon2id, each with its own random
+salt, and the salt and cost parameters are stored inside the hash. So there is no secret to lose, no
+secret to rotate, and two people who pick the same password no longer get the same hash.
+
+Local passwords must be at least 12 characters, may be up to 128, and are refused if they appear in
+the list of passwords attackers try first. There are no composition rules — a passphrase of a few
+words is both stronger and easier to type than `Passw0rd!`.
+
 ### What the image sets for you
 
 These have image defaults that describe the container's own filesystem. Override them only if you
