@@ -43,6 +43,22 @@ about to do. It needs the server stopped: one process holds the database, which 
 
 Tests catch a malformed set before it reaches CI. Run `go test ./internal/store/migrate/...`.
 
+### Two DuckDB limitations to design around
+
+**Do not give a table a foreign key pointing at rows you will need to update.** DuckDB runs an
+`UPDATE` on an indexed table as a delete followed by an insert, and the delete half runs the
+referential check — so a *referenced* row cannot be updated at all while anything points at it, not
+even a column the key has nothing to do with. `0002_identity` learned this the expensive way: with
+`app.session.user_id REFERENCES app."user"(id)`, recording a login was a constraint error for every
+account that had ever signed in. `0003_user_updatable` removed those keys and moved the rule into
+`requireUser` in the repositories. Verified against DuckDB v1.5.5; check whether it still holds
+before reaching for a foreign key.
+
+**There is no `ALTER TABLE ... DROP CONSTRAINT`** — "No support for that ALTER TABLE option yet!".
+Removing a constraint means creating the table again beside the old one, copying the rows across,
+dropping the old one and renaming, with every index recreated afterwards. `0003_user_updatable.sql`
+is the worked example.
+
 ## Migrations are append-only
 
 Once a migration is merged, it is never edited, renamed or deleted. Every deployment that already

@@ -321,3 +321,134 @@ func TestDeleteExpiredRemovesOnlyWhatIsPastTheCutoff(t *testing.T) {
 		t.Errorf("the long-expired session is still there: %v", err)
 	}
 }
+
+// TestRotateReplacesTheTokenAndKeepsTheSession is the storage half of the
+// session-fixation defence in M1-003: the row survives, its expiry is not
+// extended, and the hash it was found by no longer finds it.
+func TestRotateReplacesTheTokenAndKeepsTheSession(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	user := mustCreateUser(t, r, "alice@example.com")
+	created, err := r.sessions.Create(t.Context(), identity.NewSession{
+		UserID:    user.ID,
+		TokenHash: "hash-before-rotation",
+		ExpiresAt: time.Now().Add(12 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Create() = %v, want nil", err)
+	}
+
+	rotated, err := r.sessions.Rotate(t.Context(), created.ID, "hash-after-rotation", time.Now())
+	if err != nil {
+		t.Fatalf("Rotate() = %v, want nil", err)
+	}
+
+	switch {
+	case rotated.ID != created.ID:
+		t.Errorf("Rotate() returned session %q, want the same one %q", rotated.ID, created.ID)
+	case rotated.TokenHash != "hash-after-rotation":
+		t.Errorf("TokenHash = %q, want the new one", rotated.TokenHash)
+	case !rotated.CreatedAt.Equal(created.CreatedAt):
+		t.Errorf("CreatedAt moved from %s to %s", created.CreatedAt, rotated.CreatedAt)
+	case !rotated.ExpiresAt.Equal(created.ExpiresAt):
+		t.Errorf("ExpiresAt moved from %s to %s; rotation must not extend a session",
+			created.ExpiresAt, rotated.ExpiresAt)
+	}
+
+	if _, err := r.sessions.ByTokenHash(t.Context(), "hash-before-rotation"); !errors.Is(err, apierr.ErrNotFound) {
+		t.Errorf("the old hash still finds the session: %v", err)
+	}
+	if _, err := r.sessions.ByTokenHash(t.Context(), "hash-after-rotation"); err != nil {
+		t.Errorf("the new hash does not find the session: %v", err)
+	}
+}
+
+// TestRotateRefusesARevokedOrMissingSession: rotating a session that has ended
+// would hand out a live token for it.
+func TestRotateRefusesARevokedOrMissingSession(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	user := mustCreateUser(t, r, "alice@example.com")
+	created, err := r.sessions.Create(t.Context(), identity.NewSession{
+		UserID:    user.ID,
+		TokenHash: "hash-to-revoke",
+		ExpiresAt: time.Now().Add(12 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("Create() = %v, want nil", err)
+	}
+	if err := r.sessions.Revoke(t.Context(), created.ID, time.Now()); err != nil {
+		t.Fatalf("Revoke() = %v, want nil", err)
+	}
+
+	if _, err := r.sessions.Rotate(t.Context(), created.ID, "hash-new", time.Now()); !errors.Is(err, apierr.ErrNotFound) {
+		t.Errorf("Rotate() on a revoked session = %v, want a not-found", err)
+	}
+	if _, err := r.sessions.Rotate(t.Context(), "no-such-session", "hash-new", time.Now()); !errors.Is(err, apierr.ErrNotFound) {
+		t.Errorf("Rotate() on a session that does not exist = %v, want a not-found", err)
+	}
+}
+
+// TestRevokeOthersForUserKeepsExactlyOne is what a password change calls: the
+// browser making the change keeps working, everywhere else is signed out, and
+// nobody else's sessions are touched.
+func TestRevokeOthersForUserKeepsExactlyOne(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	alice := mustCreateUser(t, r, "alice@example.com")
+	bob := mustCreateUser(t, r, "bob@example.com")
+
+	newSession := func(user identity.User, hash string) identity.Session {
+		t.Helper()
+
+		created, err := r.sessions.Create(t.Context(), identity.NewSession{
+			UserID:    user.ID,
+			TokenHash: hash,
+			ExpiresAt: time.Now().Add(12 * time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("Create(%s) = %v, want nil", hash, err)
+		}
+		return created
+	}
+
+	keep := newSession(alice, "hash-keep")
+	first := newSession(alice, "hash-other-1")
+	second := newSession(alice, "hash-other-2")
+	bobs := newSession(bob, "hash-bob")
+
+	revoked, err := r.sessions.RevokeOthersForUser(t.Context(), alice.ID, keep.ID, time.Now())
+	if err != nil {
+		t.Fatalf("RevokeOthersForUser() = %v, want nil", err)
+	}
+	if revoked != 2 {
+		t.Errorf("RevokeOthersForUser() revoked %d, want 2", revoked)
+	}
+
+	live := map[string]bool{keep.ID: true, first.ID: false, second.ID: false}
+	for _, found := range mustListSessions(t, r, alice.ID) {
+		if want, known := live[found.ID]; known && found.RevokedAt.IsZero() != want {
+			t.Errorf("session %q revoked = %v, want %v", found.ID, !found.RevokedAt.IsZero(), !want)
+		}
+	}
+
+	for _, found := range mustListSessions(t, r, bob.ID) {
+		if found.ID == bobs.ID && !found.RevokedAt.IsZero() {
+			t.Error("another person's session was revoked")
+		}
+	}
+}
+
+// mustListSessions is the read half of the two tests above.
+func mustListSessions(t *testing.T, r repos, userID string) []identity.Session {
+	t.Helper()
+
+	found, err := r.sessions.ListByUser(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListByUser() = %v, want nil", err)
+	}
+	return found
+}

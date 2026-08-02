@@ -41,6 +41,15 @@ func testConfig(t *testing.T) config.Config {
 			RequestTimeout:  30 * time.Second,
 			ShutdownTimeout: 5 * time.Second,
 		},
+		// A server cannot be built without these: it would have no way to hash a
+		// session token. The secret is a fixed test value on purpose — nothing
+		// here depends on it being unguessable, and a random one would make a
+		// failure impossible to reproduce.
+		Session: config.Session{
+			Secret:      config.NewSecret([]byte("test-session-secret-not-a-real-one")),
+			Lifetime:    12 * time.Hour,
+			IdleTimeout: 2 * time.Hour,
+		},
 	}
 }
 

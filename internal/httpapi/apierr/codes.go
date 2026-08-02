@@ -24,7 +24,12 @@ type (
 // They are never returned on their own — every one of them arrives as part of
 // an [Error], which also carries the detail and the field list.
 var (
-	ErrValidation       = errors.New("validation failed")
+	ErrValidation = errors.New("validation failed")
+	// ErrUnauthenticated covers both halves of 401: a request that carried no
+	// usable session, and a sign-in attempt that failed. They are one code
+	// because they are one instruction to the client — sign in — and because
+	// telling them apart is exactly what a login endpoint must not help with.
+	ErrUnauthenticated  = errors.New("unauthenticated")
 	ErrForbidden        = errors.New("forbidden")
 	ErrNotFound         = errors.New("not found")
 	ErrMethodNotAllowed = errors.New("method not allowed")
@@ -45,6 +50,7 @@ var codes = map[Code]struct {
 	sentinel error
 }{
 	gen.ProblemCodeValidationFailed: {http.StatusBadRequest, ErrValidation},
+	gen.ProblemCodeUnauthenticated:  {http.StatusUnauthorized, ErrUnauthenticated},
 	gen.ProblemCodeForbidden:        {http.StatusForbidden, ErrForbidden},
 	gen.ProblemCodeNotFound:         {http.StatusNotFound, ErrNotFound},
 	gen.ProblemCodeMethodNotAllowed: {http.StatusMethodNotAllowed, ErrMethodNotAllowed},

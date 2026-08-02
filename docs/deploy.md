@@ -69,9 +69,11 @@ so it is configured rather than guessed. It must be `https://` unless the host i
 PURPLEOPS_BASE_URL=https://purpleops.example.com
 ```
 
-**`PURPLEOPS_SESSION_SECRET`** — signs session cookies. At least 32 bytes of real entropy;
-placeholders and low-entropy values are rejected at startup rather than accepted and quietly
-useless.
+**`PURPLEOPS_SESSION_SECRET`** — keys the hash session tokens are stored under. At least 32 bytes of
+real entropy; placeholders and low-entropy values are rejected at startup rather than accepted and
+quietly useless. The cookie carries a random token and the database keeps only its keyed hash, so a
+copy of the database is not a set of live sessions — and rotating this signs everybody out, because
+no stored hash can be reproduced from the cookies people are holding.
 
 ```sh
 PURPLEOPS_SESSION_SECRET=$(openssl rand -base64 32)
@@ -87,6 +89,31 @@ If you do not set it, the container's entrypoint generates one on first boot and
 
 Set the variable yourself for anything you would be upset to lose. Rotating it — either variable or
 file — logs everybody out, which is also how you revoke every session at once.
+
+### Sessions
+
+**`PURPLEOPS_SESSION_LIFETIME`** (default `12h`) is how long a session may live at most, counted
+from when it was issued; nothing extends it. **`PURPLEOPS_SESSION_IDLE_TIMEOUT`** (default `2h`) is
+how long one may go unused before it ends, and is the one that protects an unattended browser. The
+idle timeout must not exceed the lifetime, which would leave it with nothing to do — that is a
+startup error naming both variables.
+
+Shortening either takes effect immediately for every existing session: both are evaluated on each
+request against the row, not baked into the cookie.
+
+### The first account
+
+A new deployment has no users and no sign-up. Create the first administrator with the admin CLI —
+see [`docs/cli.md`](cli.md):
+
+```sh
+docker compose run --rm purpleops popsctl user create \
+    --email you@example.com --name "Your Name" --admin
+```
+
+DuckDB gives the database file to one process at a time, so the server has to be stopped for this
+(`docker compose stop` first), or the command has to run in a container that shares nothing with it.
+The error says so if you forget.
 
 ### The one that is gone: `PASSWORD_SALT`
 
@@ -160,8 +187,7 @@ process".
 ## Administering it: `popsctl`
 
 The image carries a second binary, `popsctl`, on `PATH`. It is how you migrate a database by hand,
-look inside one, and — as the milestones land — create the first user, sync content and take
-backups. [`docs/cli.md`](cli.md) is the reference; the short version:
+look inside one, create users, and — as the milestones land — sync content and take backups. [`docs/cli.md`](cli.md) is the reference; the short version:
 
 ```sh
 docker compose exec purpleops popsctl version      # is the CLI the same build as the server?

@@ -25,6 +25,8 @@ const (
 	envDBPath          = prefix + "DB_PATH"
 	envEvidenceDir     = prefix + "EVIDENCE_DIR"
 	envSessionSecret   = prefix + "SESSION_SECRET"
+	envSessionLifetime = prefix + "SESSION_LIFETIME"
+	envSessionIdle     = prefix + "SESSION_IDLE_TIMEOUT"
 	envLogLevel        = prefix + "LOG_LEVEL"
 	envLogFormat       = prefix + "LOG_FORMAT"
 	envChromePath      = prefix + "CHROME_PATH"
@@ -87,10 +89,23 @@ type Evidence struct {
 	Dir string
 }
 
-// Session holds the secrets behind cookie sessions.
+// Session holds the secrets and the timings behind cookie sessions.
 type Session struct {
-	// Secret signs session cookies. Rotating it invalidates every session.
+	// Secret keys the hash a session token is stored under. Rotating it
+	// invalidates every session, because no stored hash can be reproduced from
+	// the cookies people are holding.
 	Secret Secret
+
+	// Lifetime is how long a session may live at most, counted from when it was
+	// issued. Reaching it ends the session whatever the person was in the middle
+	// of; that is the point of an absolute expiry, and no amount of activity
+	// extends it.
+	Lifetime time.Duration
+
+	// IdleTimeout is how long a session may go unused before it ends. It is the
+	// one that protects an unattended browser, and it is necessarily shorter
+	// than Lifetime.
+	IdleTimeout time.Duration
 }
 
 // Log configures the process logger.
@@ -150,6 +165,8 @@ func (c *Config) bindings() []binding {
 		{name: envDBPath, target: &c.Database.Path, def: "./purpleops.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
+		{name: envSessionLifetime, target: &c.Session.Lifetime, def: "12h"},
+		{name: envSessionIdle, target: &c.Session.IdleTimeout, def: "2h"},
 		{name: envLogLevel, target: &c.Log.Level, def: string(LevelInfo), tool: true},
 		{name: envLogFormat, target: &c.Log.Format, def: string(FormatJSON), tool: true},
 		{name: envChromePath, target: &c.Report.ChromePath},

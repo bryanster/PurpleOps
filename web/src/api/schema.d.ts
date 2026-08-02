@@ -53,6 +53,113 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with an email address and password.
+         * @description Public, because the caller has no session yet — that is what this
+         *     endpoint issues.
+         *
+         *     Every way of failing produces the *same* 401 with the same body: a wrong
+         *     password, an address nobody holds, and a disabled account are
+         *     indistinguishable, so that this endpoint cannot be used to find out who
+         *     has an account here. The server spends the same work on each, too.
+         *
+         *     A 200 does not always mean a session. When a second factor is required,
+         *     `status` is `mfa_required`, no cookie is set, and the caller must
+         *     complete the challenge (M1-006) before anything is signed in. Read
+         *     `status` rather than assuming.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End the current session.
+         * @description Revokes the session server-side and clears the cookie. A replay of the
+         *     old cookie afterwards is a 401 — the session is ended in the database,
+         *     not merely forgotten by the browser.
+         *
+         *     A request that carries no usable session is a 204 as well: the caller
+         *     wanted to be signed out, and they are.
+         */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the signed-in user, their platform role and their engagement memberships.
+         * @description Everything the interface needs to decide what to show: who you are, what
+         *     you may do to this installation, which engagements you are in and with
+         *     which role, and whether this session has satisfied MFA.
+         *
+         *     It never returns anything about the session token. What is in the cookie
+         *     stays in the cookie.
+         */
+        get: operations["getCurrentUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your own password.
+         * @description Requires the current password, so that a borrowed browser cannot be used
+         *     to take an account over.
+         *
+         *     On success the current session is rotated — a new token for the same
+         *     session, in a new cookie — and every *other* session belonging to this
+         *     user is revoked. Changing your password signs out the places you did not
+         *     change it from.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -111,7 +218,7 @@ export interface components {
          *     code means adding it in both places in the same change.
          * @enum {string}
          */
-        ProblemCode: "validation_failed" | "forbidden" | "not_found" | "method_not_allowed" | "conflict" | "rate_limited" | "internal";
+        ProblemCode: "validation_failed" | "unauthenticated" | "forbidden" | "not_found" | "method_not_allowed" | "conflict" | "rate_limited" | "internal";
         /** @description One field-level validation failure. */
         FieldError: {
             /**
@@ -172,10 +279,129 @@ export interface components {
              */
             buildDate: string;
         };
+        /** @description Credentials for `POST /auth/login`. */
+        LoginRequest: {
+            /**
+             * @description The address the account was created with, matched without regard to
+             *     case or surrounding whitespace.
+             * @example alice@example.com
+             */
+            email: string;
+            /**
+             * @description The password, as typed. The bounds here are a backstop on an
+             *     unauthenticated path, not the policy: the policy lives in one place
+             *     (internal/authn/password) and applies where a password is *set*.
+             *     Holding a login attempt to it would tell an attacker how long the
+             *     password is not.
+             */
+            password: string;
+        };
+        /**
+         * @description What a successful `POST /auth/login` established. A client must branch on
+         *     this rather than assume that 200 means signed in.
+         * @enum {string}
+         */
+        LoginStatus: "authenticated" | "mfa_required";
+        /** @description The outcome of a successful `POST /auth/login`. */
+        LoginResult: {
+            status: components["schemas"]["LoginStatus"];
+            /**
+             * @description The signed-in user. Present when `status` is `authenticated` and
+             *     absent otherwise — a caller awaiting a second factor has not been
+             *     told who they are yet.
+             */
+            user?: components["schemas"]["CurrentUser"];
+        };
+        /**
+         * @description The caller, as `GET /auth/me` reports them. It carries nothing about the
+         *     session token: the cookie is the only place that value exists outside the
+         *     client.
+         */
+        CurrentUser: {
+            /** @description The user's identifier — a UUIDv7, as every identifier here is. */
+            id: string;
+            /** @description The address as it was typed when the account was created. */
+            email: string;
+            /** @description The name to show for this person. */
+            displayName: string;
+            platformRole: components["schemas"]["PlatformRole"];
+            mfa: components["schemas"]["MFAState"];
+            /**
+             * @description Every engagement this person belongs to, and their role in it. An
+             *     administrator's list is still only what they are a *member* of —
+             *     their reach beyond it comes from `platformRole`, not from here.
+             */
+            memberships: components["schemas"]["EngagementMembership"][];
+        };
+        /**
+         * @description What somebody may do to this installation: `admin` manages users, content
+         *     and every engagement; `member` takes part in the engagements they belong
+         *     to. What they may do *inside* one is `EngagementRole`, and the two are
+         *     deliberately not the same vocabulary.
+         * @enum {string}
+         */
+        PlatformRole: "admin" | "member";
+        /**
+         * @description What somebody may do inside one engagement. Red and blue are separate so
+         *     that blind mode and the split write endpoints have something to decide
+         *     on.
+         * @enum {string}
+         */
+        EngagementRole: "lead" | "red" | "blue" | "observer";
+        /** @description One person's place in one engagement. */
+        EngagementMembership: {
+            engagementId: string;
+            role: components["schemas"]["EngagementRole"];
+            /** Format: date-time */
+            addedAt: string;
+        };
+        /**
+         * @description Where this person and this session stand on multi-factor authentication.
+         *     Whether an administrator *requires* it and whether this session has
+         *     *satisfied* it are separate facts — conflating them is the hole M1-008
+         *     closes.
+         */
+        MFAState: {
+            /** @description An administrator requires a second factor of this person. */
+            enforced: boolean;
+            /** @description A second factor was presented for *this* session. */
+            satisfied: boolean;
+        };
+        /**
+         * @description Body of `POST /auth/password`. The current password is required even
+         *     though the caller is signed in: a session left open on a shared machine
+         *     must not be enough to take the account over.
+         */
+        ChangePasswordRequest: {
+            currentPassword: string;
+            /**
+             * @description The replacement. The policy — at least 12 characters, at most 128,
+             *     and not one of the passwords attackers try first — is applied by the
+             *     server and reported as field errors on `newPassword`, so that there
+             *     is one definition of an acceptable password rather than one here and
+             *     one in the client.
+             */
+            newPassword: string;
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
         BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
+         * @description No usable session — absent, expired, idle for too long, revoked, or the
+         *     credentials just presented were wrong. `code` is `unauthenticated`.
+         *
+         *     The client's move is to sign in. Compare `forbidden`, which means the
+         *     caller is known and still may not do this.
+         */
+        Unauthenticated: {
             headers: {
                 [name: string]: unknown;
             };
@@ -317,6 +543,114 @@ export interface operations {
                     "application/json": components["schemas"]["Version"];
                 };
             };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /**
+             * @description The credentials were correct. `status` says whether that was enough:
+             *     `authenticated` means the session cookie in `Set-Cookie` is live,
+             *     `mfa_required` means it is not, and no cookie was set.
+             */
+            200: {
+                headers: {
+                    /**
+                     * @description The session cookie, present only when `status` is
+                     *     `authenticated`. `HttpOnly`, `SameSite=Strict`, `Path=/`, and
+                     *     `Secure` on every deployment that is not
+                     *     `PURPLEOPS_ENV=development`.
+                     */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session is revoked and the cookie cleared. */
+            204: {
+                headers: {
+                    /** @description The expired session cookie, which clears the browser's copy. */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description The password was changed, this session rotated, and every other one revoked. */
+            204: {
+                headers: {
+                    /** @description The rotated session cookie. The token it replaces stops working. */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             500: components["responses"]["InternalError"];
         };
     };

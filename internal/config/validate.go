@@ -41,6 +41,19 @@ func (c *Config) validate() []error {
 		})
 	}
 
+	// An idle timeout longer than the lifetime is not a configuration with a
+	// generous idle policy — it is one with no idle policy at all, because the
+	// absolute expiry always arrives first. An operator who wrote that meant
+	// something, and it is not what they would get.
+	if c.Session.IdleTimeout > c.Session.Lifetime {
+		errs = append(errs, &FieldError{
+			Name:  envSessionIdle,
+			Value: c.Session.IdleTimeout.String(),
+			Msg: fmt.Sprintf("must not be longer than %s (%s), which would end the session first",
+				envSessionLifetime, c.Session.Lifetime),
+		})
+	}
+
 	if c.Report.ChromePath != "" {
 		if err := checkExecutable(c.Report.ChromePath); err != nil {
 			errs = append(errs, &FieldError{

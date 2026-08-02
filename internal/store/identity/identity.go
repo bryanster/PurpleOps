@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -211,6 +212,28 @@ func requireOneRow(result sql.Result, resource, id string) error {
 			affected, resource, id)
 	}
 	return nil
+}
+
+// requireUser reports [apierr.NotFound] unless the user exists, and is how a
+// session, an identity or a membership is held to a real person.
+//
+// Until 0003_user_updatable that was a foreign key. DuckDB implements an UPDATE
+// as a delete and an insert, and the delete half runs the RESTRICT check — so
+// with the constraint in place no user who had ever signed in could be edited at
+// all, not even to record the login. The constraint had to go; the rule it
+// enforced did not, so it lives here.
+//
+// It runs inside the caller's write transaction, which is the only way the
+// answer cannot change between the check and the insert — and, since the
+// serialized writer admits one transaction at a time (PLAN.md §1), that is as
+// strong as the constraint was.
+func requireUser(ctx context.Context, tx *sql.Tx, userID string) error {
+	var found int
+	err := tx.QueryRowContext(ctx, `SELECT 1 FROM app."user" WHERE id = ?`, userID).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return apierr.NotFound("user", userID)
+	}
+	return err
 }
 
 // newID mints a UUIDv7: sortable by creation time, so "ORDER BY id" is a stable

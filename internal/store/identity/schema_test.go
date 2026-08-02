@@ -2,10 +2,12 @@ package identity_test
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/httpapi/apierr"
 	"github.com/bryanster/purpleops/internal/store"
 	"github.com/bryanster/purpleops/internal/store/identity"
 )
@@ -15,6 +17,11 @@ import (
 // than from if statements, and a test that could only reach the database
 // through code that already validates would prove nothing about the schema.
 // Each of these is a bug getting past the Go layer.
+//
+// Two exceptions go through the repositories on purpose, and say so: the
+// invariants that 0003_user_updatable moved out of the schema and into
+// requireUser, because DuckDB's foreign keys made the rows they guard
+// impossible to update.
 
 // TestTheSchemaRefusesAnUnknownRoleOrStatus is the CHECK-constraint half. A
 // role no policy knows how to judge must be impossible to store, not merely
@@ -152,57 +159,84 @@ func TestOneSubjectBelongsToOneAccount(t *testing.T) {
 	}
 }
 
-// TestDeletingAUserWhoOwnsAnythingIsRefused is the "does not orphan rows"
-// criterion. DuckDB has no ON DELETE CASCADE, so RESTRICT is both the decision
-// and the only option; either way an account is retired by status and its
-// history stays attached to it.
-func TestDeletingAUserWhoOwnsAnythingIsRefused(t *testing.T) {
+// TestADependentRowMustBelongToARealUser is the invariant 0002_identity gave to
+// a foreign key and 0003_user_updatable had to take back: a session, an identity
+// or a membership pointing at nobody.
+//
+// DuckDB runs an UPDATE as a delete and an insert, so the ON DELETE RESTRICT
+// made every user who owned any of these permanently uneditable — including by
+// the statement that records their login. The constraints are gone and the rule
+// is enforced by requireUser inside each repository's write transaction; this is
+// what proves it still holds.
+func TestADependentRowMustBelongToARealUser(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	ctx := t.Context()
+
+	writes := map[string]func() error{
+		"identity": func() error {
+			_, err := r.identities.Create(ctx, identity.NewIdentity{
+				UserID: "no-such-user", Provider: identity.ProviderLocal, Subject: "ghost@example.com",
+			})
+			return err
+		},
+		"session": func() error {
+			_, err := r.sessions.Create(ctx, identity.NewSession{
+				UserID: "no-such-user", TokenHash: "hash-ghost", ExpiresAt: time.Now().Add(time.Hour),
+			})
+			return err
+		},
+		"membership": func() error {
+			_, err := r.memberships.Add(ctx, identity.NewMembership{
+				EngagementID: "e1", UserID: "no-such-user", Role: identity.EngagementRoleLead,
+			})
+			return err
+		},
+	}
+
+	for kind, write := range writes {
+		if err := write(); !errors.Is(err, apierr.ErrNotFound) {
+			t.Errorf("creating a %s for a user who does not exist = %v, want a not-found", kind, err)
+		}
+	}
+}
+
+// TestAUserWhoOwnsRowsCanStillBeUpdated is the regression case behind
+// 0003_user_updatable, and the reason its comment is as long as it is: with the
+// foreign keys in place every one of these updates failed with a constraint
+// error, which made signing in impossible.
+func TestAUserWhoOwnsRowsCanStillBeUpdated(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
 	ctx := t.Context()
 	user := mustCreateUser(t, r, "alice@example.com")
 
-	owners := map[string]func(t *testing.T){
-		"identity": func(t *testing.T) {
-			if _, err := r.identities.Create(ctx, identity.NewIdentity{
-				UserID: user.ID, Provider: identity.ProviderLocal, Subject: "alice@example.com",
-			}); err != nil {
-				t.Fatal(err)
-			}
-		},
-		"session": func(t *testing.T) {
-			if _, err := r.sessions.Create(ctx, identity.NewSession{
-				UserID: user.ID, TokenHash: "hash-restrict", ExpiresAt: time.Now().Add(time.Hour),
-			}); err != nil {
-				t.Fatal(err)
-			}
-		},
-		"membership": func(t *testing.T) {
-			if _, err := r.memberships.Add(ctx, identity.NewMembership{
-				EngagementID: "e1", UserID: user.ID, Role: identity.EngagementRoleLead,
-			}); err != nil {
-				t.Fatal(err)
-			}
-		},
+	if _, err := r.identities.Create(ctx, identity.NewIdentity{
+		UserID: user.ID, Provider: identity.ProviderLocal, Subject: "alice@example.com",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.sessions.Create(ctx, identity.NewSession{
+		UserID: user.ID, TokenHash: "hash-updatable", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.memberships.Add(ctx, identity.NewMembership{
+		EngagementID: "e1", UserID: user.ID, Role: identity.EngagementRoleLead, AddedBy: user.ID,
+	}); err != nil {
+		t.Fatal(err)
 	}
 
-	// Every dependent row exists at once, then they are removed one kind at a
-	// time: the delete must stay refused until the last of them is gone.
-	for _, create := range owners {
-		create(t)
+	if err := r.users.SetLastLoginAt(ctx, user.ID, time.Now()); err != nil {
+		t.Errorf("recording a login for a user who owns rows = %v, want nil", err)
 	}
-	for kind := range owners {
-		if err := writeSQL(t, r.db, `DELETE FROM app."user" WHERE id = ?`, user.ID); err == nil {
-			t.Fatalf("the user was deleted while a %s still referenced them", kind)
-		}
-		clearDependent(t, r.db, kind, user.ID)
-	}
-
-	// With nothing left pointing at them, the row can go — a mistaken account
-	// that never did anything is still removable.
-	if err := writeSQL(t, r.db, `DELETE FROM app."user" WHERE id = ?`, user.ID); err != nil {
-		t.Errorf("deleting a user who owns nothing = %v, want nil", err)
+	user.DisplayName = "Alice Renamed"
+	if updated, err := r.users.Update(ctx, user); err != nil {
+		t.Errorf("updating a user who owns rows = %v, want nil", err)
+	} else if updated.DisplayName != "Alice Renamed" {
+		t.Errorf("DisplayName = %q, want %q", updated.DisplayName, "Alice Renamed")
 	}
 }
 
@@ -214,14 +248,11 @@ func TestAddedByIsHeldToARealUser(t *testing.T) {
 	r := newRepos(t)
 	user := mustCreateUser(t, r, "alice@example.com")
 
-	err := writeSQL(t, r.db,
-		`INSERT INTO app.engagement_member (engagement_id, user_id, role, added_by, added_at)
-		 VALUES ('e1', ?, 'red', 'nobody', ?)`, user.ID, time.Now().UTC())
-	if err == nil {
-		t.Fatal("added_by accepted an identifier belonging to no user")
-	}
-	if !strings.Contains(err.Error(), "foreign key") {
-		t.Errorf("failed with %v, want a foreign key violation", err)
+	_, err := r.memberships.Add(t.Context(), identity.NewMembership{
+		EngagementID: "e1", UserID: user.ID, Role: identity.EngagementRoleRed, AddedBy: "nobody",
+	})
+	if !errors.Is(err, apierr.ErrNotFound) {
+		t.Errorf("added_by pointing at no user = %v, want a not-found", err)
 	}
 }
 
@@ -235,17 +266,4 @@ func writeSQL(t *testing.T, db *store.DB, stmt string, args ...any) error {
 		_, err := tx.ExecContext(t.Context(), stmt, args...)
 		return err
 	})
-}
-
-func clearDependent(t *testing.T, db *store.DB, kind, userID string) {
-	t.Helper()
-
-	stmts := map[string]string{
-		"identity":   `DELETE FROM app.identity WHERE user_id = ?`,
-		"session":    `DELETE FROM app.session WHERE user_id = ?`,
-		"membership": `DELETE FROM app.engagement_member WHERE user_id = ?`,
-	}
-	if err := writeSQL(t, db, stmts[kind], userID); err != nil {
-		t.Fatalf("clearing the %s rows: %v", kind, err)
-	}
 }

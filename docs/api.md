@@ -63,11 +63,24 @@ The document declares `security` at the top level, so **an endpoint is authentic
 otherwise**. An operation that is genuinely public sets `security: []` and explains itself in its
 `description` — the test rejects an unexplained one.
 
-One trap, for whoever adds the first authenticated operation: the `kin-openapi` request validator
-refuses to serve any operation carrying a security requirement unless it is given an
-`AuthenticationFunc` (`openapi3filter.ErrAuthenticationServiceMissing`). The endpoint and the
-authentication middleware have to land in the same change. Do not paper over it with a
-permissive stub.
+Requiring a session in the document is not what enforces it. Three things are separate, and they
+stay separate:
+
+| Where | What it decides |
+|---|---|
+| `security` in this document | which credential an operation is *for*, and what a generated client sends |
+| `authenticate` (`internal/httpapi/authn.go`) | who the caller is, if anybody. It refuses nothing |
+| `authz` (M1-013) | whether this caller may do this |
+
+The `kin-openapi` request validator refuses to serve any operation carrying a security requirement
+unless it is given an `AuthenticationFunc` (`openapi3filter.ErrAuthenticationServiceMissing`).
+M1-003 supplies one that allows everything, and the comment on it in `internal/httpapi/validate.go`
+says why that is not a stub: the validator runs before the cookie has been resolved, so the only
+question it could answer is "is there a cookie header", and a 401 from it would not be this API's
+401. **Do not put an access check there.**
+
+Until M1-013 lands, an endpoint that needs a caller says so itself — `subjectFrom(ctx)` in
+`internal/httpapi/authn.go`, which is the one place that turns "nobody" into a 401.
 
 ## Errors
 
@@ -84,6 +97,7 @@ Clients switch on `code`, never on `detail` (prose, may be reworded) and never o
 | `code` | Status | Raised by |
 |---|---|---|
 | `validation_failed` | 400 | The request validator, or `apierr.Validation(...)` for a rule the spec cannot express |
+| `unauthenticated` | 401 | `apierr.Unauthenticated(...)` for no usable session, `apierr.BadCredentials(...)` for a failed sign-in |
 | `forbidden` | 403 | `apierr.Forbidden(...)`, and the authorization middleware (M1-013) |
 | `not_found` | 404 | `apierr.NotFound(...)`, and a path that is not in the spec |
 | `method_not_allowed` | 405 | The request validator, for a path that exists with other methods |

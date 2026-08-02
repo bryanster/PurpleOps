@@ -26,6 +26,7 @@ export const REQUEST_ID_HEADER = 'X-Request-Id'
  */
 const PROBLEM_CODES: Record<ProblemCode, true> = {
   validation_failed: true,
+  unauthenticated: true,
   forbidden: true,
   not_found: true,
   method_not_allowed: true,

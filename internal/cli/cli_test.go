@@ -35,6 +35,13 @@ type result struct {
 // coverage profile means something.
 func run(t *testing.T, env map[string]string, args ...string) result {
 	t.Helper()
+	return runWithInput(t, env, "", args...)
+}
+
+// runWithInput is run with something on standard input. The reader is not a
+// terminal, which is the branch a piped password takes.
+func runWithInput(t *testing.T, env map[string]string, stdin string, args ...string) result {
+	t.Helper()
 
 	for _, name := range toolEnv {
 		t.Setenv(name, env[name])
@@ -46,7 +53,7 @@ func run(t *testing.T, env map[string]string, args ...string) result {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := Main(context.Background(), args, &stdout, &stderr)
+	code := Main(context.Background(), args, strings.NewReader(stdin), &stdout, &stderr)
 	return result{stdout: stdout.String(), stderr: stderr.String(), code: code}
 }
 

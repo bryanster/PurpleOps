@@ -27,9 +27,12 @@ const name = "popsctl"
 // everything it has to say to the streams it is given and never calls
 // os.Exit, so a test can run any command the binary can.
 //
-// args excludes the program name, as os.Args[1:] does.
-func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	a := &app{out: stdout, errOut: stderr}
+// args excludes the program name, as os.Args[1:] does. stdin is read by the one
+// command that needs it — `user create`, for a password — and is where the
+// terminal is detected, so a test can supply an ordinary reader and get the
+// piped behaviour.
+func Main(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	a := &app{in: stdin, out: stdout, errOut: stderr}
 	//nolint:contextcheck // ctx reaches the commands through cobra: it is handed
 	// to ExecuteContext below and read back by every RunE as cmd.Context().
 	root := newRoot(a)
@@ -66,6 +69,10 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 // `popsctl version`, `popsctl --help` and the stub commands still work on a
 // machine whose environment a server would refuse to start on.
 type app struct {
+	// in is the process's standard input. It is an io.Reader rather than an
+	// *os.File so that a test can drive it; the one place that cares whether it
+	// is a terminal type-asserts for the file (see readPassword).
+	in     io.Reader
 	out    io.Writer
 	errOut io.Writer
 

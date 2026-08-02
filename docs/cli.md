@@ -116,6 +116,40 @@ report. Counting rows reads every table.
 > Both `migrate` and `db info` open the database **read-write**, and create it if it is not there.
 > A typo in `--db` makes an empty database rather than an error.
 
+### `popsctl user create`
+
+How the first administrator of a deployment exists at all: there is no sign-up, and the web
+interface has nothing to offer somebody who cannot sign in. It is also what the end-to-end suite
+seeds its accounts with.
+
+```
+popsctl user create --email alice@example.com --name Alice --admin
+Password:
+Repeat the password:
+Created alice@example.com (admin).
+```
+
+The password is asked for on the terminal, twice, and not echoed. When stdin is not a terminal it is
+read from there instead, once:
+
+```
+printf '%s' "$PASSWORD" | popsctl user create --email alice@example.com --name Alice --admin
+```
+
+One trailing newline is stripped, so `echo` works too. **There is no `--password` flag and no
+environment variable**: both end up in shell history, in `ps`, and in whatever collects the logs.
+
+| Flag | |
+|---|---|
+| `--email` | required. Matched without regard to case; stored as typed, for display |
+| `--name` | required. The name shown for this person |
+| `--admin` | make them a platform administrator. Without it they are a member |
+
+The password is held to the same policy the API applies — at least 12 characters, at most 128, and
+not one attackers try first — and the account is created active, with a local password login. The
+database must already be migrated; the command says so rather than failing with the driver's
+complaint about a missing table.
+
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one
@@ -123,7 +157,6 @@ milestone at a time. Each exits 1 and names the milestone that will implement it
 
 | Command | Arrives in |
 |---|---|
-| `popsctl user create` | M1 — identity and access |
 | `popsctl content sync` | M2 — content sources |
 | `popsctl report render` | M6 — reporting |
 | `popsctl backup` | M7 — replaces the manual procedure in `docs/deploy.md` |

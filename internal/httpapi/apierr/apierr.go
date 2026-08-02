@@ -1,6 +1,7 @@
 package apierr
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
@@ -34,6 +35,14 @@ func (e *Error) Code() Code { return e.code }
 
 // Status returns the HTTP status this failure is reported with.
 func (e *Error) Status() int { return Status(e.code) }
+
+// Fields returns the field-level breakdown of a validation failure, and nothing
+// for every other code.
+//
+// It exists for the callers that are not HTTP responses: popsctl reports a
+// password that breaks the policy as a sentence rather than as a problem
+// document, and it should be the same sentence the API would have sent.
+func (e *Error) Fields() []FieldError { return e.fields }
 
 // Error implements error. It is the log's view: everything, including the
 // cause. Nothing serializes it into a response — [Translate] builds the
@@ -69,6 +78,36 @@ func NotFound(resource, id string) *Error {
 		code:   gen.ProblemCodeNotFound,
 		detail: "no such " + resource,
 		cause:  fmt.Errorf("id %q", id),
+	}
+}
+
+// Unauthenticated reports that the request carried no usable session: none at
+// all, or one that has expired, timed out or been revoked.
+//
+// reason says which, for the log only. The client is told the same sentence
+// whichever it was — a caller with no session cannot act differently on the
+// difference, and an attacker probing with a stolen cookie can.
+func Unauthenticated(reason string) *Error {
+	return &Error{
+		code:   gen.ProblemCodeUnauthenticated,
+		detail: "sign in to continue",
+		cause:  errors.New(reason),
+	}
+}
+
+// BadCredentials is the answer to every failed sign-in, and the reason it is
+// its own constructor: the response cannot vary with what was wrong, because
+// this constructor gives the caller no way to make it vary. A wrong password, an
+// address nobody holds and a disabled account produce byte-identical bodies
+// (M1-003).
+//
+// reason is the log's half — "no such email", "password mismatch", "account
+// disabled" — and is the only record of which it was.
+func BadCredentials(reason string) *Error {
+	return &Error{
+		code:   gen.ProblemCodeUnauthenticated,
+		detail: "the email address or password is incorrect",
+		cause:  errors.New(reason),
 	}
 }
 

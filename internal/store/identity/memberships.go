@@ -42,6 +42,16 @@ func NewMemberships(db DB) *Memberships { return &Memberships{db: db} }
 func (r *Memberships) Add(ctx context.Context, in NewMembership) (Membership, error) {
 	var created Membership
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := requireUser(ctx, tx, in.UserID); err != nil {
+			return err
+		}
+		if in.AddedBy != "" {
+			// "Who gave them access" is the first question an incident review
+			// asks, so it cannot point at nobody in particular.
+			if err := requireUser(ctx, tx, in.AddedBy); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.ExecContext(ctx, insertMembership,
 			in.EngagementID, in.UserID, in.Role, nullString(in.AddedBy), now()); err != nil {
 			return err

@@ -44,6 +44,9 @@ func (r *Identities) Create(ctx context.Context, in NewIdentity) (Identity, erro
 
 	var created Identity
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := requireUser(ctx, tx, in.UserID); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, insertIdentity,
 			id, in.UserID, in.Provider, in.Subject, now()); err != nil {
 			return err

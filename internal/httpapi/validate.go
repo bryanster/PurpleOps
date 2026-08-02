@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -44,12 +45,23 @@ func requestValidator(doc *openapi3.T, responder *apierr.Responder) (func(http.H
 		// config.Load makes for environment variables.
 		MultiError: true,
 
-		// AuthenticationFunc is deliberately absent. Both operations in the
-		// document are `security: []`, and the validator only asks for an
-		// authenticator when an operation carries a security requirement — so
-		// M1's first authenticated endpoint has to arrive together with the
-		// middleware that authenticates it (docs/api.md). Stubbing one in now
-		// would make that impossible to notice.
+		// The validator refuses to serve an operation carrying a security
+		// requirement unless it is given one of these, so it exists; it
+		// deliberately allows everything.
+		//
+		// This is not a stub standing in for a check that should be here. The
+		// document's `security` says which credential an operation is *for*, and
+		// the validator sees a request before the authentication middleware has
+		// resolved the cookie — so the only answer it could give is "there is a
+		// cookie header", which is not authentication. Rejecting here would also
+		// mean the 401 came from the validator rather than from the one place
+		// that decides (M1-013), with a body that is not this API's.
+		//
+		// Authentication happens in the middleware immediately after this one;
+		// authorization happens after that.
+		AuthenticationFunc: func(context.Context, *openapi3filter.AuthenticationInput) error {
+			return nil
+		},
 	}
 
 	return func(next http.Handler) http.Handler {

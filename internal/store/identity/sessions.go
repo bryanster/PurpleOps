@@ -47,6 +47,9 @@ func (r *Sessions) Create(ctx context.Context, in NewSession) (Session, error) {
 
 	var created Session
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := requireUser(ctx, tx, in.UserID); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, insertSession,
 			id, in.UserID, in.TokenHash, at, at, toStorage(in.ExpiresAt),
 			in.IP, in.UserAgent, in.MFASatisfied); err != nil {
@@ -106,6 +109,47 @@ func (r *Sessions) ListByUser(ctx context.Context, userID string) ([]Session, er
 		return nil, fmt.Errorf("identity: list sessions for user %q: %w", userID, err)
 	}
 	return sessions, nil
+}
+
+// Rotate replaces a session's token hash with a new one and returns the session
+// as stored. The row keeps its identifier, its creation time and its absolute
+// expiry: this is the same session reached through a new token, which is what
+// makes rotation a defence against session fixation rather than a way to extend
+// a session forever.
+//
+// It is called on every privilege change (M1-003): sign-in, MFA completion,
+// password change, platform-role change. The old hash is gone afterwards, so the
+// token it stood for stops resolving to anything.
+//
+// A hash another session already holds is [apierr.Conflict], for the same reason
+// [Sessions.Create] reports one.
+func (r *Sessions) Rotate(ctx context.Context, id, tokenHash string, at time.Time) (Session, error) {
+	var rotated Session
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		// revoked_at IS NULL: rotating a session that has already ended would
+		// hand out a live token for it, which is the one thing rotation must not
+		// do. A caller that reaches this has failed to check, so it is a
+		// not-found rather than a silent success.
+		result, err := tx.ExecContext(ctx,
+			`UPDATE app.session SET token_hash = ?, last_seen_at = ?
+			 WHERE id = ? AND revoked_at IS NULL`,
+			tokenHash, toStorage(at), id)
+		if err != nil {
+			return err
+		}
+		if err := requireOneRow(result, "session", id); err != nil {
+			return err
+		}
+		rotated, err = scanSession(tx.QueryRowContext(ctx, selectSession+`WHERE id = ?`, id))
+		return err
+	})
+	switch {
+	case store.IsUniqueViolation(err):
+		return Session{}, apierr.Conflict("that session token is already in use")
+	case err != nil:
+		return Session{}, fmt.Errorf("identity: rotate session %q: %w", id, err)
+	}
+	return rotated, nil
 }
 
 // SetLastSeenAt records that a session was used.
@@ -170,6 +214,33 @@ func (r *Sessions) RevokeAllForUser(ctx context.Context, userID string, at time.
 	})
 	if err != nil {
 		return 0, fmt.Errorf("identity: revoke sessions for user %q: %w", userID, err)
+	}
+	return revoked, nil
+}
+
+// RevokeOthersForUser ends every live session a user has except one, and
+// reports how many it ended.
+//
+// It is what a password change calls: the browser doing the changing keeps its
+// session (rotated onto a new token), and every other place that account is
+// signed in is signed out. Revoking all of them and issuing a fresh session
+// instead would look the same to that browser and would not be — an attacker
+// holding a session at that moment would also get a fresh one.
+func (r *Sessions) RevokeOthersForUser(ctx context.Context, userID, keepID string, at time.Time) (int64, error) {
+	var revoked int64
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx,
+			`UPDATE app.session SET revoked_at = ?
+			 WHERE user_id = ? AND id <> ? AND revoked_at IS NULL`,
+			toStorage(at), userID, keepID)
+		if err != nil {
+			return err
+		}
+		revoked, err = result.RowsAffected()
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("identity: revoke the other sessions of user %q: %w", userID, err)
 	}
 	return revoked, nil
 }

@@ -9,9 +9,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// Defines values for EngagementRole.
+const (
+	EngagementRoleBlue     EngagementRole = "blue"
+	EngagementRoleLead     EngagementRole = "lead"
+	EngagementRoleObserver EngagementRole = "observer"
+	EngagementRoleRed      EngagementRole = "red"
+)
+
+// Valid indicates whether the value is a known member of the EngagementRole enum.
+func (e EngagementRole) Valid() bool {
+	switch e {
+	case EngagementRoleBlue:
+		return true
+	case EngagementRoleLead:
+		return true
+	case EngagementRoleObserver:
+		return true
+	case EngagementRoleRed:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for HealthState.
 const (
@@ -31,6 +56,42 @@ func (e HealthState) Valid() bool {
 	}
 }
 
+// Defines values for LoginStatus.
+const (
+	LoginStatusAuthenticated LoginStatus = "authenticated"
+	LoginStatusMfaRequired   LoginStatus = "mfa_required"
+)
+
+// Valid indicates whether the value is a known member of the LoginStatus enum.
+func (e LoginStatus) Valid() bool {
+	switch e {
+	case LoginStatusAuthenticated:
+		return true
+	case LoginStatusMfaRequired:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformRole.
+const (
+	PlatformRoleAdmin  PlatformRole = "admin"
+	PlatformRoleMember PlatformRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the PlatformRole enum.
+func (e PlatformRole) Valid() bool {
+	switch e {
+	case PlatformRoleAdmin:
+		return true
+	case PlatformRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProblemCode.
 const (
 	ProblemCodeConflict         ProblemCode = "conflict"
@@ -39,6 +100,7 @@ const (
 	ProblemCodeMethodNotAllowed ProblemCode = "method_not_allowed"
 	ProblemCodeNotFound         ProblemCode = "not_found"
 	ProblemCodeRateLimited      ProblemCode = "rate_limited"
+	ProblemCodeUnauthenticated  ProblemCode = "unauthenticated"
 	ProblemCodeValidationFailed ProblemCode = "validation_failed"
 )
 
@@ -57,12 +119,75 @@ func (e ProblemCode) Valid() bool {
 		return true
 	case ProblemCodeRateLimited:
 		return true
+	case ProblemCodeUnauthenticated:
+		return true
 	case ProblemCodeValidationFailed:
 		return true
 	default:
 		return false
 	}
 }
+
+// ChangePasswordRequest Body of `POST /auth/password`. The current password is required even
+// though the caller is signed in: a session left open on a shared machine
+// must not be enough to take the account over.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+
+	// NewPassword The replacement. The policy — at least 12 characters, at most 128,
+	// and not one of the passwords attackers try first — is applied by the
+	// server and reported as field errors on `newPassword`, so that there
+	// is one definition of an acceptable password rather than one here and
+	// one in the client.
+	NewPassword string `json:"newPassword"`
+}
+
+// CurrentUser The caller, as `GET /auth/me` reports them. It carries nothing about the
+// session token: the cookie is the only place that value exists outside the
+// client.
+type CurrentUser struct {
+	// DisplayName The name to show for this person.
+	DisplayName string `json:"displayName"`
+
+	// Email The address as it was typed when the account was created.
+	Email string `json:"email"`
+
+	// Id The user's identifier — a UUIDv7, as every identifier here is.
+	Id string `json:"id"`
+
+	// Memberships Every engagement this person belongs to, and their role in it. An
+	// administrator's list is still only what they are a *member* of —
+	// their reach beyond it comes from `platformRole`, not from here.
+	Memberships []EngagementMembership `json:"memberships"`
+
+	// Mfa Where this person and this session stand on multi-factor authentication.
+	// Whether an administrator *requires* it and whether this session has
+	// *satisfied* it are separate facts — conflating them is the hole M1-008
+	// closes.
+	Mfa MFAState `json:"mfa"`
+
+	// PlatformRole What somebody may do to this installation: `admin` manages users, content
+	// and every engagement; `member` takes part in the engagements they belong
+	// to. What they may do *inside* one is `EngagementRole`, and the two are
+	// deliberately not the same vocabulary.
+	PlatformRole PlatformRole `json:"platformRole"`
+}
+
+// EngagementMembership One person's place in one engagement.
+type EngagementMembership struct {
+	AddedAt      time.Time `json:"addedAt"`
+	EngagementId string    `json:"engagementId"`
+
+	// Role What somebody may do inside one engagement. Red and blue are separate so
+	// that blind mode and the split write endpoints have something to decide
+	// on.
+	Role EngagementRole `json:"role"`
+}
+
+// EngagementRole What somebody may do inside one engagement. Red and blue are separate so
+// that blind mode and the split write endpoints have something to decide
+// on.
+type EngagementRole string
 
 // FieldError One field-level validation failure.
 type FieldError struct {
@@ -100,6 +225,57 @@ type HealthChecks struct {
 
 // HealthState Outcome of a single health check, or of the report as a whole.
 type HealthState string
+
+// LoginRequest Credentials for `POST /auth/login`.
+type LoginRequest struct {
+	// Email The address the account was created with, matched without regard to
+	// case or surrounding whitespace.
+	//
+	//
+	// Examples: alice@example.com
+	Email string `json:"email"`
+
+	// Password The password, as typed. The bounds here are a backstop on an
+	// unauthenticated path, not the policy: the policy lives in one place
+	// (internal/authn/password) and applies where a password is *set*.
+	// Holding a login attempt to it would tell an attacker how long the
+	// password is not.
+	Password string `json:"password"`
+}
+
+// LoginResult The outcome of a successful `POST /auth/login`.
+type LoginResult struct {
+	// Status What a successful `POST /auth/login` established. A client must branch on
+	// this rather than assume that 200 means signed in.
+	Status LoginStatus `json:"status"`
+
+	// User The signed-in user. Present when `status` is `authenticated` and
+	// absent otherwise — a caller awaiting a second factor has not been
+	// told who they are yet.
+	User *CurrentUser `json:"user,omitempty"`
+}
+
+// LoginStatus What a successful `POST /auth/login` established. A client must branch on
+// this rather than assume that 200 means signed in.
+type LoginStatus string
+
+// MFAState Where this person and this session stand on multi-factor authentication.
+// Whether an administrator *requires* it and whether this session has
+// *satisfied* it are separate facts — conflating them is the hole M1-008
+// closes.
+type MFAState struct {
+	// Enforced An administrator requires a second factor of this person.
+	Enforced bool `json:"enforced"`
+
+	// Satisfied A second factor was presented for *this* session.
+	Satisfied bool `json:"satisfied"`
+}
+
+// PlatformRole What somebody may do to this installation: `admin` manages users, content
+// and every engagement; `member` takes part in the engagements they belong
+// to. What they may do *inside* one is `EngagementRole`, and the two are
+// deliberately not the same vocabulary.
+type PlatformRole string
 
 // Problem RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
@@ -184,6 +360,13 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// BadRequest RFC 9457 problem detail — the only error shape this API produces, served
+// as `application/problem+json` (M0B-007).
+//
+// Clients switch on `code`. `title` and `detail` are prose for a human and
+// may be reworded at any time.
+type BadRequest = Problem
+
 // InternalError RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
 //
@@ -191,8 +374,33 @@ type Version struct {
 // may be reworded at any time.
 type InternalError = Problem
 
+// Unauthenticated RFC 9457 problem detail — the only error shape this API produces, served
+// as `application/problem+json` (M0B-007).
+//
+// Clients switch on `code`. `title` and `detail` are prose for a human and
+// may be reworded at any time.
+type Unauthenticated = Problem
+
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
+// ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
+type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Login Sign in with an email address and password.
+	// (POST /auth/login)
+	Login(w http.ResponseWriter, r *http.Request)
+	// Logout End the current session.
+	// (POST /auth/logout)
+	Logout(w http.ResponseWriter, r *http.Request)
+	// GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
+	// (GET /auth/me)
+	GetCurrentUser(w http.ResponseWriter, r *http.Request)
+	// ChangePassword Change your own password.
+	// (POST /auth/password)
+	ChangePassword(w http.ResponseWriter, r *http.Request)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -204,6 +412,30 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// Login Sign in with an email address and password.
+// (POST /auth/login)
+func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Logout End the current session.
+// (POST /auth/logout)
+func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
+// (GET /auth/me)
+func (_ Unimplemented) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ChangePassword Change your own password.
+// (POST /auth/password)
+func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // GetHealth Report whether the server and its dependencies are healthy.
 // (GET /healthz)
@@ -225,6 +457,62 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// Login operation middleware
+func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCurrentUser operation middleware
+func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCurrentUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangePassword operation middleware
+func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangePassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -373,11 +661,267 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/version", wrapper.GetVersion)
 	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/me", wrapper.GetCurrentUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/password", wrapper.ChangePassword)
+	})
 
 	return r
 }
 
+type BadRequestApplicationProblemPlusJSONResponse Problem
+
 type InternalErrorApplicationProblemPlusJSONResponse Problem
+
+type UnauthenticatedApplicationProblemPlusJSONResponse Problem
+
+type LoginRequestObject struct {
+	Body *LoginJSONRequestBody
+}
+
+type LoginResponseObject interface {
+	VisitLoginResponse(w http.ResponseWriter) error
+}
+
+type Login200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type Login200JSONResponse struct {
+	Body    LoginResult
+	Headers Login200ResponseHeaders
+}
+
+func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response Login400ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response Login401ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response Login500ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LogoutRequestObject struct {
+}
+
+type LogoutResponseObject interface {
+	VisitLogoutResponse(w http.ResponseWriter) error
+}
+
+type Logout204ResponseHeaders struct {
+	SetCookie string
+}
+
+type Logout204Response struct {
+	Headers Logout204ResponseHeaders
+}
+
+func (response Logout204Response) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(204)
+	return nil
+}
+
+type Logout500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response Logout500ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentUserRequestObject struct {
+}
+
+type GetCurrentUserResponseObject interface {
+	VisitGetCurrentUserResponse(w http.ResponseWriter) error
+}
+
+type GetCurrentUser200JSONResponse CurrentUser
+
+func (response GetCurrentUser200JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCurrentUser401ApplicationProblemPlusJSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentUser500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCurrentUser500ApplicationProblemPlusJSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePasswordRequestObject struct {
+	Body *ChangePasswordJSONRequestBody
+}
+
+type ChangePasswordResponseObject interface {
+	VisitChangePasswordResponse(w http.ResponseWriter) error
+}
+
+type ChangePassword204ResponseHeaders struct {
+	SetCookie string
+}
+
+type ChangePassword204Response struct {
+	Headers ChangePassword204ResponseHeaders
+}
+
+func (response ChangePassword204Response) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(204)
+	return nil
+}
+
+type ChangePassword400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword400ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword401ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword500ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetHealthRequestObject struct {
 }
@@ -469,6 +1013,18 @@ func (response GetVersion500ApplicationProblemPlusJSONResponse) VisitGetVersionR
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Login Sign in with an email address and password.
+	// (POST /auth/login)
+	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
+	// Logout End the current session.
+	// (POST /auth/logout)
+	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
+	// (GET /auth/me)
+	GetCurrentUser(ctx context.Context, request GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error)
+	// ChangePassword Change your own password.
+	// (POST /auth/password)
+	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -514,6 +1070,116 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// Login operation middleware
+func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var request LoginRequestObject
+
+	var body LoginJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Login(ctx, request.(LoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Login")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LoginResponseObject); ok {
+		if err := validResponse.VisitLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Logout operation middleware
+func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var request LogoutRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Logout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LogoutResponseObject); ok {
+		if err := validResponse.VisitLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCurrentUser operation middleware
+func (sh *strictHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	var request GetCurrentUserRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCurrentUser(ctx, request.(GetCurrentUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCurrentUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCurrentUserResponseObject); ok {
+		if err := validResponse.VisitGetCurrentUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangePassword operation middleware
+func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	var request ChangePasswordRequestObject
+
+	var body ChangePasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangePassword(ctx, request.(ChangePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
+		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetHealth operation middleware

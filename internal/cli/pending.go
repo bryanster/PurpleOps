@@ -8,7 +8,8 @@ import (
 
 // The commands in this file are registered, documented and inert. PLAN.md §6
 // says popsctl does four things beyond migrations — create users, sync content,
-// back up, render reports — and none of those features exists yet.
+// back up, render reports — and only the first of those exists so far (M1-003,
+// in user.go).
 //
 // They are here anyway so that the shape of the tool is visible from
 // `popsctl --help` rather than discovered one milestone at a time, and so that
@@ -28,19 +29,6 @@ func notImplemented(milestone, summary string) func(*cobra.Command, []string) er
 		return fmt.Errorf("`%s` is not implemented in this milestone; it arrives in %s, %s",
 			cmd.CommandPath(), milestone, summary)
 	}
-}
-
-func newUserCommand() *cobra.Command {
-	create := &cobra.Command{
-		Use:   "create",
-		Short: "Create a user account (M1)",
-		Long: "Creates a user account without going through the web interface — which is how\n" +
-			"the first administrator of a new deployment gets in, and how the end-to-end\n" +
-			"suite seeds the accounts its specs sign in as.",
-		Args: noArgs,
-		RunE: notImplemented("M1", "which builds identity and access"),
-	}
-	return group("user", "Manage user accounts (M1)", create)
 }
 
 func newContentCommand() *cobra.Command {

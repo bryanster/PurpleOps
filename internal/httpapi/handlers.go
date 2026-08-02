@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/bryanster/purpleops/internal/authn"
+	"github.com/bryanster/purpleops/internal/authn/session"
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
 	"github.com/bryanster/purpleops/internal/store"
 	"github.com/bryanster/purpleops/internal/version"
@@ -14,7 +16,14 @@ import (
 // to reach for (PLAN.md §6).
 type handlers struct {
 	store store.Store
-	log   *slog.Logger
+
+	// auth answers the questions the four endpoints in authhandlers.go ask;
+	// sessions is here for the one thing those endpoints do that is transport
+	// rather than policy — building the Set-Cookie header.
+	auth     *authn.Service
+	sessions *session.Manager
+
+	log *slog.Logger
 }
 
 // The compiler is what keeps this in step with api/openapi.yaml: adding an

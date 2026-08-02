@@ -20,16 +20,48 @@ In order, outermost first:
 | 5 | `timeout` | Puts `PURPLEOPS_REQUEST_TIMEOUT` on the request context |
 | 6 | `securityHeaders` | The response headers below |
 | 7 | `requestValidator` | Rejects anything `api/openapi.yaml` does not describe, before any handler runs |
+| 8 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
 
-Only 7 is mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404 for an
-unknown path is still logged, still carries a request ID and still has the security headers.
+Only 7 and 8 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
+for an unknown path is still logged, still carries a request ID and still has the security headers.
 
 **The recoverer is inside the logger**, which is the reverse of what `M0B-006` proposed. The logger
 records the status when the handler beneath it returns; with the recoverer outside, the line would
 be written while the panic is still unwinding and every panic would appear in the access log as a
 success. `TestALoggedPanicReportsTheStatusTheClientSaw` is the test that says so.
 
-M1 inserts authentication and then authorization between 7 and the handlers, on the API router.
+**Authentication decides who, not whether.** A request with no cookie, an expired session or a
+revoked one goes through step 8 exactly as it arrived, with no subject on its context; refusing is
+authorization's job and happens in one place (`M1-013`). What step 8 *does* answer for itself is a
+database failure: "the store did not answer" is not "you are not signed in", and reporting it as one
+would sign everybody out whenever the database hiccupped.
+
+M1-013 inserts authorization between 8 and the handlers, on the same router.
+
+## Sessions
+
+The cookie is `pops_session`: `HttpOnly`, `Secure` (except `PURPLEOPS_ENV=development`),
+`SameSite=Strict`, `Path=/`, no `Domain`. Its value is 32 bytes from `crypto/rand`, base64url.
+
+**Only a keyed hash of the token is stored** — HMAC-SHA256 under `PURPLEOPS_SESSION_SECRET` — so a
+copy of the database is not a set of live sessions, and rotating that secret signs everybody out.
+`internal/authn/session` is the only package that decides whether a session is usable:
+
+| Ends a session | Setting |
+|---|---|
+| Absolute expiry, from when it was issued. Nothing extends it | `PURPLEOPS_SESSION_LIFETIME` (12h) |
+| Idle timeout, from when it was last used | `PURPLEOPS_SESSION_IDLE_TIMEOUT` (2h) |
+| Revocation — logout, a password change elsewhere, an administrator | `revoked_at` on the row |
+| The account being disabled | `status` on the user, checked on every request |
+
+`last_seen_at` is written at most once a minute per session (`touchInterval`). Writes are serialized
+(`PLAN.md` §1), and a column whose only consumer is a timeout measured in hours does not deserve the
+write lock on every read.
+
+**Rotation replaces the token and keeps the session**: same row, same identifier, same absolute
+expiry. It happens on sign-in (a new session), on a password change, and — when they land — on MFA
+completion and a platform-role change. The token it replaces stops resolving to anything, which is
+what makes a session an attacker fixed before login worthless afterwards.
 
 ## Serving the app
 

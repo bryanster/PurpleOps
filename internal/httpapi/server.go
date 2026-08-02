@@ -11,10 +11,13 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/bryanster/purpleops/api"
+	"github.com/bryanster/purpleops/internal/authn"
+	"github.com/bryanster/purpleops/internal/authn/session"
 	"github.com/bryanster/purpleops/internal/config"
 	"github.com/bryanster/purpleops/internal/httpapi/apierr"
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
 	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/purpleops/internal/store/identity"
 )
 
 // BasePath is where the generated routes are mounted. It is the one server
@@ -90,6 +93,11 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		return nil, err
 	}
 
+	auth, sessions, err := newAuthn(deps, log)
+	if err != nil {
+		return nil, err
+	}
+
 	router := chi.NewRouter()
 
 	// The order is the design, outermost first — the order a request meets them:
@@ -109,10 +117,13 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	//  7. request validation, mounted on the API router below: it needs the
 	//     path to be one the specification describes, which /healthz under any
 	//     other prefix is not.
+	//  8. authentication, also on the API router: it resolves the session cookie
+	//     into a subject and decides nothing else (M1-003). After validation,
+	//     because a request that does not match the specification should be
+	//     rejected before it costs a database lookup.
 	//
-	// M1 inserts authentication and then authorization between 7 and the
-	// handlers, on the API router — one chain, so there is no route that can
-	// quietly avoid them (M1-013).
+	// M1-013 inserts authorization between 8 and the handlers, on the same
+	// router — one chain, so there is no route that can quietly avoid it.
 	router.Use(
 		requestID,
 		realIP(deps.Config.Server.TrustedProxies),
@@ -143,8 +154,8 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	// puts the SPA's catch-all.
 	apiRouter.NotFound(notFound)
 	apiRouter.MethodNotAllowed(methodNotAllowed)
-	apiRouter.Use(validate)
-	gen.HandlerWithOptions(strictHandler(deps.Store, log, responder), gen.ChiServerOptions{
+	apiRouter.Use(validate, authenticate(auth, responder, log))
+	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,
 		// Reached when the generated wrapper cannot bind a parameter. The
 		// validator rejects those first, so this is a belt-and-braces path —
@@ -177,13 +188,37 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	return router, nil
 }
 
+// newAuthn builds the session manager and the login service the middleware and
+// the auth handlers share.
+//
+// Both are built here rather than passed in [Deps] because they are made of
+// things already there — the store and the configuration — and a caller who had
+// to assemble them could assemble two that disagreed about how long a session
+// lasts.
+func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, error) {
+	sessions, err := session.New(identity.NewSessions(deps.Store), session.OptionsFrom(deps.Config))
+	if err != nil {
+		return nil, nil, err
+	}
+	auth, err := authn.NewService(
+		identity.NewUsers(deps.Store),
+		identity.NewMemberships(deps.Store),
+		sessions,
+		log)
+	if err != nil {
+		return nil, nil, err
+	}
+	return auth, sessions, nil
+}
+
 // strictHandler wraps the handlers in the generated strict-mode adapter, with
 // both of its error hooks pointed at the one responder. An error returned by a
 // handler, and a response that will not serialize, then produce the same shape
 // as everything else (M0B-007).
-func strictHandler(db store.Store, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
+	log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
 	return gen.NewStrictHandlerWithOptions(
-		&handlers{store: db, log: log},
+		&handlers{store: deps.Store, auth: auth, sessions: sessions, log: log},
 		nil, // No strict middleware: the chain is chi's, so there is one of them.
 		gen.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  responder.Write,
