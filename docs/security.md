@@ -108,14 +108,80 @@ three facts apart, and they are three different rows:
 
 | Fact | Where it lives | What it means |
 |---|---|---|
-| `enforced` | `app."user".mfa_enforced` | An administrator requires a second factor of this person |
+| `enforced` | `app."user".mfa_enforced` | An administrator requires a second factor of *this person specifically* |
+| `required` | computed | A second factor is required of them at all — `enforced`, or the platform policy |
 | `enrolled` | `app.user_totp.confirmed_at` | This person has an authenticator that works |
 | `satisfied` | `app.session.mfa_satisfied` | *This session* presented one |
 
-`GET /auth/me` reports all three, alongside `recoveryCodesRemaining` — a count of the ways back in
+`GET /auth/me` reports all four, alongside `recoveryCodesRemaining` — a count of the ways back in
 that are left, so an interface can warn somebody before the last one is spent. Conflating any two of
-the three is the hole; `M1-008` is the ticket that turns `enforced` into a refusal, and it can only
-do that because they are separate here.
+them is the hole. An interface deciding whether to block reads `required`, never `enforced`:
+somebody can be required by the platform policy with the flag off.
+
+### Enforcement
+
+The platform policy is two booleans in `app.platform_setting`, read and written by administrators at
+`GET`/`PUT /settings/mfa`:
+
+| Setting | Effect |
+|---|---|
+| `mfa.required_for_all` | Every account that signs in with a local password must hold a second factor |
+| `mfa.required_for_admins` | Every account with the `admin` platform role must |
+
+The effective requirement for one person is the **or** of those and their own `mfa_enforced` flag.
+Neither is a default: a database nobody has configured has no rows here and requires nothing, so a
+fresh installation does not confine its first administrator to enrolling before they have seen the
+product.
+
+**Policy is evaluated before enrolment is looked at.** That order is the whole fix. v1 asked "have
+they enrolled?" and enforced only if the answer was yes, which made enrolment optional by
+construction — the people who skipped it were exactly the people enforcement stopped applying to.
+What a sign-in does now, once the password is right:
+
+| Required | Enrolled | Outcome |
+|---|---|---|
+| no | no | An ordinary session |
+| no | yes | A challenge — a factor somebody set up is asked for whether or not anybody requires it |
+| yes | yes | A challenge |
+| yes | **no** | A session confined to enrolment |
+
+A **confined session** is a real session with a real cookie that may reach exactly four routes:
+`POST /auth/mfa/totp/enroll`, `POST /auth/mfa/totp/confirm`, `GET /auth/me` and `POST /auth/logout`.
+Everything else is `403` with `code: "mfa_enrolment_required"`, from one middleware in front of all
+of them (`internal/httpapi/mfagate.go`) rather than from a check each endpoint remembers to make.
+Confirming an enrolment marks the session satisfied and rotates it onto a new token in the same
+exchange, so there is no second sign-in.
+
+The requirement is evaluated **per request**, not recorded on the session at sign-in. Three
+consequences, and they are the point:
+
+- Turning a requirement on reaches everybody already signed in, at their next request. There is no
+  set of sessions grandfathered under the old policy.
+- A session that never presented a factor, belonging to somebody who *has* one, is answered `401`
+  and has to sign in again — the flow that asks for the factor they hold. Confining it to enrolment
+  would be a dead end, because enrolment refuses while a confirmed authenticator exists.
+- Turning a requirement off deletes nothing. Enrolments, recovery codes and per-user flags all
+  survive, so switching it back on does not make everybody enrol again.
+
+`DELETE /auth/mfa/totp` is refused with `403` while a factor is required of the caller, by policy or
+by flag. Removing it would leave an account subject to a requirement it can no longer satisfy — and
+the account most likely to try is the administrator who has just turned the policy on.
+
+**SSO accounts are exempt from the local policy.** The rule is `password_hash IS NULL`: an account
+that signs in through an identity provider presents no password here, so there is no local sign-in
+for a local second factor to stand behind, and the provider is where its factors are asserted and
+verified. The exemption covers the per-user flag too, because a requirement somebody has no way to
+satisfy is a lockout rather than a policy. `M1-009` and `M1-010` refine this when there is an
+assertion to read: an IdP that says what it verified (an `amr` claim, an authentication context
+class) is what should satisfy the requirement, and until one exists the honest answer is that this
+deployment is not the thing enforcing it. An account that holds both a local password and an SSO
+identity is **not** exempt — it can sign in locally, so the local requirement applies to it.
+
+**There is no way to lock the platform out of itself.** An administrator who turns on a requirement
+they do not meet is confined to enrolling and can enrol; if their phone is gone, the recovery codes
+are the way through; if those are gone too, `blctl user reset-mfa` clears the factor from the host
+and the account is confined to enrolling again rather than locked out. None of those paths needs
+somebody else to be signed in.
 
 ### The pending state
 
@@ -239,6 +305,13 @@ presentable, and the next enrolment mints its own set.
 ### When both are gone
 
 `blctl user reset-mfa --email …` clears the enrolment, the codes and any pending challenge, and says
-loudly what it has just done. It is the one path that makes a password sufficient again, and there
-is deliberately **no API for it**: needing the database file means needing the host, and that is the
-access control. [`docs/cli.md`](cli.md) has the operator's version.
+loudly what it has just done. There is deliberately **no API for it**: needing the database file
+means needing the host, and that is the access control. [`docs/cli.md`](cli.md) has the operator's
+version.
+
+It does not make a password sufficient again where a policy says otherwise, and it is not meant to.
+It touches the factor and nothing else — not `mfa_enforced`, not the platform policy, not any
+session — so an account of which a second factor is required still has one required of it, and the
+next sign-in is confined to enrolling a new authenticator. That is the break-glass path in full: it
+turns "locked out" into "enrol again", and it never turns enforcement off behind an administrator's
+back.

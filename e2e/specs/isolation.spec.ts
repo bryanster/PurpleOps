@@ -16,7 +16,7 @@ import { expect, test } from '../harness/test'
  * step regardless — it proves the hook runs, in order, before the server boots,
  * with the environment naming this spec file's database.
  */
-test.use({ seed: [['version']] })
+test.use({ seed: { steps: [['version']] } })
 
 // The only claims this file makes are about a database the harness created. An
 // external server has none, so there is nothing here to check — and inventing

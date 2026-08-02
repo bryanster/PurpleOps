@@ -784,36 +784,9 @@ func TestALoginUpgradesAHashMadeUnderWeakerSettings(t *testing.T) {
 	}
 }
 
-// TestAnMFAEnforcedUserGetsNoSessionYet: the credentials were right and that is
-// not enough. M1-006 through M1-008 turn this into a challenge the caller can
-// answer; until then it fails closed, which is the safe direction.
-func TestAnMFAEnforcedUserGetsNoSessionYet(t *testing.T) {
-	t.Parallel()
-
-	server := newAuthServer(t)
-	server.seedUser(t, func(u *identity.NewUser) { u.MFAEnforced = true })
-
-	recorder := server.login(testEmail, testPassword)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("login = %d, want 200\nbody: %s", recorder.Code, recorder.Body)
-	}
-
-	result := decodeJSON[gen.LoginResult](t, recorder)
-	if result.Status != gen.LoginStatusMfaRequired {
-		t.Errorf("status = %q, want %q", result.Status, gen.LoginStatusMfaRequired)
-	}
-	if result.User != nil {
-		t.Error("the response describes the user although nothing has been established yet")
-	}
-	for _, cookie := range recorder.Result().Cookies() {
-		if cookie.Name == session.CookieName {
-			t.Error("a session cookie was set although a second factor is required")
-		}
-	}
-	if got := len(server.sessions(t)); got != 0 {
-		t.Errorf("%d session rows, want none", got)
-	}
-}
+// What an account with MFA enforced and nothing enrolled gets is
+// mfaenforcement_test.go's subject: before M1-008 it was a dead end, and now it
+// is a session confined to enrolling.
 
 // --- The request the specification does not describe ---------------------------------
 

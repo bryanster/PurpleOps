@@ -28,7 +28,7 @@ func (h *handlers) Login(ctx context.Context, request gen.LoginRequestObject) (g
 		return nil, err
 	}
 
-	if result.Status != authn.LoginAuthenticated {
+	if result.Status == authn.LoginMFARequired {
 		// No session cookie and no user: the caller has proved a password and
 		// nothing more, and until the second factor is presented (M1-006) there
 		// is no session to describe.
@@ -39,18 +39,12 @@ func (h *handlers) Login(ctx context.Context, request gen.LoginRequestObject) (g
 		// password reset their code-guessing budget between every guess.
 		markCredentialIncomplete(ctx)
 
-		body := gen.Login200JSONResponse{
-			Body: gen.LoginResult{Status: gen.LoginStatusMfaRequired},
-		}
-		if result.Challenge.Token != "" {
-			// A challenge the caller can actually answer. Its absence means MFA
-			// is enforced with nothing enrolled — the dead end M1-008 removes —
-			// and there is deliberately nothing to hand out in that case.
-			cookie := h.challenges.Cookie(
-				result.Challenge.Token, result.Challenge.Challenge.ExpiresAt).String()
-			body.Headers = gen.Login200ResponseHeaders{SetCookie: &cookie}
-		}
-		return body, nil
+		cookie := h.challenges.Cookie(
+			result.Challenge.Token, result.Challenge.Challenge.ExpiresAt).String()
+		return gen.Login200JSONResponse{
+			Body:    gen.LoginResult{Status: gen.LoginStatusMfaRequired},
+			Headers: gen.Login200ResponseHeaders{SetCookie: &cookie},
+		}, nil
 	}
 
 	profile, err := h.auth.Profile(ctx, result.Subject)
@@ -63,9 +57,18 @@ func (h *handlers) Login(ctx context.Context, request gen.LoginRequestObject) (g
 	user := currentUser(profile, h.sessions.CSRFToken(result.Issued.Token))
 	cookie := h.sessions.Cookie(result.Issued.Token, result.Issued.Session.ExpiresAt).String()
 
+	// Both remaining outcomes issued a session, and the difference between them
+	// is what that session may do — which the caller reads off `status` and the
+	// server enforces in requireMFAEnrolment. It is deliberately not throttled
+	// as an incomplete attempt: there is no further credential to guess, only an
+	// enrolment to finish (M1-008).
+	status := gen.LoginStatusAuthenticated
+	if result.Status == authn.LoginMFAEnrolmentRequired {
+		status = gen.LoginStatusMfaEnrolmentRequired
+	}
 	return gen.Login200JSONResponse{
 		Body: gen.LoginResult{
-			Status: gen.LoginStatusAuthenticated,
+			Status: status,
 			User:   &user,
 		},
 		Headers: gen.Login200ResponseHeaders{SetCookie: &cookie},

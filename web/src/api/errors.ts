@@ -28,11 +28,26 @@ const PROBLEM_CODES: Record<ProblemCode, true> = {
   validation_failed: true,
   unauthenticated: true,
   forbidden: true,
+  mfa_enrolment_required: true,
   not_found: true,
   method_not_allowed: true,
   conflict: true,
   rate_limited: true,
   internal: true,
+}
+
+/**
+ * Codes that refine another, and the code each falls back to.
+ *
+ * The server allows a status to carry more than one code only when the extra
+ * one is strictly more specific (`internal/httpapi/apierr`, `refinements`), so
+ * a client that has not been taught a refinement can always treat it as what it
+ * refines. This is that fallback, in the one place it belongs: a screen that
+ * handles `forbidden` handles `mfa_enrolment_required` too unless it says
+ * otherwise, and M1-017's enrolment screen is what will say otherwise.
+ */
+const PROBLEM_CODE_REFINES: Partial<Record<ProblemCode, ProblemCode>> = {
+  mfa_enrolment_required: 'forbidden',
 }
 
 export function isProblemCode(value: unknown): value is ProblemCode {
@@ -74,9 +89,22 @@ export class ApiError extends Error {
   }
 }
 
-/** True when `error` is an [ApiError], optionally one carrying a specific code. */
+/**
+ * True when `error` is an [ApiError], optionally one carrying a specific code.
+ *
+ * A refinement satisfies the code it refines: asking for `forbidden` is also
+ * true of `mfa_enrolment_required`, because that is what "strictly more
+ * specific" has to mean for a caller who has not been taught the narrower one.
+ * Asking for the narrower one is never true of the wider one.
+ */
 export function isApiError(error: unknown, code?: ProblemCode): error is ApiError {
-  return error instanceof ApiError && (code === undefined || error.code === code)
+  if (!(error instanceof ApiError)) {
+    return false
+  }
+  if (code === undefined || error.code === code) {
+    return true
+  }
+  return error.code !== undefined && PROBLEM_CODE_REFINES[error.code] === code
 }
 
 /**

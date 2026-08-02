@@ -153,8 +153,7 @@ complaint about a missing table.
 ### `blctl user reset-mfa`
 
 The break-glass path (`M1-007`). It removes an account's authenticator enrolment, every recovery
-code it holds and any half-finished sign-in, so the account signs in with its password alone until
-somebody enrols an authenticator again.
+code it holds and any half-finished sign-in, so that whoever lost their phone can get back in.
 
 ```
 blctl user reset-mfa --email alice@example.com
@@ -169,6 +168,13 @@ Anyone holding that password holds the account. Have them enrol an
 authenticator again as soon as they are back in, and take a new set of
 recovery codes when they do — the old ones no longer work.
 ```
+
+**What it leaves behind depends on the policy** (`M1-008`). The warning above is what an account
+nothing requires a factor of gets: a password is now sufficient, which is the lock being broken. An
+account the platform policy or its own `mfa_enforced` flag still covers gets the opposite note —
+its next sign-in can do exactly one thing, which is enrol a new authenticator. This command touches
+the factor and nothing else: not the password, not the flag, not the platform policy, not any live
+session. So it turns "locked out" into "enrol again", and it never quietly relaxes enforcement.
 
 **Reach for the recovery codes first.** They were issued when the authenticator was enrolled,
 they need nobody's help, and using one produces a fully signed-in session from which the person can

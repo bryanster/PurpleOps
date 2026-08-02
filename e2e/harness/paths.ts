@@ -17,8 +17,7 @@ export const blacklightBinary =
   process.env.BLACKLIGHT_E2E_BINARY ?? path.join(repoRoot, 'bin', 'blacklight')
 
 /** The admin CLI, which is how specs seed — see `harness/test.ts`. */
-export const blctlBinary =
-  process.env.BLACKLIGHT_E2E_BLCTL ?? path.join(repoRoot, 'bin', 'blctl')
+export const blctlBinary = process.env.BLACKLIGHT_E2E_BLCTL ?? path.join(repoRoot, 'bin', 'blctl')
 
 /**
  * An already-running server to test against instead of starting our own, or

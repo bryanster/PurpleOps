@@ -81,18 +81,41 @@ workers.
 
 ### Seeding
 
-Put the system into a known state with `test.use({ seed: [...] })` at the top of a spec file. Each
-entry is an argument vector for [`blctl`](../cmd/blctl), run in order against that file's fresh
-database **before its server boots**:
+Put the system into a known state with `test.use({ seed: { steps: [...] } })` at the top of a spec
+file. Each step is an argument vector for [`blctl`](../cmd/blctl), run in order against that file's
+fresh database **before its server boots**:
 
 ```ts
 test.use({
-  seed: [
-    ['user', 'create', '--email', 'red@example.test', '--role', 'red'],
-    ['content', 'sync', '--source', 'attack'],
-  ],
+  seed: {
+    steps: [
+      ['user', 'create', '--email', 'red@example.test', '--role', 'red'],
+      ['content', 'sync', '--source', 'attack'],
+    ],
+  },
 })
 ```
+
+A step that reads stdin takes the object form. `blctl user create` wants the password there and
+deliberately not in a flag, because a flag ends up in shell history and in `ps`:
+
+```ts
+test.use({
+  seed: {
+    steps: [
+      {
+        args: ['user', 'create', '--email', 'lead@example.test', '--name', 'Lee', '--admin'],
+        stdin: 'the password this spec signs in with',
+      },
+    ],
+  },
+})
+```
+
+The `{ steps: [...] }` wrapper is not decoration. Playwright reads any option value that is an array
+whose second element is an object as a `[value, options]` fixture tuple, and a bare array of two
+seed steps is exactly that — the option would silently resolve to the first step alone. `SeedPlan`
+in `harness/server.ts` carries the full explanation.
 
 Two reasons it is `blctl` and not SQL. A fixture full of `INSERT`s drifts away from what the
 application actually writes, and the first thing it stops exercising is the validation that would

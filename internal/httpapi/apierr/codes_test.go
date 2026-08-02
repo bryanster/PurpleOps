@@ -74,20 +74,64 @@ func TestEveryCodeInTheTableIsInTheSpec(t *testing.T) {
 	}
 }
 
-// TestEachStatusBelongsToOneCode is the 1:1 half of the pairing that
-// api/openapi.yaml and docs/api.md both promise. Two codes sharing a status
-// would leave a client unable to tell them apart without parsing prose.
-func TestEachStatusBelongsToOneCode(t *testing.T) {
+// TestEachStatusBelongsToOneCodeOrARefinementOfIt is the pairing that
+// api/openapi.yaml and docs/api.md both promise, in the form it takes now that
+// refinements exist: a status has one base code, and any other code reporting
+// that status must declare itself a refinement of one that does.
+//
+// Two *unrelated* codes on one status is what this still refuses. It would leave
+// a client that knows neither of them unable to do anything sensible, which is
+// exactly what declaring a refinement prevents.
+func TestEachStatusBelongsToOneCodeOrARefinementOfIt(t *testing.T) {
 	t.Parallel()
 
 	byStatus := map[int]Code{}
 	for _, code := range specCodes(t) {
+		if _, refines := refinements[code]; refines {
+			continue
+		}
 		status := Status(code)
 		if first, taken := byStatus[status]; taken {
-			t.Errorf("%q and %q both report %d (%s); a client cannot distinguish them from the status line",
+			t.Errorf("%q and %q both report %d (%s) and neither refines the other; a client that knows only one of them cannot handle the other — declare one in refinements or give it its own status",
 				first, code, status, http.StatusText(status))
 		}
 		byStatus[status] = code
+	}
+
+	// And the other half: a refinement has to refine something real, report the
+	// same status as it, and not refine itself into a cycle.
+	for code, base := range refinements {
+		switch {
+		case code == base:
+			t.Errorf("%q refines itself", code)
+		case Status(base) != Status(code):
+			t.Errorf("%q reports %d and refines %q, which reports %d; a client falling back to the base code would be reading the wrong status",
+				code, Status(code), base, Status(base))
+		}
+		if _, alsoRefines := refinements[base]; alsoRefines {
+			t.Errorf("%q refines %q, which is itself a refinement; a fallback has to reach a base code in one step",
+				code, base)
+		}
+	}
+}
+
+// TestEveryRefinementIsADeclaredCode keeps the refinement table inside the
+// vocabulary the spec declares. A refinement of a code no client has a type for
+// is a fallback that does not work.
+func TestEveryRefinementIsADeclaredCode(t *testing.T) {
+	t.Parallel()
+
+	declared := map[Code]bool{}
+	for _, code := range specCodes(t) {
+		declared[code] = true
+	}
+	for code, base := range refinements {
+		if !declared[code] {
+			t.Errorf("refinements names %q, which the spec does not declare", code)
+		}
+		if !declared[base] {
+			t.Errorf("%q refines %q, which the spec does not declare", code, base)
+		}
 	}
 }
 

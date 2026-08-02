@@ -452,6 +452,45 @@ func TestUserResetMFAWarnsAboutWhatItDid(t *testing.T) {
 	}
 }
 
+// TestUserResetMFASaysWhenAFactorIsStillRequired is the other half of the same
+// output (M1-008). On an account a policy still covers, this command has not
+// made a password sufficient — it has turned a lockout into an enrolment — and
+// printing the warning above would tell an operator their deployment is less
+// protected than it is.
+func TestUserResetMFASaysWhenAFactorIsStillRequired(t *testing.T) {
+	db := migratedDB(t)
+	seedUser(t, db)
+
+	user := readUser(t, db, testEmail)
+	enrolMFA(t, db, user.ID, 4)
+	requireMFAOf(t, db, user)
+
+	got := runIn(t, db, "user", "reset-mfa", "--email", testEmail)
+	if got.code != ExitOK {
+		t.Fatalf("exited %d: %s", got.code, got.stderr)
+	}
+
+	if !strings.Contains(got.stdout, "still required") {
+		t.Errorf("the output does not say a factor is still required:\n%s", got.stdout)
+	}
+	if strings.Contains(got.stdout, "password and nothing else") {
+		t.Errorf("the output claims a password is now sufficient, which it is not:\n%s", got.stdout)
+	}
+}
+
+// requireMFAOf sets the per-user flag directly, which is what the user
+// administration API will do (M1-016). The platform policy would do just as
+// well; the flag is the half that needs no second row.
+func requireMFAOf(t *testing.T, db string, user identity.User) {
+	t.Helper()
+
+	store := openDB(t, db)
+	user.MFAEnforced = true
+	if _, err := identity.NewUsers(store).Update(t.Context(), user); err != nil {
+		t.Fatalf("requiring MFA of %s: %v", user.Email, err)
+	}
+}
+
 // TestUserResetMFAOnAnAccountWithoutOneIsNotAnError: the operator wanted the
 // account to have no second factor, and it does.
 func TestUserResetMFAOnAnAccountWithoutOneIsNotAnError(t *testing.T) {

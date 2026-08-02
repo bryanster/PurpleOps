@@ -143,6 +143,29 @@ func Forbidden(action string) *Error {
 	}
 }
 
+// MFAEnrolmentRequired reports that the caller holds a session which may do
+// exactly one thing: enrol a second factor (M1-008).
+//
+// It refines [Forbidden] rather than reusing it because the two are different
+// instructions. "You may not do this" is final; this one says the caller is one
+// enrolment away from being able to, and names the endpoints — so an interface
+// can put a person in front of a QR code instead of an apology.
+//
+// detail is shown to the client and says what to do, which is safe here in a way
+// it is not for [Forbidden]: nothing about the requirement is a secret, and the
+// caller is being told about their own account.
+//
+// action is the log's half: what they were trying to reach when they were
+// stopped.
+func MFAEnrolmentRequired(action string) *Error {
+	return &Error{
+		code: gen.ProblemCodeMfaEnrolmentRequired,
+		detail: "a second factor is required of your account; " +
+			"enrol an authenticator to continue",
+		cause: fmt.Errorf("attempted %s", action),
+	}
+}
+
 // MethodNotAllowed reports that the path exists but not with this method.
 //
 // Normally this comes from the request validator rather than from a handler —

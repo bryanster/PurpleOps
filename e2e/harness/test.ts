@@ -3,14 +3,13 @@ import fs from 'node:fs/promises'
 import { test as base, type TestInfo } from '@playwright/test'
 
 import { keyFor, ServerPool } from './pool'
-import type { Server } from './server'
+import type { SeedCommand, SeedPlan, Server } from './server'
+
+// Re-exported so a spec's `test.use({ seed: ... })` and this file's option type
+// name the same thing without reaching into the harness's plumbing.
+export type { SeedCommand, SeedPlan }
 
 export { expect } from '@playwright/test'
-
-/**
- * A `blctl` argument vector, e.g. `['user', 'create', '--email', 'red@x']`.
- */
-export type SeedCommand = readonly string[]
 
 export interface HarnessOptions {
   /**
@@ -18,7 +17,7 @@ export interface HarnessOptions {
    * server boots. Declare them at the top of a spec file:
    *
    * ```ts
-   * test.use({ seed: [['user', 'create', '--email', 'red@example.test']] })
+   * test.use({ seed: { steps: [['user', 'create', '--email', 'red@example.test']] } })
    * ```
    *
    * Before boot, not inside a test: DuckDB admits one writer to a file at a
@@ -26,7 +25,7 @@ export interface HarnessOptions {
    * That constraint is also a feature — seeding is a fact about the spec file,
    * visible at the top of it, rather than something buried in a `beforeEach`.
    */
-  seed: readonly SeedCommand[]
+  seed: SeedPlan
 }
 
 export interface HarnessFixtures {
@@ -43,7 +42,7 @@ export interface HarnessWorkerFixtures {
 }
 
 export const test = base.extend<HarnessOptions & HarnessFixtures, HarnessWorkerFixtures>({
-  seed: [[], { option: true }],
+  seed: [{ steps: [] }, { option: true }],
 
   serverPool: [
     async ({}, use, workerInfo) => {
@@ -55,7 +54,10 @@ export const test = base.extend<HarnessOptions & HarnessFixtures, HarnessWorkerF
   ],
 
   server: async ({ serverPool, seed }, use, testInfo) => {
-    const server = await serverPool.forKey(keyFor(testInfo.file, testInfo.repeatEachIndex), seed)
+    const server = await serverPool.forKey(
+      keyFor(testInfo.file, testInfo.repeatEachIndex),
+      seed.steps,
+    )
     await use(server)
 
     // A failed end-to-end test without the server's side of the story is an

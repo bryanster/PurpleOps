@@ -9,6 +9,43 @@ import { waitForHealthy } from './health'
 import { blacklightBinary } from './paths'
 import { runBlctl } from './blctl'
 
+/**
+ * A `blctl` argument vector, e.g. `['user', 'create', '--email', 'red@x']`.
+ *
+ * The object form adds what the command reads from stdin, which is how an
+ * account gets a password: `blctl user create` takes one from stdin and
+ * deliberately not from a flag, because a flag ends up in shell history and in
+ * `ps`.
+ *
+ * ```ts
+ * test.use({
+ *   seed: [
+ *     { args: ['user', 'create', '--email', 'red@example.test', '--name', 'Red'],
+ *       stdin: 'a password nobody else knows' },
+ *   ],
+ * })
+ * ```
+ */
+export type SeedCommand =
+  readonly string[] | { readonly args: readonly string[]; readonly stdin: string }
+
+/**
+ * The seed steps of one spec file, wrapped in an object rather than passed as a
+ * bare array — and the wrapper is load-bearing.
+ *
+ * Playwright decides whether an option value is a `[value, options]` tuple with
+ * `Array.isArray(value) && typeof value[1] === 'object'` (its
+ * `isFixtureTuple`). A bare array of two or more seed steps satisfies that: the
+ * second step is an object, whether it is an argument array or an object with
+ * stdin. The option would then resolve to the *first step alone*, and the
+ * harness would fail deep inside `startServer` with something unrelated to what
+ * was wrong. A one-step seed was under the threshold, which is why this went
+ * unnoticed until a spec needed two.
+ */
+export interface SeedPlan {
+  readonly steps: readonly SeedCommand[]
+}
+
 /** How long a server gets to exit on SIGTERM before it is killed outright. */
 const stopTimeoutMs = 10_000
 
@@ -41,8 +78,8 @@ export interface Server {
 export interface StartOptions {
   /** A directory of this server's own. Created; never shared. */
   dir: string
-  /** `blctl` argument vectors run against the fresh database before boot. */
-  seed: readonly (readonly string[])[]
+  /** `blctl` seed commands run against the fresh database before boot. */
+  seed: readonly SeedCommand[]
   /** Named in errors so a failure says which spec file was being set up. */
   label: string
 }
@@ -185,11 +222,14 @@ function serverEnvironment(
 async function seedStep(
   label: string,
   index: number,
-  command: readonly string[],
+  command: SeedCommand,
   env: NodeJS.ProcessEnv,
 ): Promise<string> {
+  const { args, stdin } = Array.isArray(command)
+    ? { args: command as readonly string[], stdin: undefined }
+    : (command as { args: readonly string[]; stdin: string })
   try {
-    return await runBlctl(command, env)
+    return await runBlctl(args, env, stdin)
   } catch (error) {
     throw new Error(
       `${label}: seed step ${String(index + 1)} failed — the spec never ran.\n` +

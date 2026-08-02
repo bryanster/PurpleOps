@@ -250,18 +250,28 @@ func (s *Service) VerifyTOTP(ctx context.Context, token challenge.Token, code st
 //
 // It requires the current password for the same reason changing one does: a
 // session left open on a shared machine must not be enough to take the second
-// factor off an account. It is refused outright while an administrator requires
-// MFA of this person — removing the factor would leave an account subject to a
-// requirement it can no longer satisfy, which is a lockout rather than a choice.
+// factor off an account.
+//
+// It is refused outright while a second factor is *required* of this person —
+// by the platform policy or by their own flag, which are the same answer here
+// (M1-008). Removing it would leave an account subject to a requirement it can
+// no longer satisfy, and the account most likely to be doing this is the
+// administrator who just turned the policy on: an endpoint that let them take
+// their own factor off would let them lock the platform's last administrator
+// into a state only the host's filesystem can undo.
 func (s *Service) DisableTOTP(ctx context.Context, subject Subject, current password.Plaintext) error {
 	user, err := s.users.ByID(ctx, subject.UserID)
 	if err != nil {
 		return err
 	}
 
-	if user.MFAEnforced {
+	policy, err := s.mfaPolicy(ctx)
+	if err != nil {
+		return err
+	}
+	if policy.Requires(user) {
 		return apierr.Forbidden("remove the authenticator of user " + user.ID +
-			", for whom MFA is enforced")
+			", of whom a second factor is required")
 	}
 	if user.PasswordHash == "" {
 		return apierr.Validation(apierr.Field("currentPassword",

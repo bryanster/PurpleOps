@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import { externalBaseURL, runDir } from './paths'
-import { startServer, externalServer, type Server } from './server'
+import { startServer, externalServer, type SeedCommand, type Server } from './server'
 
 /**
  * One worker's server, replaced whenever it starts on a new spec file.
@@ -34,7 +34,7 @@ export class ServerPool {
    * The server for `key`, starting a fresh one — fresh database, seed steps
    * replayed — if this worker was last serving something else.
    */
-  async forKey(key: string, seed: readonly (readonly string[])[]): Promise<Server> {
+  async forKey(key: string, seed: readonly SeedCommand[]): Promise<Server> {
     const external = externalBaseURL()
     if (external !== undefined) {
       // Not ours: no database to reset, and resetting someone's running

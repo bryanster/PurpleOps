@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   get,
   internalError,
+  mfaEnrolmentRequired,
   notFound,
   post,
   problem,
@@ -54,6 +55,26 @@ describe('the problem middleware', () => {
     expect(failure.status).toBe(404)
     expect(failure.detail).toBe('no such build')
     expect(failure.message).toBe('no such build')
+  })
+
+  it('lets a refined code be caught as the code it refines', async () => {
+    server.use(get('/version', () => mfaEnrolmentRequired()))
+
+    const failure = await failureOf(api.GET('/version'))
+
+    // Both directions. A screen that only knows `forbidden` still handles this
+    // — which is what makes adding a refinement safe for code already written
+    // — and one that asks for the narrower code does not catch the wider one.
+    expect(isApiError(failure, 'mfa_enrolment_required')).toBe(true)
+    expect(isApiError(failure, 'forbidden')).toBe(true)
+    expect((failure as ApiError).code).toBe('mfa_enrolment_required')
+
+    server.use(
+      get('/version', () => problem({ status: 403, code: 'forbidden', title: 'Forbidden' })),
+    )
+    const plain = await failureOf(api.GET('/version'))
+    expect(isApiError(plain, 'forbidden')).toBe(true)
+    expect(isApiError(plain, 'mfa_enrolment_required')).toBe(false)
   })
 
   it('carries the echoed request ID, so a user can quote it', async () => {

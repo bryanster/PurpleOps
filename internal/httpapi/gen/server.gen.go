@@ -59,14 +59,17 @@ func (e HealthState) Valid() bool {
 
 // Defines values for LoginStatus.
 const (
-	LoginStatusAuthenticated LoginStatus = "authenticated"
-	LoginStatusMfaRequired   LoginStatus = "mfa_required"
+	LoginStatusAuthenticated        LoginStatus = "authenticated"
+	LoginStatusMfaEnrolmentRequired LoginStatus = "mfa_enrolment_required"
+	LoginStatusMfaRequired          LoginStatus = "mfa_required"
 )
 
 // Valid indicates whether the value is a known member of the LoginStatus enum.
 func (e LoginStatus) Valid() bool {
 	switch e {
 	case LoginStatusAuthenticated:
+		return true
+	case LoginStatusMfaEnrolmentRequired:
 		return true
 	case LoginStatusMfaRequired:
 		return true
@@ -95,14 +98,15 @@ func (e PlatformRole) Valid() bool {
 
 // Defines values for ProblemCode.
 const (
-	ProblemCodeConflict         ProblemCode = "conflict"
-	ProblemCodeForbidden        ProblemCode = "forbidden"
-	ProblemCodeInternal         ProblemCode = "internal"
-	ProblemCodeMethodNotAllowed ProblemCode = "method_not_allowed"
-	ProblemCodeNotFound         ProblemCode = "not_found"
-	ProblemCodeRateLimited      ProblemCode = "rate_limited"
-	ProblemCodeUnauthenticated  ProblemCode = "unauthenticated"
-	ProblemCodeValidationFailed ProblemCode = "validation_failed"
+	ProblemCodeConflict             ProblemCode = "conflict"
+	ProblemCodeForbidden            ProblemCode = "forbidden"
+	ProblemCodeInternal             ProblemCode = "internal"
+	ProblemCodeMethodNotAllowed     ProblemCode = "method_not_allowed"
+	ProblemCodeMfaEnrolmentRequired ProblemCode = "mfa_enrolment_required"
+	ProblemCodeNotFound             ProblemCode = "not_found"
+	ProblemCodeRateLimited          ProblemCode = "rate_limited"
+	ProblemCodeUnauthenticated      ProblemCode = "unauthenticated"
+	ProblemCodeValidationFailed     ProblemCode = "validation_failed"
 )
 
 // Valid indicates whether the value is a known member of the ProblemCode enum.
@@ -115,6 +119,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeInternal:
 		return true
 	case ProblemCodeMethodNotAllowed:
+		return true
+	case ProblemCodeMfaEnrolmentRequired:
 		return true
 	case ProblemCodeNotFound:
 		return true
@@ -266,9 +272,13 @@ type LoginResult struct {
 	// this rather than assume that 200 means signed in.
 	Status LoginStatus `json:"status"`
 
-	// User The signed-in user. Present when `status` is `authenticated` and
-	// absent otherwise — a caller awaiting a second factor has not been
-	// told who they are yet.
+	// User The signed-in user. Present when `status` is `authenticated` or
+	// `mfa_enrolment_required` — both of those issued a session, and the
+	// second one needs `mfa` to render the enrolment screen it is confined
+	// to.
+	//
+	// Absent when `status` is `mfa_required`: a caller awaiting a second
+	// factor has no session and has not been told who they are yet.
 	User *CurrentUser `json:"user,omitempty"`
 }
 
@@ -276,12 +286,38 @@ type LoginResult struct {
 // this rather than assume that 200 means signed in.
 type LoginStatus string
 
+// MFAPolicy The platform-wide half of the multi-factor requirement (M1-008). The
+// other half is the per-user `mfaEnforced` flag, and the effective
+// requirement for one person is the **or** of whichever apply — so turning
+// both of these off does not release somebody an administrator has
+// individually enforced.
+//
+// Policy is evaluated before enrolment is looked at, which is the whole
+// point: v1 asked "have they enrolled?" and so let anybody who skipped
+// enrolment sign in with a password alone.
+type MFAPolicy struct {
+	// RequiredForAdmins Every account with the `admin` platform role must hold one. Implied
+	// by `requiredForAll`; the two are stored separately so that turning
+	// the wider one off does not silently release administrators too.
+	RequiredForAdmins bool `json:"requiredForAdmins"`
+
+	// RequiredForAll Every account that signs in with a local password must hold a second factor.
+	RequiredForAll bool `json:"requiredForAll"`
+}
+
 // MFAState Where this person and this session stand on multi-factor authentication.
 // Whether an administrator *requires* it and whether this session has
 // *satisfied* it are separate facts — conflating them is the hole M1-008
 // closes.
 type MFAState struct {
-	// Enforced An administrator requires a second factor of this person.
+	// Enforced An administrator requires a second factor of *this person
+	// specifically* — the per-user flag, set through the user
+	// administration API.
+	//
+	// It is one of the inputs to `required`, and not the whole answer:
+	// somebody can be required to hold a factor by the platform policy
+	// with this flag off. A client deciding whether to block should read
+	// `required`.
 	Enforced bool `json:"enforced"`
 
 	// Enrolled This person has a confirmed authenticator (M1-006). A *started* but
@@ -301,6 +337,19 @@ type MFAState struct {
 	// keeps only their hashes. Warn below three: the number matters most
 	// to the person who is one lost phone away from having no way in.
 	RecoveryCodesRemaining int `json:"recoveryCodesRemaining"`
+
+	// Required Whether this person must hold a second factor: `enforced`, or the
+	// platform policy (`GET /settings/mfa`) applying to them. This is the
+	// effective answer and the one an interface acts on (M1-008).
+	//
+	// `required` with `enrolled` false is the state that confines a
+	// session to enrolling: every other endpoint answers `403` with `code`
+	// `mfa_enrolment_required` until an enrolment is confirmed.
+	//
+	// An account that signs in only through an identity provider is
+	// exempt, and reports `false` — the provider owns its factors. See
+	// `docs/security.md`.
+	Required bool `json:"required"`
 
 	// Satisfied A second factor was presented for *this* session.
 	Satisfied bool `json:"satisfied"`
@@ -324,6 +373,12 @@ type Problem struct {
 	// Each code maps to exactly one HTTP status; the mapping lives in
 	// internal/httpapi/apierr and a test there asserts it (M0B-007). Adding a
 	// code means adding it in both places in the same change.
+	//
+	// The reverse is *nearly* 1:1. A code may refine another — same status,
+	// more specific instruction — and `mfa_enrolment_required` is the one that
+	// does, refining `forbidden`. A client that does not know a refinement can
+	// always fall back to the code it refines, and internal/httpapi/apierr
+	// holds the refinement table that says which that is.
 	Code ProblemCode `json:"code"`
 
 	// Detail Explanation specific to this occurrence. Never carries internal
@@ -369,6 +424,12 @@ type Problem struct {
 // Each code maps to exactly one HTTP status; the mapping lives in
 // internal/httpapi/apierr and a test there asserts it (M0B-007). Adding a
 // code means adding it in both places in the same change.
+//
+// The reverse is *nearly* 1:1. A code may refine another — same status,
+// more specific instruction — and `mfa_enrolment_required` is the one that
+// does, refining `forbidden`. A client that does not know a refinement can
+// always fall back to the code it refines, and internal/httpapi/apierr
+// holds the refinement table that says which that is.
 type ProblemCode string
 
 // RecoveryCodeRequest Body of `POST /auth/mfa/recovery/verify`: one recovery code, as the
@@ -648,6 +709,25 @@ type ChangePasswordParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// SetMfaPolicyParams defines parameters for SetMfaPolicy.
+type SetMfaPolicyParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -668,6 +748,9 @@ type VerifyTotpJSONRequestBody = TOTPCodeRequest
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
+type SetMfaPolicyJSONRequestBody = MFAPolicy
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -704,6 +787,12 @@ type ServerInterface interface {
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetMfaPolicy Read the platform-wide multi-factor authentication policy.
+	// (GET /settings/mfa)
+	GetMfaPolicy(w http.ResponseWriter, r *http.Request)
+	// SetMfaPolicy Replace the platform-wide multi-factor authentication policy.
+	// (PUT /settings/mfa)
+	SetMfaPolicy(w http.ResponseWriter, r *http.Request, params SetMfaPolicyParams)
 	// GetVersion Return the build identity of the running binary.
 	// (GET /version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
@@ -776,6 +865,18 @@ func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request, pa
 // GetHealth Report whether the server and its dependencies are healthy.
 // (GET /healthz)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMfaPolicy Read the platform-wide multi-factor authentication policy.
+// (GET /settings/mfa)
+func (_ Unimplemented) GetMfaPolicy(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetMfaPolicy Replace the platform-wide multi-factor authentication policy.
+// (PUT /settings/mfa)
+func (_ Unimplemented) SetMfaPolicy(w http.ResponseWriter, r *http.Request, params SetMfaPolicyParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1110,6 +1211,61 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetMfaPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetMfaPolicy(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMfaPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMfaPolicy operation middleware
+func (siw *ServerInterfaceWrapper) SetMfaPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetMfaPolicyParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMfaPolicy(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetVersion operation middleware
 func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Request) {
 
@@ -1272,6 +1428,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/auth/mfa/totp", wrapper.DisableTotp)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/mfa", wrapper.GetMfaPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/mfa", wrapper.SetMfaPolicy)
 	})
 
 	return r
@@ -2211,6 +2373,162 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	return err
 }
 
+type GetMfaPolicyRequestObject struct {
+}
+
+type GetMfaPolicyResponseObject interface {
+	VisitGetMfaPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetMfaPolicy200JSONResponse MFAPolicy
+
+func (response GetMfaPolicy200JSONResponse) VisitGetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMfaPolicy401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetMfaPolicy401ApplicationProblemPlusJSONResponse) VisitGetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMfaPolicy403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetMfaPolicy403ApplicationProblemPlusJSONResponse) VisitGetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMfaPolicy500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetMfaPolicy500ApplicationProblemPlusJSONResponse) VisitGetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMfaPolicyRequestObject struct {
+	Params SetMfaPolicyParams
+	Body   *SetMfaPolicyJSONRequestBody
+}
+
+type SetMfaPolicyResponseObject interface {
+	VisitSetMfaPolicyResponse(w http.ResponseWriter) error
+}
+
+type SetMfaPolicy200JSONResponse MFAPolicy
+
+func (response SetMfaPolicy200JSONResponse) VisitSetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMfaPolicy400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetMfaPolicy400ApplicationProblemPlusJSONResponse) VisitSetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMfaPolicy401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetMfaPolicy401ApplicationProblemPlusJSONResponse) VisitSetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMfaPolicy403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SetMfaPolicy403ApplicationProblemPlusJSONResponse) VisitSetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMfaPolicy500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response SetMfaPolicy500ApplicationProblemPlusJSONResponse) VisitSetMfaPolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetVersionRequestObject struct {
 }
 
@@ -2283,6 +2601,12 @@ type StrictServerInterface interface {
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetMfaPolicy Read the platform-wide multi-factor authentication policy.
+	// (GET /settings/mfa)
+	GetMfaPolicy(ctx context.Context, request GetMfaPolicyRequestObject) (GetMfaPolicyResponseObject, error)
+	// SetMfaPolicy Replace the platform-wide multi-factor authentication policy.
+	// (PUT /settings/mfa)
+	SetMfaPolicy(ctx context.Context, request SetMfaPolicyRequestObject) (SetMfaPolicyResponseObject, error)
 	// GetVersion Return the build identity of the running binary.
 	// (GET /version)
 	GetVersion(ctx context.Context, request GetVersionRequestObject) (GetVersionResponseObject, error)
@@ -2645,6 +2969,63 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMfaPolicy operation middleware
+func (sh *strictHandler) GetMfaPolicy(w http.ResponseWriter, r *http.Request) {
+	var request GetMfaPolicyRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMfaPolicy(ctx, request.(GetMfaPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMfaPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMfaPolicyResponseObject); ok {
+		if err := validResponse.VisitGetMfaPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetMfaPolicy operation middleware
+func (sh *strictHandler) SetMfaPolicy(w http.ResponseWriter, r *http.Request, params SetMfaPolicyParams) {
+	var request SetMfaPolicyRequestObject
+
+	request.Params = params
+
+	var body SetMfaPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetMfaPolicy(ctx, request.(SetMfaPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetMfaPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetMfaPolicyResponseObject); ok {
+		if err := validResponse.VisitSetMfaPolicyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

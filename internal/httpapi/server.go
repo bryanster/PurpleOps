@@ -22,6 +22,7 @@ import (
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/store/settings"
 )
 
 // BasePath is where the generated routes are mounted. It is the one server
@@ -140,8 +141,12 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	//     request authenticated and nothing else.
 	// 11. clearing the spent MFA challenge cookie (M1-006), which is a response
 	//     wrapper and decides nothing about the request.
+	// 12. the MFA enrolment gate (M1-008): a session belonging to somebody who
+	//     is required to hold a second factor and holds none may reach the
+	//     enrolment endpoints and nothing else. After authentication, because
+	//     the state it acts on is decided there.
 	//
-	// M1-013 inserts authorization between 11 and the handlers, on the same
+	// M1-013 inserts authorization between 12 and the handlers, on the same
 	// router — one chain, so there is no route that can quietly avoid it.
 	router.Use(
 		requestID,
@@ -179,6 +184,7 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		authenticate(auth, responder, log),
 		requireCSRF(sessions, responder, log),
 		clearSpentChallenge(challenges),
+		requireMFAEnrolment(responder, log),
 	)
 	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,
@@ -251,6 +257,7 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 		Memberships:   identity.NewMemberships(deps.Store),
 		TOTP:          identity.NewTOTPs(deps.Store),
 		RecoveryCodes: identity.NewRecoveryCodes(deps.Store),
+		Settings:      settings.New(deps.Store),
 		Sessions:      sessions,
 		Challenges:    challenges,
 		Secrets:       cipher,

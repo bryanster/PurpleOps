@@ -13,10 +13,12 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/password"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/store/settings"
 )
 
 // `blctl user create` is how the first administrator of a deployment gets in:
@@ -141,6 +143,13 @@ type resetMFAResult struct {
 	AuthenticatorRemoved bool `json:"authenticatorRemoved"`
 	RecoveryCodesRemoved int  `json:"recoveryCodesRemoved"`
 	ChallengesDiscarded  bool `json:"challengesDiscarded"`
+
+	// MFAStillRequired is whether a second factor is *still* required of this
+	// account after the reset — by the platform policy or by their own flag
+	// (M1-008). It decides which of two opposite warnings is printed, so it is
+	// read here rather than left for an operator to work out: this command
+	// makes a password sufficient only when the answer is false.
+	MFAStillRequired bool `json:"mfaStillRequired"`
 }
 
 func newUserResetMFACommand(a *app) *cobra.Command {
@@ -150,13 +159,16 @@ func newUserResetMFACommand(a *app) *cobra.Command {
 		Use:   "reset-mfa",
 		Short: "Remove a user's second factor and recovery codes",
 		Long: "Removes an account's authenticator enrolment, every recovery code it holds and\n" +
-			"any half-finished sign-in, so that the account signs in with its password alone\n" +
-			"until somebody enrols an authenticator again.\n\n" +
-			"This is the break-glass path, and it is genuinely a lock being broken: the whole\n" +
-			"point of a second factor is that a password is not enough, and this makes it\n" +
-			"enough. It exists because the alternative in a self-hosted, single-tenant tool\n" +
-			"is worse — a lost phone belonging to the only administrator would otherwise mean\n" +
-			"editing the database by hand or reinstalling.\n\n" +
+			"any half-finished sign-in, so that whoever lost their phone can get back in.\n\n" +
+			"What that means depends on whether a second factor is still required of them.\n" +
+			"If nothing requires one, the account signs in with its password alone until\n" +
+			"somebody enrols an authenticator again — genuinely a lock being broken, and the\n" +
+			"output says so. If the platform policy or their own flag requires one, their\n" +
+			"next sign-in can do exactly one thing: enrol a new authenticator. This command\n" +
+			"does not change that, and does not touch the policy or the flag.\n\n" +
+			"It exists because the alternative in a self-hosted, single-tenant tool is worse:\n" +
+			"a lost phone belonging to the only administrator would otherwise mean editing\n" +
+			"the database by hand or reinstalling.\n\n" +
 			"Reach for recovery codes first: they were issued when the authenticator was\n" +
 			"enrolled and they need nobody's help. This is for when those are gone too.\n\n" +
 			"It does not touch the password and does not sign anybody out. An account that\n" +
@@ -226,6 +238,19 @@ func newUserResetMFACommand(a *app) *cobra.Command {
 func resetMFA(ctx context.Context, db *store.DB, user identity.User) (resetMFAResult, error) {
 	result := resetMFAResult{ID: user.ID, Email: user.Email}
 
+	// Read before anything is removed, because it decides what the operator is
+	// told and nothing here changes the answer: this command does not touch
+	// mfa_enforced or the platform policy, on purpose (M1-008).
+	stored, err := settings.New(db).All(ctx)
+	if err != nil {
+		return resetMFAResult{}, err
+	}
+	policy, err := authn.DecodeMFAPolicy(stored)
+	if err != nil {
+		return resetMFAResult{}, err
+	}
+	result.MFAStillRequired = policy.Requires(user)
+
 	totps := identity.NewTOTPs(db)
 	if _, err := totps.ByUserID(ctx, user.ID); err == nil {
 		result.AuthenticatorRemoved = true
@@ -258,8 +283,12 @@ func resetMFA(ctx context.Context, db *store.DB, user identity.User) (resetMFARe
 }
 
 // writeResetMFA says what just happened in a way that is hard to skim past. The
-// warning is the point of the command's output: the operator has just made a
-// password sufficient on an account where it was not.
+// warning is the point of the command's output, and there are two of them
+// because there are two outcomes: on an account nothing requires a factor of,
+// the operator has just made a password sufficient where it was not; on one a
+// policy still covers, they have turned a lockout into an enrolment (M1-008).
+// Printing the first sentence in the second case would be telling an operator
+// their deployment is less protected than it is.
 func writeResetMFA(w *tabwriter.Writer, result resetMFAResult) {
 	if !result.AuthenticatorRemoved && result.RecoveryCodesRemoved == 0 {
 		fmt.Fprintf(w, "%s had no second factor. Nothing was removed.\n", result.Email)
@@ -271,6 +300,16 @@ func writeResetMFA(w *tabwriter.Writer, result resetMFAResult) {
 	fmt.Fprintf(w, "authenticator\t%s\n", removedOrNot(result.AuthenticatorRemoved))
 	fmt.Fprintf(w, "unused recovery codes\t%s\n", plural(result.RecoveryCodesRemoved, "code")+" removed")
 	fmt.Fprintf(w, "\n")
+	if result.MFAStillRequired {
+		fmt.Fprintf(w, "NOTE: a second factor is still required of %s.\n", result.Email)
+		fmt.Fprintf(w, "Their next sign-in can do one thing: enrol a new authenticator. The\n")
+		fmt.Fprintf(w, "password alone does not get them into the application, and this command\n")
+		fmt.Fprintf(w, "has not changed that — it removed the factor they could no longer use.\n")
+		fmt.Fprintf(w, "They will be shown a new set of recovery codes; the old ones no longer\n")
+		fmt.Fprintf(w, "work.\n")
+		return
+	}
+
 	fmt.Fprintf(w, "WARNING: %s now signs in with a password and nothing else.\n", result.Email)
 	fmt.Fprintf(w, "Anyone holding that password holds the account. Have them enrol an\n")
 	fmt.Fprintf(w, "authenticator again as soon as they are back in, and take a new set of\n")

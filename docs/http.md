@@ -24,8 +24,9 @@ In order, outermost first:
 | 9 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
 | 10 | `requireCSRF` | Refuses a state-changing request that authenticated by cookie and carries no valid CSRF token — see [`docs/security.md`](security.md) |
 | 11 | `clearSpentChallenge` | A response wrapper: drops the `bl_mfa` cookie once the sign-in it belongs to has produced a session |
+| 12 | `requireMFAEnrolment` | Refuses a session that must enrol a second factor before it may do anything else, with `403 mfa_enrolment_required` — see [`docs/security.md`](security.md) |
 
-Only 7 to 11 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
+Only 7 to 12 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
 for an unknown path is still logged, still carries a request ID and still has the security headers.
 
 **The recoverer is inside the logger**, which is the reverse of what `M0B-006` proposed. The logger
@@ -34,8 +35,8 @@ be written while the panic is still unwinding and every panic would appear in th
 success. `TestALoggedPanicReportsTheStatusTheClientSaw` is the test that says so.
 
 **Authentication decides who, not whether.** A request with no cookie, an expired session or a
-revoked one goes through step 8 exactly as it arrived, with no subject on its context; refusing is
-authorization's job and happens in one place (`M1-013`). What step 8 *does* answer for itself is a
+revoked one goes through step 9 exactly as it arrived, with no subject on its context; refusing is
+authorization's job and happens in one place (`M1-013`). What step 9 *does* answer for itself is a
 database failure: "the store did not answer" is not "you are not signed in", and reporting it as one
 would sign everybody out whenever the database hiccupped.
 

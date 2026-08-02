@@ -95,6 +95,20 @@ export function notFound(detail = 'no such thing'): HttpResponse<Problem> {
   return problem({ status: 404, code: 'not_found', title: 'Not Found', detail })
 }
 
+/**
+ * The 403 the MFA enrolment gate sends (M1-008). It is the one code in the
+ * vocabulary that refines another, which is what the fallback in `isApiError`
+ * is for.
+ */
+export function mfaEnrolmentRequired(): HttpResponse<Problem> {
+  return problem({
+    status: 403,
+    code: 'mfa_enrolment_required',
+    title: 'Forbidden',
+    detail: 'a second factor is required of your account; enrol an authenticator to continue',
+  })
+}
+
 /** The 500 the server sends for anything it cannot classify. */
 export function internalError(): HttpResponse<Problem> {
   return problem({

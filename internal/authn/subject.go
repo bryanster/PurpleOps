@@ -36,11 +36,28 @@ type Subject struct {
 	// that value exists in the cookie and nowhere else.
 	SessionID string
 
-	// MFAEnforced is whether an administrator requires a second factor of this
-	// person; MFASatisfied is whether this session presented one. Two facts, not
-	// one: conflating them is the hole M1-008 closes.
-	MFAEnforced  bool
+	// MFASatisfied is whether this session presented a second factor. It is a
+	// fact about the session and not about the person: that they are *required*
+	// to hold one is a different fact, and conflating the two is the hole
+	// M1-008 closes.
 	MFASatisfied bool
+
+	// MFAEnrolmentRequired is set when this session may do exactly one thing:
+	// enrol a second factor. It means a factor is required of this person, this
+	// session has not presented one, and there is none enrolled to present
+	// (M1-008).
+	//
+	// It is a state rather than the three booleans it is derived from, because
+	// the decision is made once — in [Service.Authenticate], which is the only
+	// place that has all three — and read by a middleware whose job is to
+	// refuse, not to re-derive. The three-booleans version is how v1 arrived at
+	// a combination nobody had thought about.
+	//
+	// False on a satisfied session whatever the policy says, and false where no
+	// factor is required. "Is a factor required of this person at all" is
+	// [Profile.MFARequired], which is a different question with a different
+	// answer.
+	MFAEnrolmentRequired bool
 }
 
 // Method is a way of authenticating a request. There is one today; M1-011 adds

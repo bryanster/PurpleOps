@@ -61,6 +61,11 @@ type Deps struct {
 	TOTP          TOTPs
 	RecoveryCodes RecoveryCodes
 
+	// Settings holds the platform MFA policy (M1-008), which is read on every
+	// sign-in and on every request made with a session that has not satisfied
+	// MFA.
+	Settings Settings
+
 	Sessions   *session.Manager
 	Challenges *challenge.Manager
 
@@ -100,6 +105,7 @@ type Service struct {
 	memberships   Memberships
 	totp          TOTPs
 	recoveryCodes RecoveryCodes
+	settings      Settings
 
 	sessions   *session.Manager
 	challenges *challenge.Manager
@@ -125,6 +131,8 @@ func NewService(deps Deps) (*Service, error) {
 		return nil, errors.New("authn: no authenticator repository")
 	case deps.RecoveryCodes == nil:
 		return nil, errors.New("authn: no recovery code repository")
+	case deps.Settings == nil:
+		return nil, errors.New("authn: no settings store; the MFA policy could not be read")
 	case deps.Sessions == nil:
 		return nil, errors.New("authn: no session manager")
 	case deps.Challenges == nil:
@@ -150,6 +158,7 @@ func NewService(deps Deps) (*Service, error) {
 		memberships:   deps.Memberships,
 		totp:          deps.TOTP,
 		recoveryCodes: deps.RecoveryCodes,
+		settings:      deps.Settings,
 		sessions:      deps.Sessions,
 		challenges:    deps.Challenges,
 		secrets:       deps.Secrets,
@@ -172,6 +181,11 @@ const (
 	// second factor is required of this person and was not presented. No session
 	// exists yet.
 	LoginMFARequired LoginStatus = "mfa_required"
+
+	// LoginMFAEnrolmentRequired means the credentials were right, a second
+	// factor is required of this person, and they hold none to present. A
+	// session exists and may do exactly one thing: enrol one (M1-008).
+	LoginMFAEnrolmentRequired LoginStatus = "mfa_enrolment_required"
 )
 
 // Login is a sign-in attempt.
@@ -194,10 +208,8 @@ type LoginResult struct {
 	Issued  session.Issued
 
 	// Challenge is the pending state, and is zero unless Status is
-	// [LoginMFARequired] *and* there is a factor the caller can actually
-	// present. An account with MFA enforced but nothing enrolled produces
-	// mfa_required with no challenge — the credentials were right and there is
-	// no way forward, which is the dead end M1-008 exists to remove.
+	// [LoginMFARequired]. It is what the caller answers with a code; it
+	// authorizes nothing else.
 	Challenge challenge.Issued
 }
 
@@ -255,17 +267,23 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 		s.upgradeHash(ctx, user, in.Password)
 	}
 
+	// Policy first, enrolment second. Asking them the other way round is the
+	// defect M1-008 closes: enforcement that consults enrolment state is
+	// enforcement that stops applying to whoever skipped enrolling.
+	policy, err := s.mfaPolicy(ctx)
+	if err != nil {
+		return LoginResult{}, err
+	}
 	enrolment, enrolled, err := s.confirmedTOTP(ctx, user.ID)
 	if err != nil {
 		return LoginResult{}, err
 	}
-	switch {
-	case enrolled:
-		// A confirmed factor gates the sign-in whether or not an administrator
-		// requires one: somebody who set up an authenticator meant it to be
-		// asked for. The password was right and no session exists yet — what
-		// the caller gets is a challenge, which authorizes nothing but the
-		// verification endpoint.
+
+	switch decideLogin(policy.Requires(user), enrolled) {
+	case outcomeChallenge:
+		// The password was right and no session exists yet — what the caller
+		// gets is a challenge, which authorizes nothing but the verification
+		// endpoints.
 		issued, err := s.challenges.Open(ctx, user.ID)
 		if err != nil {
 			return LoginResult{}, err
@@ -276,39 +294,70 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 			slog.Time("enrolled_at", enrolment.ConfirmedAt))
 		return LoginResult{Status: LoginMFARequired, Challenge: issued}, nil
 
-	case user.MFAEnforced:
-		// Fail closed. An administrator requires a second factor of this person
-		// and they have not enrolled one, so there is nothing to issue a session
-		// on the strength of and nothing to challenge them with either. M1-008
-		// turns this into an enrolment the caller is walked through; until then
-		// the credentials were right and that is all they are told.
-		s.log.WarnContext(ctx, "login refused: MFA is enforced but nothing is enrolled",
-			slog.String("user_id", user.ID))
-		return LoginResult{Status: LoginMFARequired}, nil
-	}
+	case outcomeEnrolment:
+		// A second factor is required of this person and they hold none. Before
+		// M1-008 this was a dead end — the credentials were right, no session
+		// was issued and there was nothing the caller could do about it. Now
+		// they get a session that can reach the enrolment endpoints and
+		// nothing else (see [Service.Authenticate] and the gate in
+		// internal/httpapi), so the requirement is something they can satisfy
+		// rather than a door that will not open.
+		issued, err := s.issueSession(ctx, user, in.Request)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		s.log.WarnContext(ctx, "login confined to enrolment: MFA is required and nothing is enrolled",
+			slog.String("user_id", user.ID),
+			slog.String("session_id", issued.Session.ID))
 
-	// A fresh session, not a reused one: whatever cookie the caller arrived
-	// with, the session they leave with is one this exchange created. That is
-	// rotation on sign-in, and it is what makes a session fixed by an attacker
-	// before login worthless afterwards. Any other session the person has stays
-	// live — signing in on a second machine does not sign out the first.
-	issued, err := s.sessions.Issue(ctx, user.ID, in.Request, false)
+		subject := subjectOf(user, issued.Session)
+		subject.MFAEnrolmentRequired = true
+		return LoginResult{
+			Status:  LoginMFAEnrolmentRequired,
+			Subject: subject,
+			Issued:  issued,
+		}, nil
+
+	default:
+		issued, err := s.issueSession(ctx, user, in.Request)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		s.log.InfoContext(ctx, "login",
+			slog.String("user_id", user.ID),
+			slog.String("session_id", issued.Session.ID))
+
+		return LoginResult{
+			Status:  LoginAuthenticated,
+			Subject: subjectOf(user, issued.Session),
+			Issued:  issued,
+		}, nil
+	}
+}
+
+// issueSession creates the session a completed sign-in leaves with, and records
+// the login against the account.
+//
+// A fresh session, not a reused one: whatever cookie the caller arrived with,
+// the session they leave with is one this exchange created. That is rotation on
+// sign-in, and it is what makes a session fixed by an attacker before login
+// worthless afterwards. Any other session the person has stays live — signing in
+// on a second machine does not sign out the first.
+//
+// mfa_satisfied is false on it in both of the cases that call this: an ordinary
+// sign-in that was not asked for a factor, and one confined to enrolment. The
+// flag means "a factor was presented for this session", and neither of them
+// presented one. What separates the two is the policy, evaluated on every
+// request against the flag — not a second meaning loaded onto the flag itself.
+func (s *Service) issueSession(ctx context.Context, user identity.User, req session.Request) (session.Issued, error) {
+	issued, err := s.sessions.Issue(ctx, user.ID, req, false)
 	if err != nil {
-		return LoginResult{}, err
+		return session.Issued{}, err
 	}
 	if err := s.users.SetLastLoginAt(ctx, user.ID, issued.Session.CreatedAt); err != nil {
-		return LoginResult{}, err
+		return session.Issued{}, err
 	}
-
-	s.log.InfoContext(ctx, "login",
-		slog.String("user_id", user.ID),
-		slog.String("session_id", issued.Session.ID))
-
-	return LoginResult{
-		Status:  LoginAuthenticated,
-		Subject: subjectOf(user, issued.Session),
-		Issued:  issued,
-	}, nil
+	return issued, nil
 }
 
 // upgradeHash re-hashes a correct password under today's parameters, so that a
@@ -341,6 +390,12 @@ func (s *Service) upgradeHash(ctx context.Context, user identity.User, plaintext
 // disabling somebody must end their access now, not when their session happens
 // to expire. Any other error is the database failing, and the caller must not
 // report it as a failure to authenticate.
+//
+// It is also where the MFA policy reaches a session that already existed when
+// the policy changed (M1-008). The requirement is evaluated here, on every
+// request, rather than recorded on the session at sign-in — so turning it on
+// applies to everybody who is already signed in at their next request, and there
+// is no set of sessions quietly grandfathered under the old rules.
 func (s *Service) Authenticate(ctx context.Context, token session.Token) (Subject, error) {
 	found, err := s.sessions.Resolve(ctx, token)
 	if err != nil {
@@ -360,12 +415,67 @@ func (s *Service) Authenticate(ctx context.Context, token session.Token) (Subjec
 			session.ErrNoSession, user.ID, user.Status)
 	}
 
+	confined, err := s.confineToEnrolment(ctx, user, found)
+	if err != nil {
+		return Subject{}, err
+	}
+
 	subject := subjectOf(user, found)
+	subject.MFAEnrolmentRequired = confined
 	// Set here, where the cookie was actually resolved, rather than in
 	// subjectOf: this is the only function that knows a *cookie* is what proved
 	// it, and M1-011's equivalent will say MethodServiceToken in its own.
 	subject.Method = MethodCookie
 	return subject, nil
+}
+
+// confineToEnrolment decides what a live session may do under the policy as it
+// stands right now: everything, nothing but enrolling, or nothing at all.
+//
+// The three answers, and why each is the one it is:
+//
+//   - The session presented a factor, or none is required of this person. It is
+//     an ordinary session. This is the common case and it costs no queries — a
+//     satisfied session is never confined, whatever the policy says, so the
+//     policy is not read for one.
+//   - A factor is required, this session did not present one, and there is
+//     nothing enrolled. Confined to enrolling (true, nil). This is the sign-in
+//     that happened before the policy was turned on, and the point of M1-008 is
+//     that it neither keeps its access nor loses the ability to fix that.
+//   - A factor is required, this session did not present one, and there *is* one
+//     enrolled. [session.ErrNoSession]: the caller is signed out and must sign
+//     in again, which is the flow that asks for the factor they hold. Confining
+//     them to enrolment instead would be a dead end — the enrolment endpoint
+//     refuses while a confirmed authenticator exists — and letting them through
+//     would be the policy not applying to the people most able to satisfy it.
+//     Reachable in one step: sign in on two browsers, enrol in one, and the
+//     other is holding exactly this session when the policy goes on.
+//
+// The session row is left alone in all three cases. Nothing here revokes,
+// because a policy turned on and then off again should leave the sessions it
+// interrupted usable rather than having quietly ended them.
+func (s *Service) confineToEnrolment(ctx context.Context, user identity.User, sess identity.Session) (bool, error) {
+	if sess.MFASatisfied {
+		return false, nil
+	}
+	policy, err := s.mfaPolicy(ctx)
+	if err != nil {
+		return false, err
+	}
+	if !policy.Requires(user) {
+		return false, nil
+	}
+
+	_, enrolled, err := s.confirmedTOTP(ctx, user.ID)
+	if err != nil {
+		return false, err
+	}
+	if enrolled {
+		return false, fmt.Errorf(
+			"%w: session %s of user %s never presented the second factor now required of them",
+			session.ErrNoSession, sess.ID, user.ID)
+	}
+	return true, nil
 }
 
 // Logout revokes the caller's session. It is idempotent: a session that has
@@ -393,6 +503,16 @@ type Profile struct {
 	// gates nothing — reporting it as enrolled would be a lie the interface
 	// acted on.
 	MFAEnrolled bool
+
+	// MFARequired is whether this person must hold a second factor at all: the
+	// platform policy, or their own [identity.User.MFAEnforced] flag, whichever
+	// applies (M1-008).
+	//
+	// It is the effective answer, and the one an interface acts on. The flag on
+	// its own is not: somebody can be required by the policy with the flag off,
+	// and an interface reading the flag would let them past the screen that is
+	// meant to stop them.
+	MFARequired bool
 
 	// MFASatisfied is a fact about the session the request arrived on, not about
 	// the user, which is why it is not read off User.
@@ -430,10 +550,19 @@ func (s *Service) Profile(ctx context.Context, subject Subject) (Profile, error)
 	if err != nil {
 		return Profile{}, err
 	}
+	// Read here rather than taken off the [Subject]: the subject carries the
+	// state this *session* is in, which is false for a session that has already
+	// satisfied MFA — and the interface still has to be able to say "a second
+	// factor is required of you" on the account screen of somebody who has one.
+	policy, err := s.mfaPolicy(ctx)
+	if err != nil {
+		return Profile{}, err
+	}
 	return Profile{
 		User:                   user,
 		Memberships:            memberships,
 		MFAEnrolled:            enrolled,
+		MFARequired:            policy.Requires(user),
 		MFASatisfied:           subject.MFASatisfied,
 		RecoveryCodesRemaining: remaining,
 	}, nil
@@ -522,7 +651,6 @@ func subjectOf(user identity.User, sess identity.Session) Subject {
 		DisplayName:  user.DisplayName,
 		PlatformRole: user.PlatformRole,
 		SessionID:    sess.ID,
-		MFAEnforced:  user.MFAEnforced,
 		MFASatisfied: sess.MFASatisfied,
 	}
 }

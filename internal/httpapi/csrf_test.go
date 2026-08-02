@@ -392,6 +392,10 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/auth/mfa/recovery/regenerate": {
 		body: `{"currentPassword":"` + testPassword + `"}`,
 	},
+
+	"PUT " + BasePath + "/settings/mfa": {
+		body: `{"requiredForAll":true,"requiredForAdmins":true}`,
+	},
 }
 
 func TestEveryMutatingRouteIsCoveredByCSRF(t *testing.T) {

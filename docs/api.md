@@ -99,6 +99,7 @@ Clients switch on `code`, never on `detail` (prose, may be reworded) and never o
 | `validation_failed` | 400 | The request validator, or `apierr.Validation(...)` for a rule the spec cannot express |
 | `unauthenticated` | 401 | `apierr.Unauthenticated(...)` for no usable session, `apierr.BadCredentials(...)` for a failed sign-in |
 | `forbidden` | 403 | `apierr.Forbidden(...)`, and the authorization middleware (M1-013) |
+| `mfa_enrolment_required` | 403 | The MFA enrolment gate (M1-008), for a session that must enrol a second factor before it may do anything else. **Refines `forbidden`** — see below |
 | `not_found` | 404 | `apierr.NotFound(...)`, and a path that is not in the spec |
 | `method_not_allowed` | 405 | The request validator, for a path that exists with other methods |
 | `conflict` | 409 | `apierr.Conflict(...)` |
@@ -108,6 +109,13 @@ Clients switch on `code`, never on `detail` (prose, may be reworded) and never o
 `ProblemCode` in the spec and that table (`internal/httpapi/apierr/codes.go`) are two halves of one
 thing: adding a code means editing both in the same change, plus a `components/responses` entry
 describing it. Three tests fail if you do less than that.
+
+**Refinements.** Every code has one status, and — with one exception — every status has one code. A
+code may share a status with another only by declaring itself a *refinement* of it in
+`apierr.refinements`, and a refinement must be strictly more specific, so that a client which has
+never heard of it can treat it as the code it refines and still be right. `mfa_enrolment_required`
+refines `forbidden`: both mean "not this, not now", and the refinement additionally says the caller
+is one enrolment away from being allowed. Two unrelated codes on one status stay a test failure.
 
 ### Returning an error from a handler
 

@@ -72,11 +72,15 @@ export interface paths {
          *     indistinguishable, so that this endpoint cannot be used to find out who
          *     has an account here. The server spends the same work on each, too.
          *
-         *     A 200 does not always mean a session. When a second factor is required,
-         *     `status` is `mfa_required`, no *session* cookie is set, and the caller
-         *     must post a code to `POST /auth/mfa/totp/verify` — or a recovery code to
-         *     `POST /auth/mfa/recovery/verify` (M1-007) — before anything is signed in
-         *     (M1-006). Read `status` rather than assuming.
+         *     A 200 does not always mean a session. When a second factor is required
+         *     and the caller has one, `status` is `mfa_required`, no *session* cookie
+         *     is set, and they must post a code to `POST /auth/mfa/totp/verify` — or a
+         *     recovery code to `POST /auth/mfa/recovery/verify` (M1-007) — before
+         *     anything is signed in (M1-006).
+         *
+         *     When one is required and they have **none**, `status` is
+         *     `mfa_enrolment_required`: a session cookie is set and it may do exactly
+         *     one thing, which is enrol (M1-008). Read `status` rather than assuming.
          *
          *     Attempts are throttled per account and per client address (M1-004). Once
          *     either limit trips, every attempt is a 429 with a `Retry-After` — the
@@ -362,11 +366,53 @@ export interface paths {
          *     was removed is still presentable — and the next enrolment mints its own
          *     set, so keeping these could only ever mean two live sets.
          *
-         *     Refused with `403` when an administrator requires MFA of this person
-         *     (M1-008) — removing the factor would leave an account that cannot
-         *     satisfy a requirement it is still subject to.
+         *     Refused with `403` when a second factor is required of this person
+         *     (M1-008) — by the platform policy or by their own `mfaEnforced` flag,
+         *     which are the same answer here. Removing it would leave an account
+         *     subject to a requirement it can no longer satisfy, which is a lockout
+         *     rather than a choice. `mfa.required` on `GET /auth/me` says in advance
+         *     whether this call will be refused.
          */
         delete: operations["disableTotp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the platform-wide multi-factor authentication policy.
+         * @description Administrators only. What every ordinary caller needs to know about the
+         *     requirement — whether it applies to *them* — is on `GET /auth/me` as
+         *     `mfa.required`, which is a fact about one person rather than the policy
+         *     that produced it.
+         */
+        get: operations["getMfaPolicy"];
+        /**
+         * Replace the platform-wide multi-factor authentication policy.
+         * @description Administrators only, and a whole replacement rather than a patch: both
+         *     fields are required, so two administrators editing at once cannot each
+         *     change the half they were thinking about and silently keep the other's.
+         *
+         *     Turning a requirement **on** takes effect on the next request every
+         *     signed-in user makes, not at their next sign-in. Somebody who is already
+         *     signed in and has not enrolled is confined to enrolling; somebody who is
+         *     enrolled but whose session never presented a factor is signed out and
+         *     must sign in again (M1-008).
+         *
+         *     Turning it **off** deletes nothing. Enrolments, recovery codes and the
+         *     per-user `mfaEnforced` flag all survive, so switching it back on does not
+         *     make everybody enrol again.
+         */
+        put: operations["setMfaPolicy"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -428,9 +474,15 @@ export interface components {
          *     Each code maps to exactly one HTTP status; the mapping lives in
          *     internal/httpapi/apierr and a test there asserts it (M0B-007). Adding a
          *     code means adding it in both places in the same change.
+         *
+         *     The reverse is *nearly* 1:1. A code may refine another — same status,
+         *     more specific instruction — and `mfa_enrolment_required` is the one that
+         *     does, refining `forbidden`. A client that does not know a refinement can
+         *     always fall back to the code it refines, and internal/httpapi/apierr
+         *     holds the refinement table that says which that is.
          * @enum {string}
          */
-        ProblemCode: "validation_failed" | "unauthenticated" | "forbidden" | "not_found" | "method_not_allowed" | "conflict" | "rate_limited" | "internal";
+        ProblemCode: "validation_failed" | "unauthenticated" | "forbidden" | "mfa_enrolment_required" | "not_found" | "method_not_allowed" | "conflict" | "rate_limited" | "internal";
         /** @description One field-level validation failure. */
         FieldError: {
             /**
@@ -513,14 +565,18 @@ export interface components {
          *     this rather than assume that 200 means signed in.
          * @enum {string}
          */
-        LoginStatus: "authenticated" | "mfa_required";
+        LoginStatus: "authenticated" | "mfa_required" | "mfa_enrolment_required";
         /** @description The outcome of a successful `POST /auth/login`. */
         LoginResult: {
             status: components["schemas"]["LoginStatus"];
             /**
-             * @description The signed-in user. Present when `status` is `authenticated` and
-             *     absent otherwise — a caller awaiting a second factor has not been
-             *     told who they are yet.
+             * @description The signed-in user. Present when `status` is `authenticated` or
+             *     `mfa_enrolment_required` — both of those issued a session, and the
+             *     second one needs `mfa` to render the enrolment screen it is confined
+             *     to.
+             *
+             *     Absent when `status` is `mfa_required`: a caller awaiting a second
+             *     factor has no session and has not been told who they are yet.
              */
             user?: components["schemas"]["CurrentUser"];
         };
@@ -585,8 +641,31 @@ export interface components {
          *     closes.
          */
         MFAState: {
-            /** @description An administrator requires a second factor of this person. */
+            /**
+             * @description An administrator requires a second factor of *this person
+             *     specifically* — the per-user flag, set through the user
+             *     administration API.
+             *
+             *     It is one of the inputs to `required`, and not the whole answer:
+             *     somebody can be required to hold a factor by the platform policy
+             *     with this flag off. A client deciding whether to block should read
+             *     `required`.
+             */
             enforced: boolean;
+            /**
+             * @description Whether this person must hold a second factor: `enforced`, or the
+             *     platform policy (`GET /settings/mfa`) applying to them. This is the
+             *     effective answer and the one an interface acts on (M1-008).
+             *
+             *     `required` with `enrolled` false is the state that confines a
+             *     session to enrolling: every other endpoint answers `403` with `code`
+             *     `mfa_enrolment_required` until an enrolment is confirmed.
+             *
+             *     An account that signs in only through an identity provider is
+             *     exempt, and reports `false` — the provider owns its factors. See
+             *     `docs/security.md`.
+             */
+            required: boolean;
             /**
              * @description This person has a confirmed authenticator (M1-006). A *started* but
              *     unconfirmed enrolment does not count — it gates nothing, so
@@ -609,6 +688,27 @@ export interface components {
              *     to the person who is one lost phone away from having no way in.
              */
             recoveryCodesRemaining: number;
+        };
+        /**
+         * @description The platform-wide half of the multi-factor requirement (M1-008). The
+         *     other half is the per-user `mfaEnforced` flag, and the effective
+         *     requirement for one person is the **or** of whichever apply — so turning
+         *     both of these off does not release somebody an administrator has
+         *     individually enforced.
+         *
+         *     Policy is evaluated before enrolment is looked at, which is the whole
+         *     point: v1 asked "have they enrolled?" and so let anybody who skipped
+         *     enrolment sign in with a password alone.
+         */
+        MFAPolicy: {
+            /** @description Every account that signs in with a local password must hold a second factor. */
+            requiredForAll: boolean;
+            /**
+             * @description Every account with the `admin` platform role must hold one. Implied
+             *     by `requiredForAll`; the two are stored separately so that turning
+             *     the wider one off does not silently release administrators too.
+             */
+            requiredForAdmins: boolean;
         };
         /**
          * @description Body of `POST /auth/password`. The current password is required even
@@ -755,6 +855,32 @@ export interface components {
         };
         /** @description Authenticated, but not permitted to do this. `code` is `forbidden`. */
         Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /**
+         * @description A second factor is required of this caller and they hold none, so their
+         *     session may do nothing but enrol one. `code` is `mfa_enrolment_required`
+         *     (M1-008).
+         *
+         *     It refines `forbidden` and shares its 403: a client that does not know
+         *     this code should treat it as one. A client that does knows exactly what
+         *     to render — the enrolment screen, with no way past it — and knows the
+         *     way out is `POST /auth/mfa/totp/enroll` followed by
+         *     `POST /auth/mfa/totp/confirm`, after which the session is rotated and
+         *     fully privileged without signing in again.
+         *
+         *     No operation lists this response, and none can: it is produced before a
+         *     request reaches its operation, by the gate that stands in front of all of
+         *     them, and every authenticated operation can answer with it. It is
+         *     declared here so the code has a documented shape — the same reason
+         *     `MethodNotAllowed` is.
+         */
+        MFAEnrolmentRequired: {
             headers: {
                 [name: string]: unknown;
             };
@@ -930,7 +1056,8 @@ export interface operations {
             /**
              * @description The credentials were correct. `status` says whether that was enough:
              *     `authenticated` means the session cookie in `Set-Cookie` is live,
-             *     `mfa_required` means it is not.
+             *     `mfa_enrolment_required` means it is live and confined to enrolling,
+             *     and `mfa_required` means there is no session at all yet.
              */
             200: {
                 headers: {
@@ -941,6 +1068,12 @@ export interface operations {
                      *     carries `bl_csrf` (M1-005), with the same attributes except
                      *     that it is **not** `HttpOnly` — script has to read it to send
                      *     `X-CSRF-Token`.
+                     *
+                     *     When `status` is `mfa_enrolment_required`: the same two cookies,
+                     *     for a session that is refused everywhere except the two
+                     *     enrolment endpoints and `GET /auth/me` (M1-008). It becomes an
+                     *     ordinary session, on a new token, the moment an enrolment is
+                     *     confirmed.
                      *
                      *     When `status` is `mfa_required`: the short-lived `bl_mfa`
                      *     cookie instead, and no session cookie. It authorizes nothing but
@@ -1332,6 +1465,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getMfaPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy as it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MFAPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setMfaPolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MFAPolicy"];
+            };
+        };
+        responses: {
+            /** @description The policy as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MFAPolicy"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];

@@ -22,9 +22,21 @@ const seedTimeoutMs = 60_000
  * nothing is how a suite ends up asserting against an empty database and
  * passing.
  */
-export async function runBlctl(args: readonly string[], env: NodeJS.ProcessEnv): Promise<string> {
+export async function runBlctl(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  stdin?: string,
+): Promise<string> {
   try {
-    const { stdout } = await run(blctlBinary, [...args], { env, timeout: seedTimeoutMs })
+    const pending = run(blctlBinary, [...args], { env, timeout: seedTimeoutMs })
+    // `blctl user create` reads the password from stdin when stdin is not a
+    // terminal, deliberately: a password in a flag ends up in shell history and
+    // in `ps`. That makes writing to the child the only way to seed an account
+    // whose password a spec knows. Closed either way, so a command that reads
+    // stdin and was given nothing sees EOF rather than hanging until the
+    // timeout.
+    pending.child.stdin?.end(stdin ?? '')
+    const { stdout } = await pending
     return stdout
   } catch (error) {
     throw new Error(`blctl ${args.join(' ')}\n${describe(error)}`, { cause: error })

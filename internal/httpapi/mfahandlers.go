@@ -175,14 +175,21 @@ func recoveryCodes(set authn.RecoveryCodeSet) gen.RecoveryCodes {
 	return gen.RecoveryCodes{Codes: printed, GeneratedAt: set.GeneratedAt}
 }
 
-// mfaState renders the four facts about a person's second factor. It is here
-// rather than inline in currentUser so that "enforced", "enrolled", "satisfied"
-// and what is left to fall back on are filled from four different sources in one
-// place, where the difference between them is visible.
+// mfaState renders the five facts about a person's second factor. It is here
+// rather than inline in currentUser so that "enforced", "required", "enrolled",
+// "satisfied" and what is left to fall back on are filled from five different
+// sources in one place, where the difference between them is visible — which is
+// the whole subject of M1-008, whose defect was two of these being treated as
+// one.
 func mfaState(profile authn.Profile) gen.MFAState {
 	return gen.MFAState{
-		// The administrator's requirement, off the user row.
+		// The administrator's requirement of this person specifically, off the
+		// user row.
 		Enforced: profile.User.MFAEnforced,
+		// Whether one is required at all: the flag above, or the platform
+		// policy applying to them (M1-008). This is the one an interface acts
+		// on, and it is computed rather than stored.
+		Required: profile.MFARequired,
 		// Whether there is a confirmed enrolment, off the authenticator row.
 		Enrolled: profile.MFAEnrolled,
 		// Whether *this session* presented one, off the session row.
