@@ -50,6 +50,15 @@ func testConfig(t *testing.T) config.Config {
 			Lifetime:    12 * time.Hour,
 			IdleTimeout: 2 * time.Hour,
 		},
+		// The documented defaults. A server cannot be built without them either
+		// — a zero threshold would lock out the first caller through the door —
+		// and the tests that are about throttling lower them.
+		Throttle: config.Throttle{
+			AccountFailures: 5,
+			AccountLockout:  15 * time.Minute,
+			SourceFailures:  50,
+			SourceLockout:   15 * time.Minute,
+		},
 	}
 }
 

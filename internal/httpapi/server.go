@@ -13,6 +13,7 @@ import (
 	"github.com/bryanster/purpleops/api"
 	"github.com/bryanster/purpleops/internal/authn"
 	"github.com/bryanster/purpleops/internal/authn/session"
+	"github.com/bryanster/purpleops/internal/authn/throttle"
 	"github.com/bryanster/purpleops/internal/config"
 	"github.com/bryanster/purpleops/internal/httpapi/apierr"
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
@@ -98,6 +99,13 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		return nil, err
 	}
 
+	policy := throttle.PolicyFrom(deps.Config)
+	policy.Log = log
+	limiter, err := throttle.New(policy)
+	if err != nil {
+		return nil, err
+	}
+
 	router := chi.NewRouter()
 
 	// The order is the design, outermost first — the order a request meets them:
@@ -117,12 +125,14 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	//  7. request validation, mounted on the API router below: it needs the
 	//     path to be one the specification describes, which /healthz under any
 	//     other prefix is not.
-	//  8. authentication, also on the API router: it resolves the session cookie
-	//     into a subject and decides nothing else (M1-003). After validation,
-	//     because a request that does not match the specification should be
-	//     rejected before it costs a database lookup.
+	//  8. credential throttling, also on the API router: it rations failed
+	//     sign-in attempts (M1-004). After validation, so a request that does
+	//     not match the specification is not counted as a guess; before
+	//     authentication, so a locked-out caller costs nothing at all.
+	//  9. authentication: it resolves the session cookie into a subject and
+	//     decides nothing else (M1-003).
 	//
-	// M1-013 inserts authorization between 8 and the handlers, on the same
+	// M1-013 inserts authorization between 9 and the handlers, on the same
 	// router — one chain, so there is no route that can quietly avoid it.
 	router.Use(
 		requestID,
@@ -154,7 +164,11 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	// puts the SPA's catch-all.
 	apiRouter.NotFound(notFound)
 	apiRouter.MethodNotAllowed(methodNotAllowed)
-	apiRouter.Use(validate, authenticate(auth, responder, log))
+	apiRouter.Use(
+		validate,
+		throttleCredentials(limiter, responder, log),
+		authenticate(auth, responder, log),
+	)
 	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,
 		// Reached when the generated wrapper cannot bind a parameter. The

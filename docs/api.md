@@ -102,7 +102,7 @@ Clients switch on `code`, never on `detail` (prose, may be reworded) and never o
 | `not_found` | 404 | `apierr.NotFound(...)`, and a path that is not in the spec |
 | `method_not_allowed` | 405 | The request validator, for a path that exists with other methods |
 | `conflict` | 409 | `apierr.Conflict(...)` |
-| `rate_limited` | 429 | Login throttling (M1-004) |
+| `rate_limited` | 429 | `apierr.RateLimited(...)`, and the sign-in throttle (M1-004). Always carries `Retry-After`, in whole seconds |
 | `internal` | 500 | Anything else at all — see below |
 
 `ProblemCode` in the spec and that table (`internal/httpapi/apierr/codes.go`) are two halves of one

@@ -374,6 +374,13 @@ type BadRequest = Problem
 // may be reworded at any time.
 type InternalError = Problem
 
+// TooManyRequests RFC 9457 problem detail — the only error shape this API produces, served
+// as `application/problem+json` (M0B-007).
+//
+// Clients switch on `code`. `title` and `detail` are prose for a human and
+// may be reworded at any time.
+type TooManyRequests = Problem
+
 // Unauthenticated RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
 //
@@ -681,6 +688,15 @@ type BadRequestApplicationProblemPlusJSONResponse Problem
 
 type InternalErrorApplicationProblemPlusJSONResponse Problem
 
+type TooManyRequestsResponseHeaders struct {
+	RetryAfter int
+}
+type TooManyRequestsApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers TooManyRequestsResponseHeaders
+}
+
 type UnauthenticatedApplicationProblemPlusJSONResponse Problem
 
 type LoginRequestObject struct {
@@ -743,6 +759,23 @@ func (response Login401ApplicationProblemPlusJSONResponse) VisitLoginResponse(w 
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Login429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response Login429ApplicationProblemPlusJSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }

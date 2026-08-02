@@ -76,6 +76,12 @@ export interface paths {
          *     `status` is `mfa_required`, no cookie is set, and the caller must
          *     complete the challenge (M1-006) before anything is signed in. Read
          *     `status` rather than assuming.
+         *
+         *     Attempts are throttled per account and per client address (M1-004). Once
+         *     either limit trips, every attempt is a 429 with a `Retry-After` — the
+         *     right password included, because a lockout that the right password ends
+         *     is not a lockout. The 429 is identical for an account that exists and one
+         *     that does not.
          */
         post: operations["login"];
         delete?: never;
@@ -456,9 +462,16 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Rate limited. `code` is `rate_limited`. */
+        /**
+         * @description Rate limited. `code` is `rate_limited`.
+         *
+         *     `Retry-After` says how many seconds to wait, and is always present.
+         *     Retrying before it elapses does not shorten it.
+         */
         TooManyRequests: {
             headers: {
+                /** @description Seconds to wait before trying again. */
+                "Retry-After": number;
                 [name: string]: unknown;
             };
             content: {
@@ -581,6 +594,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };

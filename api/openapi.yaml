@@ -145,6 +145,12 @@ paths:
         `status` is `mfa_required`, no cookie is set, and the caller must
         complete the challenge (M1-006) before anything is signed in. Read
         `status` rather than assuming.
+
+        Attempts are throttled per account and per client address (M1-004). Once
+        either limit trips, every attempt is a 429 with a `Retry-After` — the
+        right password included, because a lockout that the right password ends
+        is not a lockout. The 429 is identical for an account that exists and one
+        that does not.
       tags:
         - auth
       security: []
@@ -177,6 +183,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -372,7 +380,18 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     TooManyRequests:
-      description: Rate limited. `code` is `rate_limited`.
+      description: |
+        Rate limited. `code` is `rate_limited`.
+
+        `Retry-After` says how many seconds to wait, and is always present.
+        Retrying before it elapses does not shorten it.
+      headers:
+        Retry-After:
+          description: Seconds to wait before trying again.
+          required: true
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/problem+json:
           schema:

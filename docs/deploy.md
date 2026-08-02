@@ -101,6 +101,36 @@ startup error naming both variables.
 Shortening either takes effect immediately for every existing session: both are evaluated on each
 request against the row, not baked into the cookie.
 
+### Sign-in throttling
+
+Failed sign-ins are rationed two ways, and both have to allow an attempt through. A refused attempt
+is a `429` carrying `Retry-After`, and it is the same answer whether or not the account exists.
+
+| Variable | Default | Counts |
+|---|---|---|
+| `PURPLEOPS_LOGIN_ACCOUNT_FAILURES` | `5` | consecutive failures against one email address |
+| `PURPLEOPS_LOGIN_ACCOUNT_LOCKOUT` | `15m` | how long that address is then locked |
+| `PURPLEOPS_LOGIN_SOURCE_FAILURES` | `50` | failures from one client address, across all accounts |
+| `PURPLEOPS_LOGIN_SOURCE_LOCKOUT` | `15m` | how long that client address is then locked |
+
+Each further lockout of the same key doubles the wait, three times — 15m, 30m, 1h, 2h — and then
+stops growing. A successful sign-in clears the account's count and its place on that ladder, as does
+going quiet for the length of the longest lockout; a success deliberately does not clear the
+source's, because an attacker holding one valid account would otherwise refill their budget with it.
+Hammering a locked key does not extend the lockout.
+
+Two consequences worth expecting:
+
+- **The right password during a lockout is refused too.** Somebody who locks themselves out waits,
+  or an administrator waits with them; there is no override yet (`M1-016`). A lockout that the
+  correct password ended would only be a delay on an attacker who had already guessed it.
+- **Behind a reverse proxy, the source limit counts the proxy** — every user shares one address —
+  unless `PURPLEOPS_TRUSTED_PROXIES` names it. Set that (see below) or raise
+  `PURPLEOPS_LOGIN_SOURCE_FAILURES` to suit the size of the office behind it.
+
+Lockouts are logged at `WARN` with the scope, the key and the client address. The state is held in
+memory by the server process: it is per-instance, and restarting clears it.
+
 ### The first account
 
 A new deployment has no users and no sign-up. Create the first administrator with the admin CLI —

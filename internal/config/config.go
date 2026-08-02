@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +28,10 @@ const (
 	envSessionSecret   = prefix + "SESSION_SECRET"
 	envSessionLifetime = prefix + "SESSION_LIFETIME"
 	envSessionIdle     = prefix + "SESSION_IDLE_TIMEOUT"
+	envAccountFailures = prefix + "LOGIN_ACCOUNT_FAILURES"
+	envAccountLockout  = prefix + "LOGIN_ACCOUNT_LOCKOUT"
+	envSourceFailures  = prefix + "LOGIN_SOURCE_FAILURES"
+	envSourceLockout   = prefix + "LOGIN_SOURCE_LOCKOUT"
 	envLogLevel        = prefix + "LOG_LEVEL"
 	envLogFormat       = prefix + "LOG_FORMAT"
 	envChromePath      = prefix + "CHROME_PATH"
@@ -44,6 +49,7 @@ type Config struct {
 	Database Database
 	Evidence Evidence
 	Session  Session
+	Throttle Throttle
 	Log      Log
 	Report   Report
 }
@@ -108,6 +114,23 @@ type Session struct {
 	IdleTimeout time.Duration
 }
 
+// Throttle is how many failed sign-in attempts the server answers before it
+// starts refusing them (M1-004). Two independent limits, both enforced.
+type Throttle struct {
+	// AccountFailures is how many consecutive failures against one email
+	// address close it, and AccountLockout is how long the first closure lasts.
+	// Each further closure of the same account doubles the wait, three times.
+	AccountFailures int
+	AccountLockout  time.Duration
+
+	// SourceFailures and SourceLockout are the same two things keyed on the
+	// client address instead. The threshold is much higher: this limit is not
+	// about one password being guessed, which the account limit sees, but about
+	// one host trying one password against every account, which it does not.
+	SourceFailures int
+	SourceLockout  time.Duration
+}
+
 // Log configures the process logger.
 type Log struct {
 	Level  LogLevel
@@ -167,6 +190,10 @@ func (c *Config) bindings() []binding {
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
 		{name: envSessionLifetime, target: &c.Session.Lifetime, def: "12h"},
 		{name: envSessionIdle, target: &c.Session.IdleTimeout, def: "2h"},
+		{name: envAccountFailures, target: &c.Throttle.AccountFailures, def: "5"},
+		{name: envAccountLockout, target: &c.Throttle.AccountLockout, def: "15m"},
+		{name: envSourceFailures, target: &c.Throttle.SourceFailures, def: "50"},
+		{name: envSourceLockout, target: &c.Throttle.SourceLockout, def: "15m"},
 		{name: envLogLevel, target: &c.Log.Level, def: string(LevelInfo), tool: true},
 		{name: envLogFormat, target: &c.Log.Format, def: string(FormatJSON), tool: true},
 		{name: envChromePath, target: &c.Report.ChromePath},
@@ -295,6 +322,18 @@ func (b binding) set(raw string) error {
 	switch target := b.target.(type) {
 	case *string:
 		*target = raw
+	case *int:
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return errors.New("must be a whole number")
+		}
+		// Every count this package reads is a threshold, and none of them mean
+		// anything at zero or below. A binding that wants to allow zero needs its
+		// own case rather than a relaxation of this one.
+		if n <= 0 {
+			return errors.New("must be a positive whole number")
+		}
+		*target = n
 	case *time.Duration:
 		d, err := time.ParseDuration(raw)
 		if err != nil {

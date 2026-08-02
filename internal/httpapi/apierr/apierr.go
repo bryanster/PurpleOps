@@ -3,6 +3,7 @@ package apierr
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
 )
@@ -28,6 +29,9 @@ type Error struct {
 	// cause is the log's half: the wrapped error, or context such as the
 	// identifier that was not found. It reaches the log and never the response.
 	cause error
+	// retryAfter is how long the caller must wait before trying again. Set only
+	// by [RateLimited]; the [Responder] turns it into the header.
+	retryAfter time.Duration
 }
 
 // Code returns the stable machine-readable identifier for this failure.
@@ -148,13 +152,24 @@ func Conflict(detail string) *Error {
 }
 
 // RateLimited reports that the caller has been throttled. detail is shown to
-// the client and should say what the limit is on.
+// the client and should say what the limit is on — and, where the limit is on a
+// credential, it should say nothing else: the sign-in throttle answers a real
+// account and an invented one identically (M1-004).
 //
-// The Retry-After header that goes with it belongs to whoever is doing the
-// limiting, not here — see M1-004.
-func RateLimited(detail string) *Error {
-	return &Error{code: gen.ProblemCodeRateLimited, detail: detail}
+// retryAfter travels with the error rather than being set by the caller, so that
+// a 429 cannot be sent without the header that says when to come back. The
+// [Responder] rounds it up to whole seconds, which is all RFC 9110 allows.
+func RateLimited(detail string, retryAfter time.Duration) *Error {
+	return &Error{
+		code:       gen.ProblemCodeRateLimited,
+		detail:     detail,
+		retryAfter: retryAfter,
+	}
 }
+
+// RetryAfter returns how long the caller must wait, or zero for every failure
+// that is not a rate limit.
+func (e *Error) RetryAfter() time.Duration { return e.retryAfter }
 
 // Validation reports field-level failures — the domain-level kind ("the end
 // date is before the start date"), which the request validator cannot see

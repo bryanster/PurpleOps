@@ -20,9 +20,10 @@ In order, outermost first:
 | 5 | `timeout` | Puts `PURPLEOPS_REQUEST_TIMEOUT` on the request context |
 | 6 | `securityHeaders` | The response headers below |
 | 7 | `requestValidator` | Rejects anything `api/openapi.yaml` does not describe, before any handler runs |
-| 8 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
+| 8 | `throttleCredentials` | Rations failed sign-in attempts, per account and per client address — see below |
+| 9 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
 
-Only 7 and 8 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
+Only 7 to 9 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
 for an unknown path is still logged, still carries a request ID and still has the security headers.
 
 **The recoverer is inside the logger**, which is the reverse of what `M0B-006` proposed. The logger
@@ -36,7 +37,40 @@ authorization's job and happens in one place (`M1-013`). What step 8 *does* answ
 database failure: "the store did not answer" is not "you are not signed in", and reporting it as one
 would sign everybody out whenever the database hiccupped.
 
-M1-013 inserts authorization between 8 and the handlers, on the same router.
+M1-013 inserts authorization between 9 and the handlers, on the same router.
+
+## Sign-in throttling
+
+Two limiters guard every endpoint where a credential is presented — today `POST /auth/login`, and
+the list is `credentialRoutes` in `internal/httpapi/throttle.go`. Both have to allow an attempt
+through, and a refusal is a `429` with `code: rate_limited` and a `Retry-After` in whole seconds.
+
+| Limit | Keyed on | Default | Cleared by a successful sign-in |
+|---|---|---|---|
+| `PURPLEOPS_LOGIN_ACCOUNT_FAILURES` / `_LOCKOUT` | the normalized email address | 5 failures → 15 min | yes |
+| `PURPLEOPS_LOGIN_SOURCE_FAILURES` / `_LOCKOUT` | the client address | 50 failures → 15 min | **no** |
+
+Each further lockout of the same key doubles the wait, three times — 15m, 30m, 1h, 2h. Two things
+put a key back to the bottom of that ladder: a successful sign-in, and going quiet for the length of
+the longest lockout, which is also how the table is kept bounded. A success does not clear the
+*source* limit on purpose: an attacker who holds one valid account would otherwise top their
+spraying budget up with it.
+
+Four things worth knowing before changing any of it:
+
+- **The right password during a lockout is refused too**, and no session is issued. A lockout that
+  the right password ends is not a lockout — it is a delay on an attacker who has already won.
+- **A locked-out attempt costs no password hash.** The middleware runs before the handler, which is
+  half of what throttling is for: Argon2id is expensive on purpose, so an attacker must not be able
+  to spend the server's CPU by sending guesses faster.
+- **The 429 is identical for an account that exists and one that does not**, which is the same
+  defence the 401 makes (see *Sessions*). Only the log records which key it was.
+- **The state is in memory and per-process**, and it is lost on restart. That is correct for the
+  single-node deployment in `PLAN.md` §1 and for nothing else; a second node would need it shared,
+  and nothing here would notice on its own.
+
+Behind a reverse proxy the source limiter counts the proxy unless `PURPLEOPS_TRUSTED_PROXIES` names
+it — the same resolution the request log uses, described under *Behind a reverse proxy* below.
 
 ## Sessions
 
@@ -111,7 +145,7 @@ decides what `/api/…` means.
 in `PURPLEOPS_TRUSTED_PROXIES` (a comma-separated list of addresses or CIDR ranges). Unset — the
 default — means the client address is always the address the connection came from.
 
-This matters because the client address is what login throttling counts (`M1-004`) and what the
+This matters because the client address is what login throttling counts (`M1-004`, above) and what the
 activity log records (`M1-015`). A server that believed the header unconditionally would let any
 caller choose which address gets throttled and which one appears in the audit trail.
 
@@ -170,3 +204,7 @@ produced before a handler is reached: an unknown path, a wrong method, a body th
 the specification, and a panic. There is one writer (`apierr.Responder.Write`), installed as the
 error handler for the router, the generated strict handler and the request validator, so the three
 cannot disagree.
+
+A `429` also carries `Retry-After`, in whole seconds and always rounded up. It comes off the error
+itself rather than from whoever did the limiting, so there is no way to send one of these without
+telling the caller when to come back.

@@ -65,6 +65,14 @@ func TestParseAppliesDocumentedDefaults(t *testing.T) {
 	if cfg.Session.Secret.IsZero() {
 		t.Error("Session.Secret is zero, want the value from the environment")
 	}
+	if got, want := cfg.Throttle, (Throttle{
+		AccountFailures: 5,
+		AccountLockout:  15 * time.Minute,
+		SourceFailures:  50,
+		SourceLockout:   15 * time.Minute,
+	}); got != want {
+		t.Errorf("Throttle = %+v, want %+v", got, want)
+	}
 }
 
 // TestFields is the per-variable table the ticket asks for: at least one value
@@ -235,6 +243,43 @@ func TestFields(t *testing.T) {
 	}, {
 		name: "session secret accepts a long passphrase",
 		env:  map[string]string{envSessionSecret: "correct horse battery staple, and then some more of it"},
+	}, {
+		name: "throttle thresholds and lockouts",
+		env: map[string]string{
+			envAccountFailures: "3",
+			envAccountLockout:  "5m",
+			envSourceFailures:  "100",
+			envSourceLockout:   "1h",
+		},
+		check: func(t *testing.T, cfg Config) {
+			want := Throttle{
+				AccountFailures: 3,
+				AccountLockout:  5 * time.Minute,
+				SourceFailures:  100,
+				SourceLockout:   time.Hour,
+			}
+			if cfg.Throttle != want {
+				t.Errorf("Throttle = %+v, want %+v", cfg.Throttle, want)
+			}
+		},
+	}, {
+		// Zero would lock out the first person to mistype anything, which is not
+		// a stricter policy but a broken one.
+		name:    "a throttle threshold rejects zero",
+		env:     map[string]string{envAccountFailures: "0"},
+		wantErr: `PURPLEOPS_LOGIN_ACCOUNT_FAILURES: must be a positive whole number, got "0"`,
+	}, {
+		name:    "a throttle threshold rejects a fraction",
+		env:     map[string]string{envSourceFailures: "2.5"},
+		wantErr: `PURPLEOPS_LOGIN_SOURCE_FAILURES: must be a whole number, got "2.5"`,
+	}, {
+		name:    "a throttle lockout rejects a bare number",
+		env:     map[string]string{envAccountLockout: "900"},
+		wantErr: `PURPLEOPS_LOGIN_ACCOUNT_LOCKOUT: must be a duration with a unit`,
+	}, {
+		name:    "a throttle lockout rejects zero",
+		env:     map[string]string{envSourceLockout: "0s"},
+		wantErr: `PURPLEOPS_LOGIN_SOURCE_LOCKOUT: must be a positive duration`,
 	}, {
 		name: "log level and format",
 		env:  map[string]string{envLogLevel: "debug", envLogFormat: "text"},

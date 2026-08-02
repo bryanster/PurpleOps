@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
 )
@@ -51,7 +52,7 @@ func TestEachConstructorCarriesItsCodeStatusAndSentinel(t *testing.T) {
 		},
 		{
 			name:     "rate limited",
-			err:      RateLimited("too many login attempts"),
+			err:      RateLimited("too many login attempts", time.Minute),
 			code:     gen.ProblemCodeRateLimited,
 			status:   http.StatusTooManyRequests,
 			sentinel: ErrRateLimited,

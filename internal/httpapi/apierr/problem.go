@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -127,6 +129,12 @@ func (rs *Responder) Write(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	w.Header().Set("Content-Type", MediaType)
+	// Set from the error rather than by whoever is doing the limiting: a 429
+	// that does not say when to come back leaves a client to guess, and every
+	// 429 this API sends goes through here.
+	if retryAfter := classify(err).retryAfter; retryAfter > 0 {
+		w.Header().Set("Retry-After", retryAfterSeconds(retryAfter))
+	}
 	w.WriteHeader(problem.Status)
 	if err := json.NewEncoder(w).Encode(problem); err != nil {
 		// The status line is already on the wire, so there is no second chance
@@ -136,6 +144,20 @@ func (rs *Responder) Write(w http.ResponseWriter, r *http.Request, err error) {
 			slog.String("request_id", instance),
 			slog.String("error", err.Error()))
 	}
+}
+
+// retryAfterSeconds renders a wait as the whole number of seconds RFC 9110
+// allows, rounded *up* — a client that comes back at the rounded-down second is
+// still locked out, and would spend its retry learning that.
+func retryAfterSeconds(d time.Duration) string {
+	seconds := int64(d / time.Second)
+	if d%time.Second > 0 {
+		seconds++
+	}
+	if seconds < 1 {
+		seconds = 1
+	}
+	return strconv.FormatInt(seconds, 10)
 }
 
 // errorText renders err for the log, tolerating the nil that a mistaken caller

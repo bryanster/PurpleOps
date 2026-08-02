@@ -26,7 +26,13 @@ func TestSecretIsRedactedInEveryRendering(t *testing.T) {
 		`fmt "%v" of the config`:  func() string { return fmt.Sprintf("%v", cfg) },
 		`fmt "%+v" of the config`: func() string { return fmt.Sprintf("%+v", cfg) },
 		`fmt "%#v" of the config`: func() string { return fmt.Sprintf("%#v", cfg) },
-		`fmt "%s" of the config`:  func() string { return fmt.Sprintf("%s", cfg) },
+		// A Config has held a field with no String method since M1-004, so "%s"
+		// of one is a verb the vet and staticcheck are both right to object to.
+		// It stays: reaching for the wrong verb is exactly the accident this test
+		// is about, and a redaction that only holds for the verbs a linter
+		// approves of is not a redaction.
+		//nolint:staticcheck // SA5009: the wrong verb is the case under test.
+		`fmt "%s" of the config`:  func() string { return fmt.Sprintf("%s", any(cfg)) },
 		`fmt "%v" of the secret`:  func() string { return fmt.Sprintf("%v", cfg.Session.Secret) },
 		`fmt "%#v" of the secret`: func() string { return fmt.Sprintf("%#v", cfg.Session.Secret) },
 		"json of the config": func() string {

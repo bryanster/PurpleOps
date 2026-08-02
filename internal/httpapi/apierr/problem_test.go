@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5/middleware"
@@ -69,7 +70,7 @@ func TestTranslateMapsAnErrorToItsProblem(t *testing.T) {
 		},
 		{
 			name:   "rate limited",
-			err:    RateLimited("too many login attempts"),
+			err:    RateLimited("too many login attempts", 90*time.Second),
 			status: http.StatusTooManyRequests,
 			code:   gen.ProblemCodeRateLimited,
 			detail: "too many login attempts",
@@ -193,6 +194,52 @@ func TestWriteServesTheProblemMediaTypeAndStatus(t *testing.T) {
 		t.Errorf("instance = %v, want %q", got, testRequestID)
 	}
 	validateAgainstSpec(t, rec.Body.String())
+}
+
+// TestWriteSendsRetryAfterWithARateLimit is why the wait travels on the error
+// rather than being set by whoever is doing the limiting: a 429 that does not
+// say when to come back leaves a client guessing, and this is the one place that
+// can promise every one of them carries it (M1-004).
+func TestWriteSendsRetryAfterWithARateLimit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{{
+		name: "whole seconds",
+		err:  RateLimited("too many sign-in attempts", 90*time.Second),
+		want: "90",
+	}, {
+		// Rounded up. A client that came back at the rounded-down second would
+		// still be locked out, and would spend its retry finding that out.
+		name: "a part second rounds up",
+		err:  RateLimited("too many sign-in attempts", 1500*time.Millisecond),
+		want: "2",
+	}, {
+		name: "the last moment of a lockout is still a second away",
+		err:  RateLimited("too many sign-in attempts", time.Microsecond),
+		want: "1",
+	}, {
+		name: "every other failure carries none",
+		err:  Conflict("the engagement is closed"),
+		want: "",
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			responder, _ := newTestResponder()
+			rec := httptest.NewRecorder()
+			responder.Write(rec, newTestRequest(t, testRequestID), test.err)
+
+			if got := rec.Header().Get("Retry-After"); got != test.want {
+				t.Errorf("Retry-After = %q, want %q", got, test.want)
+			}
+		})
+	}
 }
 
 // TestWriteLogsTheCauseItDoesNotSend asserts both halves of the rule at once:
