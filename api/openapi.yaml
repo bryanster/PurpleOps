@@ -143,8 +143,9 @@ paths:
 
         A 200 does not always mean a session. When a second factor is required,
         `status` is `mfa_required`, no *session* cookie is set, and the caller
-        must post a code to `POST /auth/mfa/totp/verify` before anything is
-        signed in (M1-006). Read `status` rather than assuming.
+        must post a code to `POST /auth/mfa/totp/verify` — or a recovery code to
+        `POST /auth/mfa/recovery/verify` (M1-007) — before anything is signed in
+        (M1-006). Read `status` rather than assuming.
 
         Attempts are throttled per account and per client address (M1-004). Once
         either limit trips, every attempt is a 429 with a `Retry-After` — the
@@ -346,6 +347,13 @@ paths:
         token — satisfying a factor is a privilege change, and PLAN.md §4 wants
         the token to change whenever that is true.
 
+        It also mints ten **recovery codes** (M1-007) and returns them in the
+        body. This is the only response in the API that ever carries them: there
+        is no endpoint that reads them back, because the server keeps only their
+        hashes. A client that does not put them in front of the person right
+        now has lost them, and the only remedy is
+        `POST /auth/mfa/recovery/regenerate`, which mints a different set.
+
         A wrong code is a `400` naming the `code` field, not a `401`: the caller
         is signed in and this is a form to correct, not a session to re-establish.
         It is deliberately not throttled — the only secret being guessed is the
@@ -362,8 +370,10 @@ paths:
             schema:
               $ref: "#/components/schemas/TOTPCodeRequest"
       responses:
-        "204":
-          description: The enrolment is confirmed and this session rotated.
+        "200":
+          description: |
+            The enrolment is confirmed, this session rotated, and the recovery
+            codes minted. Show them.
           headers:
             Set-Cookie:
               description: |
@@ -372,6 +382,10 @@ paths:
               required: true
               schema:
                 type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodes"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -437,6 +451,113 @@ paths:
             schema:
               $ref: "#/components/schemas/TOTPCodeRequest"
 
+  /auth/mfa/recovery/verify:
+    post:
+      operationId: verifyRecoveryCode
+      summary: Complete a sign-in with a recovery code instead of an authenticator.
+      description: |
+        The other way out of `mfa_required`, for the person whose phone is in a
+        river (M1-007). It takes the same short-lived `bl_mfa` cookie as
+        `POST /auth/mfa/totp/verify` and one of the codes issued when the
+        authenticator was enrolled.
+
+        A code works exactly once. On success it is marked used, the pending
+        state is spent, and a session is issued with MFA **satisfied** — this is
+        a full sign-in and not a diminished one, because someone holding a
+        printed code has presented a second factor. `GET /auth/me` then reports
+        `mfa.recoveryCodesRemaining` one lower; below three, warn them.
+
+        Every way of failing is the same `401` as the TOTP endpoint's: a code
+        that is not theirs, one already used, one that is not a code at all, an
+        expired pending state and no pending state at all. Attempts are
+        throttled per account and per client address alongside password and
+        TOTP attempts (M1-004).
+      tags:
+        - auth
+      security:
+        - mfaChallenge: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoveryCodeRequest"
+      responses:
+        "200":
+          description: |
+            The code was correct and is now spent. `status` is always
+            `authenticated`.
+          headers:
+            Set-Cookie:
+              description: |
+                The session cookie, its `bl_csrf` companion, and the cleared
+                `bl_mfa` cookie, in three `Set-Cookie` headers.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/mfa/recovery/regenerate:
+    post:
+      operationId: regenerateRecoveryCodes
+      summary: Replace your recovery codes with a fresh set.
+      description: |
+        Mints ten new codes and **invalidates every previous one**, including
+        the codes that were never used. Somebody regenerating because a printout
+        went missing is telling us the missing printout must stop working.
+
+        It asks for two things. The current password, so that a session left
+        open on a shared machine cannot mint credentials that walk past a second
+        factor. And a session that has already satisfied MFA — `403` otherwise.
+        Deliberately *not* a fresh code from the authenticator: signing in with
+        a recovery code produces a satisfied session, so this is reachable by
+        the person whose phone is gone, which is the case recovery codes exist
+        for.
+
+        `409` when no authenticator is enrolled: codes stand in for one, and
+        there has to be one to stand in for.
+
+        Like the enrolment response, this is the only time the new codes exist
+        outside the client.
+      tags:
+        - auth
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegenerateRecoveryCodesRequest"
+      responses:
+        "200":
+          description: A new set of codes. Every earlier code is now dead.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodes"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /auth/mfa/totp:
     delete:
       operationId: disableTotp
@@ -445,6 +566,11 @@ paths:
         Requires the current password, for the same reason changing a password
         does: a session left open on a shared machine must not be enough to take
         the second factor off an account.
+
+        The recovery codes go with it (M1-007). They stand in for the
+        authenticator, so leaving them behind would mean a second factor that
+        was removed is still presentable — and the next enrolment mints its own
+        set, so keeping these could only ever mean two live sets.
 
         Refused with `403` when an administrator requires MFA of this person
         (M1-008) — removing the factor would leave an account that cannot
@@ -461,7 +587,9 @@ paths:
               $ref: "#/components/schemas/DisableTOTPRequest"
       responses:
         "204":
-          description: The authenticator is removed. Removing one that was not there answers the same way.
+          description: |
+            The authenticator and the recovery codes are removed. Removing one
+            that was not there answers the same way.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -497,8 +625,10 @@ components:
 
         It is emphatically not a session. Nothing resolves one of these into a
         caller — a request carrying only this cookie is anonymous everywhere
-        except `POST /auth/mfa/totp/verify`, and `GET /auth/me` answers it with
-        a `401`. It is spent by the first code accepted against it.
+        except the two verification endpoints, `POST /auth/mfa/totp/verify` and
+        `POST /auth/mfa/recovery/verify`, and `GET /auth/me` answers it with a
+        `401`. It is spent by the first code accepted against it, of either
+        kind.
     bearerServiceToken:
       type: http
       scheme: bearer
@@ -956,6 +1086,7 @@ components:
         - enforced
         - enrolled
         - satisfied
+        - recoveryCodesRemaining
       properties:
         enforced:
           type: boolean
@@ -973,6 +1104,17 @@ components:
         satisfied:
           type: boolean
           description: A second factor was presented for *this* session.
+        recoveryCodesRemaining:
+          type: integer
+          minimum: 0
+          description: |
+            How many unused recovery codes this person holds (M1-007). `0` for
+            somebody who has not enrolled: codes are minted when an enrolment is
+            confirmed and deleted when it is removed.
+
+            A count and never the codes — those were shown once, and the server
+            keeps only their hashes. Warn below three: the number matters most
+            to the person who is one lost phone away from having no way in.
 
     ChangePasswordRequest:
       type: object
@@ -1060,6 +1202,83 @@ components:
       description: |
         Body of `DELETE /auth/mfa/totp`. The current password is required for the
         same reason `ChangePasswordRequest` asks for it.
+      required:
+        - currentPassword
+      additionalProperties: false
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 1024
+
+    RecoveryCodes:
+      type: object
+      description: |
+        A freshly minted set of recovery codes (M1-007), in the only response
+        that ever carries them. Put them in front of the person immediately and
+        offer a way to save or print them: there is no endpoint that reads them
+        back, because the server stores only their hashes.
+      required:
+        - codes
+        - generatedAt
+      properties:
+        codes:
+          type: array
+          minItems: 1
+          description: |
+            Ten single-use codes, each twenty characters of Crockford base32 —
+            the digits and the uppercase letters, less `I`, `L`, `O` and `U`, so
+            that no two characters in a code look alike. That is 100 bits each.
+
+            They arrive grouped in fours for transcription. The grouping is
+            presentation: the server accepts them back in any case, with or
+            without the hyphens, and folds the four omitted characters onto
+            what they resemble (`O`→`0`, `I`/`L`→`1`) so that somebody's
+            handwriting cannot lock them out.
+          items:
+            type: string
+            examples:
+              - 3K9M-2PTV-XA47-QRJH-58WY
+        generatedAt:
+          type: string
+          format: date-time
+          description: |
+            When this set was minted. It is what an interface shows next to
+            "you last replaced these on …", and the moment every previous code
+            stopped working.
+
+    RecoveryCodeRequest:
+      type: object
+      description: |
+        Body of `POST /auth/mfa/recovery/verify`: one recovery code, as the
+        person has it written down.
+      required:
+        - code
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 20
+          maxLength: 32
+          pattern: "^[0-9A-Za-z -]+$"
+          description: |
+            The code, in any case, with or without the hyphens it was printed
+            with. The bounds and the pattern here are a backstop that keeps
+            obvious junk off an unauthenticated path — what a code actually is
+            gets decided in one place, `internal/authn/recovery.Parse`, and
+            anything that gets past this and fails there is refused as an
+            incorrect code rather than as a malformed request. Two answers to
+            one question is how the two definitions would drift apart.
+          examples:
+            - 3K9M-2PTV-XA47-QRJH-58WY
+
+    RegenerateRecoveryCodesRequest:
+      type: object
+      description: |
+        Body of `POST /auth/mfa/recovery/regenerate`. The current password is
+        required for the same reason `ChangePasswordRequest` asks for it; the
+        second factor is not in the body, it is the requirement that this
+        session has already satisfied one.
       required:
         - currentPassword
       additionalProperties: false

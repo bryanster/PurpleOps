@@ -70,56 +70,81 @@ func (s *Service) EnrollTOTP(ctx context.Context, subject Subject) (totp.Enrolme
 	return enrolment, nil
 }
 
-// ConfirmTOTP finishes an enrolment by checking a code from it, and returns the
-// caller's rotated session.
+// ConfirmResult is a finished enrolment: the caller's rotated session, and the
+// recovery codes minted alongside it.
 //
-// Success does three things at once, and they are one event: the enrolment
-// becomes confirmed, the code's step is spent so it cannot be replayed, and the
-// session is marked as having satisfied MFA and rotated onto a new token.
+// The codes are here and in no other result type, which is what makes "shown
+// exactly once" (M1-007) structural rather than a rule somebody has to keep:
+// there is no second endpoint that returns them, so a client that loses this
+// response has nothing to retry — only [Service.RegenerateRecoveryCodes], which
+// mints a different set.
+type ConfirmResult struct {
+	Issued   session.Issued
+	Recovery RecoveryCodeSet
+}
+
+// ConfirmTOTP finishes an enrolment by checking a code from it, and returns the
+// caller's rotated session together with a fresh set of recovery codes.
+//
+// Success does four things at once, and they are one event: the enrolment
+// becomes confirmed, the code's step is spent so it cannot be replayed, ten
+// recovery codes are minted (M1-007), and the session is marked as having
+// satisfied MFA and rotated onto a new token.
+//
+// The codes are minted before the session is marked, so that a failure to store
+// them is a failure of the whole exchange rather than an enrolment that
+// silently has no way out behind it. The person is then still able to sign in
+// with the authenticator they have just proved works, and can mint a set from
+// there.
 //
 // A wrong code is a field error rather than a 401. The caller is signed in and
 // is confirming their own secret, so there is nothing to give away and a form
 // can put the message next to the input — and, for the same reason, this is not
 // throttled: the only secret being guessed is the caller's own.
-func (s *Service) ConfirmTOTP(ctx context.Context, subject Subject, code string) (session.Issued, error) {
+func (s *Service) ConfirmTOTP(ctx context.Context, subject Subject, code string) (ConfirmResult, error) {
 	enrolment, err := s.totp.ByUserID(ctx, subject.UserID)
 	if err != nil {
 		// Not-found flows through as a 404: there is nothing to confirm, which
 		// is a client that has lost track of the flow rather than a bad code.
-		return session.Issued{}, err
+		return ConfirmResult{}, err
 	}
 
 	step, err := s.checkCode(ctx, enrolment, code)
 	switch {
 	case errors.Is(err, totp.ErrNoMatch):
-		return session.Issued{}, apierr.Validation(apierr.Field("code",
+		return ConfirmResult{}, apierr.Validation(apierr.Field("code",
 			"is not correct — check your authenticator and try the current code"))
 	case err != nil:
-		return session.Issued{}, err
+		return ConfirmResult{}, err
 	}
 
 	accepted, err := s.totp.Accept(ctx, subject.UserID, step, s.now())
 	if err != nil {
-		return session.Issued{}, err
+		return ConfirmResult{}, err
 	}
 	if !accepted {
 		// The step was spent between the check and the write, which for a
 		// confirmation means the same code was submitted twice. Answered
 		// identically to a wrong code: it is wrong now.
-		return session.Issued{}, apierr.Validation(apierr.Field("code",
+		return ConfirmResult{}, apierr.Validation(apierr.Field("code",
 			"has already been used — wait for the next one"))
+	}
+
+	set, err := s.issueRecoveryCodes(ctx, subject.UserID)
+	if err != nil {
+		return ConfirmResult{}, err
 	}
 
 	issued, err := s.sessions.SatisfyMFA(ctx, subject.SessionID)
 	if err != nil {
-		return session.Issued{}, err
+		return ConfirmResult{}, err
 	}
 
 	s.log.InfoContext(ctx, "authenticator enrolment confirmed",
 		slog.String("user_id", subject.UserID),
 		slog.String("session_id", subject.SessionID))
 
-	return issued, nil
+	return ConfirmResult{Issued: issued, Recovery: set}, nil
 }
 
 // VerifyResult is a completed sign-in: the caller, and the session they leave
@@ -254,11 +279,18 @@ func (s *Service) DisableTOTP(ctx context.Context, subject Subject, current pass
 	if err := s.totp.Delete(ctx, user.ID); err != nil {
 		return err
 	}
+	// And the codes with it (M1-007). They stand in for the authenticator, so
+	// leaving them behind would mean a second factor that was removed is still
+	// presentable — and the next enrolment mints its own set anyway, so keeping
+	// these could only ever mean two live sets.
+	if err := s.recoveryCodes.DeleteForUser(ctx, user.ID); err != nil {
+		return err
+	}
 
 	// Warn rather than info: an authenticator disappearing is the event somebody
 	// reads back after an account is taken over, and it should stand out from
 	// the successful sign-ins around it.
-	s.log.WarnContext(ctx, "authenticator removed",
+	s.log.WarnContext(ctx, "authenticator and recovery codes removed",
 		slog.String("user_id", user.ID),
 		slog.String("session_id", subject.SessionID))
 

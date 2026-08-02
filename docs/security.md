@@ -112,8 +112,10 @@ three facts apart, and they are three different rows:
 | `enrolled` | `app.user_totp.confirmed_at` | This person has an authenticator that works |
 | `satisfied` | `app.session.mfa_satisfied` | *This session* presented one |
 
-`GET /auth/me` reports all three. Conflating any two of them is the hole; `M1-008` is the ticket
-that turns `enforced` into a refusal, and it can only do that because the three are separate here.
+`GET /auth/me` reports all three, alongside `recoveryCodesRemaining` — a count of the ways back in
+that are left, so an interface can warn somebody before the last one is spent. Conflating any two of
+the three is the hole; `M1-008` is the ticket that turns `enforced` into a refusal, and it can only
+do that because they are separate here.
 
 ### The pending state
 
@@ -123,8 +125,9 @@ It produces a *challenge*: a row in `app.mfa_challenge` and a `bl_mfa` cookie, a
 The distinction is enforced in the plumbing rather than in the logic. `internal/authn/challenge` is
 a separate package from `internal/authn/session`, with a separate cookie name, a separate table and
 a separate HMAC domain; the authentication middleware does not resolve one, so a request carrying
-only `bl_mfa` is anonymous everywhere. `POST /auth/mfa/totp/verify` is the one endpoint that
-looks at it, and the only thing it can produce is a session.
+only `bl_mfa` is anonymous everywhere. `POST /auth/mfa/totp/verify` and its recovery-code twin,
+`POST /auth/mfa/recovery/verify`, are the only two endpoints that look at it, and the only thing
+either can produce is a session.
 
 Three properties, each enforced by a statement rather than by a caller remembering:
 
@@ -177,3 +180,65 @@ undecryptable, and the only symptom would be everyone's codes failing at once.
 The secret appears in exactly one response — the enrolment that mints it — and in no log line.
 `TestTheSecretAppearsOnceAndNeverAgain` checks both, and that what is on disk is not the base32
 string.
+
+### Recovery codes
+
+A second factor that cannot be recovered from is a way to lose an account, not a way to protect one.
+In a self-hosted, single-tenant tool there is no help desk and no mail transport: if the only
+administrator drops their phone in a river, the alternatives are a recovery code or a reinstall.
+
+Ten codes are minted when an enrolment is **confirmed**, returned by that one response, and never
+again. There is no endpoint that reads them back, because the server keeps only their hashes —
+`TestConfirmingAnEnrolmentIssuesTenCodesOnce` walks the API and the log looking for one.
+
+| | |
+|---|---|
+| Alphabet | Crockford base32 — digits and uppercase letters, less `I`, `L`, `O`, `U` |
+| Length | 20 characters, printed in five groups of four |
+| Entropy | 100 bits each, against the 80 `M1-007` asks for |
+| Stored as | `HMAC-SHA256(key, "blacklight/recovery-code\0" ‖ code)`, base64url |
+| Key | HKDF-SHA256 of `BLACKLIGHT_ENCRYPTION_KEY`, under its own info string |
+
+**Why the alphabet.** No two characters in it look alike, and the four that were left out are
+*accepted* on the way in and folded onto what they resemble — `O`→`0`, `I`/`L`→`1` — along with any
+case and any spacing. Somebody's handwriting must not be what locks them out. `recovery.Parse` is
+the one definition of what a code is; the pattern in `api/openapi.yaml` is deliberately looser, so
+that anything shaped roughly right is answered as an incorrect code rather than as a malformed
+request.
+
+**Why an HMAC and not Argon2id.** A code carries 100 bits from `crypto/rand`, so there is no
+dictionary for a work factor to slow down. Verification has to compare against every unused code a
+person holds, which under Argon2id would be ten sequential derivations — most of a second — on an
+endpoint reachable before authentication, which is a denial-of-service lever aimed at the login
+path. Being keyed is worth more here than being slow: a stolen database is not enough to forge a
+code, because the key is in the environment and not in the file.
+
+**Why the encryption key and not the session secret.** Rotating the session secret is the documented
+way to sign everybody out (`docs/deploy.md`). If codes were keyed from it, pulling that lever would
+also destroy every recovery code in the deployment — silently, with the only symptom being that the
+way back in stopped working at the moment somebody needed it. Same argument as the TOTP secret
+above, same conclusion.
+
+**Using one is a full sign-in.** `POST /auth/mfa/recovery/verify` takes the same `bl_mfa` pending
+cookie as the TOTP endpoint and issues a session with `mfa_satisfied` set. Anything less would be
+asking the person for the authenticator they have just told us they no longer have. It is spent by
+the statement (`UPDATE ... WHERE used_at IS NULL`), so one code buys exactly one session; the row is
+kept and marked rather than deleted, so "three of ten left" is answerable. Failures are rationed by
+the same limiter and against the same account budget as password and TOTP failures — two counters
+would mean an attacker who exhausted one could carry on against the other.
+
+**Regenerating** needs the current password *and* a session that has already satisfied MFA. Not a
+fresh code from the authenticator: signing in with a recovery code produces a satisfied session, and
+requiring a code would lock out exactly the person these exist for. It invalidates every outstanding
+code including the unused ones, because somebody regenerating after a printout went missing is
+telling us the missing printout must stop working.
+
+Removing an authenticator deletes the codes with it. A factor that was removed must not still be
+presentable, and the next enrolment mints its own set.
+
+### When both are gone
+
+`blctl user reset-mfa --email …` clears the enrolment, the codes and any pending challenge, and says
+loudly what it has just done. It is the one path that makes a password sufficient again, and there
+is deliberately **no API for it**: needing the database file means needing the host, and that is the
+access control. [`docs/cli.md`](cli.md) has the operator's version.

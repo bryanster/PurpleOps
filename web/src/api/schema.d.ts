@@ -74,8 +74,9 @@ export interface paths {
          *
          *     A 200 does not always mean a session. When a second factor is required,
          *     `status` is `mfa_required`, no *session* cookie is set, and the caller
-         *     must post a code to `POST /auth/mfa/totp/verify` before anything is
-         *     signed in (M1-006). Read `status` rather than assuming.
+         *     must post a code to `POST /auth/mfa/totp/verify` — or a recovery code to
+         *     `POST /auth/mfa/recovery/verify` (M1-007) — before anything is signed in
+         *     (M1-006). Read `status` rather than assuming.
          *
          *     Attempts are throttled per account and per client address (M1-004). Once
          *     either limit trips, every attempt is a 429 with a `Retry-After` — the
@@ -217,6 +218,13 @@ export interface paths {
          *     token — satisfying a factor is a privilege change, and PLAN.md §4 wants
          *     the token to change whenever that is true.
          *
+         *     It also mints ten **recovery codes** (M1-007) and returns them in the
+         *     body. This is the only response in the API that ever carries them: there
+         *     is no endpoint that reads them back, because the server keeps only their
+         *     hashes. A client that does not put them in front of the person right
+         *     now has lost them, and the only remedy is
+         *     `POST /auth/mfa/recovery/regenerate`, which mints a different set.
+         *
          *     A wrong code is a `400` naming the `code` field, not a `401`: the caller
          *     is signed in and this is a form to correct, not a session to re-establish.
          *     It is deliberately not throttled — the only secret being guessed is the
@@ -262,6 +270,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/recovery/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a sign-in with a recovery code instead of an authenticator.
+         * @description The other way out of `mfa_required`, for the person whose phone is in a
+         *     river (M1-007). It takes the same short-lived `bl_mfa` cookie as
+         *     `POST /auth/mfa/totp/verify` and one of the codes issued when the
+         *     authenticator was enrolled.
+         *
+         *     A code works exactly once. On success it is marked used, the pending
+         *     state is spent, and a session is issued with MFA **satisfied** — this is
+         *     a full sign-in and not a diminished one, because someone holding a
+         *     printed code has presented a second factor. `GET /auth/me` then reports
+         *     `mfa.recoveryCodesRemaining` one lower; below three, warn them.
+         *
+         *     Every way of failing is the same `401` as the TOTP endpoint's: a code
+         *     that is not theirs, one already used, one that is not a code at all, an
+         *     expired pending state and no pending state at all. Attempts are
+         *     throttled per account and per client address alongside password and
+         *     TOTP attempts (M1-004).
+         */
+        post: operations["verifyRecoveryCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/recovery/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace your recovery codes with a fresh set.
+         * @description Mints ten new codes and **invalidates every previous one**, including
+         *     the codes that were never used. Somebody regenerating because a printout
+         *     went missing is telling us the missing printout must stop working.
+         *
+         *     It asks for two things. The current password, so that a session left
+         *     open on a shared machine cannot mint credentials that walk past a second
+         *     factor. And a session that has already satisfied MFA — `403` otherwise.
+         *     Deliberately *not* a fresh code from the authenticator: signing in with
+         *     a recovery code produces a satisfied session, so this is reachable by
+         *     the person whose phone is gone, which is the case recovery codes exist
+         *     for.
+         *
+         *     `409` when no authenticator is enrolled: codes stand in for one, and
+         *     there has to be one to stand in for.
+         *
+         *     Like the enrolment response, this is the only time the new codes exist
+         *     outside the client.
+         */
+        post: operations["regenerateRecoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/mfa/totp": {
         parameters: {
             query?: never;
@@ -277,6 +356,11 @@ export interface paths {
          * @description Requires the current password, for the same reason changing a password
          *     does: a session left open on a shared machine must not be enough to take
          *     the second factor off an account.
+         *
+         *     The recovery codes go with it (M1-007). They stand in for the
+         *     authenticator, so leaving them behind would mean a second factor that
+         *     was removed is still presentable — and the next enrolment mints its own
+         *     set, so keeping these could only ever mean two live sets.
          *
          *     Refused with `403` when an administrator requires MFA of this person
          *     (M1-008) — removing the factor would leave an account that cannot
@@ -515,6 +599,16 @@ export interface components {
             enrolled: boolean;
             /** @description A second factor was presented for *this* session. */
             satisfied: boolean;
+            /**
+             * @description How many unused recovery codes this person holds (M1-007). `0` for
+             *     somebody who has not enrolled: codes are minted when an enrolment is
+             *     confirmed and deleted when it is removed.
+             *
+             *     A count and never the codes — those were shown once, and the server
+             *     keeps only their hashes. Warn below three: the number matters most
+             *     to the person who is one lost phone away from having no way in.
+             */
+            recoveryCodesRemaining: number;
         };
         /**
          * @description Body of `POST /auth/password`. The current password is required even
@@ -578,6 +672,59 @@ export interface components {
          *     same reason `ChangePasswordRequest` asks for it.
          */
         DisableTOTPRequest: {
+            currentPassword: string;
+        };
+        /**
+         * @description A freshly minted set of recovery codes (M1-007), in the only response
+         *     that ever carries them. Put them in front of the person immediately and
+         *     offer a way to save or print them: there is no endpoint that reads them
+         *     back, because the server stores only their hashes.
+         */
+        RecoveryCodes: {
+            /**
+             * @description Ten single-use codes, each twenty characters of Crockford base32 —
+             *     the digits and the uppercase letters, less `I`, `L`, `O` and `U`, so
+             *     that no two characters in a code look alike. That is 100 bits each.
+             *
+             *     They arrive grouped in fours for transcription. The grouping is
+             *     presentation: the server accepts them back in any case, with or
+             *     without the hyphens, and folds the four omitted characters onto
+             *     what they resemble (`O`→`0`, `I`/`L`→`1`) so that somebody's
+             *     handwriting cannot lock them out.
+             */
+            codes: string[];
+            /**
+             * Format: date-time
+             * @description When this set was minted. It is what an interface shows next to
+             *     "you last replaced these on …", and the moment every previous code
+             *     stopped working.
+             */
+            generatedAt: string;
+        };
+        /**
+         * @description Body of `POST /auth/mfa/recovery/verify`: one recovery code, as the
+         *     person has it written down.
+         */
+        RecoveryCodeRequest: {
+            /**
+             * @description The code, in any case, with or without the hyphens it was printed
+             *     with. The bounds and the pattern here are a backstop that keeps
+             *     obvious junk off an unauthenticated path — what a code actually is
+             *     gets decided in one place, `internal/authn/recovery.Parse`, and
+             *     anything that gets past this and fails there is refused as an
+             *     incorrect code rather than as a malformed request. Two answers to
+             *     one question is how the two definitions would drift apart.
+             * @example 3K9M-2PTV-XA47-QRJH-58WY
+             */
+            code: string;
+        };
+        /**
+         * @description Body of `POST /auth/mfa/recovery/regenerate`. The current password is
+         *     required for the same reason `ChangePasswordRequest` asks for it; the
+         *     second factor is not in the body, it is the requirement that this
+         *     session has already satisfied one.
+         */
+        RegenerateRecoveryCodesRequest: {
             currentPassword: string;
         };
     };
@@ -1002,8 +1149,11 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The enrolment is confirmed and this session rotated. */
-            204: {
+            /**
+             * @description The enrolment is confirmed, this session rotated, and the recovery
+             *     codes minted. Show them.
+             */
+            200: {
                 headers: {
                     /**
                      * @description The rotated session cookie, with its matching `bl_csrf` cookie
@@ -1012,7 +1162,9 @@ export interface operations {
                     "Set-Cookie": string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodes"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
@@ -1057,6 +1209,89 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    verifyRecoveryCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoveryCodeRequest"];
+            };
+        };
+        responses: {
+            /**
+             * @description The code was correct and is now spent. `status` is always
+             *     `authenticated`.
+             */
+            200: {
+                headers: {
+                    /**
+                     * @description The session cookie, its `bl_csrf` companion, and the cleared
+                     *     `bl_mfa` cookie, in three `Set-Cookie` headers.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    regenerateRecoveryCodes: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateRecoveryCodesRequest"];
+            };
+        };
+        responses: {
+            /** @description A new set of codes. Every earlier code is now dead. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodes"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     disableTotp: {
         parameters: {
             query?: never;
@@ -1088,7 +1323,10 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The authenticator is removed. Removing one that was not there answers the same way. */
+            /**
+             * @description The authenticator and the recovery codes are removed. Removing one
+             *     that was not there answers the same way.
+             */
             204: {
                 headers: {
                     [name: string]: unknown;

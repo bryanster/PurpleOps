@@ -13,6 +13,7 @@ import (
 	"github.com/bryanster/blacklight/api"
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/recovery"
 	"github.com/bryanster/blacklight/internal/authn/secrets"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
@@ -236,16 +237,26 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// The same configured material as the cipher, and a different derived key:
+	// one encrypts what this server holds, the other authenticates what somebody
+	// presents (M1-007). internal/authn/recovery says why they are separate
+	// derivations rather than one shared key.
+	hasher, err := recovery.NewHasher(deps.Config.Encryption.Key.Reveal())
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	auth, err := authn.NewService(authn.Deps{
-		Users:       identity.NewUsers(deps.Store),
-		Memberships: identity.NewMemberships(deps.Store),
-		TOTP:        identity.NewTOTPs(deps.Store),
-		Sessions:    sessions,
-		Challenges:  challenges,
-		Secrets:     cipher,
-		Issuer:      totpIssuer(deps.Config),
-		Log:         log,
+		Users:         identity.NewUsers(deps.Store),
+		Memberships:   identity.NewMemberships(deps.Store),
+		TOTP:          identity.NewTOTPs(deps.Store),
+		RecoveryCodes: identity.NewRecoveryCodes(deps.Store),
+		Sessions:      sessions,
+		Challenges:    challenges,
+		Secrets:       cipher,
+		Recovery:      hasher,
+		Issuer:        totpIssuer(deps.Config),
+		Log:           log,
 	})
 	if err != nil {
 		return nil, nil, nil, err

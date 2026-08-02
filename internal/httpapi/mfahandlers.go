@@ -37,21 +37,27 @@ func (h *handlers) EnrollTotp(ctx context.Context, _ gen.EnrollTotpRequestObject
 	}, nil
 }
 
-// ConfirmTotp finishes an enrolment and rotates the caller's session onto a new
-// token, now marked as having satisfied MFA.
+// ConfirmTotp finishes an enrolment, rotates the caller's session onto a new
+// token now marked as having satisfied MFA, and hands back the recovery codes
+// minted with it.
+//
+// This response and the one from RegenerateRecoveryCodes are the only two in the
+// API that carry codes, and they are the only two that can be: the server keeps
+// hashes, so there is nothing for a third to read.
 func (h *handlers) ConfirmTotp(ctx context.Context, request gen.ConfirmTotpRequestObject) (gen.ConfirmTotpResponseObject, error) {
 	subject, err := subjectFrom(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	issued, err := h.auth.ConfirmTOTP(ctx, subject, request.Body.Code)
+	result, err := h.auth.ConfirmTOTP(ctx, subject, request.Body.Code)
 	if err != nil {
 		return nil, err
 	}
-	return gen.ConfirmTotp204Response{
-		Headers: gen.ConfirmTotp204ResponseHeaders{
-			SetCookie: h.sessions.Cookie(issued.Token, issued.Session.ExpiresAt).String(),
+	return gen.ConfirmTotp200JSONResponse{
+		Body: recoveryCodes(result.Recovery),
+		Headers: gen.ConfirmTotp200ResponseHeaders{
+			SetCookie: h.sessions.Cookie(result.Issued.Token, result.Issued.Session.ExpiresAt).String(),
 		},
 	}, nil
 }
@@ -106,10 +112,73 @@ func (h *handlers) DisableTotp(ctx context.Context, request gen.DisableTotpReque
 	return gen.DisableTotp204Response{}, nil
 }
 
-// mfaState renders the three facts about a person's second factor. It is here
-// rather than inline in currentUser so that "enforced", "enrolled" and
-// "satisfied" are filled from three different sources in one place, where the
-// difference between them is visible.
+// VerifyRecoveryCode completes a sign-in with a printed code instead of an
+// authenticator (M1-007).
+//
+// It is VerifyTotp with a different second factor, down to where the pending
+// token comes from and what the response sets — which is the point: a person
+// reaching for a recovery code is having a bad enough day without also landing
+// in a different sign-in flow.
+func (h *handlers) VerifyRecoveryCode(ctx context.Context, request gen.VerifyRecoveryCodeRequestObject) (gen.VerifyRecoveryCodeResponseObject, error) {
+	result, err := h.auth.VerifyRecoveryCode(ctx,
+		pendingTokenFrom(ctx),
+		request.Body.Code,
+		originFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	profile, err := h.auth.Profile(ctx, result.Subject)
+	if err != nil {
+		return nil, err
+	}
+	user := currentUser(profile, h.sessions.CSRFToken(result.Issued.Token))
+	cookie := h.sessions.Cookie(result.Issued.Token, result.Issued.Session.ExpiresAt).String()
+
+	return gen.VerifyRecoveryCode200JSONResponse{
+		Body: gen.LoginResult{
+			Status: gen.LoginStatusAuthenticated,
+			User:   &user,
+		},
+		Headers: gen.VerifyRecoveryCode200ResponseHeaders{SetCookie: cookie},
+	}, nil
+}
+
+// RegenerateRecoveryCodes replaces the caller's codes and returns the new set.
+// The password and the requirement that this session has already satisfied MFA
+// are both checked by the service.
+func (h *handlers) RegenerateRecoveryCodes(ctx context.Context, request gen.RegenerateRecoveryCodesRequestObject) (gen.RegenerateRecoveryCodesResponseObject, error) {
+	subject, err := subjectFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	set, err := h.auth.RegenerateRecoveryCodes(ctx, subject,
+		password.Plaintext(request.Body.CurrentPassword))
+	if err != nil {
+		return nil, err
+	}
+	return gen.RegenerateRecoveryCodes200JSONResponse(recoveryCodes(set)), nil
+}
+
+// recoveryCodes renders a minted set for the wire.
+//
+// [recovery.Code] redacts itself for fmt, slog and the JSON encoder alike, so
+// this call to Reveal is the one place in the process where a code becomes an
+// ordinary string — which is what makes leaking one a deliberate act rather
+// than an available accident.
+func recoveryCodes(set authn.RecoveryCodeSet) gen.RecoveryCodes {
+	printed := make([]string, len(set.Codes))
+	for i, code := range set.Codes {
+		printed[i] = code.Printed()
+	}
+	return gen.RecoveryCodes{Codes: printed, GeneratedAt: set.GeneratedAt}
+}
+
+// mfaState renders the four facts about a person's second factor. It is here
+// rather than inline in currentUser so that "enforced", "enrolled", "satisfied"
+// and what is left to fall back on are filled from four different sources in one
+// place, where the difference between them is visible.
 func mfaState(profile authn.Profile) gen.MFAState {
 	return gen.MFAState{
 		// The administrator's requirement, off the user row.
@@ -118,6 +187,8 @@ func mfaState(profile authn.Profile) gen.MFAState {
 		Enrolled: profile.MFAEnrolled,
 		// Whether *this session* presented one, off the session row.
 		Satisfied: profile.MFASatisfied,
+		// How many ways back in remain, counted off the recovery code rows.
+		RecoveryCodesRemaining: profile.RecoveryCodesRemaining,
 	}
 }
 

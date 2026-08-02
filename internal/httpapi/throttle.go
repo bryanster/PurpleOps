@@ -48,6 +48,15 @@ func credentialAccounts(auth *authn.Service) map[string]accountOf {
 		BasePath + mfaPathPrefix + "/totp/verify": func(r *http.Request) string {
 			return auth.AccountForChallenge(r.Context(), challenge.FromRequest(r))
 		},
+
+		// The other way past a second factor (M1-007), keyed the same way and
+		// against the same budget — deliberately the same budget, because two
+		// counters would mean an attacker who exhausted one could carry on
+		// against the other. A recovery code is 100 bits and not worth guessing,
+		// but the endpoint is on the public path and rationing it costs nothing.
+		BasePath + mfaPathPrefix + "/recovery/verify": func(r *http.Request) string {
+			return auth.AccountForChallenge(r.Context(), challenge.FromRequest(r))
+		},
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -23,7 +24,9 @@ import (
 // cannot sign in. It is also what the end-to-end suite seeds its accounts with.
 
 func newUserCommand(a *app) *cobra.Command {
-	return group("user", "Manage user accounts", newUserCreateCommand(a))
+	return group("user", "Manage user accounts",
+		newUserCreateCommand(a),
+		newUserResetMFACommand(a))
 }
 
 // userResult is what `user create --json` prints. It carries no password and no
@@ -118,6 +121,167 @@ func newUserCreateCommand(a *app) *cobra.Command {
 	flags.BoolVar(&admin, "admin", false,
 		"make them a platform administrator, who may manage users, content and every engagement")
 	return cmd
+}
+
+// `blctl user reset-mfa` is the break-glass path of M1-007: the only way back
+// into an account whose second factor is gone along with the codes that were
+// supposed to cover exactly that. It needs the database file and therefore the
+// host, which is the access control — there is no API for this, deliberately,
+// because an endpoint that strips somebody's second factor is an endpoint worth
+// attacking.
+
+// resetMFAResult is what `user reset-mfa --json` prints: who it was done to,
+// and what was actually removed. The counts are read before the delete, so a
+// script can tell "there was nothing to remove" from "seven working codes are
+// now gone".
+type resetMFAResult struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+
+	AuthenticatorRemoved bool `json:"authenticatorRemoved"`
+	RecoveryCodesRemoved int  `json:"recoveryCodesRemoved"`
+	ChallengesDiscarded  bool `json:"challengesDiscarded"`
+}
+
+func newUserResetMFACommand(a *app) *cobra.Command {
+	var email string
+
+	cmd := &cobra.Command{
+		Use:   "reset-mfa",
+		Short: "Remove a user's second factor and recovery codes",
+		Long: "Removes an account's authenticator enrolment, every recovery code it holds and\n" +
+			"any half-finished sign-in, so that the account signs in with its password alone\n" +
+			"until somebody enrols an authenticator again.\n\n" +
+			"This is the break-glass path, and it is genuinely a lock being broken: the whole\n" +
+			"point of a second factor is that a password is not enough, and this makes it\n" +
+			"enough. It exists because the alternative in a self-hosted, single-tenant tool\n" +
+			"is worse — a lost phone belonging to the only administrator would otherwise mean\n" +
+			"editing the database by hand or reinstalling.\n\n" +
+			"Reach for recovery codes first: they were issued when the authenticator was\n" +
+			"enrolled and they need nobody's help. This is for when those are gone too.\n\n" +
+			"It does not touch the password and does not sign anybody out. An account that\n" +
+			"had no second factor is not an error — it comes back saying nothing was removed.\n\n" +
+			"The server holds the database file open, so stop it first.",
+		Args: noArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if strings.TrimSpace(email) == "" {
+				return usagef(cmd, "--email is required")
+			}
+
+			cfg, err := a.settings()
+			if err != nil {
+				return err
+			}
+
+			return a.withStore(cmd.Context(), func(ctx context.Context, db *store.DB) error {
+				if err := a.requireMigrated(ctx, db); err != nil {
+					return err
+				}
+
+				user, err := identity.NewUsers(db).ByEmail(ctx, email)
+				if errors.Is(err, apierr.ErrNotFound) {
+					// Named, unlike the API's answer to the same question. An
+					// operator at a terminal already knows who they meant, and
+					// there is nobody to enumerate accounts for.
+					return fmt.Errorf("no account holds %s; "+
+						"addresses are matched without regard to case", email)
+				}
+				if err != nil {
+					return err
+				}
+
+				result, err := resetMFA(ctx, db, user)
+				if err != nil {
+					return err
+				}
+
+				// To the log as well as to stdout. Removing somebody's second
+				// factor is the security-relevant event M1-007 wants in M1-015's
+				// activity log; until that table exists this line is the record,
+				// and it is written at warn so it stands out in whatever
+				// collects it.
+				a.logger(cfg).WarnContext(ctx, "second factor reset from the command line",
+					slog.String("user_id", result.ID),
+					slog.String("email", result.Email),
+					slog.Bool("authenticator_removed", result.AuthenticatorRemoved),
+					slog.Int("recovery_codes_removed", result.RecoveryCodesRemoved))
+
+				return a.print(result, func(w *tabwriter.Writer) { writeResetMFA(w, result) })
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&email, "email", "", "email address of the account to reset (required)")
+	return cmd
+}
+
+// resetMFA removes every piece of second-factor state a user has, and reports
+// what was there.
+//
+// The counts are taken first, in the order the deletes happen, so the report
+// describes what this command removed rather than what is left. Three separate
+// writes rather than one transaction: they are three repositories, and a failure
+// between them leaves *less* second-factor state than before, which is the
+// direction this command is already going in. Re-running it finishes the job.
+func resetMFA(ctx context.Context, db *store.DB, user identity.User) (resetMFAResult, error) {
+	result := resetMFAResult{ID: user.ID, Email: user.Email}
+
+	totps := identity.NewTOTPs(db)
+	if _, err := totps.ByUserID(ctx, user.ID); err == nil {
+		result.AuthenticatorRemoved = true
+	} else if !errors.Is(err, apierr.ErrNotFound) {
+		return resetMFAResult{}, err
+	}
+
+	codes := identity.NewRecoveryCodes(db)
+	unused, err := codes.CountUnused(ctx, user.ID)
+	if err != nil {
+		return resetMFAResult{}, err
+	}
+	result.RecoveryCodesRemoved = unused
+
+	if err := totps.Delete(ctx, user.ID); err != nil {
+		return resetMFAResult{}, err
+	}
+	if err := codes.DeleteForUser(ctx, user.ID); err != nil {
+		return resetMFAResult{}, err
+	}
+	// And any sign-in that was waiting for a code. It is unanswerable now that
+	// the enrolment is gone, but a challenge outliving the factor it was opened
+	// against is exactly the sort of leftover this command exists to clear.
+	if err := identity.NewMFAChallenges(db).DeleteForUser(ctx, user.ID); err != nil {
+		return resetMFAResult{}, err
+	}
+	result.ChallengesDiscarded = true
+
+	return result, nil
+}
+
+// writeResetMFA says what just happened in a way that is hard to skim past. The
+// warning is the point of the command's output: the operator has just made a
+// password sufficient on an account where it was not.
+func writeResetMFA(w *tabwriter.Writer, result resetMFAResult) {
+	if !result.AuthenticatorRemoved && result.RecoveryCodesRemoved == 0 {
+		fmt.Fprintf(w, "%s had no second factor. Nothing was removed.\n", result.Email)
+		return
+	}
+
+	fmt.Fprintf(w, "Reset the second factor of %s.\n\n", result.Email)
+	fmt.Fprintf(w, "id\t%s\n", result.ID)
+	fmt.Fprintf(w, "authenticator\t%s\n", removedOrNot(result.AuthenticatorRemoved))
+	fmt.Fprintf(w, "unused recovery codes\t%s\n", plural(result.RecoveryCodesRemoved, "code")+" removed")
+	fmt.Fprintf(w, "\n")
+	fmt.Fprintf(w, "WARNING: %s now signs in with a password and nothing else.\n", result.Email)
+	fmt.Fprintf(w, "Anyone holding that password holds the account. Have them enrol an\n")
+	fmt.Fprintf(w, "authenticator again as soon as they are back in, and take a new set of\n")
+	fmt.Fprintf(w, "recovery codes when they do — the old ones no longer work.\n")
+}
+
+func removedOrNot(removed bool) string {
+	if removed {
+		return "removed"
+	}
+	return "none was enrolled"
 }
 
 func platformRole(admin bool) identity.PlatformRole {

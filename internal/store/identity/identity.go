@@ -203,6 +203,28 @@ type NewTOTP struct {
 	SecretEncrypted string
 }
 
+// RecoveryCode is one single-use way past a lost authenticator (M1-007). A
+// person holds a set of them, minted together and replaced together.
+type RecoveryCode struct {
+	ID     string
+	UserID string
+
+	// CodeHash is the hash of the code that was printed. As with a session or a
+	// challenge token, the value itself is never stored: it was shown once, and
+	// this package could not produce it again if asked.
+	CodeHash string
+
+	// UsedAt is the zero time until the code is spent. A spent code is kept
+	// rather than deleted, so that "seven of ten left" is answerable and so
+	// that presenting one twice is refused by a row that exists.
+	UsedAt time.Time
+
+	CreatedAt time.Time
+}
+
+// Used reports whether this code has been spent.
+func (c RecoveryCode) Used() bool { return !c.UsedAt.IsZero() }
+
 // MFAChallenge is the pending state between a correct password and a presented
 // second factor. It is not a session and nothing resolves it into a caller; see
 // 0004_mfa.sql.

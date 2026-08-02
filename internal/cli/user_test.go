@@ -2,11 +2,15 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bryanster/blacklight/internal/authn/password"
 	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -312,4 +316,189 @@ func readIdentities(t *testing.T, path, userID string) []identity.Identity {
 		t.Fatalf("listing identities: %v", err)
 	}
 	return found
+}
+
+// `blctl user reset-mfa` is the break-glass path of M1-007. It is the only way
+// back into an account whose authenticator and codes are both gone, and it is a
+// lock being deliberately broken — so what it removes, what it leaves alone and
+// what it says about it are all worth pinning down.
+
+// enrolMFA gives a user an authenticator and a set of recovery codes, writing
+// the rows directly. The command under test does not create them and there is no
+// CLI path that does; what matters here is that it removes them.
+func enrolMFA(t *testing.T, path, userID string, codes int) {
+	t.Helper()
+
+	db := openDB(t, path)
+	if _, err := identity.NewTOTPs(db).Enroll(t.Context(), identity.NewTOTP{
+		UserID:          userID,
+		SecretEncrypted: "sealed-placeholder",
+	}); err != nil {
+		t.Fatalf("enrolling an authenticator: %v", err)
+	}
+	if _, err := identity.NewTOTPs(db).Accept(t.Context(), userID, 1, time.Now()); err != nil {
+		t.Fatalf("confirming the enrolment: %v", err)
+	}
+
+	hashes := make([]string, codes)
+	for i := range hashes {
+		hashes[i] = fmt.Sprintf("hash-%s-%02d", userID, i)
+	}
+	if _, err := identity.NewRecoveryCodes(db).Replace(t.Context(), userID, hashes); err != nil {
+		t.Fatalf("storing recovery codes: %v", err)
+	}
+}
+
+func mfaState(t *testing.T, path, userID string) (enrolled bool, codes int) {
+	t.Helper()
+
+	db := openDB(t, path)
+	_, err := identity.NewTOTPs(db).ByUserID(t.Context(), userID)
+	switch {
+	case err == nil:
+		enrolled = true
+	case !errors.Is(err, apierr.ErrNotFound):
+		t.Fatalf("reading the enrolment: %v", err)
+	}
+
+	codes, err = identity.NewRecoveryCodes(db).CountUnused(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("counting recovery codes: %v", err)
+	}
+	return enrolled, codes
+}
+
+func TestUserResetMFARemovesBothHalvesOfTheSecondFactor(t *testing.T) {
+	db := migratedDB(t)
+	seedUser(t, db)
+	user := readUser(t, db, testEmail)
+	enrolMFA(t, db, user.ID, 7)
+
+	got := runIn(t, db, "user", "reset-mfa", "--email", testEmail, "--json")
+	if got.code != ExitOK {
+		t.Fatalf("exited %d: %s", got.code, got.stderr)
+	}
+
+	result := decodeJSON(t, got.stdout)
+	if result["authenticatorRemoved"] != true {
+		t.Errorf("authenticatorRemoved = %v, want true", result["authenticatorRemoved"])
+	}
+	if result["recoveryCodesRemoved"] != float64(7) {
+		t.Errorf("recoveryCodesRemoved = %v, want 7", result["recoveryCodesRemoved"])
+	}
+	if result["email"] != testEmail {
+		t.Errorf("email = %v, want %q", result["email"], testEmail)
+	}
+
+	enrolled, codes := mfaState(t, db, user.ID)
+	if enrolled {
+		t.Error("the authenticator enrolment survived the reset")
+	}
+	if codes != 0 {
+		t.Errorf("%d recovery codes survived the reset, want 0", codes)
+	}
+}
+
+// TestUserResetMFALeavesTheAccountItself. It removes a second factor and
+// nothing else: the account, its password and its role are not this command's
+// business, and an operator reaching for it in a hurry must not find they have
+// also reset something they did not mean to.
+func TestUserResetMFALeavesTheAccountItself(t *testing.T) {
+	db := migratedDB(t)
+	seedUser(t, db)
+	before := readUser(t, db, testEmail)
+	enrolMFA(t, db, before.ID, 10)
+
+	if got := runIn(t, db, "user", "reset-mfa", "--email", testEmail); got.code != ExitOK {
+		t.Fatalf("exited %d: %s", got.code, got.stderr)
+	}
+
+	after := readUser(t, db, testEmail)
+	switch {
+	case after.PasswordHash != before.PasswordHash:
+		t.Error("the password hash changed")
+	case after.PlatformRole != before.PlatformRole:
+		t.Error("the platform role changed")
+	case after.Status != before.Status:
+		t.Error("the account status changed")
+	case after.MFAEnforced != before.MFAEnforced:
+		t.Error("mfa_enforced changed; whether an administrator requires a factor " +
+			"is a different question from whether one is enrolled")
+	}
+}
+
+// TestUserResetMFAWarnsAboutWhatItDid is the acceptance criterion. The output
+// is the only thing standing between an operator and forgetting that they have
+// just made a password sufficient.
+func TestUserResetMFAWarnsAboutWhatItDid(t *testing.T) {
+	db := migratedDB(t)
+	seedUser(t, db)
+	enrolMFA(t, db, readUser(t, db, testEmail).ID, 4)
+
+	got := runIn(t, db, "user", "reset-mfa", "--email", testEmail)
+	if got.code != ExitOK {
+		t.Fatalf("exited %d: %s", got.code, got.stderr)
+	}
+
+	for _, want := range []string{"WARNING", "password and nothing else", "enrol an", testEmail} {
+		if !strings.Contains(got.stdout, want) {
+			t.Errorf("the output does not mention %q:\n%s", want, got.stdout)
+		}
+	}
+	// And the log line an audit trail is built from (M1-015 gives it a durable
+	// home; until then this is the record).
+	if !strings.Contains(got.stderr, "second factor reset") {
+		t.Errorf("nothing was logged about the reset:\n%s", got.stderr)
+	}
+}
+
+// TestUserResetMFAOnAnAccountWithoutOneIsNotAnError: the operator wanted the
+// account to have no second factor, and it does.
+func TestUserResetMFAOnAnAccountWithoutOneIsNotAnError(t *testing.T) {
+	db := migratedDB(t)
+	seedUser(t, db)
+
+	got := runIn(t, db, "user", "reset-mfa", "--email", testEmail)
+	if got.code != ExitOK {
+		t.Fatalf("exited %d: %s", got.code, got.stderr)
+	}
+	if !strings.Contains(got.stdout, "had no second factor") {
+		t.Errorf("the output does not say nothing was removed:\n%s", got.stdout)
+	}
+	if strings.Contains(got.stdout, "WARNING") {
+		t.Error("a reset that removed nothing warned as though it had")
+	}
+}
+
+func TestUserResetMFANeedsAnAccountThatExists(t *testing.T) {
+	db := migratedDB(t)
+
+	got := runIn(t, db, "user", "reset-mfa", "--email", "nobody@example.com")
+	if got.code != ExitFailure {
+		t.Fatalf("exited %d, want %d\nstderr: %s", got.code, ExitFailure, got.stderr)
+	}
+	if !strings.Contains(got.stderr, "nobody@example.com") {
+		t.Errorf("the error does not name the address:\n%s", got.stderr)
+	}
+}
+
+func TestUserResetMFANeedsAnEmail(t *testing.T) {
+	db := migratedDB(t)
+
+	got := runIn(t, db, "user", "reset-mfa")
+	if got.code != ExitUsage {
+		t.Fatalf("exited %d, want %d\nstderr: %s", got.code, ExitUsage, got.stderr)
+	}
+}
+
+// seedUser creates the account the reset-mfa tests act on, through the command
+// that exists for it.
+func seedUser(t *testing.T, db string) {
+	t.Helper()
+
+	got := runWithInput(t, nil, testPassword,
+		"user", "create", "--email", testEmail, "--name", "Alice", "--db", db)
+	if got.code != ExitOK {
+		t.Fatalf("seeding the user exited %d: %s", got.code, got.stderr)
+	}
 }

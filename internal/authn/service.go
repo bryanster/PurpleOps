@@ -13,6 +13,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn/challenge"
 	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authn/recovery"
 	"github.com/bryanster/blacklight/internal/authn/secrets"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -40,6 +41,14 @@ type (
 		Accept(ctx context.Context, userID string, step int64, at time.Time) (bool, error)
 		Delete(ctx context.Context, userID string) error
 	}
+
+	RecoveryCodes interface {
+		Replace(ctx context.Context, userID string, hashes []string) ([]identity.RecoveryCode, error)
+		Unused(ctx context.Context, userID string) ([]identity.RecoveryCode, error)
+		CountUnused(ctx context.Context, userID string) (int, error)
+		Use(ctx context.Context, id string, at time.Time) (bool, error)
+		DeleteForUser(ctx context.Context, userID string) error
+	}
 )
 
 // Deps is everything a [Service] is built from. It is a struct rather than a
@@ -47,9 +56,10 @@ type (
 // service tokens (M1-011) both arrive here — and a positional constructor with
 // nine parameters is one a caller gets wrong silently.
 type Deps struct {
-	Users       Users
-	Memberships Memberships
-	TOTP        TOTPs
+	Users         Users
+	Memberships   Memberships
+	TOTP          TOTPs
+	RecoveryCodes RecoveryCodes
 
 	Sessions   *session.Manager
 	Challenges *challenge.Manager
@@ -57,6 +67,12 @@ type Deps struct {
 	// Secrets encrypts what this server holds on somebody else's behalf: today
 	// the TOTP shared secrets, which is the only thing that reads it.
 	Secrets *secrets.Cipher
+
+	// Recovery hashes the codes that stand in for an authenticator (M1-007).
+	// It is a separate thing from Secrets because it does a different job —
+	// authenticating a value rather than storing one — under a key derived
+	// separately from the same configured material.
+	Recovery *recovery.Hasher
 
 	// Issuer is what an authenticator app shows as the name of the entry. It
 	// names the deployment, so that somebody with an account on two of these can
@@ -80,13 +96,15 @@ type Deps struct {
 // add their own ways of arriving at a [Subject]; the session, the cookie and the
 // rotation rules stay here and are shared.
 type Service struct {
-	users       Users
-	memberships Memberships
-	totp        TOTPs
+	users         Users
+	memberships   Memberships
+	totp          TOTPs
+	recoveryCodes RecoveryCodes
 
 	sessions   *session.Manager
 	challenges *challenge.Manager
 	secrets    *secrets.Cipher
+	recovery   *recovery.Hasher
 
 	issuer string
 	log    *slog.Logger
@@ -105,12 +123,16 @@ func NewService(deps Deps) (*Service, error) {
 		return nil, errors.New("authn: no membership repository")
 	case deps.TOTP == nil:
 		return nil, errors.New("authn: no authenticator repository")
+	case deps.RecoveryCodes == nil:
+		return nil, errors.New("authn: no recovery code repository")
 	case deps.Sessions == nil:
 		return nil, errors.New("authn: no session manager")
 	case deps.Challenges == nil:
 		return nil, errors.New("authn: no MFA challenge manager")
 	case deps.Secrets == nil:
 		return nil, errors.New("authn: no cipher; enrolled secrets could not be stored")
+	case deps.Recovery == nil:
+		return nil, errors.New("authn: no recovery code hasher; codes could not be checked")
 	case strings.TrimSpace(deps.Issuer) == "":
 		return nil, errors.New("authn: no issuer; authenticator apps would show an unnamed entry")
 	}
@@ -124,15 +146,17 @@ func NewService(deps Deps) (*Service, error) {
 		now = time.Now
 	}
 	return &Service{
-		users:       deps.Users,
-		memberships: deps.Memberships,
-		totp:        deps.TOTP,
-		sessions:    deps.Sessions,
-		challenges:  deps.Challenges,
-		secrets:     deps.Secrets,
-		issuer:      deps.Issuer,
-		log:         log,
-		now:         now,
+		users:         deps.Users,
+		memberships:   deps.Memberships,
+		totp:          deps.TOTP,
+		recoveryCodes: deps.RecoveryCodes,
+		sessions:      deps.Sessions,
+		challenges:    deps.Challenges,
+		secrets:       deps.Secrets,
+		recovery:      deps.Recovery,
+		issuer:        deps.Issuer,
+		log:           log,
+		now:           now,
 	}, nil
 }
 
@@ -373,6 +397,15 @@ type Profile struct {
 	// MFASatisfied is a fact about the session the request arrived on, not about
 	// the user, which is why it is not read off User.
 	MFASatisfied bool
+
+	// RecoveryCodesRemaining is how many unused recovery codes this person
+	// holds (M1-007). It is a count and never the codes: those were shown once
+	// and this server could not produce them again if asked.
+	//
+	// It is here so that an interface can warn somebody who is running out
+	// before the last one is spent, which is the moment at which a lost
+	// authenticator stops being an inconvenience.
+	RecoveryCodesRemaining int
 }
 
 // Profile returns the caller, read fresh, with their engagement memberships.
@@ -393,11 +426,16 @@ func (s *Service) Profile(ctx context.Context, subject Subject) (Profile, error)
 	if err != nil {
 		return Profile{}, err
 	}
+	remaining, err := s.recoveryCodes.CountUnused(ctx, subject.UserID)
+	if err != nil {
+		return Profile{}, err
+	}
 	return Profile{
-		User:         user,
-		Memberships:  memberships,
-		MFAEnrolled:  enrolled,
-		MFASatisfied: subject.MFASatisfied,
+		User:                   user,
+		Memberships:            memberships,
+		MFAEnrolled:            enrolled,
+		MFASatisfied:           subject.MFASatisfied,
+		RecoveryCodesRemaining: remaining,
 	}, nil
 }
 

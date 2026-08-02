@@ -31,6 +31,10 @@ const changePasswordBody = `{"currentPassword":"` + testPassword + `","newPasswo
 // answers is the CSRF middleware rather than the schema.
 const totpCodeBody = `{"code":"000000"}`
 
+// recoveryCodeBody is the same idea for M1-007: twenty characters of the
+// alphabet, so the validator lets it through, and not a code anybody holds.
+const recoveryCodeBody = `{"code":"0000-0000-0000-0000-0000"}`
+
 // forge builds the request a cross-site attacker can cause: the browser
 // attaches the cookies, and the attacker chooses everything else. header and
 // csrfCookie are omitted when empty, which is the state an attacker is actually
@@ -380,6 +384,14 @@ var csrfCoverage = map[string]struct {
 		exempt: true, // The second half of a sign-in; see csrfExemptRoutes.
 	},
 	"DELETE " + BasePath + "/auth/mfa/totp": {body: `{"currentPassword":"` + testPassword + `"}`},
+
+	"POST " + BasePath + "/auth/mfa/recovery/verify": {
+		body:   recoveryCodeBody,
+		exempt: true, // The same half of the same sign-in, with a printed code.
+	},
+	"POST " + BasePath + "/auth/mfa/recovery/regenerate": {
+		body: `{"currentPassword":"` + testPassword + `"}`,
+	},
 }
 
 func TestEveryMutatingRouteIsCoveredByCSRF(t *testing.T) {

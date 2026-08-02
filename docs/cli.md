@@ -150,6 +150,47 @@ not one attackers try first — and the account is created active, with a local 
 database must already be migrated; the command says so rather than failing with the driver's
 complaint about a missing table.
 
+### `blctl user reset-mfa`
+
+The break-glass path (`M1-007`). It removes an account's authenticator enrolment, every recovery
+code it holds and any half-finished sign-in, so the account signs in with its password alone until
+somebody enrols an authenticator again.
+
+```
+blctl user reset-mfa --email alice@example.com
+Reset the second factor of alice@example.com.
+
+id                     0192f3c4-5d6e-7f80-9123-456789abcdef
+authenticator          removed
+unused recovery codes  7 codes removed
+
+WARNING: alice@example.com now signs in with a password and nothing else.
+Anyone holding that password holds the account. Have them enrol an
+authenticator again as soon as they are back in, and take a new set of
+recovery codes when they do — the old ones no longer work.
+```
+
+**Reach for the recovery codes first.** They were issued when the authenticator was enrolled,
+they need nobody's help, and using one produces a fully signed-in session from which the person can
+enrol a new device and take a fresh set. This command is for when those are gone too.
+
+It is genuinely a lock being broken: the point of a second factor is that a password is not enough,
+and this makes it enough. It exists because the alternative in a self-hosted, single-tenant tool is
+worse — a lost phone belonging to the only administrator would otherwise mean editing the database
+by hand or reinstalling. There is deliberately **no API for it**: needing the database file means
+needing the host, and that is the access control. An endpoint that strips somebody's second factor
+is an endpoint worth attacking.
+
+| Flag | |
+|---|---|
+| `--email` | required. The account to reset, matched without regard to case |
+
+It does not touch the password, the role or `mfa_enforced`, and it does not sign anybody out — an
+account an administrator requires MFA of is still required to have it, and will be walked through
+enrolling again (`M1-008`). An account that had no second factor is not an error: it reports that
+nothing was removed. The reset is also written to the log at warn level, which is the audit record
+until `M1-015` gives it a durable home.
+
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one

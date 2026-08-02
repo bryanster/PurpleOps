@@ -28,6 +28,7 @@ type repos struct {
 	memberships *identity.Memberships
 	totp        *identity.TOTPs
 	challenges  *identity.MFAChallenges
+	recovery    *identity.RecoveryCodes
 }
 
 func newRepos(t *testing.T) repos {
@@ -42,6 +43,7 @@ func newRepos(t *testing.T) repos {
 		memberships: identity.NewMemberships(db),
 		totp:        identity.NewTOTPs(db),
 		challenges:  identity.NewMFAChallenges(db),
+		recovery:    identity.NewRecoveryCodes(db),
 	}
 }
 

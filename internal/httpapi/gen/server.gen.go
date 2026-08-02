@@ -293,6 +293,15 @@ type MFAState struct {
 	// evidence of the other is the hole M1-008 closes.
 	Enrolled bool `json:"enrolled"`
 
+	// RecoveryCodesRemaining How many unused recovery codes this person holds (M1-007). `0` for
+	// somebody who has not enrolled: codes are minted when an enrolment is
+	// confirmed and deleted when it is removed.
+	//
+	// A count and never the codes — those were shown once, and the server
+	// keeps only their hashes. Warn below three: the number matters most
+	// to the person who is one lost phone away from having no way in.
+	RecoveryCodesRemaining int `json:"recoveryCodesRemaining"`
+
 	// Satisfied A second factor was presented for *this* session.
 	Satisfied bool `json:"satisfied"`
 }
@@ -361,6 +370,52 @@ type Problem struct {
 // internal/httpapi/apierr and a test there asserts it (M0B-007). Adding a
 // code means adding it in both places in the same change.
 type ProblemCode string
+
+// RecoveryCodeRequest Body of `POST /auth/mfa/recovery/verify`: one recovery code, as the
+// person has it written down.
+type RecoveryCodeRequest struct {
+	// Code The code, in any case, with or without the hyphens it was printed
+	// with. The bounds and the pattern here are a backstop that keeps
+	// obvious junk off an unauthenticated path — what a code actually is
+	// gets decided in one place, `internal/authn/recovery.Parse`, and
+	// anything that gets past this and fails there is refused as an
+	// incorrect code rather than as a malformed request. Two answers to
+	// one question is how the two definitions would drift apart.
+	//
+	//
+	// Examples: 3K9M-2PTV-XA47-QRJH-58WY
+	Code string `json:"code"`
+}
+
+// RecoveryCodes A freshly minted set of recovery codes (M1-007), in the only response
+// that ever carries them. Put them in front of the person immediately and
+// offer a way to save or print them: there is no endpoint that reads them
+// back, because the server stores only their hashes.
+type RecoveryCodes struct {
+	// Codes Ten single-use codes, each twenty characters of Crockford base32 —
+	// the digits and the uppercase letters, less `I`, `L`, `O` and `U`, so
+	// that no two characters in a code look alike. That is 100 bits each.
+	//
+	// They arrive grouped in fours for transcription. The grouping is
+	// presentation: the server accepts them back in any case, with or
+	// without the hyphens, and folds the four omitted characters onto
+	// what they resemble (`O`→`0`, `I`/`L`→`1`) so that somebody's
+	// handwriting cannot lock them out.
+	Codes []string `json:"codes"`
+
+	// GeneratedAt When this set was minted. It is what an interface shows next to
+	// "you last replaced these on …", and the moment every previous code
+	// stopped working.
+	GeneratedAt time.Time `json:"generatedAt"`
+}
+
+// RegenerateRecoveryCodesRequest Body of `POST /auth/mfa/recovery/regenerate`. The current password is
+// required for the same reason `ChangePasswordRequest` asks for it; the
+// second factor is not in the body, it is the requirement that this
+// session has already satisfied one.
+type RegenerateRecoveryCodesRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+}
 
 // TOTPCodeRequest A six-digit code from an authenticator app. The same body confirms an
 // enrolment and completes a sign-in.
@@ -498,6 +553,25 @@ type LogoutParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// RegenerateRecoveryCodesParams defines parameters for RegenerateRecoveryCodes.
+type RegenerateRecoveryCodesParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // DisableTotpParams defines parameters for DisableTotp.
 type DisableTotpParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -577,6 +651,12 @@ type ChangePasswordParams struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// RegenerateRecoveryCodesJSONRequestBody defines body for RegenerateRecoveryCodes for application/json ContentType.
+type RegenerateRecoveryCodesJSONRequestBody = RegenerateRecoveryCodesRequest
+
+// VerifyRecoveryCodeJSONRequestBody defines body for VerifyRecoveryCode for application/json ContentType.
+type VerifyRecoveryCodeJSONRequestBody = RecoveryCodeRequest
+
 // DisableTotpJSONRequestBody defines body for DisableTotp for application/json ContentType.
 type DisableTotpJSONRequestBody = DisableTOTPRequest
 
@@ -600,6 +680,12 @@ type ServerInterface interface {
 	// GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
 	// (GET /auth/me)
 	GetCurrentUser(w http.ResponseWriter, r *http.Request)
+	// RegenerateRecoveryCodes Replace your recovery codes with a fresh set.
+	// (POST /auth/mfa/recovery/regenerate)
+	RegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request, params RegenerateRecoveryCodesParams)
+	// VerifyRecoveryCode Complete a sign-in with a recovery code instead of an authenticator.
+	// (POST /auth/mfa/recovery/verify)
+	VerifyRecoveryCode(w http.ResponseWriter, r *http.Request)
 	// DisableTotp Remove your authenticator.
 	// (DELETE /auth/mfa/totp)
 	DisableTotp(w http.ResponseWriter, r *http.Request, params DisableTotpParams)
@@ -642,6 +728,18 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request, params Log
 // GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
 // (GET /auth/me)
 func (_ Unimplemented) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RegenerateRecoveryCodes Replace your recovery codes with a fresh set.
+// (POST /auth/mfa/recovery/regenerate)
+func (_ Unimplemented) RegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request, params RegenerateRecoveryCodesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// VerifyRecoveryCode Complete a sign-in with a recovery code instead of an authenticator.
+// (POST /auth/mfa/recovery/verify)
+func (_ Unimplemented) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -756,6 +854,61 @@ func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCurrentUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegenerateRecoveryCodes operation middleware
+func (siw *ServerInterfaceWrapper) RegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RegenerateRecoveryCodesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegenerateRecoveryCodes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyRecoveryCode operation middleware
+func (siw *ServerInterfaceWrapper) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyRecoveryCode(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1112,6 +1265,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/mfa/totp/verify", wrapper.VerifyTotp)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/mfa/recovery/verify", wrapper.VerifyRecoveryCode)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/mfa/recovery/regenerate", wrapper.RegenerateRecoveryCodes)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/auth/mfa/totp", wrapper.DisableTotp)
 	})
 
@@ -1343,6 +1502,204 @@ func (response GetCurrentUser500ApplicationProblemPlusJSONResponse) VisitGetCurr
 	return err
 }
 
+type RegenerateRecoveryCodesRequestObject struct {
+	Params RegenerateRecoveryCodesParams
+	Body   *RegenerateRecoveryCodesJSONRequestBody
+}
+
+type RegenerateRecoveryCodesResponseObject interface {
+	VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error
+}
+
+type RegenerateRecoveryCodes200JSONResponse RecoveryCodes
+
+func (response RegenerateRecoveryCodes200JSONResponse) VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegenerateRecoveryCodes400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RegenerateRecoveryCodes400ApplicationProblemPlusJSONResponse) VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegenerateRecoveryCodes401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RegenerateRecoveryCodes401ApplicationProblemPlusJSONResponse) VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegenerateRecoveryCodes403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RegenerateRecoveryCodes403ApplicationProblemPlusJSONResponse) VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegenerateRecoveryCodes409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response RegenerateRecoveryCodes409ApplicationProblemPlusJSONResponse) VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegenerateRecoveryCodes500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RegenerateRecoveryCodes500ApplicationProblemPlusJSONResponse) VisitRegenerateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyRecoveryCodeRequestObject struct {
+	Body *VerifyRecoveryCodeJSONRequestBody
+}
+
+type VerifyRecoveryCodeResponseObject interface {
+	VisitVerifyRecoveryCodeResponse(w http.ResponseWriter) error
+}
+
+type VerifyRecoveryCode200ResponseHeaders struct {
+	SetCookie string
+}
+
+type VerifyRecoveryCode200JSONResponse struct {
+	Body    LoginResult
+	Headers VerifyRecoveryCode200ResponseHeaders
+}
+
+func (response VerifyRecoveryCode200JSONResponse) VisitVerifyRecoveryCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyRecoveryCode400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyRecoveryCode400ApplicationProblemPlusJSONResponse) VisitVerifyRecoveryCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyRecoveryCode401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyRecoveryCode401ApplicationProblemPlusJSONResponse) VisitVerifyRecoveryCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyRecoveryCode429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyRecoveryCode429ApplicationProblemPlusJSONResponse) VisitVerifyRecoveryCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyRecoveryCode500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyRecoveryCode500ApplicationProblemPlusJSONResponse) VisitVerifyRecoveryCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DisableTotpRequestObject struct {
 	Params DisableTotpParams
 	Body   *DisableTotpJSONRequestBody
@@ -1433,18 +1790,26 @@ type ConfirmTotpResponseObject interface {
 	VisitConfirmTotpResponse(w http.ResponseWriter) error
 }
 
-type ConfirmTotp204ResponseHeaders struct {
+type ConfirmTotp200ResponseHeaders struct {
 	SetCookie string
 }
 
-type ConfirmTotp204Response struct {
-	Headers ConfirmTotp204ResponseHeaders
+type ConfirmTotp200JSONResponse struct {
+	Body    RecoveryCodes
+	Headers ConfirmTotp200ResponseHeaders
 }
 
-func (response ConfirmTotp204Response) VisitConfirmTotpResponse(w http.ResponseWriter) error {
+func (response ConfirmTotp200JSONResponse) VisitConfirmTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
-	w.WriteHeader(204)
-	return nil
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type ConfirmTotp400ApplicationProblemPlusJSONResponse struct {
@@ -1894,6 +2259,12 @@ type StrictServerInterface interface {
 	// GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
 	// (GET /auth/me)
 	GetCurrentUser(ctx context.Context, request GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error)
+	// RegenerateRecoveryCodes Replace your recovery codes with a fresh set.
+	// (POST /auth/mfa/recovery/regenerate)
+	RegenerateRecoveryCodes(ctx context.Context, request RegenerateRecoveryCodesRequestObject) (RegenerateRecoveryCodesResponseObject, error)
+	// VerifyRecoveryCode Complete a sign-in with a recovery code instead of an authenticator.
+	// (POST /auth/mfa/recovery/verify)
+	VerifyRecoveryCode(ctx context.Context, request VerifyRecoveryCodeRequestObject) (VerifyRecoveryCodeResponseObject, error)
 	// DisableTotp Remove your authenticator.
 	// (DELETE /auth/mfa/totp)
 	DisableTotp(ctx context.Context, request DisableTotpRequestObject) (DisableTotpResponseObject, error)
@@ -2030,6 +2401,70 @@ func (sh *strictHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCurrentUserResponseObject); ok {
 		if err := validResponse.VisitGetCurrentUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RegenerateRecoveryCodes operation middleware
+func (sh *strictHandler) RegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request, params RegenerateRecoveryCodesParams) {
+	var request RegenerateRecoveryCodesRequestObject
+
+	request.Params = params
+
+	var body RegenerateRecoveryCodesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RegenerateRecoveryCodes(ctx, request.(RegenerateRecoveryCodesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RegenerateRecoveryCodes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RegenerateRecoveryCodesResponseObject); ok {
+		if err := validResponse.VisitRegenerateRecoveryCodesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerifyRecoveryCode operation middleware
+func (sh *strictHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) {
+	var request VerifyRecoveryCodeRequestObject
+
+	var body VerifyRecoveryCodeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyRecoveryCode(ctx, request.(VerifyRecoveryCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyRecoveryCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyRecoveryCodeResponseObject); ok {
+		if err := validResponse.VisitVerifyRecoveryCodeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

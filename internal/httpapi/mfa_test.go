@@ -78,14 +78,24 @@ func (s *authServer) enrol(t *testing.T, sess *http.Cookie) string {
 func (s *authServer) enrolAndConfirm(t *testing.T) string {
 	t.Helper()
 
+	secret, _ := s.enrolAndConfirmWithCodes(t)
+	return secret
+}
+
+// enrolAndConfirmWithCodes is the same, and also hands back the recovery codes
+// the confirmation minted (M1-007) — which is the only way to get them, here as
+// much as in production.
+func (s *authServer) enrolAndConfirmWithCodes(t *testing.T) (string, []string) {
+	t.Helper()
+
 	sess := s.signIn(t)
 	secret := s.enrol(t, sess)
 
 	recorder := s.post(confirmPath, codeBody(codeFor(t, secret, time.Now())), sess)
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("confirm = %d, want 204\nbody: %s", recorder.Code, recorder.Body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("confirm = %d, want 200\nbody: %s", recorder.Code, recorder.Body)
 	}
-	return secret
+	return secret, decodeJSON[gen.RecoveryCodes](t, recorder).Codes
 }
 
 // pendingCookie returns the MFA challenge cookie a response set, failing the
@@ -149,8 +159,8 @@ func TestEnrolmentReturnsAURIAnAppCanScan(t *testing.T) {
 	// And the code it produces is one this server accepts, which is the only
 	// end-to-end statement that the secret handed out is the secret stored.
 	if got := server.post(confirmPath,
-		codeBody(codeFor(t, enrolment.Secret, time.Now())), sess).Code; got != http.StatusNoContent {
-		t.Errorf("confirm with a code from the enrolment = %d, want 204", got)
+		codeBody(codeFor(t, enrolment.Secret, time.Now())), sess).Code; got != http.StatusOK {
+		t.Errorf("confirm with a code from the enrolment = %d, want 200", got)
 	}
 }
 
@@ -222,8 +232,8 @@ func TestConfirmingRotatesTheSessionAndSatisfiesMFA(t *testing.T) {
 	}
 
 	recorder := server.post(confirmPath, codeBody(codeFor(t, secret, time.Now())), sess)
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("confirm = %d, want 204\nbody: %s", recorder.Code, recorder.Body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("confirm = %d, want 200\nbody: %s", recorder.Code, recorder.Body)
 	}
 
 	rotated := sessionCookie(t, recorder)

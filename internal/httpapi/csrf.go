@@ -53,6 +53,12 @@ var csrfExemptRoutes = map[string]string{
 	// neither of.
 	"POST " + BasePath + mfaPathPrefix + "/totp/verify": "no session exists yet; the pending cookie and the code are the proof",
 
+	// The same half of the same sign-in, reached with a printed code instead of
+	// an authenticator (M1-007). Exempt for exactly the reasons above and for no
+	// additional one: it is the same exchange, with the same pending cookie, and
+	// a caller who has not started a sign-in has nothing to present.
+	"POST " + BasePath + mfaPathPrefix + "/recovery/verify": "no session exists yet; the pending cookie and the code are the proof",
+
 	// M1-009 and M1-010 add the SSO assertion callbacks here. They arrive as a
 	// cross-site POST from the identity provider by design, and their integrity
 	// comes from the signed assertion and the state/nonce they carry.
