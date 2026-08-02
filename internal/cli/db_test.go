@@ -58,6 +58,17 @@ func TestDBInfoDescribesTheDatabase(t *testing.T) {
 	if got, want := rows["main.schema_migrations"], float64(1); got < want {
 		t.Errorf("main.schema_migrations has %v rows, want at least %v", got, want)
 	}
+
+	// Every table a migration created is listed, including the ones whose names
+	// need quoting — app."user" is a reserved word, and a listing that silently
+	// dropped it would be worse than one that failed (M1-001).
+	for _, table := range []string{
+		"app.user", "app.identity", "app.session", "app.engagement_member",
+	} {
+		if _, listed := rows[table]; !listed {
+			t.Errorf("%s is missing from db info (tables seen: %v)", table, rows)
+		}
+	}
 }
 
 func TestDBInfoIsReadableWithoutJSON(t *testing.T) {

@@ -56,7 +56,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
-| **M1 — Identity & access** | ready to implement | [17 tickets](#m1--identity--access) |
+| **M1 — Identity & access** | in progress — 1/17 | [17 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
@@ -102,7 +102,7 @@ here traces to a named defect in `PLAN.md` §4 — the regression cases are the 
 
 | ID | Title | Size |
 |---|---|---|
-| [M1-001](M1-001-identity-schema.md) | Users, sessions, memberships schema | M |
+| [M1-001](done/M1-001-identity-schema.md) ✅ | Users, sessions, memberships schema | M |
 | [M1-002](M1-002-password-hashing.md) | Argon2id hashing + password policy | S |
 | [M1-003](M1-003-local-login-sessions.md) | Local login/logout, session cookies, rotation | L |
 | [M1-004](M1-004-login-throttling.md) | Login throttling and lockout | M |

@@ -8,11 +8,14 @@ package storetest
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"path/filepath"
 	"testing"
 
 	"github.com/bryanster/purpleops/internal/config"
 	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/purpleops/internal/store/migrate"
 )
 
 // New opens an empty database in a temporary directory of its own and closes it
@@ -36,5 +39,23 @@ func New(t testing.TB) *store.DB {
 			t.Errorf("storetest.New: closing %s: %v", path, err)
 		}
 	})
+	return db
+}
+
+// Migrated is [New] with the shipped migrations applied — the database a
+// repository test needs, and the same schema a server starts against, so a
+// migration that a repository's SQL disagrees with fails here rather than in
+// production.
+//
+// The migrator's progress goes nowhere: it is one line per migration per test,
+// and none of it is what the test is about.
+func Migrated(t testing.TB) *store.DB {
+	t.Helper()
+
+	db := New(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if _, err := migrate.Up(context.Background(), db, migrate.WithLogger(quiet)); err != nil {
+		t.Fatalf("storetest.Migrated: %v", err)
+	}
 	return db
 }
