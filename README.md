@@ -47,3 +47,7 @@ debug the end-to-end suite.
 ## Licence
 
 Apache 2.0 — see [`LICENSE`](LICENSE).
+
+Blacklight is an independent rewrite. It began as a fork of
+[PurpleOps](https://github.com/CyberCX-STA/PurpleOps) (Copyright 2023 Willem Mouton & Harrison
+Mitchell, Apache-2.0); no code from that project remains.
