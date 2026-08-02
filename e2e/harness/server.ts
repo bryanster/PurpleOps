@@ -6,8 +6,8 @@ import net from 'node:net'
 import path from 'node:path'
 
 import { waitForHealthy } from './health'
-import { purpleopsBinary } from './paths'
-import { runPopsctl } from './popsctl'
+import { blacklightBinary } from './paths'
+import { runBlctl } from './blctl'
 
 /** How long a server gets to exit on SIGTERM before it is killed outright. */
 const stopTimeoutMs = 10_000
@@ -41,7 +41,7 @@ export interface Server {
 export interface StartOptions {
   /** A directory of this server's own. Created; never shared. */
   dir: string
-  /** `popsctl` argument vectors run against the fresh database before boot. */
+  /** `blctl` argument vectors run against the fresh database before boot. */
   seed: readonly (readonly string[])[]
   /** Named in errors so a failure says which spec file was being set up. */
   label: string
@@ -75,20 +75,20 @@ export function externalServer(baseURL: string): Server {
 }
 
 /**
- * Starts one `purpleops` process on a fresh database and waits for it to be
+ * Starts one `blacklight` process on a fresh database and waits for it to be
  * healthy.
  *
  * Seeding happens here, before the process starts, and not from inside a test.
- * DuckDB gives a database file to one writer at a time, so `popsctl` cannot
+ * DuckDB gives a database file to one writer at a time, so `blctl` cannot
  * open a database a running server is holding — a seed step that ran later
  * would fail with a lock error rather than doing anything useful.
  */
 export async function startServer(options: StartOptions): Promise<Server> {
-  await assertExecutable(purpleopsBinary)
+  await assertExecutable(blacklightBinary)
 
   const dir = options.dir
   const paths = {
-    dbPath: path.join(dir, 'purpleops.duckdb'),
+    dbPath: path.join(dir, 'blacklight.duckdb'),
     evidenceDir: path.join(dir, 'evidence'),
     logPath: path.join(dir, 'server.log'),
   }
@@ -104,7 +104,7 @@ export async function startServer(options: StartOptions): Promise<Server> {
   }
 
   const log = createWriteStream(paths.logPath)
-  const child = spawn(purpleopsBinary, [], { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(blacklightBinary, [], { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] })
   child.stdout.pipe(log)
   child.stderr.pipe(log)
 
@@ -146,7 +146,7 @@ export async function startServer(options: StartOptions): Promise<Server> {
 /**
  * The environment the server and every seed command see.
  *
- * It starts from the developer's environment with every `PURPLEOPS_` variable
+ * It starts from the developer's environment with every `BLACKLIGHT_` variable
  * stripped. A `.env` exported into the shell — which is the normal way to run
  * the server by hand — would otherwise decide which database the suite writes
  * to, and the first thing anyone would notice is their own data changing.
@@ -158,7 +158,7 @@ function serverEnvironment(
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (!key.startsWith('PURPLEOPS_')) {
+    if (!key.startsWith('BLACKLIGHT_')) {
       env[key] = value
     }
   }
@@ -166,19 +166,19 @@ function serverEnvironment(
   // `development`, because the suite drives a browser over plain http on
   // loopback and production posture makes session cookies Secure (M1). The
   // production path over TLS is the container smoke test's job, not this one's.
-  env.PURPLEOPS_ENV = 'development'
-  env.PURPLEOPS_ADDR = `127.0.0.1:${String(port)}`
-  env.PURPLEOPS_BASE_URL = baseURL
-  env.PURPLEOPS_DB_PATH = paths.dbPath
-  env.PURPLEOPS_EVIDENCE_DIR = paths.evidenceDir
+  env.BLACKLIGHT_ENV = 'development'
+  env.BLACKLIGHT_ADDR = `127.0.0.1:${String(port)}`
+  env.BLACKLIGHT_BASE_URL = baseURL
+  env.BLACKLIGHT_DB_PATH = paths.dbPath
+  env.BLACKLIGHT_EVIDENCE_DIR = paths.evidenceDir
   // Real entropy per server: config rejects placeholders and low-variety values.
   // Two distinct values, because config refuses a deployment that uses one for
   // both — see .env.example on why the blast radii differ.
-  env.PURPLEOPS_SESSION_SECRET = randomBytes(32).toString('base64')
-  env.PURPLEOPS_ENCRYPTION_KEY = randomBytes(32).toString('base64')
+  env.BLACKLIGHT_SESSION_SECRET = randomBytes(32).toString('base64')
+  env.BLACKLIGHT_ENCRYPTION_KEY = randomBytes(32).toString('base64')
   // Debug and text: this log is read by a human staring at a failed run.
-  env.PURPLEOPS_LOG_LEVEL = 'debug'
-  env.PURPLEOPS_LOG_FORMAT = 'text'
+  env.BLACKLIGHT_LOG_LEVEL = 'debug'
+  env.BLACKLIGHT_LOG_FORMAT = 'text'
   return env
 }
 
@@ -189,7 +189,7 @@ async function seedStep(
   env: NodeJS.ProcessEnv,
 ): Promise<string> {
   try {
-    return await runPopsctl(command, env)
+    return await runBlctl(command, env)
   } catch (error) {
     throw new Error(
       `${label}: seed step ${String(index + 1)} failed — the spec never ran.\n` +
@@ -201,7 +201,7 @@ async function seedStep(
 
 /**
  * Asks the kernel for a free port and immediately gives it back, so the server
- * can be told which port to bind *and* the matching PURPLEOPS_BASE_URL, which
+ * can be told which port to bind *and* the matching BLACKLIGHT_BASE_URL, which
  * it needs at startup and cannot be told after the fact.
  *
  * Binding port 0 in the server instead would avoid the gap between releasing

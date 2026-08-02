@@ -21,7 +21,7 @@ and reinstall) and `app` (engagement data, precious). That separation starts her
 - `schema_migrations` table: `version` (int, PK), `name`, `checksum`, `applied_at`.
 - Migration `0001_init.sql` creating the `app` and `content` schemas and nothing else.
 - Migrations run automatically at server startup, before the HTTP listener opens.
-- `popsctl migrate status` support (the command itself lands in `M0B-014`; expose the function).
+- `blctl migrate status` support (the command itself lands in `M0B-014`; expose the function).
 
 **Out**
 
@@ -121,7 +121,7 @@ cannot pass with a broken probe.
    not `sql/*.sql`) precisely so that `0004_wip.sql.bak` is caught rather than silently not embedded.
 6. **The migrator logs.** At startup the log is the only UI, and only the migrator knows when each
    file started. `WithLogger` defaults to `slog.Default()`; `Up` also returns what it applied, which
-   is what `popsctl` and the tests use.
+   is what `blctl` and the tests use.
 
 ### Mutation testing: what the tests actually catch
 
@@ -150,7 +150,7 @@ documented as UTC and should not depend on that quietly continuing to be true.
 
 ### Deviations from the ticket
 
-- **`cmd/purpleops` is unchanged.** The scope says migrations run at server startup before the
+- **`cmd/blacklight` is unchanged.** The scope says migrations run at server startup before the
   listener opens; there is no listener until M0B-006, which owns process startup (M0B-003's notes
   say the same about `store.Open`). Wiring a temporary `main()` now would be rewritten there.
   Confirmed with the ticket owner. **M0B-006 must call, in this order:**
@@ -171,7 +171,7 @@ documented as UTC and should not depend on that quietly continuing to be true.
 - `migrate.Up(ctx, db)` and `migrate.Status(ctx, db)` work on the embedded set. `migrate.New(fsys)`
   takes any `fs.FS` and is how tests supply their own.
 - `Status` returns `[]State` in version order, each carrying `Applied` and a UTC `AppliedAt` —
-  that is the function **M0B-014**'s `popsctl migrate status` renders.
+  that is the function **M0B-014**'s `blctl migrate status` renders.
 - `migrate.DB` is `Read()` + `Write()`; `store.Store` satisfies it.
 - **Adding a table**: a new `internal/store/migrate/sql/NNNN_*.sql`, never an edit to an existing
   one. `docs/migrations.md` has the rules; the set is validated by the package's own tests, so a

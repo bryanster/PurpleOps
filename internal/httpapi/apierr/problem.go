@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // MediaType is the content type of every error this API produces (RFC 9457).
@@ -81,7 +81,7 @@ type Responder struct {
 }
 
 // NewResponder returns a Responder logging to log. A nil log means
-// slog.Default(), for a caller that has not built one yet — a test, or popsctl.
+// slog.Default(), for a caller that has not built one yet — a test, or blctl.
 func NewResponder(log *slog.Logger) *Responder {
 	if log == nil {
 		log = slog.Default()

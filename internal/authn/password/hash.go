@@ -38,7 +38,7 @@ type Params struct {
 //
 // OWASP's Password Storage Cheat Sheet (2025) gives m=19456 (19 MiB), t=2, p=1
 // as its Argon2id minimum. That is a floor for hardware nobody controls; on the
-// hardware PurpleOps actually runs on it completes in well under 50 ms, which
+// hardware Blacklight actually runs on it completes in well under 50 ms, which
 // buys less than it could. These settings sit above it — 64 MiB and three
 // passes, single-lane so that a login costs one core rather than several — and
 // land in the 100–500 ms band M1-002 asks for: slow enough that an offline

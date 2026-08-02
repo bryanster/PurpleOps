@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/blacklight/internal/config"
 )
 
 // TestClientIPTrustsOnlyConfiguredProxies is the regression case for the

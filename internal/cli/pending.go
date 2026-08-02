@@ -7,12 +7,12 @@ import (
 )
 
 // The commands in this file are registered, documented and inert. PLAN.md §6
-// says popsctl does four things beyond migrations — create users, sync content,
+// says blctl does four things beyond migrations — create users, sync content,
 // back up, render reports — and only the first of those exists so far (M1-003,
 // in user.go).
 //
 // They are here anyway so that the shape of the tool is visible from
-// `popsctl --help` rather than discovered one milestone at a time, and so that
+// `blctl --help` rather than discovered one milestone at a time, and so that
 // the milestone that builds a feature adds a RunE to a command that already
 // exists instead of arguing about where it goes. Each says which milestone that
 // is, because "not implemented" without a date is indistinguishable from

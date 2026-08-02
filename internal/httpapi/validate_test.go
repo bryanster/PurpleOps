@@ -9,7 +9,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // api/openapi.yaml has only GETs with no request body until M1, so the

@@ -243,11 +243,11 @@ export interface paths {
          * Complete a sign-in by presenting a code from your authenticator.
          * @description The second half of a sign-in that answered `mfa_required`. It carries no
          *     session — that is the point: the credential is the short-lived
-         *     `pops_mfa` cookie set by `POST /auth/login`, which authorizes nothing
+         *     `bl_mfa` cookie set by `POST /auth/login`, which authorizes nothing
          *     except this endpoint and expires in minutes.
          *
          *     On success the pending state is spent, a session is issued with MFA
-         *     satisfied, and the `pops_mfa` cookie is cleared. One correct code buys
+         *     satisfied, and the `bl_mfa` cookie is cleared. One correct code buys
          *     exactly one session.
          *
          *     Every way of failing is the same `401`: a wrong code, a code already
@@ -462,7 +462,7 @@ export interface components {
             memberships: components["schemas"]["EngagementMembership"][];
             /**
              * @description The double-submit CSRF token for this session (M1-005) — the same
-             *     value as the `pops_csrf` cookie, which is where a browser client
+             *     value as the `bl_csrf` cookie, which is where a browser client
              *     should read it from.
              *
              *     It is here for a client that has no cookie jar to read, and it is
@@ -541,7 +541,7 @@ export interface components {
             /**
              * @description The `otpauth://totp/...` URI, for a client that can hand a URI to an
              *     authenticator directly.
-             * @example otpauth://totp/PurpleOps%20%28purpleops.internal%29:alice@example.com?algorithm=SHA1&digits=6&issuer=PurpleOps+%28purpleops.internal%29&period=30&secret=JBSWY3DPEHPK3PXP
+             * @example otpauth://totp/Blacklight%20%28blacklight.internal%29:alice@example.com?algorithm=SHA1&digits=6&issuer=Blacklight+%28blacklight.internal%29&period=30&secret=JBSWY3DPEHPK3PXP
              */
             otpauthUri: string;
             /**
@@ -686,7 +686,7 @@ export interface components {
     parameters: {
         /**
          * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-         *     `pops_csrf` cookie, echoed back in this header.
+         *     `bl_csrf` cookie, echoed back in this header.
          *
          *     **Required in practice** on every state-changing request authenticated
          *     by the session cookie, even though it is declared optional here. The
@@ -790,12 +790,12 @@ export interface operations {
                     /**
                      * @description When `status` is `authenticated`: the session cookie, `HttpOnly`,
                      *     `SameSite=Strict`, `Path=/`, and `Secure` on every deployment
-                     *     that is not `PURPLEOPS_ENV=development`. A second `Set-Cookie`
-                     *     carries `pops_csrf` (M1-005), with the same attributes except
+                     *     that is not `BLACKLIGHT_ENV=development`. A second `Set-Cookie`
+                     *     carries `bl_csrf` (M1-005), with the same attributes except
                      *     that it is **not** `HttpOnly` — script has to read it to send
                      *     `X-CSRF-Token`.
                      *
-                     *     When `status` is `mfa_required`: the short-lived `pops_mfa`
+                     *     When `status` is `mfa_required`: the short-lived `bl_mfa`
                      *     cookie instead, and no session cookie. It authorizes nothing but
                      *     `POST /auth/mfa/totp/verify`; see the `mfaChallenge` scheme.
                      */
@@ -818,7 +818,7 @@ export interface operations {
             header?: {
                 /**
                  * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-                 *     `pops_csrf` cookie, echoed back in this header.
+                 *     `bl_csrf` cookie, echoed back in this header.
                  *
                  *     **Required in practice** on every state-changing request authenticated
                  *     by the session cookie, even though it is declared optional here. The
@@ -844,7 +844,7 @@ export interface operations {
                 headers: {
                     /**
                      * @description The expired session cookie, which clears the browser's copy. The
-                     *     `pops_csrf` cookie is cleared alongside it, in a second
+                     *     `bl_csrf` cookie is cleared alongside it, in a second
                      *     `Set-Cookie` — the two are issued together and dropped together.
                      */
                     "Set-Cookie": string;
@@ -884,7 +884,7 @@ export interface operations {
             header?: {
                 /**
                  * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-                 *     `pops_csrf` cookie, echoed back in this header.
+                 *     `bl_csrf` cookie, echoed back in this header.
                  *
                  *     **Required in practice** on every state-changing request authenticated
                  *     by the session cookie, even though it is declared optional here. The
@@ -914,7 +914,7 @@ export interface operations {
                 headers: {
                     /**
                      * @description The rotated session cookie. The token it replaces stops working,
-                     *     and the matching `pops_csrf` cookie is set in a second
+                     *     and the matching `bl_csrf` cookie is set in a second
                      *     `Set-Cookie`: the CSRF token is derived from the session token,
                      *     so it rotates with it.
                      */
@@ -935,7 +935,7 @@ export interface operations {
             header?: {
                 /**
                  * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-                 *     `pops_csrf` cookie, echoed back in this header.
+                 *     `bl_csrf` cookie, echoed back in this header.
                  *
                  *     **Required in practice** on every state-changing request authenticated
                  *     by the session cookie, even though it is declared optional here. The
@@ -977,7 +977,7 @@ export interface operations {
             header?: {
                 /**
                  * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-                 *     `pops_csrf` cookie, echoed back in this header.
+                 *     `bl_csrf` cookie, echoed back in this header.
                  *
                  *     **Required in practice** on every state-changing request authenticated
                  *     by the session cookie, even though it is declared optional here. The
@@ -1006,7 +1006,7 @@ export interface operations {
             204: {
                 headers: {
                     /**
-                     * @description The rotated session cookie, with its matching `pops_csrf` cookie
+                     * @description The rotated session cookie, with its matching `bl_csrf` cookie
                      *     in a second `Set-Cookie`.
                      */
                     "Set-Cookie": string;
@@ -1041,8 +1041,8 @@ export interface operations {
             200: {
                 headers: {
                     /**
-                     * @description The session cookie, its `pops_csrf` companion, and the cleared
-                     *     `pops_mfa` cookie, in three `Set-Cookie` headers.
+                     * @description The session cookie, its `bl_csrf` companion, and the cleared
+                     *     `bl_mfa` cookie, in three `Set-Cookie` headers.
                      */
                     "Set-Cookie": string;
                     [name: string]: unknown;
@@ -1063,7 +1063,7 @@ export interface operations {
             header?: {
                 /**
                  * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-                 *     `pops_csrf` cookie, echoed back in this header.
+                 *     `bl_csrf` cookie, echoed back in this header.
                  *
                  *     **Required in practice** on every state-changing request authenticated
                  *     by the session cookie, even though it is declared optional here. The

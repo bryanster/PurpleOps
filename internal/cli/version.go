@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 // newVersionCommand reports the build identity of this binary. It is the one

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // userColumns is the read projection, in the order [scanUser] expects. One

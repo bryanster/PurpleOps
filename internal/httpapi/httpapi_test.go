@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // The helpers every test in this package shares: a server built the way the
@@ -191,7 +191,7 @@ type panickyStore struct {
 }
 
 func (panickyStore) Health(context.Context) error {
-	panic("the database driver exploded: dsn=file:/secret/purpleops.duckdb")
+	panic("the database driver exploded: dsn=file:/secret/blacklight.duckdb")
 }
 
 // stubStore is the minimum a Deps needs. Embedding the interface means a method

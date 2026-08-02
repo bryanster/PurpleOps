@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // DB is the part of the store these repositories need: pooled reads, and writes

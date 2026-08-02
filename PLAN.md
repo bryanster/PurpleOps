@@ -1,8 +1,8 @@
-# PurpleOps v2 — Ground-Up Rebuild
+# Blacklight v2 — Ground-Up Rebuild
 
 ## Context
 
-PurpleOps is a self-hosted purple-team assessment tool: red and blue fill in a shared workbook
+Blacklight is a self-hosted purple-team assessment tool: red and blue fill in a shared workbook
 during adversary emulation, and the output is a report. Today's implementation (analysed in
 `CURRENT.md`) works, but its foundations fight the goal:
 
@@ -57,7 +57,7 @@ Go binary  (net/http + chi)
    ├── analytics (DuckDB SQL: rollups, heatmaps, MTTD, round deltas)
    └── report renderer (block registry → HTML → PDF)
    ▼
-purpleops.duckdb   +   evidence/  (content-addressed blobs)   +   web/dist (embed.FS)
+blacklight.duckdb   +   evidence/  (content-addressed blobs)   +   web/dist (embed.FS)
 ```
 
 **Single binary, single file, no external services.** Postgres/Mongo/Redis all disappear.
@@ -257,8 +257,8 @@ test, fixing today's `export/entire` writes `export.csv` / `import/entire` reads
 
 ```
 api/openapi.yaml              # source of truth
-cmd/purpleops/                # server
-cmd/popsctl/                  # admin CLI: user create, content sync, backup, report render
+cmd/blacklight/                # server
+cmd/blctl/                  # admin CLI: user create, content sync, backup, report render
 internal/
   config/  store/             # DuckDB: embedded SQL migrations, repositories, serialized writer
   domain/                     # entities + rules: scoring, MTTD, rollups, retest deltas
@@ -302,7 +302,7 @@ Each milestone ends green on CI and demoable.
 1. Tag the current v1 tip so the old implementation stays reachable (`git tag v1-final`).
 2. Branch: `git switch -c rebuild` off `checks`.
 3. Remove **everything**: all tracked files (`git rm -r .`) plus the untracked/ignored ones —
-   `files/`, `.env`, `vendor/`, `node_modules/`, and the built `purpleops` / `seed` binaries.
+   `files/`, `.env`, `vendor/`, `node_modules/`, and the built `blacklight` / `seed` binaries.
 4. Write `PLAN.md` (this document) and commit it as the first commit on the branch.
 
 **Recoverability — read before approving.** Tracked files are safe forever in git history and via
@@ -313,7 +313,7 @@ the `v1-final` tag. These are **not** in git and will be gone permanently:
 | `files/` | 22 assessment directories of **real evidence** from prior engagements/testing |
 | `.env` | Live secrets (`SECRET_KEY`, `PASSWORD_SALT`) for the current deployment |
 | `CURRENT.md` | Untracked analysis of the v1 system. Its substance is carried into the Context section above, so this is an acceptable loss — say so if you'd rather it survive as a second file |
-| `vendor/`, `node_modules/`, `purpleops`, `seed` | Regenerable build artefacts — no loss |
+| `vendor/`, `node_modules/`, `blacklight`, `seed` | Regenerable build artefacts — no loss |
 
 The Mongo database itself is untouched by this and remains available independently. If any of
 `files/` matters, copy it out before approving; the "greenfield, no migration" decision assumes it

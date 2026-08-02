@@ -31,8 +31,8 @@ test('this spec file got its own fresh database, seeded before the server booted
 }) => {
   const paths = managedPaths(server)
 
-  // Under this run's scratch directory — `<run>/<per-spec dir>/purpleops.duckdb`
-  // — and therefore not the developer's ./purpleops.duckdb, and not shared with
+  // Under this run's scratch directory — `<run>/<per-spec dir>/blacklight.duckdb`
+  // — and therefore not the developer's ./blacklight.duckdb, and not shared with
   // any other spec file.
   expect(path.dirname(path.dirname(paths.dbPath))).toBe(runDir())
 

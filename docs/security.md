@@ -17,14 +17,14 @@ protected. v2 has two layers, and both, or neither, is the choice — neither is
 another site caused, which on its own defeats almost every version of this attack. It is set in
 `internal/authn/session/cookie.go` alongside `HttpOnly` and `Secure`.
 
-**A double-submit token.** The server issues a second cookie, `pops_csrf`, and a state-changing
+**A double-submit token.** The server issues a second cookie, `bl_csrf`, and a state-changing
 request must echo its value in the `X-CSRF-Token` header. It covers what `SameSite` does not: older
 clients, and a request from a sibling origin on the same site — a neighbouring subdomain, or an
 `http` sibling of an `https` origin — which is same-site as far as the cookie is concerned.
 
 ### The token is derived, not stored
 
-`pops_csrf` carries `HMAC-SHA256(PURPLEOPS_SESSION_SECRET, "purpleops/csrf\0" || session token)`,
+`bl_csrf` carries `HMAC-SHA256(BLACKLIGHT_SESSION_SECRET, "blacklight/csrf\0" || session token)`,
 base64url. There is no column and no migration, and three things follow from it:
 
 - **It rotates with the session.** Rotation replaces the session token (`docs/http.md`, *Sessions*),
@@ -44,10 +44,10 @@ one, so a browser that lost the cookie recovers by retrying instead of by signin
 
 ### The two cookies
 
-| | `pops_session` | `pops_csrf` |
+| | `bl_session` | `bl_csrf` |
 |---|---|---|
 | `HttpOnly` | **yes** — script must never read the session token | **no** — script must read it, or no request could carry the header |
-| `Secure` | yes, except `PURPLEOPS_ENV=development` | the same |
+| `Secure` | yes, except `BLACKLIGHT_ENV=development` | the same |
 | `SameSite` | `Strict` | `Strict` |
 | `Path` / `Domain` | `/` / none | the same |
 | Expiry | the session's absolute expiry | none; the value is checked against a derivation |
@@ -59,7 +59,7 @@ would leave a test that checks either cookie alone still passing.
 ### What is checked, and what is exempt
 
 `requireCSRF` (`internal/httpapi/csrf.go`) is step 10 of the middleware chain. For a state-changing
-request that authenticated **by cookie**, the `X-CSRF-Token` header must equal the `pops_csrf`
+request that authenticated **by cookie**, the `X-CSRF-Token` header must equal the `bl_csrf`
 cookie *and* equal the value derived from the session token — both comparisons in constant time.
 Anything else is a `403` with `code: "forbidden"`, written before the handler is entered.
 
@@ -118,17 +118,17 @@ that turns `enforced` into a refusal, and it can only do that because the three 
 ### The pending state
 
 A correct password against an account with a **confirmed** authenticator does not produce a session.
-It produces a *challenge*: a row in `app.mfa_challenge` and a `pops_mfa` cookie, and nothing else.
+It produces a *challenge*: a row in `app.mfa_challenge` and a `bl_mfa` cookie, and nothing else.
 
 The distinction is enforced in the plumbing rather than in the logic. `internal/authn/challenge` is
 a separate package from `internal/authn/session`, with a separate cookie name, a separate table and
 a separate HMAC domain; the authentication middleware does not resolve one, so a request carrying
-only `pops_mfa` is anonymous everywhere. `POST /auth/mfa/totp/verify` is the one endpoint that
+only `bl_mfa` is anonymous everywhere. `POST /auth/mfa/totp/verify` is the one endpoint that
 looks at it, and the only thing it can produce is a session.
 
 Three properties, each enforced by a statement rather than by a caller remembering:
 
-- **It expires** — five minutes by default (`PURPLEOPS_MFA_PENDING_TTL`), checked against the row.
+- **It expires** — five minutes by default (`BLACKLIGHT_MFA_PENDING_TTL`), checked against the row.
 - **It is spent by use** — `UPDATE ... WHERE consumed_at IS NULL`, so one correct code buys exactly
   one session even if two requests arrive together.
 - **It is superseded** — opening a challenge deletes whatever that person had pending, so an
@@ -164,11 +164,11 @@ search space than "no".
 ### The secret at rest
 
 The shared secret has to be readable — it is checked, not verified against a hash — so it is
-encrypted rather than digested: AES-256-GCM under a key derived from `PURPLEOPS_ENCRYPTION_KEY` by
+encrypted rather than digested: AES-256-GCM under a key derived from `BLACKLIGHT_ENCRYPTION_KEY` by
 HKDF-SHA256, with a fresh 12-byte nonce per record stored in front of the ciphertext. A copy of the
 database is not a set of working authenticators.
 
-`PURPLEOPS_ENCRYPTION_KEY` is deliberately **not** `PURPLEOPS_SESSION_SECRET`, and the server
+`BLACKLIGHT_ENCRYPTION_KEY` is deliberately **not** `BLACKLIGHT_SESSION_SECRET`, and the server
 refuses to start if they are the same value. Rotating the session secret is the documented way to
 sign everybody out; if the two were shared, that lever would also make every enrolled authenticator
 undecryptable, and the only symptom would be everyone's codes failing at once.

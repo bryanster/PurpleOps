@@ -3,7 +3,7 @@ import path from 'node:path'
 /**
  * Where the harness finds the things it drives.
  *
- * The suite tests a *binary*, not a package: `bin/purpleops` serving the SPA it
+ * The suite tests a *binary*, not a package: `bin/blacklight` serving the SPA it
  * embedded, over HTTP, against a DuckDB file. Everything below points at build
  * output, so a stale `bin/` is a stale test run — `make e2e` builds first for
  * exactly that reason.
@@ -13,12 +13,12 @@ import path from 'node:path'
 export const repoRoot = path.resolve(__dirname, '..', '..')
 
 /** The server under test. Override to run the suite against another build. */
-export const purpleopsBinary =
-  process.env.PURPLEOPS_E2E_BINARY ?? path.join(repoRoot, 'bin', 'purpleops')
+export const blacklightBinary =
+  process.env.BLACKLIGHT_E2E_BINARY ?? path.join(repoRoot, 'bin', 'blacklight')
 
 /** The admin CLI, which is how specs seed — see `harness/test.ts`. */
-export const popsctlBinary =
-  process.env.PURPLEOPS_E2E_POPSCTL ?? path.join(repoRoot, 'bin', 'popsctl')
+export const blctlBinary =
+  process.env.BLACKLIGHT_E2E_BLCTL ?? path.join(repoRoot, 'bin', 'blctl')
 
 /**
  * An already-running server to test against instead of starting our own, or
@@ -42,10 +42,10 @@ export function externalBaseURL(): string | undefined {
  * environment, which is the only channel they share — workers are separate
  * processes, forked after global setup has run.
  */
-const runDirVariable = 'PURPLEOPS_E2E_RUN_DIR'
+const runDirVariable = 'BLACKLIGHT_E2E_RUN_DIR'
 
 /** Prefix of the temp directory name, checked again before teardown deletes it. */
-export const runDirPrefix = 'purpleops-e2e-'
+export const runDirPrefix = 'blacklight-e2e-'
 
 export function setRunDir(dir: string): void {
   process.env[runDirVariable] = dir

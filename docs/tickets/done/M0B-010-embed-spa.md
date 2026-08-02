@@ -23,7 +23,7 @@ explodes somewhere unhelpful.
 - SPA fallback: any GET that doesn't match a file and doesn't start with `/api/` serves
   `index.html` with 200.
 - `/api/*` misses continue to return the JSON 404 problem from `M0B-006`.
-- A development mode (`PURPLEOPS_ENV=development`) that serves from disk rather than the embedded
+- A development mode (`BLACKLIGHT_ENV=development`) that serves from disk rather than the embedded
   FS, so the frontend can be rebuilt without recompiling Go — optional, but note the choice either
   way.
 
@@ -68,7 +68,7 @@ logs a warning at startup when it is serving that. `make test-spa` (`go test -ta
 exercises the tagged path and asserts the embed captured a real Vite build; **M0B-012 should run it
 after `make build`** in CI, since `make test` cannot — it does not build the frontend.
 
-**No development disk mode.** The optional `PURPLEOPS_ENV=development` serve-from-disk mode was not
+**No development disk mode.** The optional `BLACKLIGHT_ENV=development` serve-from-disk mode was not
 implemented, deliberately: `npm run dev` already serves the frontend with hot reload and proxies
 `/api` to the Go server (`web/vite.config.ts`), which is strictly better for the loop it would
 serve. A disk mode would add a second code path through the thing that decides what `/api/…` means,

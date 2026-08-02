@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// timeout puts PURPLEOPS_REQUEST_TIMEOUT on every request's context.
+// timeout puts BLACKLIGHT_REQUEST_TIMEOUT on every request's context.
 //
 // A deadline rather than an http.TimeoutHandler, for two reasons. The response
 // TimeoutHandler writes on expiry is a plain-text 503 that no `code` in the

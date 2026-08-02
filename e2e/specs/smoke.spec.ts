@@ -16,7 +16,7 @@ import { expect, test } from '../harness/test'
 test('the shell renders and the version screen agrees with the binary', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('link', { name: 'PurpleOps' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Blacklight' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
   // The root redirects; M2–M6 give the product a real landing screen and this

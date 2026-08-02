@@ -9,9 +9,9 @@ import (
 // the `cookieSession` security scheme in api/openapi.yaml; the two must agree,
 // and TestTheCookieNameMatchesTheSpecification checks that they do.
 //
-// The "pops_" prefix is this application's, so that a deployment sharing a
+// The "bl_" prefix is this application's, so that a deployment sharing a
 // hostname with something else does not have two cookies called "session".
-const CookieName = "pops_session"
+const CookieName = "bl_session"
 
 // Cookie returns the Set-Cookie for a live session.
 //
@@ -20,7 +20,7 @@ const CookieName = "pops_session"
 //
 //   - HttpOnly, so that script cannot read the token. This is what keeps a
 //     cross-site scripting bug from being an immediate session theft.
-//   - Secure, unless PURPLEOPS_ENV=development. A browser will not send a Secure
+//   - Secure, unless BLACKLIGHT_ENV=development. A browser will not send a Secure
 //     cookie over plain http, which is why config rejects a production
 //     deployment on a non-loopback http base URL.
 //   - SameSite=Strict, so the browser does not attach it to a request another

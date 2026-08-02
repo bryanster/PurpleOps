@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 const totpColumns = `user_id, secret_encrypted, confirmed_at, last_used_step, created_at`

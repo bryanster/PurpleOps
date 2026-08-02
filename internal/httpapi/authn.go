@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // authenticate resolves the session cookie and puts the caller in the request

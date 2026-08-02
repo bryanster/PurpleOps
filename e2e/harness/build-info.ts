@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { purpleopsBinary } from './paths'
+import { blacklightBinary } from './paths'
 
 const run = promisify(execFile)
 
-/** What `purpleops --version` prints: `internal/version`'s `Info.String()`. */
+/** What `blacklight --version` prints: `internal/version`'s `Info.String()`. */
 const versionLine = /^(?<version>\S+) \(commit (?<commit>\S+), built (?<buildDate>\S+)\)$/
 
 export interface BuildInfo {
@@ -31,7 +31,7 @@ export function reportedBuild(): Promise<BuildInfo> {
 }
 
 async function read(): Promise<BuildInfo> {
-  const { stdout } = await run(purpleopsBinary, ['--version'])
+  const { stdout } = await run(blacklightBinary, ['--version'])
   const line = stdout.trim()
   const fields = versionLine.exec(line)?.groups
   if (
@@ -40,7 +40,7 @@ async function read(): Promise<BuildInfo> {
     fields.buildDate === undefined
   ) {
     throw new Error(
-      `could not read a build identity from \`${purpleopsBinary} --version\`.\n` +
+      `could not read a build identity from \`${blacklightBinary} --version\`.\n` +
         `  printed: ${JSON.stringify(line)}\n` +
         `  wanted:  <version> (commit <sha>, built <timestamp>)\n` +
         `If internal/version.Info.String() changed, this pattern has to change with it.`,

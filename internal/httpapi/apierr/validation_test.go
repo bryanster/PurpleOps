@@ -12,7 +12,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // These tests drive the real kin-openapi validator rather than hand-built error

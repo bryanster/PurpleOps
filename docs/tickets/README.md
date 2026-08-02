@@ -1,4 +1,4 @@
-# PurpleOps v2 — Ticket Backlog
+# Blacklight v2 — Ticket Backlog
 
 Every ticket here derives from [`PLAN.md`](../../PLAN.md). If a ticket and `PLAN.md` disagree,
 `PLAN.md` wins — raise it rather than guessing.
@@ -38,7 +38,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 
 ## Conventions the whole backlog assumes
 
-- **Module path** — `github.com/bryanster/purpleops` (unchanged from v1).
+- **Module path** — `github.com/bryanster/blacklight` (unchanged from v1).
 - **Spec-first.** `api/openapi.yaml` is edited *before* the Go or TS side. Hand-writing a handler
   signature or a fetch call that isn't in the spec is a review rejection.
 - **Errors.** All API errors use the single problem shape defined in `M0B-007`. No ad-hoc JSON.
@@ -93,7 +93,7 @@ Build in this order — the dependency chain is real.
 | [M0B-011](done/M0B-011-docker.md) ✅ | Dockerfile (CGO + Chromium) and compose | M |
 | [M0B-012](done/M0B-012-ci.md) ✅ | CI: lint, test, build matrix, codegen-drift gate | M |
 | [M0B-013](done/M0B-013-e2e-harness.md) ✅ | Playwright harness that fails loudly | M |
-| [M0B-014](done/M0B-014-popsctl-skeleton.md) ✅ | `popsctl` admin CLI skeleton | S |
+| [M0B-014](done/M0B-014-blctl-skeleton.md) ✅ | `blctl` admin CLI skeleton | S |
 
 ## M1 — Identity & access
 

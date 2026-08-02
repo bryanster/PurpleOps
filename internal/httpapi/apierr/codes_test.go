@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/bryanster/purpleops/api"
+	"github.com/bryanster/blacklight/api"
 )
 
 // specCodes returns the ProblemCode enum as api/openapi.yaml declares it. The

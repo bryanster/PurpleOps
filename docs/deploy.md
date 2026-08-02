@@ -1,4 +1,4 @@
-# Deploying PurpleOps
+# Deploying Blacklight
 
 One process, one database file, one directory of evidence. There is no application server to
 configure, no separate database to run, and nothing is fetched at first boot.
@@ -16,8 +16,8 @@ runs against it on every CI build.
 ## Quick start
 
 ```sh
-git clone https://github.com/bryanster/purpleops
-cd purpleops
+git clone https://github.com/bryanster/blacklight
+cd blacklight
 docker compose up --build
 ```
 
@@ -26,7 +26,7 @@ seconds and makes no network request.
 
 That works with no configuration at all, which is fine for a laptop and not fine for anything else.
 Before anyone else can reach it, read [Configuration](#configuration) — at minimum you must set
-`PURPLEOPS_BASE_URL`, `PURPLEOPS_SESSION_SECRET` and `PURPLEOPS_ENCRYPTION_KEY`.
+`BLACKLIGHT_BASE_URL`, `BLACKLIGHT_SESSION_SECRET` and `BLACKLIGHT_ENCRYPTION_KEY`.
 
 | Command | What it does |
 |---|---|
@@ -61,26 +61,26 @@ and why.
 
 ### The three that matter
 
-**`PURPLEOPS_BASE_URL`** — the absolute URL your users type. OIDC and SAML redirect URIs and report
+**`BLACKLIGHT_BASE_URL`** — the absolute URL your users type. OIDC and SAML redirect URIs and report
 share links are built from it and cannot be derived from a request without trusting a proxy header,
 so it is configured rather than guessed. It must be `https://` unless the host is loopback.
 
 ```sh
-PURPLEOPS_BASE_URL=https://purpleops.example.com
+BLACKLIGHT_BASE_URL=https://blacklight.example.com
 ```
 
-**`PURPLEOPS_SESSION_SECRET`** — keys the hash session tokens are stored under. At least 32 bytes of
+**`BLACKLIGHT_SESSION_SECRET`** — keys the hash session tokens are stored under. At least 32 bytes of
 real entropy; placeholders and low-entropy values are rejected at startup rather than accepted and
 quietly useless. The cookie carries a random token and the database keeps only its keyed hash, so a
 copy of the database is not a set of live sessions — and rotating this signs everybody out, because
 no stored hash can be reproduced from the cookies people are holding.
 
 ```sh
-PURPLEOPS_SESSION_SECRET=$(openssl rand -base64 32)
+BLACKLIGHT_SESSION_SECRET=$(openssl rand -base64 32)
 ```
 
 If you do not set it, the container's entrypoint generates one on first boot and stores it at
-`/var/lib/purpleops/session.secret` on the data volume, announcing it in the log. That is what makes
+`/var/lib/blacklight/session.secret` on the data volume, announcing it in the log. That is what makes
 `docker compose up` work on a clean clone. It is a convenience, not a design:
 
 - the secret exists only in that volume, so losing the volume logs everybody out permanently;
@@ -90,18 +90,18 @@ If you do not set it, the container's entrypoint generates one on first boot and
 Set the variable yourself for anything you would be upset to lose. Rotating it — either variable or
 file — logs everybody out, which is also how you revoke every session at once.
 
-**`PURPLEOPS_ENCRYPTION_KEY`** — encrypts what the server holds on somebody else's behalf, which
+**`BLACKLIGHT_ENCRYPTION_KEY`** — encrypts what the server holds on somebody else's behalf, which
 today means the TOTP shared secrets people enrol (`docs/security.md`, *Multi-factor
 authentication*). Same shape as the session secret: at least 32 bytes of real entropy, generated the
 same way, and it must **not** be the same value — the server refuses to start if the two match.
 
 ```sh
-PURPLEOPS_ENCRYPTION_KEY=$(openssl rand -base64 32)
+BLACKLIGHT_ENCRYPTION_KEY=$(openssl rand -base64 32)
 ```
 
 They are separate because their consequences are, and this is the part worth reading twice:
 
-| | Rotating `PURPLEOPS_SESSION_SECRET` | Rotating or losing `PURPLEOPS_ENCRYPTION_KEY` |
+| | Rotating `BLACKLIGHT_SESSION_SECRET` | Rotating or losing `BLACKLIGHT_ENCRYPTION_KEY` |
 |---|---|---|
 | What happens | everybody is signed out | every enrolled authenticator stops working |
 | Is it recoverable? | yes — people sign in again | **no** — everyone must re-enrol from scratch |
@@ -111,14 +111,14 @@ Rotating the session secret is a lever you are meant to pull. If the same value 
 encryption key, pulling it would silently destroy every second factor in the deployment — which is
 why sharing one value between them is a startup error rather than a note in this file.
 
-The entrypoint generates this one on first boot too, at `/var/lib/purpleops/encryption.key`, with
+The entrypoint generates this one on first boot too, at `/var/lib/blacklight/encryption.key`, with
 the same caveats and one more: **back it up with the database.** A restored database whose
 encryption key is gone is a deployment where nobody with MFA can sign in.
 
 ### Sessions
 
-**`PURPLEOPS_SESSION_LIFETIME`** (default `12h`) is how long a session may live at most, counted
-from when it was issued; nothing extends it. **`PURPLEOPS_SESSION_IDLE_TIMEOUT`** (default `2h`) is
+**`BLACKLIGHT_SESSION_LIFETIME`** (default `12h`) is how long a session may live at most, counted
+from when it was issued; nothing extends it. **`BLACKLIGHT_SESSION_IDLE_TIMEOUT`** (default `2h`) is
 how long one may go unused before it ends, and is the one that protects an unattended browser. The
 idle timeout must not exceed the lifetime, which would leave it with nothing to do — that is a
 startup error naming both variables.
@@ -133,10 +133,10 @@ is a `429` carrying `Retry-After`, and it is the same answer whether or not the 
 
 | Variable | Default | Counts |
 |---|---|---|
-| `PURPLEOPS_LOGIN_ACCOUNT_FAILURES` | `5` | consecutive failures against one email address |
-| `PURPLEOPS_LOGIN_ACCOUNT_LOCKOUT` | `15m` | how long that address is then locked |
-| `PURPLEOPS_LOGIN_SOURCE_FAILURES` | `50` | failures from one client address, across all accounts |
-| `PURPLEOPS_LOGIN_SOURCE_LOCKOUT` | `15m` | how long that client address is then locked |
+| `BLACKLIGHT_LOGIN_ACCOUNT_FAILURES` | `5` | consecutive failures against one email address |
+| `BLACKLIGHT_LOGIN_ACCOUNT_LOCKOUT` | `15m` | how long that address is then locked |
+| `BLACKLIGHT_LOGIN_SOURCE_FAILURES` | `50` | failures from one client address, across all accounts |
+| `BLACKLIGHT_LOGIN_SOURCE_LOCKOUT` | `15m` | how long that client address is then locked |
 
 Each further lockout of the same key doubles the wait, three times — 15m, 30m, 1h, 2h — and then
 stops growing. A successful sign-in clears the account's count and its place on that ladder, as does
@@ -150,8 +150,8 @@ Two consequences worth expecting:
   or an administrator waits with them; there is no override yet (`M1-016`). A lockout that the
   correct password ended would only be a delay on an attacker who had already guessed it.
 - **Behind a reverse proxy, the source limit counts the proxy** — every user shares one address —
-  unless `PURPLEOPS_TRUSTED_PROXIES` names it. Set that (see below) or raise
-  `PURPLEOPS_LOGIN_SOURCE_FAILURES` to suit the size of the office behind it.
+  unless `BLACKLIGHT_TRUSTED_PROXIES` names it. Set that (see below) or raise
+  `BLACKLIGHT_LOGIN_SOURCE_FAILURES` to suit the size of the office behind it.
 
 Lockouts are logged at `WARN` with the scope, the key and the client address. The state is held in
 memory by the server process: it is per-instance, and restarting clears it.
@@ -162,7 +162,7 @@ A new deployment has no users and no sign-up. Create the first administrator wit
 see [`docs/cli.md`](cli.md):
 
 ```sh
-docker compose run --rm purpleops popsctl user create \
+docker compose run --rm blacklight blctl user create \
     --email you@example.com --name "Your Name" --admin
 ```
 
@@ -188,27 +188,27 @@ are changing the layout.
 
 | Variable | Image default |
 |---|---|
-| `PURPLEOPS_ADDR` | `:8080` |
-| `PURPLEOPS_DB_PATH` | `/var/lib/purpleops/purpleops.duckdb` |
-| `PURPLEOPS_EVIDENCE_DIR` | `/var/lib/purpleops/evidence` |
-| `PURPLEOPS_CHROME_PATH` | `/usr/bin/chromium` |
-| `PURPLEOPS_BASE_URL` | `http://localhost:8080` — correct for a laptop, wrong for everything else |
+| `BLACKLIGHT_ADDR` | `:8080` |
+| `BLACKLIGHT_DB_PATH` | `/var/lib/blacklight/blacklight.duckdb` |
+| `BLACKLIGHT_EVIDENCE_DIR` | `/var/lib/blacklight/evidence` |
+| `BLACKLIGHT_CHROME_PATH` | `/usr/bin/chromium` |
+| `BLACKLIGHT_BASE_URL` | `http://localhost:8080` — correct for a laptop, wrong for everything else |
 
-Changing `PURPLEOPS_ADDR` to a different port also changes what the image's health check probes: it
+Changing `BLACKLIGHT_ADDR` to a different port also changes what the image's health check probes: it
 reads the port out of that variable. Port `0` — "ask the kernel for a free port" — cannot be
 health-checked, and the check says so rather than reporting a healthy container nobody is probing.
 
 ### Behind a reverse proxy
 
-Terminate TLS at the proxy, forward to the container's port, and tell PurpleOps which proxy to
+Terminate TLS at the proxy, forward to the container's port, and tell Blacklight which proxy to
 believe:
 
 ```sh
-PURPLEOPS_BASE_URL=https://purpleops.example.com
-PURPLEOPS_TRUSTED_PROXIES=10.0.0.0/8
+BLACKLIGHT_BASE_URL=https://blacklight.example.com
+BLACKLIGHT_TRUSTED_PROXIES=10.0.0.0/8
 ```
 
-Without `PURPLEOPS_TRUSTED_PROXIES` the client address is always the address the connection came
+Without `BLACKLIGHT_TRUSTED_PROXIES` the client address is always the address the connection came
 from — which is your proxy, so every request appears to come from one IP and rate limiting and the
 activity log lose their meaning. With it set too widely (never `0.0.0.0/0`) anyone can choose the
 address that gets throttled and logged by sending a header. Set it to the proxy, and nothing else.
@@ -217,13 +217,13 @@ address that gets throttled and logged by sending a header. Set it to the proxy,
 
 ## Where the data lives
 
-Everything that must survive the container is under one directory, `/var/lib/purpleops`, which
-compose mounts as the named volume `purpleops-data`:
+Everything that must survive the container is under one directory, `/var/lib/blacklight`, which
+compose mounts as the named volume `blacklight-data`:
 
 | Path | What it is |
 |---|---|
-| `purpleops.duckdb` | The database. Everything except evidence blobs |
-| `purpleops.duckdb.wal` | DuckDB's write-ahead log. Present while the process runs; part of the database, not a temporary file |
+| `blacklight.duckdb` | The database. Everything except evidence blobs |
+| `blacklight.duckdb.wal` | DuckDB's write-ahead log. Present while the process runs; part of the database, not a temporary file |
 | `evidence/` | Uploaded evidence, content-addressed |
 | `session.secret` | The generated session secret, if you did not supply one |
 
@@ -233,28 +233,28 @@ thing: back them up together, restore them together.
 The directory is owned by **uid 10001, gid 10001** inside the image, and the container runs as that
 user — it is never root. Docker seeds a new *named* volume from the image, ownership included, so
 the compose setup works with no chown. A **bind mount** does not work that way: the host directory
-keeps its own ownership, so if you replace the named volume with `-v /srv/purpleops:/var/lib/purpleops`
-you must `chown -R 10001:10001 /srv/purpleops` first, or startup fails with "is not writable by this
+keeps its own ownership, so if you replace the named volume with `-v /srv/blacklight:/var/lib/blacklight`
+you must `chown -R 10001:10001 /srv/blacklight` first, or startup fails with "is not writable by this
 process".
 
 ---
 
-## Administering it: `popsctl`
+## Administering it: `blctl`
 
-The image carries a second binary, `popsctl`, on `PATH`. It is how you migrate a database by hand,
+The image carries a second binary, `blctl`, on `PATH`. It is how you migrate a database by hand,
 look inside one, create users, and — as the milestones land — sync content and take backups. [`docs/cli.md`](cli.md) is the reference; the short version:
 
 ```sh
-docker compose exec purpleops popsctl version      # is the CLI the same build as the server?
+docker compose exec blacklight blctl version      # is the CLI the same build as the server?
 docker compose stop                                # DuckDB admits one process at a time
-docker compose run --rm purpleops popsctl db info  # …so a command needs the server down
+docker compose run --rm blacklight blctl db info  # …so a command needs the server down
 docker compose start
 ```
 
-`popsctl` reads the same environment and the same `PURPLEOPS_DB_PATH` as the server, so inside the
+`blctl` reads the same environment and the same `BLACKLIGHT_DB_PATH` as the server, so inside the
 image it already points at the right file. Anything that opens the database needs the server
 stopped, `docker compose exec` included: DuckDB admits one process per file, and a command that
-tries anyway fails with a message saying so rather than corrupting anything. `popsctl version` is
+tries anyway fails with a message saying so rather than corrupting anything. `blctl version` is
 the exception, because it opens nothing.
 
 ---
@@ -269,21 +269,21 @@ torn state. **Stop the container first.** A backup that has never been restored 
 ```sh
 docker compose stop
 docker run --rm \
-  -v purpleops_purpleops-data:/data:ro \
+  -v blacklight_blacklight-data:/data:ro \
   -v "$PWD:/backup" \
   debian:trixie-slim \
-  tar czf /backup/purpleops-$(date -u +%Y%m%d).tar.gz -C /data .
+  tar czf /backup/blacklight-$(date -u +%Y%m%d).tar.gz -C /data .
 docker compose start
 ```
 
-The volume is called `purpleops_purpleops-data`: compose prefixes the volume name with the project
+The volume is called `blacklight_blacklight-data`: compose prefixes the volume name with the project
 name. `docker volume ls` confirms it.
 
 Keep the archive somewhere the deployment is not. It contains the session secret, the encryption
 key and every piece of evidence anyone has uploaded — treat it as classified as the engagements it
 describes.
 
-If you supplied `PURPLEOPS_SESSION_SECRET` and `PURPLEOPS_ENCRYPTION_KEY` yourself, they are in your
+If you supplied `BLACKLIGHT_SESSION_SECRET` and `BLACKLIGHT_ENCRYPTION_KEY` yourself, they are in your
 environment and not in this archive: back them up wherever you keep the rest of your secrets. A
 restored database without its encryption key is one where nobody with an authenticator enrolled can
 sign in, and there is no way back from that except an administrator resetting each of them.
@@ -295,14 +295,14 @@ Into an empty volume, over a stopped deployment:
 ```sh
 docker compose down                      # not -v: we are about to overwrite, not delete
 docker run --rm \
-  -v purpleops_purpleops-data:/data \
+  -v blacklight_blacklight-data:/data \
   -v "$PWD:/backup" \
   debian:trixie-slim \
-  sh -c 'rm -rf /data/* /data/.[!.]* && tar xzf /backup/purpleops-20260801.tar.gz -C /data'
+  sh -c 'rm -rf /data/* /data/.[!.]* && tar xzf /backup/blacklight-20260801.tar.gz -C /data'
 docker compose up -d
 ```
 
-Restore into the same or a newer version of PurpleOps, never an older one: migrations run forward on
+Restore into the same or a newer version of Blacklight, never an older one: migrations run forward on
 startup and are append-only, so a newer database in an older binary is a schema the binary does not
 understand.
 
@@ -321,7 +321,7 @@ above exists is that rolling *back* is the case that is not supported.
 ## Chromium and PDF rendering
 
 The image carries Chromium so that M6's PDF reports work without a second container or a runtime
-download. `PURPLEOPS_CHROME_PATH` already points at it. Nothing renders PDFs yet — M6 builds that —
+download. `BLACKLIGHT_CHROME_PATH` already points at it. Nothing renders PDFs yet — M6 builds that —
 but the packaging is in place and tested now, on purpose, rather than discovered at the end.
 
 **The sandbox is left on.** Chromium's renderer sandbox needs to create a user namespace, and
@@ -387,7 +387,7 @@ make tools                              # once: pinned generators into ./bin
 make build                              # SPA + binaries into ./bin
 cp .env.example .env                    # then edit it
 set -a && . ./.env && set +a
-./bin/purpleops
+./bin/blacklight
 ```
 
 Notes that bite people:
@@ -395,14 +395,14 @@ Notes that bite people:
 - **`make build`, not `go build`.** The frontend is embedded behind the `spa` build tag. A plain
   `go build` produces a working server that serves a placeholder page explaining that it was built
   wrong, and every other check still passes.
-- **The parent directory of `PURPLEOPS_DB_PATH` must already exist.** DuckDB creates the file;
-  nothing creates the directory. `PURPLEOPS_EVIDENCE_DIR` *is* created at startup.
+- **The parent directory of `BLACKLIGHT_DB_PATH` must already exist.** DuckDB creates the file;
+  nothing creates the directory. `BLACKLIGHT_EVIDENCE_DIR` *is* created at startup.
 - **Run it as a non-root service account** with a private data directory, under systemd or
   equivalent. `SIGTERM` starts a graceful shutdown and in-flight requests get
-  `PURPLEOPS_SHUTDOWN_TIMEOUT` to finish, so `Restart=on-failure` and a normal `systemctl restart`
+  `BLACKLIGHT_SHUTDOWN_TIMEOUT` to finish, so `Restart=on-failure` and a normal `systemctl restart`
   behave.
 - **There is no static asset directory to deploy.** The binary is the whole application.
-- **`make build` also produces `./bin/popsctl`**, the admin CLI ([`docs/cli.md`](cli.md)). Install it
+- **`make build` also produces `./bin/blctl`**, the admin CLI ([`docs/cli.md`](cli.md)). Install it
   beside the server and give it the same environment; it needs the service stopped, because DuckDB
   gives the database file to one process at a time.
 
@@ -411,22 +411,22 @@ Notes that bite people:
 ## Building the image
 
 ```sh
-make docker-build                       # purpleops:local, version stamped from git
+make docker-build                       # blacklight:local, version stamped from git
 make docker-smoke                       # build it, run it, and check every claim on this page
-IMAGE=ghcr.io/bryanster/purpleops IMAGE_TAG=v2.0.0 make docker-build
+IMAGE=ghcr.io/bryanster/blacklight IMAGE_TAG=v2.0.0 make docker-build
 ```
 
 The build context is the repository root and the Dockerfile is
 [`deploy/Dockerfile`](../deploy/Dockerfile), so a bare `docker build` needs `-f`:
 
 ```sh
-docker build -f deploy/Dockerfile -t purpleops:local .
+docker build -f deploy/Dockerfile -t blacklight:local .
 ```
 
 ### Two architectures
 
 ```sh
-docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile -t purpleops:local .
+docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile -t blacklight:local .
 ```
 
 `linux/amd64` and `linux/arm64` both work, and both build at roughly native speed. Neither build
@@ -461,7 +461,7 @@ a few percent). Where it goes:
 |---|---|
 | Chromium and its dependencies | ~345 MB |
 | Debian trixie-slim base | ~109 MB |
-| The `purpleops` binary | ~64 MB — mostly the statically linked DuckDB engine |
+| The `blacklight` binary | ~64 MB — mostly the statically linked DuckDB engine |
 | Fonts, CA certificates, curl, tzdata | ~120 MB |
 
 That is over the 500 MB the ticket aimed at, and the overshoot is Chromium: the Debian package is
@@ -470,7 +470,7 @@ The build already deletes ~230 MB of it — the Mesa hardware GL stack (LLVM, Ga
 drivers), the Vulkan validation layer and the GTK icon themes — none of which a headless renderer in
 a container without a GPU can use; Chromium falls back to the bundled SwiftShader software renderer,
 and `--print-to-pdf` produces byte-identical output with them gone. Dropping Chromium entirely would
-land the image at ~290 MB, and is the shape of a future `purpleops:slim` if the size ever matters
+land the image at ~290 MB, and is the shape of a future `blacklight:slim` if the size ever matters
 more than PDF reports working out of the box.
 
 ---
@@ -480,7 +480,7 @@ more than PDF reports working out of the box.
 **The container exits immediately.** `docker compose logs` — configuration errors are one plain
 sentence naming the variable, printed before the log format is even applied.
 
-**"must use https when PURPLEOPS_ENV=production".** Session cookies are `Secure`, and browsers do
+**"must use https when BLACKLIGHT_ENV=production".** Session cookies are `Secure`, and browsers do
 not send those over plain HTTP, so a production deployment on `http://` cannot log anyone in. Use
 `https://`, or a loopback host, which browsers treat as a secure context.
 
@@ -494,8 +494,8 @@ not send those over plain HTTP, so a production deployment on `http://` cannot l
 step:
 
 ```sh
-PURPLEOPS_HOST_PORT=9090
-PURPLEOPS_BASE_URL=http://localhost:9090
+BLACKLIGHT_HOST_PORT=9090
+BLACKLIGHT_BASE_URL=http://localhost:9090
 ```
 
 **Chromium aborts with "Failed to move to new namespace".** The sandbox — see

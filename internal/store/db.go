@@ -15,7 +15,7 @@ import (
 
 	"github.com/duckdb/duckdb-go/v2"
 
-	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/blacklight/internal/config"
 )
 
 // readerConns bounds the read pool. DuckDB parallelises a single query across
@@ -337,7 +337,7 @@ func openError(path string, err error) error {
 // the database file is held by another process. The full text is
 //
 //	IO Error: Could not set lock on file "x.duckdb": Conflicting lock is held
-//	in /usr/local/bin/purpleops (PID 1) by user purpleops.
+//	in /usr/local/bin/blacklight (PID 1) by user blacklight.
 const lockConflictMarker = "Conflicting lock is held"
 
 // isLockConflict reports whether err is DuckDB refusing to open a file another

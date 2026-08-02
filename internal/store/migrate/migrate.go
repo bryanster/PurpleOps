@@ -11,7 +11,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // sqlDir holds the shipped migrations and nothing else — the whole directory is
@@ -124,7 +124,7 @@ func Up(ctx context.Context, db DB, opts ...Option) ([]Migration, error) {
 }
 
 // Status reports the embedded migrations against what db has applied. It backs
-// `popsctl migrate status`.
+// `blctl migrate status`.
 func Status(ctx context.Context, db DB, opts ...Option) ([]State, error) {
 	m, err := Default(opts...)
 	if err != nil {

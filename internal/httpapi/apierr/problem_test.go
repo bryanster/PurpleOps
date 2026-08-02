@@ -17,8 +17,8 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bryanster/purpleops/api"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/api"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 const testRequestID = "018f3b2c-7a41-7c3e-9b0d-2f1a4c6e8d90"

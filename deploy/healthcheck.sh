@@ -16,7 +16,7 @@ set -eu
 
 # The listen address is configurable, so the port is read from it rather than
 # hardcoded. ":8080", "0.0.0.0:8080" and "[::]:8080" all reduce to 8080.
-addr="${PURPLEOPS_ADDR:-:8080}"
+addr="${BLACKLIGHT_ADDR:-:8080}"
 port="${addr##*:}"
 
 case "$port" in
@@ -24,7 +24,7 @@ case "$port" in
 	# Port 0 asks the kernel for a free port, which nothing outside the process
 	# can discover — a deployment that does that cannot be health-checked, and
 	# saying so beats reporting a healthy container that is not being probed.
-	echo "healthcheck: cannot derive a port from PURPLEOPS_ADDR=${addr}" >&2
+	echo "healthcheck: cannot derive a port from BLACKLIGHT_ADDR=${addr}" >&2
 	exit 1
 	;;
 esac

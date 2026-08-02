@@ -1,5 +1,5 @@
 {
-  "name": "PurpleOps",
+  "name": "Blacklight",
 
   // Plain Dockerfile, not docker-compose. v1 needed compose because it needed a
   // MongoDB container alongside; v2's database is a file inside the process, so
@@ -21,7 +21,7 @@
   "postCreateCommand": "make tools",
 
   "forwardPorts": [
-    8080, // the server — PURPLEOPS_ADDR
+    8080, // the server — BLACKLIGHT_ADDR
     5173 // `npm --prefix web run dev`, which proxies /api to 8080
   ],
 
@@ -39,8 +39,8 @@
     // Named volumes, so a container rebuild does not re-download every module
     // and recompile every package. Both are caches: deleting them costs time
     // and nothing else.
-    "source=purpleops-go-mod,target=/go/pkg/mod,type=volume",
-    "source=purpleops-go-build,target=/root/.cache/go-build,type=volume"
+    "source=blacklight-go-mod,target=/go/pkg/mod,type=volume",
+    "source=blacklight-go-build,target=/root/.cache/go-build,type=volume"
   ],
 
   "customizations": {

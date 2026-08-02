@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/password"
-	"github.com/bryanster/purpleops/internal/authn/secrets"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authn/secrets"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // Users, Memberships and TOTPs are the parts of the identity store this package

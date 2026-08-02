@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/migrate"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/migrate"
 )
 
 // New opens an empty database in a temporary directory of its own and closes it
@@ -28,7 +28,7 @@ func New(t testing.TB) *store.DB {
 
 	// t.TempDir registers its own removal now, so the Close below — registered
 	// after it — runs before it. The files go away only once DuckDB has let go.
-	path := filepath.Join(t.TempDir(), "purpleops.duckdb")
+	path := filepath.Join(t.TempDir(), "blacklight.duckdb")
 
 	db, err := store.Open(context.Background(), config.Database{Path: path})
 	if err != nil {

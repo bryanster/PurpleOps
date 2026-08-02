@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/authn/password"
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
-// `popsctl user create` is the bootstrap path: it is how the first
+// `blctl user create` is the bootstrap path: it is how the first
 // administrator of a deployment exists at all, so its failure modes matter as
 // much as its success.
 
@@ -141,7 +141,7 @@ func TestUserCreateRefusesADuplicate(t *testing.T) {
 func TestUserCreateNeverEchoesThePassword(t *testing.T) {
 	db := migratedDB(t)
 
-	got := runWithInput(t, map[string]string{"PURPLEOPS_LOG_LEVEL": "debug"}, testPassword,
+	got := runWithInput(t, map[string]string{"BLACKLIGHT_LOG_LEVEL": "debug"}, testPassword,
 		"user", "create", "--email", testEmail, "--name", "Alice", "--db", db, "--json")
 	if got.code != ExitOK {
 		t.Fatalf("exited %d: %s", got.code, got.stderr)
@@ -172,7 +172,7 @@ func TestUserCreateHoldsThePasswordToThePolicy(t *testing.T) {
 			if got.code != ExitFailure {
 				t.Fatalf("exited %d, want %d", got.code, ExitFailure)
 			}
-			if !strings.HasPrefix(got.stderr, "popsctl: the password ") {
+			if !strings.HasPrefix(got.stderr, "blctl: the password ") {
 				t.Errorf("the error does not say what is wrong with the password: %s", got.stderr)
 			}
 			if strings.Contains(got.stderr, plaintext) {
@@ -200,7 +200,7 @@ func TestUserCreateWithNothingOnStdin(t *testing.T) {
 	}
 }
 
-// TestUserCreateStripsOneTrailingNewline, because `echo secret | popsctl …` adds
+// TestUserCreateStripsOneTrailingNewline, because `echo secret | blctl …` adds
 // one and almost nobody remembers -n.
 func TestUserCreateStripsOneTrailingNewline(t *testing.T) {
 	db := migratedDB(t)
@@ -256,7 +256,7 @@ func TestUserCreateOnAnUnmigratedDatabase(t *testing.T) {
 	if got.code != ExitFailure {
 		t.Fatalf("exited %d, want %d", got.code, ExitFailure)
 	}
-	if !strings.Contains(got.stderr, "popsctl migrate up") {
+	if !strings.Contains(got.stderr, "blctl migrate up") {
 		t.Errorf("the error does not say how to fix it: %s", got.stderr)
 	}
 }

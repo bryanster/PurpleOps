@@ -25,8 +25,8 @@ here is the one every later feature plugs into — including the single authoriz
      compatible with the SPA, and HSTS when the base URL is HTTPS.
   7. **Request validation** — `kin-openapi` `OapiRequestValidator` against the loaded spec.
   8. (M1 inserts authn then authz here.)
-- `cmd/purpleops/main.go`: load config → open store → migrate → build server → listen → shut down
-  gracefully on `SIGINT`/`SIGTERM` within `PURPLEOPS_SHUTDOWN_TIMEOUT`.
+- `cmd/blacklight/main.go`: load config → open store → migrate → build server → listen → shut down
+  gracefully on `SIGINT`/`SIGTERM` within `BLACKLIGHT_SHUTDOWN_TIMEOUT`.
 - `/healthz` and `/version` implemented against the generated interface.
 
 **Out**
@@ -158,8 +158,8 @@ The ticket requires a per-request deadline "from config" and a `RealIP` that tru
 "only when configured to". `M0B-002` has neither, so both were added, with `.env.example` and the
 config tests updated:
 
-- `PURPLEOPS_REQUEST_TIMEOUT` (default `30s`).
-- `PURPLEOPS_TRUSTED_PROXIES` — comma-separated addresses or CIDR ranges, unset by default. The
+- `BLACKLIGHT_REQUEST_TIMEOUT` (default `30s`).
+- `BLACKLIGHT_TRUSTED_PROXIES` — comma-separated addresses or CIDR ranges, unset by default. The
   shape was chosen over a boolean deliberately (asked and confirmed): a boolean, once true, trusts
   the header from any peer, which lets anyone choose the address that gets throttled in `M1-004` and
   recorded in `M1-015`. Forwarded headers are read only when the connecting peer is in the list, and

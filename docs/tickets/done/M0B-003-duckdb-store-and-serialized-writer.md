@@ -197,5 +197,5 @@ should read this table first.
   context is cancelled.
 - `Close` blocks until the in-flight write finishes. M0B-006's shutdown path should close the store
   *after* the HTTP server has drained, not alongside it.
-- Nothing calls `store.Open` yet — wiring it into `cmd/purpleops` belongs to M0B-006, which owns
+- Nothing calls `store.Open` yet — wiring it into `cmd/blacklight` belongs to M0B-006, which owns
   process startup.

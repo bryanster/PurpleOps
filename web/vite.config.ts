@@ -6,8 +6,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 // Where `npm run dev` forwards /api. The Go server's default listen address
-// (PURPLEOPS_ADDR in .env.example); override for a server on another port.
-const apiTarget = process.env.PURPLEOPS_DEV_PROXY_TARGET ?? 'http://localhost:8080'
+// (BLACKLIGHT_ADDR in .env.example); override for a server on another port.
+const apiTarget = process.env.BLACKLIGHT_DEV_PROXY_TARGET ?? 'http://localhost:8080'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

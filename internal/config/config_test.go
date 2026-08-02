@@ -21,7 +21,7 @@ const testKey = "9Qd3JmE7uZpA0xTnCiL5wHrYbVsK2fGoP4jXeM8tUcR="
 // variables and nothing else, so every other assertion is about a default.
 func validEnv() map[string]string {
 	return map[string]string{
-		envBaseURL:       "https://purpleops.internal",
+		envBaseURL:       "https://blacklight.internal",
 		envSessionSecret: testSecret,
 		envEncryptionKey: testKey,
 	}
@@ -52,7 +52,7 @@ func TestParseAppliesDocumentedDefaults(t *testing.T) {
 	if got, want := cfg.Server.ShutdownTimeout, 15*time.Second; got != want {
 		t.Errorf("Server.ShutdownTimeout = %v, want %v", got, want)
 	}
-	if got, want := cfg.Database.Path, "./purpleops.duckdb"; got != want {
+	if got, want := cfg.Database.Path, "./blacklight.duckdb"; got != want {
 		t.Errorf("Database.Path = %q, want %q", got, want)
 	}
 	if got, want := cfg.Evidence.Dir, "./evidence"; got != want {
@@ -114,7 +114,7 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "env rejects anything else",
 		env:     map[string]string{envEnv: "staging"},
-		wantErr: `PURPLEOPS_ENV: must be one of "development", "production", got "staging"`,
+		wantErr: `BLACKLIGHT_ENV: must be one of "development", "production", got "staging"`,
 	}, {
 		name: "addr accepts host and port",
 		env:  map[string]string{envAddr: "127.0.0.1:9000"},
@@ -129,28 +129,28 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "addr rejects a bare port",
 		env:     map[string]string{envAddr: "8080"},
-		wantErr: `PURPLEOPS_ADDR: must be a host:port listen address, such as ":8080" or "127.0.0.1:8080", got "8080"`,
+		wantErr: `BLACKLIGHT_ADDR: must be a host:port listen address, such as ":8080" or "127.0.0.1:8080", got "8080"`,
 	}, {
 		name:    "addr rejects a port out of range",
 		env:     map[string]string{envAddr: ":70000"},
-		wantErr: `PURPLEOPS_ADDR: must have a port between 0 and 65535, got ":70000"`,
+		wantErr: `BLACKLIGHT_ADDR: must have a port between 0 and 65535, got ":70000"`,
 	}, {
 		name:    "addr rejects a non-numeric port",
 		env:     map[string]string{envAddr: ":http"},
-		wantErr: `PURPLEOPS_ADDR: must have a numeric port, got ":http"`,
+		wantErr: `BLACKLIGHT_ADDR: must have a numeric port, got ":http"`,
 	}, {
 		name: "base url keeps a subpath",
-		env:  map[string]string{envBaseURL: "https://example.internal/purpleops"},
+		env:  map[string]string{envBaseURL: "https://example.internal/blacklight"},
 		check: func(t *testing.T, cfg Config) {
-			if got, want := cfg.Server.BaseURL.String(), "https://example.internal/purpleops"; got != want {
+			if got, want := cfg.Server.BaseURL.String(), "https://example.internal/blacklight"; got != want {
 				t.Errorf("BaseURL = %q, want %q", got, want)
 			}
 		},
 	}, {
 		name: "base url loses its trailing slash",
-		env:  map[string]string{envBaseURL: "https://example.internal/purpleops/"},
+		env:  map[string]string{envBaseURL: "https://example.internal/blacklight/"},
 		check: func(t *testing.T, cfg Config) {
-			if got, want := cfg.Server.BaseURL.String(), "https://example.internal/purpleops"; got != want {
+			if got, want := cfg.Server.BaseURL.String(), "https://example.internal/blacklight"; got != want {
 				t.Errorf("BaseURL = %q, want %q", got, want)
 			}
 		},
@@ -166,31 +166,31 @@ func TestFields(t *testing.T) {
 		// The exact text the ticket's acceptance criteria names.
 		name:    "base url rejects a value with no scheme",
 		env:     map[string]string{envBaseURL: "localhost:8080"},
-		wantErr: `PURPLEOPS_BASE_URL: must be an absolute URL, got "localhost:8080"`,
+		wantErr: `BLACKLIGHT_BASE_URL: must be an absolute URL, got "localhost:8080"`,
 	}, {
 		name:    "base url rejects a path-only value",
-		env:     map[string]string{envBaseURL: "/purpleops"},
-		wantErr: `PURPLEOPS_BASE_URL: must be an absolute URL, got "/purpleops"`,
+		env:     map[string]string{envBaseURL: "/blacklight"},
+		wantErr: `BLACKLIGHT_BASE_URL: must be an absolute URL, got "/blacklight"`,
 	}, {
 		name:    "base url rejects a non-http scheme",
 		env:     map[string]string{envBaseURL: "ftp://example.internal"},
-		wantErr: `PURPLEOPS_BASE_URL: must use scheme http or https, got "ftp://example.internal"`,
+		wantErr: `BLACKLIGHT_BASE_URL: must use scheme http or https, got "ftp://example.internal"`,
 	}, {
 		name:    "base url rejects embedded credentials",
 		env:     map[string]string{envBaseURL: "https://admin:hunter2@example.internal"},
-		wantErr: `PURPLEOPS_BASE_URL: must not contain credentials`,
+		wantErr: `BLACKLIGHT_BASE_URL: must not contain credentials`,
 	}, {
 		name:    "base url rejects a query string",
 		env:     map[string]string{envBaseURL: "https://example.internal?tenant=1"},
-		wantErr: `PURPLEOPS_BASE_URL: must not contain a query string or fragment`,
+		wantErr: `BLACKLIGHT_BASE_URL: must not contain a query string or fragment`,
 	}, {
 		name:    "base url rejects a port out of range",
 		env:     map[string]string{envBaseURL: "https://example.internal:70000"},
-		wantErr: `PURPLEOPS_BASE_URL: must have a port between 1 and 65535`,
+		wantErr: `BLACKLIGHT_BASE_URL: must have a port between 1 and 65535`,
 	}, {
 		name:    "base url is required",
 		env:     map[string]string{envBaseURL: ""},
-		wantErr: `PURPLEOPS_BASE_URL: must be set`,
+		wantErr: `BLACKLIGHT_BASE_URL: must be set`,
 	}, {
 		name: "shutdown timeout accepts a duration",
 		env:  map[string]string{envShutdownTimeout: "45s"},
@@ -202,20 +202,20 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "shutdown timeout rejects a bare number",
 		env:     map[string]string{envShutdownTimeout: "15"},
-		wantErr: `PURPLEOPS_SHUTDOWN_TIMEOUT: must be a duration with a unit, such as "15s" or "2m", got "15"`,
+		wantErr: `BLACKLIGHT_SHUTDOWN_TIMEOUT: must be a duration with a unit, such as "15s" or "2m", got "15"`,
 	}, {
 		name:    "shutdown timeout rejects zero",
 		env:     map[string]string{envShutdownTimeout: "0s"},
-		wantErr: `PURPLEOPS_SHUTDOWN_TIMEOUT: must be a positive duration, got "0s"`,
+		wantErr: `BLACKLIGHT_SHUTDOWN_TIMEOUT: must be a positive duration, got "0s"`,
 	}, {
 		name:    "shutdown timeout rejects a negative duration",
 		env:     map[string]string{envShutdownTimeout: "-5s"},
-		wantErr: `PURPLEOPS_SHUTDOWN_TIMEOUT: must be a positive duration, got "-5s"`,
+		wantErr: `BLACKLIGHT_SHUTDOWN_TIMEOUT: must be a positive duration, got "-5s"`,
 	}, {
 		name: "db path is taken verbatim",
-		env:  map[string]string{envDBPath: "/var/lib/purpleops/db.duckdb"},
+		env:  map[string]string{envDBPath: "/var/lib/blacklight/db.duckdb"},
 		check: func(t *testing.T, cfg Config) {
-			if got, want := cfg.Database.Path, "/var/lib/purpleops/db.duckdb"; got != want {
+			if got, want := cfg.Database.Path, "/var/lib/blacklight/db.duckdb"; got != want {
 				t.Errorf("Database.Path = %q, want %q", got, want)
 			}
 		},
@@ -230,24 +230,24 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "session secret is required",
 		env:     map[string]string{envSessionSecret: ""},
-		wantErr: `PURPLEOPS_SESSION_SECRET: must be set`,
+		wantErr: `BLACKLIGHT_SESSION_SECRET: must be set`,
 	}, {
 		name:    "session secret rejects a short value",
 		env:     map[string]string{envSessionSecret: "short"},
-		wantErr: `PURPLEOPS_SESSION_SECRET: must carry at least 32 bytes of secret material, this carries 5`,
+		wantErr: `BLACKLIGHT_SESSION_SECRET: must carry at least 32 bytes of secret material, this carries 5`,
 	}, {
 		name: "session secret rejects base64 that is long but thin",
 		// 40 characters, but only 30 bytes once decoded.
 		env:     map[string]string{envSessionSecret: "cmVhbGx5IG5vdCB0aGlydHktdHdvIGJ5dGVzIQ=="},
-		wantErr: `PURPLEOPS_SESSION_SECRET: must carry at least 32 bytes of secret material, this carries 28`,
+		wantErr: `BLACKLIGHT_SESSION_SECRET: must carry at least 32 bytes of secret material, this carries 28`,
 	}, {
 		name:    "session secret rejects a placeholder",
 		env:     map[string]string{envSessionSecret: "please-change-me-before-going-live-ok"},
-		wantErr: `PURPLEOPS_SESSION_SECRET: is a placeholder or a guessable value (contains "change-me")`,
+		wantErr: `BLACKLIGHT_SESSION_SECRET: is a placeholder or a guessable value (contains "change-me")`,
 	}, {
 		name:    "session secret rejects padding pretending to be entropy",
 		env:     map[string]string{envSessionSecret: strings.Repeat("ab!", 16)},
-		wantErr: `PURPLEOPS_SESSION_SECRET: is a placeholder or a guessable value (only 3 distinct characters)`,
+		wantErr: `BLACKLIGHT_SESSION_SECRET: is a placeholder or a guessable value (only 3 distinct characters)`,
 	}, {
 		name: "session secret accepts a hex value",
 		env:  map[string]string{envSessionSecret: "3f7a1c9e5b2d8046af13c5e7920bd4681fa3c05d9e7b264180ac539fe62d7b41"},
@@ -257,14 +257,14 @@ func TestFields(t *testing.T) {
 	}, {
 		name: "the encryption key is held to the same strength as the session secret",
 		env:  map[string]string{envEncryptionKey: "short"},
-		wantErr: `PURPLEOPS_ENCRYPTION_KEY: must carry at least 32 bytes of secret material, ` +
+		wantErr: `BLACKLIGHT_ENCRYPTION_KEY: must carry at least 32 bytes of secret material, ` +
 			`this carries 5`,
 	}, {
 		// The one check that only exists because there are two keys: sharing a
 		// value re-attaches the consequence of rotating one to the other.
 		name:    "the encryption key may not be the session secret",
 		env:     map[string]string{envEncryptionKey: testSecret},
-		wantErr: `PURPLEOPS_ENCRYPTION_KEY: must not be the same value as PURPLEOPS_SESSION_SECRET`,
+		wantErr: `BLACKLIGHT_ENCRYPTION_KEY: must not be the same value as BLACKLIGHT_SESSION_SECRET`,
 	}, {
 		name: "the pending MFA window accepts a duration",
 		env:  map[string]string{envMFAPending: "90s"},
@@ -276,7 +276,7 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "the pending MFA window rejects a bare number",
 		env:     map[string]string{envMFAPending: "300"},
-		wantErr: `PURPLEOPS_MFA_PENDING_TTL: must be a duration with a unit`,
+		wantErr: `BLACKLIGHT_MFA_PENDING_TTL: must be a duration with a unit`,
 	}, {
 		name: "throttle thresholds and lockouts",
 		env: map[string]string{
@@ -301,19 +301,19 @@ func TestFields(t *testing.T) {
 		// a stricter policy but a broken one.
 		name:    "a throttle threshold rejects zero",
 		env:     map[string]string{envAccountFailures: "0"},
-		wantErr: `PURPLEOPS_LOGIN_ACCOUNT_FAILURES: must be a positive whole number, got "0"`,
+		wantErr: `BLACKLIGHT_LOGIN_ACCOUNT_FAILURES: must be a positive whole number, got "0"`,
 	}, {
 		name:    "a throttle threshold rejects a fraction",
 		env:     map[string]string{envSourceFailures: "2.5"},
-		wantErr: `PURPLEOPS_LOGIN_SOURCE_FAILURES: must be a whole number, got "2.5"`,
+		wantErr: `BLACKLIGHT_LOGIN_SOURCE_FAILURES: must be a whole number, got "2.5"`,
 	}, {
 		name:    "a throttle lockout rejects a bare number",
 		env:     map[string]string{envAccountLockout: "900"},
-		wantErr: `PURPLEOPS_LOGIN_ACCOUNT_LOCKOUT: must be a duration with a unit`,
+		wantErr: `BLACKLIGHT_LOGIN_ACCOUNT_LOCKOUT: must be a duration with a unit`,
 	}, {
 		name:    "a throttle lockout rejects zero",
 		env:     map[string]string{envSourceLockout: "0s"},
-		wantErr: `PURPLEOPS_LOGIN_SOURCE_LOCKOUT: must be a positive duration`,
+		wantErr: `BLACKLIGHT_LOGIN_SOURCE_LOCKOUT: must be a positive duration`,
 	}, {
 		name: "log level and format",
 		env:  map[string]string{envLogLevel: "debug", envLogFormat: "text"},
@@ -325,11 +325,11 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "log level rejects an unknown level",
 		env:     map[string]string{envLogLevel: "verbose"},
-		wantErr: `PURPLEOPS_LOG_LEVEL: must be one of "debug", "info", "warn", "error", got "verbose"`,
+		wantErr: `BLACKLIGHT_LOG_LEVEL: must be one of "debug", "info", "warn", "error", got "verbose"`,
 	}, {
 		name:    "log format rejects an unknown format",
 		env:     map[string]string{envLogFormat: "logfmt"},
-		wantErr: `PURPLEOPS_LOG_FORMAT: must be one of "json", "text", got "logfmt"`,
+		wantErr: `BLACKLIGHT_LOG_FORMAT: must be one of "json", "text", got "logfmt"`,
 	}, {
 		name: "chrome path accepts an executable",
 		env:  map[string]string{envChromePath: executableFile(t)},
@@ -341,11 +341,11 @@ func TestFields(t *testing.T) {
 	}, {
 		name:    "chrome path rejects a missing file",
 		env:     map[string]string{envChromePath: "/nonexistent/chromium"},
-		wantErr: `PURPLEOPS_CHROME_PATH: must be an executable file, but nothing exists at that path, got "/nonexistent/chromium"`,
+		wantErr: `BLACKLIGHT_CHROME_PATH: must be an executable file, but nothing exists at that path, got "/nonexistent/chromium"`,
 	}, {
 		name:    "chrome path rejects a file that is not executable",
 		env:     map[string]string{envChromePath: regularFile(t)},
-		wantErr: `PURPLEOPS_CHROME_PATH: must be executable`,
+		wantErr: `BLACKLIGHT_CHROME_PATH: must be executable`,
 	}, {
 		name: "values are trimmed",
 		env:  map[string]string{envLogLevel: "  warn  "},
@@ -411,7 +411,7 @@ func TestLoadErrorNamesTheVariable(t *testing.T) {
 	if !errors.As(err, &fieldErr) {
 		t.Fatalf("errors.As(%v, *FieldError) = false; the individual problems must stay inspectable", err)
 	}
-	if got, want := fieldErr.Error(), `PURPLEOPS_BASE_URL: must be an absolute URL, got "localhost:8080"`; got != want {
+	if got, want := fieldErr.Error(), `BLACKLIGHT_BASE_URL: must be an absolute URL, got "localhost:8080"`; got != want {
 		t.Errorf("FieldError.Error() = %q, want %q", got, want)
 	}
 	if got := err.Error(); !strings.HasPrefix(got, "invalid configuration") {
@@ -426,8 +426,8 @@ func TestProductionRequiresHTTPS(t *testing.T) {
 		baseURL string
 		wantErr bool
 	}{
-		{name: "production over https", env: EnvProduction, baseURL: "https://purpleops.internal", wantErr: false},
-		{name: "production over http", env: EnvProduction, baseURL: "http://purpleops.internal", wantErr: true},
+		{name: "production over https", env: EnvProduction, baseURL: "https://blacklight.internal", wantErr: false},
+		{name: "production over http", env: EnvProduction, baseURL: "http://blacklight.internal", wantErr: true},
 		{name: "production over http on localhost", env: EnvProduction, baseURL: "http://localhost:8080"},
 		{name: "production over http on a loopback IP", env: EnvProduction, baseURL: "http://127.0.0.1:8080"},
 		{name: "production over http on ipv6 loopback", env: EnvProduction, baseURL: "http://[::1]:8080"},
@@ -493,17 +493,17 @@ func TestLoadReadsTheProcessEnvironment(t *testing.T) {
 	dir := t.TempDir()
 	evidence := filepath.Join(dir, "evidence")
 
-	t.Setenv(envBaseURL, "https://purpleops.internal")
+	t.Setenv(envBaseURL, "https://blacklight.internal")
 	t.Setenv(envSessionSecret, testSecret)
 	t.Setenv(envEncryptionKey, testKey)
-	t.Setenv(envDBPath, filepath.Join(dir, "purpleops.duckdb"))
+	t.Setenv(envDBPath, filepath.Join(dir, "blacklight.duckdb"))
 	t.Setenv(envEvidenceDir, evidence)
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() = %v, want a valid config", err)
 	}
-	if got, want := cfg.Server.BaseURL.String(), "https://purpleops.internal"; got != want {
+	if got, want := cfg.Server.BaseURL.String(), "https://blacklight.internal"; got != want {
 		t.Errorf("BaseURL = %q, want %q", got, want)
 	}
 
@@ -526,7 +526,7 @@ func TestLoadRejectsUnwritablePaths(t *testing.T) {
 		wantErr string
 	}{{
 		name:    "database parent directory does not exist",
-		env:     map[string]string{envDBPath: filepath.Join(dir, "missing", "purpleops.duckdb")},
+		env:     map[string]string{envDBPath: filepath.Join(dir, "missing", "blacklight.duckdb")},
 		wantErr: envDBPath + ": needs a writable parent directory",
 	}, {
 		name:    "evidence directory is a file",

@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/blacklight/internal/config"
 )
 
 // Transport-level timeouts. They are constants rather than configuration
 // because they are properties of the protocol, not of the deployment: an
-// operator tuning how long a request may take wants PURPLEOPS_REQUEST_TIMEOUT.
+// operator tuning how long a request may take wants BLACKLIGHT_REQUEST_TIMEOUT.
 const (
 	// readHeaderTimeout bounds how long a connection may take to send its
 	// request line and headers. Without it a handful of sockets dribbling one

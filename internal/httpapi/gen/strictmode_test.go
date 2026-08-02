@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // Dropping either generator flag from api/codegen-server.yaml stops this file

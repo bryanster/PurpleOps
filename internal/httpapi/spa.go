@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // indexFile is the app's entry point, and the answer to every path the server

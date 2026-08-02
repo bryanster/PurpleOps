@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/session"
 )
 
 // clearSpentChallenge drops the browser's pending-MFA cookie once the sign-in it

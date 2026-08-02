@@ -1,6 +1,6 @@
 # e2e/
 
-The end-to-end suite: Playwright driving a browser against a real `bin/purpleops`, serving the SPA
+The end-to-end suite: Playwright driving a browser against a real `bin/blacklight`, serving the SPA
 it embedded, over HTTP, against a DuckDB file created for the run. Nothing here is mocked.
 
 **[`../docs/testing.md`](../docs/testing.md) is the guide** — how to run it, how to seed a spec, and
@@ -15,12 +15,12 @@ make e2e            # from the repository root: builds, then runs
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `specs/`                     | The tests. `smoke.spec.ts` is the product; `isolation.spec.ts` is the harness checking itself                |
 | `harness/global-setup.ts`    | Picks the mode — own the servers, or test the one on `BASE_URL` — and **throws** if there is nothing to test |
-| `harness/global-teardown.ts` | Deletes the run's databases, evidence and logs (`PURPLEOPS_E2E_KEEP=1` to keep them)                         |
+| `harness/global-teardown.ts` | Deletes the run's databases, evidence and logs (`BLACKLIGHT_E2E_KEEP=1` to keep them)                         |
 | `harness/pool.ts`            | One server per spec file, on its own fresh database                                                          |
-| `harness/server.ts`          | Starting, seeding and stopping one `purpleops` process                                                       |
+| `harness/server.ts`          | Starting, seeding and stopping one `blacklight` process                                                       |
 | `harness/test.ts`            | The extended `test`: the `seed` option, the `server` fixture, `baseURL`                                      |
 | `harness/health.ts`          | Readiness, and the error message this whole ticket exists for                                                |
-| `harness/popsctl.ts`         | Seeding, through the admin CLI rather than through SQL                                                       |
+| `harness/blctl.ts`         | Seeding, through the admin CLI rather than through SQL                                                       |
 
 ## Why it looks like this
 
@@ -44,10 +44,10 @@ carries the reasoning.
 | Variable                          | Effect                                                                                     |
 | --------------------------------- | ------------------------------------------------------------------------------------------ |
 | `BASE_URL`                        | Test a server that is already running instead of starting any. Unreachable ⇒ the run fails |
-| `PURPLEOPS_E2E_KEEP`              | Keep the run's databases and server logs, and print where                                  |
-| `PURPLEOPS_E2E_BINARY`            | The server binary to drive (default `bin/purpleops`)                                       |
-| `PURPLEOPS_E2E_POPSCTL`           | The CLI seeding uses (default `bin/popsctl`)                                               |
-| `PURPLEOPS_E2E_HEALTH_TIMEOUT_MS` | Readiness budget, in milliseconds (default 30000)                                          |
+| `BLACKLIGHT_E2E_KEEP`              | Keep the run's databases and server logs, and print where                                  |
+| `BLACKLIGHT_E2E_BINARY`            | The server binary to drive (default `bin/blacklight`)                                       |
+| `BLACKLIGHT_E2E_BLCTL`           | The CLI seeding uses (default `bin/blctl`)                                               |
+| `BLACKLIGHT_E2E_HEALTH_TIMEOUT_MS` | Readiness budget, in milliseconds (default 30000)                                          |
 
-Every other `PURPLEOPS_*` variable in your shell is **stripped** before the server is started: a
+Every other `BLACKLIGHT_*` variable in your shell is **stripped** before the server is started: a
 `.env` sourced into a terminal must not be able to decide which database the suite writes to.

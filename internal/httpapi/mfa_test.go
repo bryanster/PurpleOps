@@ -11,12 +11,12 @@ import (
 
 	pqtotp "github.com/pquerna/otp/totp"
 
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/authn/totp"
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authn/totp"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // The TOTP endpoints, through the real chain and a real temporary DuckDB
@@ -134,8 +134,8 @@ func TestEnrolmentReturnsAURIAnAppCanScan(t *testing.T) {
 	enrolment := decodeJSON[gen.TOTPEnrolment](t, recorder)
 
 	// The issuer names this deployment, so two installations do not both show up
-	// as "PurpleOps"; the label carries the address the account was created with.
-	const wantLabel = "otpauth://totp/PurpleOps%20%28localhost%29:alice@example.com"
+	// as "Blacklight"; the label carries the address the account was created with.
+	const wantLabel = "otpauth://totp/Blacklight%20%28localhost%29:alice@example.com"
 	if !strings.HasPrefix(enrolment.OtpauthUri, wantLabel) {
 		t.Errorf("otpauthUri = %q,\nwant it to start %q", enrolment.OtpauthUri, wantLabel)
 	}

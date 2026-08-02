@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // Exit codes. See the package comment for what a caller may conclude from each.
@@ -21,7 +21,7 @@ const (
 )
 
 // name is the binary, used to prefix errors on stderr the way a Unix tool does.
-const name = "popsctl"
+const name = "blctl"
 
 // Main runs one command and returns the process exit code. It writes
 // everything it has to say to the streams it is given and never calls
@@ -66,7 +66,7 @@ func Main(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 // flags were set to, and the configuration and logger built from them.
 //
 // The configuration is loaded on first use rather than up front, so that
-// `popsctl version`, `popsctl --help` and the stub commands still work on a
+// `blctl version`, `blctl --help` and the stub commands still work on a
 // machine whose environment a server would refuse to start on.
 type app struct {
 	// in is the process's standard input. It is an io.Reader rather than an
@@ -168,7 +168,7 @@ func openFailure(path string, err error) error {
 		"%s — normally the server. Stop it and run this again;\n"+
 		"with the container image that is:\n\n"+
 		"    docker compose stop\n"+
-		"    docker compose run --rm purpleops popsctl <command>",
+		"    docker compose run --rm blacklight blctl <command>",
 		err, path)
 }
 

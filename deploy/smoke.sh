@@ -11,7 +11,7 @@
 # hide four others — and the summary at the end is the verdict.
 #
 # Environment:
-#   IMAGE       image reference to build and test (default purpleops:smoke)
+#   IMAGE       image reference to build and test (default blacklight:smoke)
 #   PLATFORM    --platform for the build, e.g. linux/arm64 (default: native)
 #   SKIP_BUILD  non-empty to test an image that already exists
 #   TIMEOUT     seconds to wait for a container to report healthy (default 180)
@@ -20,7 +20,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
-IMAGE="${IMAGE:-purpleops:smoke}"
+IMAGE="${IMAGE:-blacklight:smoke}"
 PLATFORM="${PLATFORM:-}"
 SKIP_BUILD="${SKIP_BUILD:-}"
 TIMEOUT="${TIMEOUT:-180}"
@@ -28,8 +28,8 @@ TIMEOUT="${TIMEOUT:-180}"
 # Unique per run, so two smoke tests — or the leftovers of a killed one — cannot
 # collide over a name.
 RUN_ID="$$-${RANDOM}"
-CONTAINER="purpleops-smoke-${RUN_ID}"
-VOLUME="purpleops-smoke-${RUN_ID}"
+CONTAINER="blacklight-smoke-${RUN_ID}"
+VOLUME="blacklight-smoke-${RUN_ID}"
 
 failures=0
 checks=0
@@ -96,7 +96,7 @@ run_container() {
 	docker run --detach --name "$CONTAINER" \
 		--init \
 		${PLATFORM:+--platform "$PLATFORM"} \
-		--volume "${VOLUME}:/var/lib/purpleops" \
+		--volume "${VOLUME}:/var/lib/blacklight" \
 		"$@" \
 		"$IMAGE" >/dev/null
 }
@@ -177,7 +177,7 @@ healthy_or_dump "the container reaches the healthy state with --network none"
 check "runs as a non-root user" "" \
 	in_container sh -c 'test "$(id -u)" -ne 0'
 check "the data directory is writable by that user" "" \
-	in_container test -w /var/lib/purpleops
+	in_container test -w /var/lib/blacklight
 check "the API answers /healthz with status ok" '"status":"ok"' get /api/v1/healthz
 check "the API answers /version" '"version"' get /api/v1/version
 check "the embedded SPA is served" 'id="root"' get /
@@ -186,21 +186,21 @@ check_fails "the SPA is the real build, not the no-frontend placeholder" \
 
 # ── the admin CLI ─────────────────────────────────────────────────────────────
 #
-# `docker exec` is what `docker compose exec purpleops …` does, so these run the
+# `docker exec` is what `docker compose exec blacklight …` does, so these run the
 # CLI exactly the way docs/cli.md tells an operator to.
 #
 # The refusal is as much the point as the version: the server in this container
 # holds the database, DuckDB admits one process — being in the same container
 # does not change that — and an operator who runs a command anyway must get an
 # instruction rather than a driver error about locks.
-info "popsctl, the admin CLI"
-check "popsctl is on PATH and reports the same build as the server" \
+info "blctl, the admin CLI"
+check "blctl is on PATH and reports the same build as the server" \
 	"$(get /api/v1/version | sed 's/.*"version":"\([^"]*\)".*/\1/')" \
-	in_container popsctl version
-check_fails "popsctl refuses the database the running server holds" \
-	in_container popsctl db info
+	in_container blctl version
+check_fails "blctl refuses the database the running server holds" \
+	in_container blctl db info
 check "...and says which process to stop and how to run the command anyway" "docker compose run" \
-	in_container sh -c 'popsctl db info 2>&1 || true'
+	in_container sh -c 'blctl db info 2>&1 || true'
 
 # ── Chromium ──────────────────────────────────────────────────────────────────
 
@@ -212,10 +212,10 @@ check "...and says which process to stop and how to run the command anyway" "doc
 # it passes. Left as a failure rather than skipped, because a silent skip is how
 # a real breakage gets through.
 info "Chromium (M6 renders PDFs with it)"
-check "PURPLEOPS_CHROME_PATH points at an executable" "" \
-	in_container sh -c 'test -x "$PURPLEOPS_CHROME_PATH"'
+check "BLACKLIGHT_CHROME_PATH points at an executable" "" \
+	in_container sh -c 'test -x "$BLACKLIGHT_CHROME_PATH"'
 check "chromium --version runs" "Chromium" \
-	in_container sh -c 'exec "$PURPLEOPS_CHROME_PATH" --version'
+	in_container sh -c 'exec "$BLACKLIGHT_CHROME_PATH" --version'
 
 # ── the health check tells the truth ──────────────────────────────────────────
 #
@@ -225,9 +225,9 @@ check "chromium --version runs" "Chromium" \
 # probe runs in a container with no server at all, which is the same code path.
 
 info "The health check"
-check_fails "purpleops-healthcheck fails when the API does not answer" \
+check_fails "blacklight-healthcheck fails when the API does not answer" \
 	docker run --rm --network none ${PLATFORM:+--platform "$PLATFORM"} \
-	--entrypoint purpleops-healthcheck "$IMAGE"
+	--entrypoint blacklight-healthcheck "$IMAGE"
 
 # ── persistence ───────────────────────────────────────────────────────────────
 #
@@ -236,17 +236,17 @@ check_fails "purpleops-healthcheck fails when the API does not answer" \
 # must still be there.
 
 info "Persistence across a container replacement"
-secret_before="$(in_container cat /var/lib/purpleops/session.secret)"
-in_container sh -c 'echo persisted > /var/lib/purpleops/evidence/smoke.txt'
+secret_before="$(in_container cat /var/lib/blacklight/session.secret)"
+in_container sh -c 'echo persisted > /var/lib/blacklight/evidence/smoke.txt'
 
 docker rm --force "$CONTAINER" >/dev/null
 run_container
 healthy_or_dump "a replacement container on the same volume is healthy"
 
-check "the database file survived" "" in_container test -s /var/lib/purpleops/purpleops.duckdb
-check "evidence/ survived" "persisted" in_container cat /var/lib/purpleops/evidence/smoke.txt
+check "the database file survived" "" in_container test -s /var/lib/blacklight/blacklight.duckdb
+check "evidence/ survived" "persisted" in_container cat /var/lib/blacklight/evidence/smoke.txt
 check "the generated session secret survived — nobody was logged out" "$secret_before" \
-	in_container cat /var/lib/purpleops/session.secret
+	in_container cat /var/lib/blacklight/session.secret
 
 # ── summary ───────────────────────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@ here because the platform's whole point is that red and blue see different thing
 - `internal/authn/session`:
   - Token: 32 bytes from `crypto/rand`, base64url. **Only the hash is stored** (`M1-001`), so a
     database leak doesn't hand over live sessions.
-  - Cookie: `HttpOnly`, `Secure` (relaxable only when `PURPLEOPS_ENV=development`), `SameSite=Strict`,
+  - Cookie: `HttpOnly`, `Secure` (relaxable only when `BLACKLIGHT_ENV=development`), `SameSite=Strict`,
     `Path=/`, no `Domain`, expiry matching the session.
   - Absolute expiry (default 12h) and idle timeout (default 2h), both configurable.
   - `Rotate` — issue a new token for the same session on: successful login, MFA completion, password
@@ -29,7 +29,7 @@ here because the platform's whole point is that red and blue see different thing
 - Authentication middleware inserted at the marked point in `M0B-006`'s chain: resolves the cookie
   to a user, puts an `authn.Subject` in the context, and **does not** decide anything about access.
   Unauthenticated is allowed to proceed — `M1-013`'s authz middleware rejects.
-- `popsctl user create --email --name --admin` — the bootstrap path, prompting for a password on a
+- `blctl user create --email --name --admin` — the bootstrap path, prompting for a password on a
   TTY and accepting stdin otherwise. This replaces `M0B-014`'s stub.
 
 **Out**
@@ -54,7 +54,7 @@ here because the platform's whole point is that red and blue see different thing
       user. Assert both.
 - [x] A login with a `needsRehash` password transparently upgrades the stored hash (`M1-002`).
 - [x] `GET /auth/me` unauthenticated is 401 with the standard problem shape.
-- [x] `popsctl user create` creates a working admin, refuses a duplicate email, and never echoes the
+- [x] `blctl user create` creates a working admin, refuses a duplicate email, and never echoes the
       password.
 
 ## Tests
@@ -109,9 +109,9 @@ needs to know before they write it, not after.
 
 ### The token: 32 random bytes, stored as a *keyed* hash
 
-HMAC-SHA256 under `PURPLEOPS_SESSION_SECRET`, not a bare SHA-256. The ticket asks only that the hash
+HMAC-SHA256 under `BLACKLIGHT_SESSION_SECRET`, not a bare SHA-256. The ticket asks only that the hash
 be stored; keying it means a stolen database is not enough to look a token up, and it gives
-`PURPLEOPS_SESSION_SECRET` — which `.env.example` already promised "logs everybody out" when
+`BLACKLIGHT_SESSION_SECRET` — which `.env.example` already promised "logs everybody out" when
 rotated — something to actually do. It is deliberately a fast hash: the input is 256 bits of uniform
 randomness, so there is no dictionary for a slow one to defend against, and this runs on every
 authenticated request.
@@ -166,7 +166,7 @@ four handlers cannot phrase the 401 four ways. That is the line `M1-013` deletes
 
 ### Two things the ticket did not ask for
 
-- **`PURPLEOPS_SESSION_LIFETIME` and `PURPLEOPS_SESSION_IDLE_TIMEOUT`** (12h, 2h). The ticket says
+- **`BLACKLIGHT_SESSION_LIFETIME` and `BLACKLIGHT_SESSION_IDLE_TIMEOUT`** (12h, 2h). The ticket says
   both are configurable; these are the variables, validated against each other — an idle timeout
   longer than the lifetime is a startup error, because it is not a generous idle policy, it is none.
 - **`last_seen_at` is written at most once a minute** per session (`touchInterval`). Writing it on
@@ -187,7 +187,7 @@ plain strings with the constraint in the description instead. `docs/api.md`'s pr
 identifiers as UUIDv7 — that remains true; it is the `format` keyword that is not carrying its
 weight.
 
-### `popsctl user create`
+### `blctl user create`
 
 Prompts twice on a terminal with echo off (`golang.org/x/term`, a new direct dependency), reads
 stdin once when there is not one, and strips a single trailing newline so `echo … |` works. **No
@@ -202,5 +202,5 @@ and a deployment should not be left with a gap in it. A failure between the two 
 ### Verified
 
 `make lint test build` green, `make test-spa` green, `make generate` idempotent. Also driven by hand
-against a real binary: `popsctl user create`, then login, `/auth/me`, a password change with the
+against a real binary: `blctl user create`, then login, `/auth/me`, a password change with the
 session rotating, logout, and the replay of the old cookie coming back 401.

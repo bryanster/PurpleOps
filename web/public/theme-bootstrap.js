@@ -16,7 +16,7 @@
 ;(function applyStoredTheme() {
   var preference = 'system'
   try {
-    var stored = window.localStorage.getItem('purpleops.theme')
+    var stored = window.localStorage.getItem('blacklight.theme')
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       preference = stored
     }

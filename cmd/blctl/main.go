@@ -1,10 +1,10 @@
-// Command popsctl is the PurpleOps administrative CLI: migrations, database
+// Command blctl is the Blacklight administrative CLI: migrations, database
 // inspection, and — as the milestones that build them land — user management,
 // content sync, backup and report rendering.
 //
 // It is a main function over [cli], which holds the command tree, so that every
 // command is reachable from a test without a process to spawn. Run
-// `popsctl --help` for the commands, and see the package documentation of
+// `blctl --help` for the commands, and see the package documentation of
 // internal/cli for the contract they all keep: results on stdout, everything
 // else on stderr, and an exit code that distinguishes a bad command line from a
 // command that ran and failed.
@@ -16,7 +16,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bryanster/purpleops/internal/cli"
+	"github.com/bryanster/blacklight/internal/cli"
 )
 
 func main() {

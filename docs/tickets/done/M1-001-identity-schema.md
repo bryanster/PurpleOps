@@ -51,7 +51,7 @@ distinction impossible to blur.
 - [x] Writes go through `store.Write` (`M0B-003`); reads use the read pool. A test asserts no
       repository holds its own `*sql.DB`.
 - [x] Timestamps are UTC.
-- [x] `popsctl db info` shows the new tables.
+- [x] `blctl db info` shows the new tables.
 
 ## Tests
 
@@ -80,7 +80,7 @@ dependent row at a time and checks the delete stays refused until the last is go
 ### `"user"` is quoted everywhere
 
 DuckDB accepts `user` as a bare table name; PostgreSQL and the standard do not. It is quoted in the
-migration and in every query, for the escape hatch in `PLAN.md` §1. `popsctl db info` already quoted
+migration and in every query, for the escape hatch in `PLAN.md` §1. `blctl db info` already quoted
 catalog-derived identifiers, so it lists `app.user` unchanged — asserted in `internal/cli/db_test.go`.
 
 (Related: `at` *is* reserved in DuckDB and cannot be a column name. Nothing here is called that, but
@@ -144,4 +144,4 @@ disagrees with a migration fails in the package that owns it.
 ### Verified
 
 `make lint test build` green; `make generate` produced no drift. Also `go test -race ./internal/store/...`,
-and `popsctl migrate up` / `popsctl db info` against a fresh file, which lists all four new tables.
+and `blctl migrate up` / `blctl db info` against a fresh file, which lists all four new tables.

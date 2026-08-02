@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store/storetest"
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 func TestHealthzReportsAHealthyDatabase(t *testing.T) {
@@ -149,10 +149,10 @@ func TestAPanicIsA500ThatLeaksNothing(t *testing.T) {
 
 	body := recorder.Body.String()
 	for _, leak := range []string{
-		"/secret/purpleops.duckdb", // the panic value
-		"goroutine",                // the stack
-		"httpapi",                  // a package name from the stack
-		"panic",                    // even the word
+		"/secret/blacklight.duckdb", // the panic value
+		"goroutine",                 // the stack
+		"httpapi",                   // a package name from the stack
+		"panic",                     // even the word
 	} {
 		if strings.Contains(body, leak) {
 			t.Errorf("the response contains %q:\n%s", leak, body)

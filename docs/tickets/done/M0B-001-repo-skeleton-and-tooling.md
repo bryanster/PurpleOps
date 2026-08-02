@@ -13,7 +13,7 @@ how spec-first rebuilds quietly die.
 
 **In**
 
-- `go.mod` with module `github.com/bryanster/purpleops`, Go 1.24.
+- `go.mod` with module `github.com/bryanster/blacklight`, Go 1.24.
 - The directory tree from `PLAN.md` §6, each package holding a real (possibly trivial) Go file so
   the tree compiles. No empty directories, no `.gitkeep`.
 - `Makefile` with the targets below.
@@ -34,8 +34,8 @@ how spec-first rebuilds quietly die.
 go.mod  go.sum  Makefile  .golangci.yml  .gitignore  .editorconfig  README.md  LICENSE
 tools/tools.go
 api/                          # openapi.yaml lands in M0B-005
-cmd/purpleops/main.go         # prints version, exits 0 for now
-cmd/popsctl/main.go           # M0B-014 fills this in
+cmd/blacklight/main.go         # prints version, exits 0 for now
+cmd/blctl/main.go           # M0B-014 fills this in
 internal/config/              internal/store/
 internal/domain/              internal/content/
 internal/httpapi/             internal/authn/        internal/authz/
@@ -56,7 +56,7 @@ Each must work from a clean checkout on Linux with Go and Node installed.
 | `make generate` | Runs every generator: Go server stubs, TS client, anything else. Idempotent |
 | `make lint` | `golangci-lint run` + `npm run lint` in `web/` |
 | `make test` | `go test ./...` + `npm test` in `web/` |
-| `make build` | Builds `web/` then `CGO_ENABLED=1 go build -o bin/purpleops ./cmd/purpleops` with version ldflags |
+| `make build` | Builds `web/` then `CGO_ENABLED=1 go build -o bin/blacklight ./cmd/blacklight` with version ldflags |
 | `make run` | `make build` then runs the binary |
 | `make clean` | Removes `bin/`, `web/dist/` |
 
@@ -67,7 +67,7 @@ Each must work from a clean checkout on Linux with Go and Node installed.
 - [x] `go build ./...` and `go vet ./...` pass on a clean clone.
 - [x] `make tools && make generate` leaves the working tree unchanged (`git diff --exit-code`).
 - [x] Running `make generate` twice in a row produces identical output both times.
-- [x] `./bin/purpleops --version` prints a version, commit SHA and build date populated by ldflags,
+- [x] `./bin/blacklight --version` prints a version, commit SHA and build date populated by ldflags,
       not placeholder strings.
 - [x] `.golangci.yml` enables at minimum: `errcheck`, `govet`, `staticcheck`, `ineffassign`,
       `unused`, `gosec`, `bodyclose`, `sqlclosecheck`, `rowserrcheck`, `contextcheck`.

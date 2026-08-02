@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/migrate"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/migrate"
 )
 
 func main() {

@@ -347,7 +347,7 @@ var weakSecretMarkers = []string{
 	"insecure", "notsecure", "notsafe", "unsafe",
 	"password", "passwd", "secretkey", "secret-key", "secret_key",
 	"supersecret", "topsecret", "mysecret", "devsecret", "dev-secret",
-	"purpleops", "testtest", "abcdef", "123456", "qwerty",
+	"blacklight", "testtest", "abcdef", "123456", "qwerty",
 }
 
 // weakSecret returns a short reason and true when raw must be rejected. The

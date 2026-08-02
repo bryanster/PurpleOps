@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * PurpleOps end-to-end configuration.
+ * Blacklight end-to-end configuration.
  *
  * Read `harness/global-setup.ts` first: it decides whether this run starts its
  * own servers or tests one that is already up, and it is where a run that has

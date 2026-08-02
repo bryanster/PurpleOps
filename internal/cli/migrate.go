@@ -9,12 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/migrate"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/migrate"
 )
 
-// The server migrates on startup (cmd/purpleops), so these commands exist for
+// The server migrates on startup (cmd/blacklight), so these commands exist for
 // the cases where that is not enough: seeing what a release is about to do
 // before it does it, and applying a schema change to a database whose server is
 // deliberately still down.
@@ -29,7 +29,7 @@ func newMigrateCommand(a *app) *cobra.Command {
 // migrationReport is the JSON shape of both migrate commands: the same field
 // means the same thing whichever one produced it.
 type migrationReport struct {
-	// Database is echoed because --db and PURPLEOPS_DB_PATH make "which
+	// Database is echoed because --db and BLACKLIGHT_DB_PATH make "which
 	// database did this just report on" a real question.
 	Database string `json:"database"`
 	// SchemaVersion is the highest migration this database has applied, and 0

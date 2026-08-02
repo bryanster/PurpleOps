@@ -1,4 +1,4 @@
-# PurpleOps v2 — developer entry points.
+# Blacklight v2 — developer entry points.
 #
 # Every target works from a clean checkout with Go and Node installed.
 # `make tools` is the only target that needs network access; `make generate`
@@ -8,7 +8,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-MODULE   := github.com/bryanster/purpleops
+MODULE   := github.com/bryanster/blacklight
 BIN_DIR  := $(CURDIR)/bin
 WEB_DIR  := $(CURDIR)/web
 E2E_DIR  := $(CURDIR)/e2e
@@ -132,9 +132,9 @@ build: ## Build the SPA and the server and CLI binaries into ./bin
 ifneq ($(HAS_WEB),)
 	npm --prefix $(WEB_DIR) run build
 endif
-	CGO_ENABLED=1 go build -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/purpleops ./cmd/purpleops
-	# No tag: popsctl does not import web, so it embeds nothing either way.
-	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/popsctl ./cmd/popsctl
+	CGO_ENABLED=1 go build -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/blacklight ./cmd/blacklight
+	# No tag: blctl does not import web, so it embeds nothing either way.
+	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/blctl ./cmd/blctl
 
 # Separate from `test` because it only compiles once web/dist exists. CI runs it
 # after `make build`; locally, so can you.
@@ -144,11 +144,11 @@ test-spa: ## Check the built web/dist is what got embedded (run after `make buil
 
 .PHONY: run
 run: build ## Build, then run the server
-	$(BIN_DIR)/purpleops
+	$(BIN_DIR)/blacklight
 
 # --- End to end --------------------------------------------------------------
 #
-# Playwright drives a real ./bin/purpleops against a real DuckDB file, so `e2e`
+# Playwright drives a real ./bin/blacklight against a real DuckDB file, so `e2e`
 # builds first: a suite run against yesterday's binary is worse than no suite,
 # because it is green about the wrong thing. docs/testing.md is the rest of this
 # story — headed runs, the trace viewer, and how to keep a failed run's database.
@@ -179,7 +179,7 @@ e2e-report: ## Open the report from the last e2e run
 # build context is the repository, and both the SPA and the binary are compiled
 # inside it. docs/deploy.md is the operator-facing half of this.
 
-IMAGE     ?= purpleops
+IMAGE     ?= blacklight
 IMAGE_TAG ?= local
 
 .PHONY: docker-build

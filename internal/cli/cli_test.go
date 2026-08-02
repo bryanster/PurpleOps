@@ -12,14 +12,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// toolEnv is every variable popsctl reads (config.Config.bindings, the ones
+// toolEnv is every variable blctl reads (config.Config.bindings, the ones
 // marked tool). The helper below empties all of them, so a developer's own
-// exported PURPLEOPS_* cannot change what a test is testing — config treats an
+// exported BLACKLIGHT_* cannot change what a test is testing — config treats an
 // empty value as unset.
 var toolEnv = []string{
-	"PURPLEOPS_DB_PATH",
-	"PURPLEOPS_LOG_LEVEL",
-	"PURPLEOPS_LOG_FORMAT",
+	"BLACKLIGHT_DB_PATH",
+	"BLACKLIGHT_LOG_LEVEL",
+	"BLACKLIGHT_LOG_FORMAT",
 }
 
 // result is one invocation of the CLI: what it printed, where, and what it
@@ -48,7 +48,7 @@ func runWithInput(t *testing.T, env map[string]string, stdin string, args ...str
 	}
 	for name := range env {
 		if !contains(toolEnv, name) {
-			t.Fatalf("%s is not a variable popsctl reads; check the name", name)
+			t.Fatalf("%s is not a variable blctl reads; check the name", name)
 		}
 	}
 
@@ -165,7 +165,7 @@ func TestEveryCommandHasItsOwnHelp(t *testing.T) {
 			return // cobra's own commands, documented by cobra
 		}
 
-		path := strings.Fields(cmd.CommandPath())[1:] // without "popsctl"
+		path := strings.Fields(cmd.CommandPath())[1:] // without "blctl"
 		got := run(t, nil, append(path, "--help")...)
 
 		if got.code != ExitOK {
@@ -203,7 +203,7 @@ func TestExitCodesDistinguishTheKindOfFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := run(t, nil, tc.args...)
 			if got.code != tc.want {
-				t.Errorf("`popsctl %s` exited %d, want %d\nstdout: %s\nstderr: %s",
+				t.Errorf("`blctl %s` exited %d, want %d\nstdout: %s\nstderr: %s",
 					strings.Join(tc.args, " "), got.code, tc.want, got.stdout, got.stderr)
 			}
 		})
@@ -219,14 +219,14 @@ func TestAUsageErrorPrintsUsageOnStderr(t *testing.T) {
 	if got.stdout != "" {
 		t.Errorf("a usage error wrote to stdout:\n%s", got.stdout)
 	}
-	for _, want := range []string{`unknown subcommand "nonsense"`, "Usage:", "popsctl migrate"} {
+	for _, want := range []string{`unknown subcommand "nonsense"`, "Usage:", "blctl migrate"} {
 		if !strings.Contains(got.stderr, want) {
 			t.Errorf("stderr does not mention %q:\n%s", want, got.stderr)
 		}
 	}
 }
 
-// TestVersionMatchesTheVersionFlag: `popsctl version` and `popsctl --version`
+// TestVersionMatchesTheVersionFlag: `blctl version` and `blctl --version`
 // are the same answer. The end-to-end harness seeds with one of them and the
 // container smoke test uses the other.
 func TestVersionMatchesTheVersionFlag(t *testing.T) {
@@ -243,7 +243,7 @@ func TestVersionMatchesTheVersionFlag(t *testing.T) {
 }
 
 // TestJSONIsParseableForEveryCommandThatSupportsIt is the acceptance criterion
-// for `popsctl db info --json | jq`, for every command that can be piped into
+// for `blctl db info --json | jq`, for every command that can be piped into
 // it. A command added later without a JSON form fails this list, which is the
 // point of listing them here rather than discovering them by reflection.
 func TestJSONIsParseableForEveryCommandThatSupportsIt(t *testing.T) {
@@ -286,7 +286,7 @@ func TestLogsStayOnStderrInJSONMode(t *testing.T) {
 func TestTheDatabaseFlagWinsOverTheEnvironment(t *testing.T) {
 	fromEnv, fromFlag := tempDB(t), tempDB(t)
 
-	got := run(t, map[string]string{"PURPLEOPS_DB_PATH": fromEnv},
+	got := run(t, map[string]string{"BLACKLIGHT_DB_PATH": fromEnv},
 		"db", "info", "--db", fromFlag, "--json")
 	if got.code != ExitOK {
 		t.Fatalf("exited %d, want 0\nstderr: %s", got.code, got.stderr)
@@ -305,7 +305,7 @@ func TestTheDatabaseFlagWinsOverTheEnvironment(t *testing.T) {
 func TestTheEnvironmentIsUsedWhenTheFlagIsAbsent(t *testing.T) {
 	db := tempDB(t)
 
-	got := run(t, map[string]string{"PURPLEOPS_DB_PATH": db}, "db", "info", "--json")
+	got := run(t, map[string]string{"BLACKLIGHT_DB_PATH": db}, "db", "info", "--json")
 	if got.code != ExitOK {
 		t.Fatalf("exited %d, want 0\nstderr: %s", got.code, got.stderr)
 	}
@@ -318,12 +318,12 @@ func TestTheEnvironmentIsUsedWhenTheFlagIsAbsent(t *testing.T) {
 // run (exit 1), and names the variable, because that is the only way the
 // operator finds it.
 func TestABadEnvironmentIsReportedNotIgnored(t *testing.T) {
-	got := run(t, map[string]string{"PURPLEOPS_LOG_LEVEL": "loud"}, "db", "info")
+	got := run(t, map[string]string{"BLACKLIGHT_LOG_LEVEL": "loud"}, "db", "info")
 
 	if got.code != ExitFailure {
 		t.Errorf("exited %d, want %d", got.code, ExitFailure)
 	}
-	if !strings.Contains(got.stderr, "PURPLEOPS_LOG_LEVEL") {
+	if !strings.Contains(got.stderr, "BLACKLIGHT_LOG_LEVEL") {
 		t.Errorf("the error does not name the variable:\n%s", got.stderr)
 	}
 }

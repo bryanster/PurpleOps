@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 func TestGetNeverReturnsEmptyFields(t *testing.T) {
@@ -51,7 +51,7 @@ func TestLDFlagsPopulateInfo(t *testing.T) {
 		t.Fatalf("make print-ldflags: %v", err)
 	}
 
-	const pkg = "github.com/bryanster/purpleops/internal/version"
+	const pkg = "github.com/bryanster/blacklight/internal/version"
 	sentinels := map[string]string{
 		pkg + ".version":   "v0.0.0-ldflags-test",
 		pkg + ".commit":    "0123456789ab",

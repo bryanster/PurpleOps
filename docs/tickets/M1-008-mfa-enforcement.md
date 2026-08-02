@@ -57,7 +57,7 @@ do exactly one thing: enrol.
       than leaving them enforced-but-unenrolled.
 - [ ] Turning the policy **off** does not delete anyone's enrolment.
 - [ ] The last remaining admin cannot lock the platform out of itself; if a path exists, it's
-      `popsctl user reset-mfa` (`M1-007`) and it's documented.
+      `blctl user reset-mfa` (`M1-007`) and it's documented.
 
 ## Tests
 

@@ -87,7 +87,7 @@ func TestANewTokenIsRandomAndTheRightShape(t *testing.T) {
 }
 
 // TestTheHashIsKeyedByTheSecret is what makes a stolen database insufficient,
-// and what makes rotating PURPLEOPS_SESSION_SECRET a way to log everybody out.
+// and what makes rotating BLACKLIGHT_SESSION_SECRET a way to log everybody out.
 func TestTheHashIsKeyedByTheSecret(t *testing.T) {
 	t.Parallel()
 

@@ -65,7 +65,7 @@ turns correct security into support tickets.
 - Component tests (Vitest + MSW): login success/failure/throttled, MFA verify, recovery-code path,
   forced enrolment, token creation showing the secret once.
 - E2E (`M0B-013`), extending the suite toward `PLAN.md` §9's full spec:
-  1. `popsctl` creates the first admin; admin logs in.
+  1. `blctl` creates the first admin; admin logs in.
   2. Admin creates a member; member logs in and is forced through MFA enrolment.
   3. Member is denied `/admin/users` in the UI and at the API.
   4. Admin revokes the member's sessions; the member's next action lands on login.

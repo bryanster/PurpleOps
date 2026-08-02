@@ -12,13 +12,13 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/bryanster/purpleops/internal/authn/password"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
-// `popsctl user create` is how the first administrator of a deployment gets in:
+// `blctl user create` is how the first administrator of a deployment gets in:
 // there is no sign-up, and the web interface has nothing to offer somebody who
 // cannot sign in. It is also what the end-to-end suite seeds its accounts with.
 
@@ -52,11 +52,11 @@ func newUserCreateCommand(a *app) *cobra.Command {
 			"suite seeds the accounts its specs sign in as.\n\n" +
 			"The password is asked for on the terminal and not echoed. When stdin is not a\n" +
 			"terminal it is read from there instead, so a script can pipe one in:\n\n" +
-			"    printf '%s' \"$PASSWORD\" | popsctl user create --email a@b.c --name Alice --admin\n\n" +
+			"    printf '%s' \"$PASSWORD\" | blctl user create --email a@b.c --name Alice --admin\n\n" +
 			"It is never taken from a flag or an environment variable: both end up in shell\n" +
 			"history, in `ps`, and in whatever collects the logs.\n\n" +
 			"The account is created active, with a local password login. The database must\n" +
-			"already be migrated — run `popsctl migrate up` first, or start the server once.",
+			"already be migrated — run `blctl migrate up` first, or start the server once.",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			switch {
@@ -180,7 +180,7 @@ func (a *app) requireMigrated(ctx context.Context, db *store.DB) error {
 	}
 	if report.Pending > 0 {
 		return fmt.Errorf("%s is at schema version %04d of %04d, with %s to apply;\n"+
-			"run `popsctl migrate up` first, or start the server once — it migrates on startup",
+			"run `blctl migrate up` first, or start the server once — it migrates on startup",
 			cfg.Database.Path, report.SchemaVersion, report.ExpectedSchemaVersion,
 			plural(report.Pending, "migration"))
 	}
@@ -210,14 +210,14 @@ func (a *app) readPassword() (password.Plaintext, error) {
 	if err != nil {
 		return "", fmt.Errorf("reading the password from stdin: %w", err)
 	}
-	// One trailing newline, because `echo secret | popsctl …` adds one and
+	// One trailing newline, because `echo secret | blctl …` adds one and
 	// almost nobody remembers -n. Anything further in is the caller's, including
 	// trailing spaces, which are legal in a password and not ours to remove.
 	plaintext := password.Plaintext(strings.TrimSuffix(strings.TrimSuffix(string(raw), "\n"), "\r"))
 	switch {
 	case plaintext == "":
 		return "", errors.New("no password on stdin, and stdin is not a terminal to ask on\n\n" +
-			"    printf '%s' \"$PASSWORD\" | popsctl user create --email a@b.c --name Alice")
+			"    printf '%s' \"$PASSWORD\" | blctl user create --email a@b.c --name Alice")
 	case strings.ContainsAny(plaintext.Reveal(), "\r\n"):
 		return "", errors.New("the password read from stdin contains a line break; " +
 			"pipe exactly the password and nothing else")

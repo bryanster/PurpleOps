@@ -13,10 +13,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/migrate"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/migrate"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // These tests run against a real DuckDB file (see storetest) rather than a mock
@@ -332,7 +332,7 @@ func TestASecondProcessCannotMigrateTheSameFile(t *testing.T) {
 	// handles inside one process the same instance, so the lock is invisible
 	// from there.
 	dir := t.TempDir()
-	path := filepath.Join(dir, "purpleops.duckdb")
+	path := filepath.Join(dir, "blacklight.duckdb")
 	probe := buildLockProbe(t, dir)
 
 	db := openAt(t, path)

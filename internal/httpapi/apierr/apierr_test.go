@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 func TestEachConstructorCarriesItsCodeStatusAndSentinel(t *testing.T) {

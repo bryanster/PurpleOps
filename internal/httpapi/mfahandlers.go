@@ -3,10 +3,10 @@ package httpapi
 import (
 	"context"
 
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/password"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // The four TOTP endpoints (M1-006). Like the login handlers next door they

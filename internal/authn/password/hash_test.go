@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authn/password"
 )
 
 // correct is the password the round-trip tests use. It is a policy-legal

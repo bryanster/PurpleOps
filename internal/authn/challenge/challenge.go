@@ -36,19 +36,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
-// CookieName is the cookie the pending token travels in. The "pops_" prefix is
+// CookieName is the cookie the pending token travels in. The "bl_" prefix is
 // this application's, for the same reason the session cookie has one.
 //
 // It is a different name from the session cookie on purpose: a token that could
-// arrive in `pops_session` would be a token the authentication middleware tried
+// arrive in `bl_session` would be a token the authentication middleware tried
 // to resolve, and the answer to "is a pending token a session" has to be no in
 // the plumbing and not only in the logic.
-const CookieName = "pops_mfa"
+const CookieName = "bl_mfa"
 
 // tokenBytes is 32 — 256 bits, the same as a session token. The challenge is
 // short-lived, which is not a reason for it to be guessable: guessing one is
@@ -63,7 +63,7 @@ var tokenLength = tokenEncoding.EncodedLen(tokenBytes)
 // hashDomain separates this HMAC from the session token's, which is keyed with
 // the same secret. Without it a token that was somehow accepted by both lookups
 // would hash to the same stored value in both tables.
-const hashDomain = "purpleops/mfa-challenge\x00"
+const hashDomain = "blacklight/mfa-challenge\x00"
 
 const redacted = "[redacted]"
 

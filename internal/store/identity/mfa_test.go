@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // The two MFA tables (M1-006). What is being tested here is what the schema and

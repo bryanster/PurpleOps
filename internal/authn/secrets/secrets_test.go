@@ -117,7 +117,7 @@ func TestOpenRefusesWhatThisKeyDidNotSeal(t *testing.T) {
 
 // TestARotatedKeyCannotReadTheOldValues is the operational consequence the
 // documentation promises, asserted rather than only written down: changing
-// PURPLEOPS_ENCRYPTION_KEY makes every enrolled authenticator unreadable.
+// BLACKLIGHT_ENCRYPTION_KEY makes every enrolled authenticator unreadable.
 func TestARotatedKeyCannotReadTheOldValues(t *testing.T) {
 	t.Parallel()
 

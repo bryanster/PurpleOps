@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // The policy, in full.

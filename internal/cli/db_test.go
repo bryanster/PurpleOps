@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 func TestDBInfoDescribesTheDatabase(t *testing.T) {
@@ -87,7 +87,7 @@ func TestDBInfoIsReadableWithoutJSON(t *testing.T) {
 }
 
 // TestRefusesADatabaseAnotherProcessHolds is the failure an operator meets on
-// their first day: running popsctl against a deployment whose server is up.
+// their first day: running blctl against a deployment whose server is up.
 // DuckDB reports it as an IO error about locks, and this asserts we turn that
 // into an instruction.
 //

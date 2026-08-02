@@ -17,12 +17,12 @@ It is not in `app` or `content` because migration `0001` is what creates those s
 
 ## Seeing where a database is
 
-`popsctl` reports the same bookkeeping without starting a server ([`docs/cli.md`](cli.md)):
+`blctl` reports the same bookkeeping without starting a server ([`docs/cli.md`](cli.md)):
 
 ```sh
-popsctl migrate status          # every migration, applied or pending, with timestamps
-popsctl migrate up              # apply the pending ones and stop
-popsctl db info                 # schema version, file size, row counts
+blctl migrate status          # every migration, applied or pending, with timestamps
+blctl migrate up              # apply the pending ones and stop
+blctl db info                 # schema version, file size, row counts
 ```
 
 The server still migrates at startup, so this is for the deployment where you want the schema
@@ -86,9 +86,9 @@ So take a backup before deploying a release that migrates:
 
 ```sh
 # The database is a single file; stop the server before copying it.
-systemctl stop purpleops
-cp /var/lib/purpleops/purpleops.duckdb /var/backups/purpleops-$(date -u +%Y%m%dT%H%M%SZ).duckdb
-systemctl start purpleops
+systemctl stop blacklight
+cp /var/lib/blacklight/blacklight.duckdb /var/backups/blacklight-$(date -u +%Y%m%dT%H%M%SZ).duckdb
+systemctl start blacklight
 ```
 
 To recover, stop the server, put the backup back, and start the previous release.

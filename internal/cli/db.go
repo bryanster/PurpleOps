@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // walSuffix is what DuckDB calls the write-ahead log beside a database file. It
@@ -195,7 +195,7 @@ func writeDBInfo(w *tabwriter.Writer, info dbInfo) {
 
 	schema := fmt.Sprintf("%04d of %04d", info.SchemaVersion, info.ExpectedSchemaVersion)
 	if info.PendingMigrations > 0 {
-		schema += fmt.Sprintf("\t(%s pending — run `popsctl migrate up`)",
+		schema += fmt.Sprintf("\t(%s pending — run `blctl migrate up`)",
 			plural(info.PendingMigrations, "migration"))
 	}
 	fmt.Fprintf(w, "schema version\t%s\n", schema)

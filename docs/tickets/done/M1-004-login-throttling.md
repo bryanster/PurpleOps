@@ -153,9 +153,9 @@ lists lockouts; the line to change is in `throttleCredentials`.
 
 ### Configuration
 
-Four variables, defaulting to the ticket's numbers: `PURPLEOPS_LOGIN_ACCOUNT_FAILURES` (5),
-`PURPLEOPS_LOGIN_ACCOUNT_LOCKOUT` (15m), `PURPLEOPS_LOGIN_SOURCE_FAILURES` (50),
-`PURPLEOPS_LOGIN_SOURCE_LOCKOUT` (15m). The cap on the doubling is derived rather than configured:
+Four variables, defaulting to the ticket's numbers: `BLACKLIGHT_LOGIN_ACCOUNT_FAILURES` (5),
+`BLACKLIGHT_LOGIN_ACCOUNT_LOCKOUT` (15m), `BLACKLIGHT_LOGIN_SOURCE_FAILURES` (50),
+`BLACKLIGHT_LOGIN_SOURCE_LOCKOUT` (15m). The cap on the doubling is derived rather than configured:
 three doublings of whichever lockout was set.
 
 `internal/config` learned to parse an `int` for them, and rejects zero and negatives for every count

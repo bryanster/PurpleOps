@@ -122,7 +122,7 @@ in `headers.go` inviting that argument can stay as it is.
   the WCAG ratios are exact: body text 19.79:1 light / 18.96:1 dark, primary buttons 17.16:1 light /
   14.22:1 dark, secondary (`muted-foreground`) text 4.73:1 light / 7.63:1 dark. All clear AA (4.5:1),
   including the secondary text that comes closest.
-- **The proxy.** Verified against a real `go run ./cmd/purpleops`: `GET /api/v1/version` and
+- **The proxy.** Verified against a real `go run ./cmd/blacklight`: `GET /api/v1/version` and
   `GET /api/v1/healthz` through `http://localhost:5173` returned the server's own JSON and its
   security headers, with no CORS configuration on either side and no `Access-Control-*` header
   involved.

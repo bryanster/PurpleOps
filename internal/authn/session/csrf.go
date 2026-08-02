@@ -15,9 +15,9 @@ import (
 // session cookie it is deliberately *not* HttpOnly: the SPA has to read it to
 // put it in the X-CSRF-Token header, which is the whole mechanism.
 //
-// The "pops_" prefix is this application's, for the same reason
+// The "bl_" prefix is this application's, for the same reason
 // [CookieName] has one.
-const CSRFCookieName = "pops_csrf"
+const CSRFCookieName = "bl_csrf"
 
 // csrfDomain separates the CSRF derivation from the token hash in token.go.
 //
@@ -26,7 +26,7 @@ const CSRFCookieName = "pops_csrf"
 // any XSS, or anyone who saw a request, would hold the key that looks a session
 // up in the database. The two are different functions of the same input, and
 // this prefix is what makes them different.
-const csrfDomain = "purpleops/csrf\x00"
+const csrfDomain = "blacklight/csrf\x00"
 
 // CSRFToken returns the double-submit token that belongs to a session token, or
 // "" when there is no session token to derive one from.

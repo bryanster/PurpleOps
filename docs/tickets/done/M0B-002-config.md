@@ -13,7 +13,7 @@ A misconfigured server must refuse to start rather than start wrong.
 **In**
 
 - `internal/config.Config` — a nested struct, loaded by `config.Load() (Config, error)`.
-- Environment variables only (no config file). Prefix `PURPLEOPS_`.
+- Environment variables only (no config file). Prefix `BLACKLIGHT_`.
 - Validation at load: required values present, ports in range, paths writable, durations positive.
 - `.env.example` documenting every variable with a comment and a safe default.
 - Redacted `String()` on any secret-bearing type so a config dump can't leak into logs.
@@ -29,24 +29,24 @@ Model it on this; extend as later tickets need, always with validation.
 
 | Variable | Type | Default | Required | Notes |
 |---|---|---|---|---|
-| `PURPLEOPS_ADDR` | string | `:8080` | no | Listen address |
-| `PURPLEOPS_BASE_URL` | URL | — | **yes** | Public URL. OIDC/SAML redirects and share links need it. Must be absolute, no trailing slash |
-| `PURPLEOPS_DB_PATH` | path | `./purpleops.duckdb` | no | Parent dir must exist and be writable |
-| `PURPLEOPS_EVIDENCE_DIR` | path | `./evidence` | no | Created at startup if absent |
-| `PURPLEOPS_SESSION_SECRET` | secret | — | **yes** | ≥32 bytes after decoding. Reject known-weak values |
-| `PURPLEOPS_LOG_LEVEL` | enum | `info` | no | `debug\|info\|warn\|error` |
-| `PURPLEOPS_LOG_FORMAT` | enum | `json` | no | `json\|text` |
-| `PURPLEOPS_ENV` | enum | `production` | no | `development\|production`. Only this may relax cookie `Secure` |
-| `PURPLEOPS_CHROME_PATH` | path | — | no | For M6 PDF rendering |
-| `PURPLEOPS_SHUTDOWN_TIMEOUT` | duration | `15s` | no | |
+| `BLACKLIGHT_ADDR` | string | `:8080` | no | Listen address |
+| `BLACKLIGHT_BASE_URL` | URL | — | **yes** | Public URL. OIDC/SAML redirects and share links need it. Must be absolute, no trailing slash |
+| `BLACKLIGHT_DB_PATH` | path | `./blacklight.duckdb` | no | Parent dir must exist and be writable |
+| `BLACKLIGHT_EVIDENCE_DIR` | path | `./evidence` | no | Created at startup if absent |
+| `BLACKLIGHT_SESSION_SECRET` | secret | — | **yes** | ≥32 bytes after decoding. Reject known-weak values |
+| `BLACKLIGHT_LOG_LEVEL` | enum | `info` | no | `debug\|info\|warn\|error` |
+| `BLACKLIGHT_LOG_FORMAT` | enum | `json` | no | `json\|text` |
+| `BLACKLIGHT_ENV` | enum | `production` | no | `development\|production`. Only this may relax cookie `Secure` |
+| `BLACKLIGHT_CHROME_PATH` | path | — | no | For M6 PDF rendering |
+| `BLACKLIGHT_SHUTDOWN_TIMEOUT` | duration | `15s` | no | |
 
 ## Acceptance criteria
 
 - [x] `config.Load()` returns a descriptive error naming the offending variable — e.g.
-      `PURPLEOPS_BASE_URL: must be an absolute URL, got "localhost:8080"`. Never a bare
+      `BLACKLIGHT_BASE_URL: must be an absolute URL, got "localhost:8080"`. Never a bare
       `invalid config`.
 - [x] All required variables missing → the error lists **all** of them, not just the first.
-- [x] `PURPLEOPS_ENV=production` with `PURPLEOPS_BASE_URL` on plain `http://` is a startup error
+- [x] `BLACKLIGHT_ENV=production` with `BLACKLIGHT_BASE_URL` on plain `http://` is a startup error
       (except for `localhost`), because secure cookies will not work.
 - [x] A secret's value never appears in `fmt.Sprintf("%v", cfg)` or in any log line.
 - [x] `.env.example` lists every variable in the table, and a test fails if a `Config` field has no
@@ -89,7 +89,7 @@ directory take two restarts to find; leaving litter on a failed boot was judged 
 
 ### Decisions the ticket did not fix
 
-1. **A trailing slash on `PURPLEOPS_BASE_URL` is stripped, not rejected.** The ticket says "no
+1. **A trailing slash on `BLACKLIGHT_BASE_URL` is stripped, not rejected.** The ticket says "no
    trailing slash"; the stored value never has one either way. Browsers add the slash when you copy
    an address bar, and every consumer joins paths onto this value, so `…/x` and `…/x/` must not be
    able to produce two different redirect URIs. Credentials, a query string and a fragment *are*
@@ -105,7 +105,7 @@ directory take two restarts to find; leaving litter on a failed boot was judged 
    the rejected values, and `TestEnvExampleIsRejectedOnlyForItsPlaceholderSecret` asserts that an
    untouched copy of the template fails **only** on the secret — which also proves the rest of the
    template is valid.
-4. **`PURPLEOPS_ADDR` accepts port 0** (ask the kernel for a free port). `M0B-013`'s harness and any
+4. **`BLACKLIGHT_ADDR` accepts port 0** (ask the kernel for a free port). `M0B-013`'s harness and any
    test that needs a real listener will want it.
 5. **Set-but-empty is treated as unset**, and every value is trimmed of surrounding whitespace: an
    empty variable is what a compose file produces for something nobody filled in, and a trailing
@@ -115,7 +115,7 @@ directory take two restarts to find; leaving litter on a failed boot was judged 
    `TestOnlyConfigReadsTheEnvironment` parses every `.go` file in the tree with `go/ast` and rejects
    `os.Getenv`, `os.LookupEnv`, `os.Environ` and `os.ExpandEnv` outside `internal/config`. AST, not
    grep, so a mention in a comment or a string is not a false positive. It was verified to fail by
-   adding a violation to `cmd/popsctl`.
+   adding a violation to `cmd/blctl`.
 
 ### For the tickets that consume this
 
@@ -129,5 +129,5 @@ directory take two restarts to find; leaving litter on a failed boot was judged 
   validated enum nothing can convert is not usable.
 - `Server.BaseURL` is a `config.URL` wrapping `*url.URL`; the embedded pointer is exposed, so
   anything needing the stdlib type gets it, and `JoinPath` works directly on it.
-- Nothing calls `config.Load()` yet — wiring it into `cmd/purpleops` belongs to `M0B-006`, which
+- Nothing calls `config.Load()` yet — wiring it into `cmd/blacklight` belongs to `M0B-006`, which
   owns process startup.

@@ -4,12 +4,12 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 // handlers implements the generated interface. Its dependencies arrive through

@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/authn/password"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/identity"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // The login endpoints, through the real chain and a real temporary DuckDB.
@@ -79,7 +79,7 @@ func newAuthServer(t *testing.T, adjust ...func(*config.Config)) *authServer {
 	return &authServer{handler: handler, db: db, logs: logs, manager: manager}
 }
 
-// seedUser creates an account directly, which is what popsctl does — there is
+// seedUser creates an account directly, which is what blctl does — there is
 // no endpoint that creates one until M1-016.
 func (s *authServer) seedUser(t *testing.T, adjust ...func(*identity.NewUser)) identity.User {
 	t.Helper()

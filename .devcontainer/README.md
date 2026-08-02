@@ -19,7 +19,7 @@ image" should not be two different questions.
 | Claude Code | `npm install -g @anthropic-ai/claude-code` |
 | **Not** golangci-lint or oapi-codegen | The Makefile pins both and installs them into `./bin`. A second copy in the image is a second version to drift. `make tools` runs as `postCreateCommand` |
 | **Not** a database container | v2's database is a file inside the process. v1 needed compose for MongoDB; there is nothing left to orchestrate |
-| **Not** any `PURPLEOPS_*` value | The server refuses configuration it cannot use, so a container-wide default would be a value nobody chose, quietly in force. `cp .env.example .env` |
+| **Not** any `BLACKLIGHT_*` value | The server refuses configuration it cannot use, so a container-wide default would be a value nobody chose, quietly in force. `cp .env.example .env` |
 
 Ports 8080 (the server) and 5173 (`npm --prefix web run dev`, which proxies `/api` to 8080) are
 forwarded.
@@ -31,7 +31,7 @@ every module and recompile every package. They are caches: deleting them costs t
 else.
 
 ```sh
-docker volume rm purpleops-go-mod purpleops-go-build
+docker volume rm blacklight-go-mod blacklight-go-build
 ```
 
 ## Chromium is not here

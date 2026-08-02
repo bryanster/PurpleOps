@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/api"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store/identity"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/api"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // These tests are white-box (package session) because two of the things worth

@@ -1,19 +1,19 @@
-# `popsctl`, the admin CLI
+# `blctl`, the admin CLI
 
-`popsctl` is the second binary in this repository. It shares the server's packages, its
-`PURPLEOPS_*` environment and its database file, and it exists for the things a web interface
+`blctl` is the second binary in this repository. It shares the server's packages, its
+`BLACKLIGHT_*` environment and its database file, and it exists for the things a web interface
 cannot do: the first administrator of a fresh deployment, a schema migration you want to watch
 happen, and answering "what is actually in this database" without a SQL prompt.
 
 ```sh
-popsctl --help                 # every command, one line each
-popsctl <command> --help       # what that one does, and why it exists
+blctl --help                 # every command, one line each
+blctl <command> --help       # what that one does, and why it exists
 ```
 
 It is in the container image, on `PATH`:
 
 ```sh
-docker compose exec purpleops popsctl version
+docker compose exec blacklight blctl version
 ```
 
 ---
@@ -24,7 +24,7 @@ docker compose exec purpleops popsctl version
 errors are diagnostics, so a pipe only ever carries the answer.
 
 **`--json` makes the result machine-readable.** Exactly one JSON document on stdout, so
-`popsctl db info --json | jq .sizeBytes` works while the log is still on your terminal.
+`blctl db info --json | jq .sizeBytes` works while the log is still on your terminal.
 
 **Exit codes mean something.**
 
@@ -38,15 +38,15 @@ errors are diagnostics, so a pipe only ever carries the answer.
 deployment whose server is running fails, on purpose:
 
 ```
-popsctl: store: open database "/var/lib/purpleops/purpleops.duckdb": another process has this
-database open: … Conflicting lock is held in /usr/local/bin/purpleops (PID 1) …
+blctl: store: open database "/var/lib/blacklight/blacklight.duckdb": another process has this
+database open: … Conflicting lock is held in /usr/local/bin/blacklight (PID 1) …
 
 DuckDB gives a database file to one process at a time, and something else is holding
-/var/lib/purpleops/purpleops.duckdb — normally the server. Stop it and run this again;
+/var/lib/blacklight/blacklight.duckdb — normally the server. Stop it and run this again;
 with the container image that is:
 
     docker compose stop
-    docker compose run --rm purpleops popsctl <command>
+    docker compose run --rm blacklight blctl <command>
 ```
 
 Running it inside the running container does *not* dodge the lock — `docker compose exec` is still a
@@ -58,24 +58,24 @@ deployments.
 
 | Flag | Default | Notes |
 |---|---|---|
-| `--db <path>` | `PURPLEOPS_DB_PATH`, then `./purpleops.duckdb` | Which database to work on |
-| `--log-level <level>` | `PURPLEOPS_LOG_LEVEL`, then `info` | `debug`, `info`, `warn`, `error` — on stderr |
+| `--db <path>` | `BLACKLIGHT_DB_PATH`, then `./blacklight.duckdb` | Which database to work on |
+| `--log-level <level>` | `BLACKLIGHT_LOG_LEVEL`, then `info` | `debug`, `info`, `warn`, `error` — on stderr |
 | `--json` | off | Machine-readable result on stdout |
-| `--version` | — | Same output as `popsctl version` |
+| `--version` | — | Same output as `blctl version` |
 
-Only three variables are read: `PURPLEOPS_DB_PATH`, `PURPLEOPS_LOG_LEVEL` and
-`PURPLEOPS_LOG_FORMAT`. The rest of `.env.example` is the server's — `popsctl` serves no HTTP and
+Only three variables are read: `BLACKLIGHT_DB_PATH`, `BLACKLIGHT_LOG_LEVEL` and
+`BLACKLIGHT_LOG_FORMAT`. The rest of `.env.example` is the server's — `blctl` serves no HTTP and
 holds no sessions, so it does not ask you for a base URL or a session secret.
 
 ## Commands
 
-### `popsctl version`
+### `blctl version`
 
 The build identity: version, commit, build date. The same three fields the server serves at
 `GET /api/v1/version`, which is how you check the CLI you are holding matches the deployment you are
 pointing it at.
 
-### `popsctl migrate status`
+### `blctl migrate status`
 
 Every migration this binary carries, and whether this database has applied it.
 
@@ -89,19 +89,19 @@ VERSION  NAME  STATUS   APPLIED AT
 It fails, rather than printing a reassuring table, if the database and the binary disagree about a
 migration that has already run — see `docs/migrations.md`.
 
-### `popsctl migrate up`
+### `blctl migrate up`
 
 Applies the pending migrations, in order, each in its own transaction, and prints the status
 afterwards. The server does this at startup, so running it by hand is for the deployment where you
 want the schema change to happen — and to be seen to happen — before the new binary serves anything.
 
-### `popsctl db info`
+### `blctl db info`
 
 Where the database is, how large it and its write-ahead log are, its schema version, and the row
 count of every table.
 
 ```
-path             /var/lib/purpleops/purpleops.duckdb
+path             /var/lib/blacklight/blacklight.duckdb
 size             780.0 KiB  (798720 bytes)
 write-ahead log  0 B        (0 bytes)
 schema version   0001 of 0001
@@ -116,14 +116,14 @@ report. Counting rows reads every table.
 > Both `migrate` and `db info` open the database **read-write**, and create it if it is not there.
 > A typo in `--db` makes an empty database rather than an error.
 
-### `popsctl user create`
+### `blctl user create`
 
 How the first administrator of a deployment exists at all: there is no sign-up, and the web
 interface has nothing to offer somebody who cannot sign in. It is also what the end-to-end suite
 seeds its accounts with.
 
 ```
-popsctl user create --email alice@example.com --name Alice --admin
+blctl user create --email alice@example.com --name Alice --admin
 Password:
 Repeat the password:
 Created alice@example.com (admin).
@@ -133,7 +133,7 @@ The password is asked for on the terminal, twice, and not echoed. When stdin is 
 read from there instead, once:
 
 ```
-printf '%s' "$PASSWORD" | popsctl user create --email alice@example.com --name Alice --admin
+printf '%s' "$PASSWORD" | blctl user create --email alice@example.com --name Alice --admin
 ```
 
 One trailing newline is stripped, so `echo` works too. **There is no `--password` flag and no
@@ -157,15 +157,15 @@ milestone at a time. Each exits 1 and names the milestone that will implement it
 
 | Command | Arrives in |
 |---|---|
-| `popsctl content sync` | M2 — content sources |
-| `popsctl report render` | M6 — reporting |
-| `popsctl backup` | M7 — replaces the manual procedure in `docs/deploy.md` |
+| `blctl content sync` | M2 — content sources |
+| `blctl report render` | M6 — reporting |
+| `blctl backup` | M7 — replaces the manual procedure in `docs/deploy.md` |
 
 ## Building it
 
-`make build` produces `bin/popsctl` beside `bin/purpleops`. It carries no frontend, so it needs no
+`make build` produces `bin/blctl` beside `bin/blacklight`. It carries no frontend, so it needs no
 `spa` build tag and no `npm run build` — but it does need cgo, like anything that links DuckDB.
 
-The command tree lives in [`internal/cli`](../internal/cli); `cmd/popsctl` is a `main` over it and
+The command tree lives in [`internal/cli`](../internal/cli); `cmd/blctl` is a `main` over it and
 nothing else, so every command is reachable from a test without spawning a process. A new command is
 a file in that package and one line in `newRoot`.

@@ -3,7 +3,7 @@
 # Container entrypoint. It does exactly one thing before handing over: make sure
 # the server has the two keys it cannot start without.
 #
-# Why this exists at all. PURPLEOPS_SESSION_SECRET and PURPLEOPS_ENCRYPTION_KEY
+# Why this exists at all. BLACKLIGHT_SESSION_SECRET and BLACKLIGHT_ENCRYPTION_KEY
 # are required and deliberately have no defaults — internal/config rejects
 # placeholders and short values rather than falling back to something guessable.
 # That is the right behaviour for a process, and it is the wrong first
@@ -23,7 +23,7 @@
 
 set -eu
 
-log() { echo "purpleops-entrypoint: $*" >&2; }
+log() { echo "blacklight-entrypoint: $*" >&2; }
 
 die() {
 	log "$*"
@@ -31,11 +31,11 @@ die() {
 }
 
 # data_dir echoes the directory the database lives in, which is where a
-# generated key is kept: an operator who moved PURPLEOPS_DB_PATH gets the keys on
+# generated key is kept: an operator who moved BLACKLIGHT_DB_PATH gets the keys on
 # the same volume as the data they belong to, instead of on the container's
 # disposable filesystem.
 data_dir() {
-	db_path="${PURPLEOPS_DB_PATH:-/var/lib/purpleops/purpleops.duckdb}"
+	db_path="${BLACKLIGHT_DB_PATH:-/var/lib/blacklight/blacklight.duckdb}"
 	dirname "$db_path"
 }
 
@@ -85,25 +85,25 @@ ensure_key() {
 ensure_secrets() {
 	dir="$(data_dir)"
 
-	if [ -z "${PURPLEOPS_SESSION_SECRET:-}" ]; then
-		PURPLEOPS_SESSION_SECRET="$(ensure_key PURPLEOPS_SESSION_SECRET "${dir}/session.secret" \
+	if [ -z "${BLACKLIGHT_SESSION_SECRET:-}" ]; then
+		BLACKLIGHT_SESSION_SECRET="$(ensure_key BLACKLIGHT_SESSION_SECRET "${dir}/session.secret" \
 			"Sessions will survive restarts, but not the loss of this volume.")"
-		export PURPLEOPS_SESSION_SECRET
+		export BLACKLIGHT_SESSION_SECRET
 	fi
 
-	if [ -z "${PURPLEOPS_ENCRYPTION_KEY:-}" ]; then
-		PURPLEOPS_ENCRYPTION_KEY="$(ensure_key PURPLEOPS_ENCRYPTION_KEY "${dir}/encryption.key" \
+	if [ -z "${BLACKLIGHT_ENCRYPTION_KEY:-}" ]; then
+		BLACKLIGHT_ENCRYPTION_KEY="$(ensure_key BLACKLIGHT_ENCRYPTION_KEY "${dir}/encryption.key" \
 			"Losing this volume means every enrolled authenticator has to be set up again.")"
-		export PURPLEOPS_ENCRYPTION_KEY
+		export BLACKLIGHT_ENCRYPTION_KEY
 	fi
 }
 
 # Only when actually starting the server. `docker run <image> chromium
-# --version`, a shell for debugging, or `purpleops --version` itself all go
+# --version`, a shell for debugging, or `blacklight --version` itself all go
 # straight through and leave no key behind — the flags that make the server
 # print something and exit never reach the point where a secret is used.
 case "${1:-}" in
-purpleops | /usr/local/bin/purpleops)
+blacklight | /usr/local/bin/blacklight)
 	case " $* " in
 	*" --version "* | *" -version "* | *" --help "* | *" -h "*) ;;
 	*) ensure_secrets ;;

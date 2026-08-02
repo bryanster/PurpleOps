@@ -8,7 +8,7 @@ import type { Server } from './server'
 export { expect } from '@playwright/test'
 
 /**
- * A `popsctl` argument vector, e.g. `['user', 'create', '--email', 'red@x']`.
+ * A `blctl` argument vector, e.g. `['user', 'create', '--email', 'red@x']`.
  */
 export type SeedCommand = readonly string[]
 
@@ -22,7 +22,7 @@ export interface HarnessOptions {
    * ```
    *
    * Before boot, not inside a test: DuckDB admits one writer to a file at a
-   * time, so `popsctl` cannot open a database a running server is holding.
+   * time, so `blctl` cannot open a database a running server is holding.
    * That constraint is also a feature — seeding is a fact about the spec file,
    * visible at the top of it, rather than something buried in a `beforeEach`.
    */
@@ -90,7 +90,7 @@ async function attachServerLog(testInfo: TestInfo, server: Server): Promise<void
   // attachment pointing into it would be a dead link by the time anyone
   // clicked it. Copying also puts the log in `test-results/` beside the trace
   // and the screenshot, so the CI artifact contains it without extra wiring.
-  const copy = testInfo.outputPath('purpleops-server.log')
+  const copy = testInfo.outputPath('blacklight-server.log')
   await fs.writeFile(copy, body)
-  await testInfo.attach('purpleops-server.log', { path: copy, contentType: 'text/plain' })
+  await testInfo.attach('blacklight-server.log', { path: copy, contentType: 'text/plain' })
 }

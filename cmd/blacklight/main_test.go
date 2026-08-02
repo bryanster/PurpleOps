@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 // TestRunStartsAndStopsCleanly is the wiring test for the whole process:
@@ -23,14 +23,14 @@ import (
 func TestRunStartsAndStopsCleanly(t *testing.T) {
 	dir := t.TempDir()
 	setEnv(t, map[string]string{
-		"PURPLEOPS_ENV":            "development",
-		"PURPLEOPS_ADDR":           "127.0.0.1:0",
-		"PURPLEOPS_BASE_URL":       "http://localhost:8080",
-		"PURPLEOPS_DB_PATH":        filepath.Join(dir, "purpleops.duckdb"),
-		"PURPLEOPS_EVIDENCE_DIR":   filepath.Join(dir, "evidence"),
-		"PURPLEOPS_SESSION_SECRET": "Qk3nP7wZs9Lx2Vd4Rt6Yu8Ia0Oe5Cg1Hj3Mb7Nv9=",
-		"PURPLEOPS_ENCRYPTION_KEY": "7Xb2Fq8Jm4Ts6Wp0Zc3Vn5Ky9Ld1Ru7Ae5Gh2Bi4=",
-		"PURPLEOPS_LOG_FORMAT":     "json",
+		"BLACKLIGHT_ENV":            "development",
+		"BLACKLIGHT_ADDR":           "127.0.0.1:0",
+		"BLACKLIGHT_BASE_URL":       "http://localhost:8080",
+		"BLACKLIGHT_DB_PATH":        filepath.Join(dir, "blacklight.duckdb"),
+		"BLACKLIGHT_EVIDENCE_DIR":   filepath.Join(dir, "evidence"),
+		"BLACKLIGHT_SESSION_SECRET": "Qk3nP7wZs9Lx2Vd4Rt6Yu8Ia0Oe5Cg1Hj3Mb7Nv9=",
+		"BLACKLIGHT_ENCRYPTION_KEY": "7Xb2Fq8Jm4Ts6Wp0Zc3Vn5Ky9Ld1Ru7Ae5Gh2Bi4=",
+		"BLACKLIGHT_LOG_FORMAT":     "json",
 	})
 
 	logs := &syncBuffer{}
@@ -55,7 +55,7 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 
 	// The store was opened and migrated on the way: the file exists, and the
 	// migrator said what it did.
-	if _, err := os.Stat(filepath.Join(dir, "purpleops.duckdb")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "blacklight.duckdb")); err != nil {
 		t.Errorf("the database file was not created: %v", err)
 	}
 	if logged := logs.String(); !strings.Contains(logged, "applied migration") {
@@ -67,15 +67,15 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 // on stderr rather than a server that starts and then cannot do anything.
 func TestRunReportsABadConfiguration(t *testing.T) {
 	setEnv(t, map[string]string{
-		"PURPLEOPS_BASE_URL":       "not-a-url",
-		"PURPLEOPS_SESSION_SECRET": "short",
+		"BLACKLIGHT_BASE_URL":       "not-a-url",
+		"BLACKLIGHT_SESSION_SECRET": "short",
 	})
 
 	err := run(context.Background(), nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatal("run() = nil, want the configuration errors")
 	}
-	for _, want := range []string{"PURPLEOPS_BASE_URL", "PURPLEOPS_SESSION_SECRET"} {
+	for _, want := range []string{"BLACKLIGHT_BASE_URL", "BLACKLIGHT_SESSION_SECRET"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %v, want it to name %s: every problem is reported, not just the first", err, want)
 		}
@@ -99,24 +99,24 @@ func TestVersionFlagPrintsTheBuildAndExits(t *testing.T) {
 }
 
 // serverEnv is every variable the server reads (.env.example). The tests set
-// all of them, so a developer's own PURPLEOPS_* exports cannot change what is
+// all of them, so a developer's own BLACKLIGHT_* exports cannot change what is
 // being tested — and reading the process environment to find them is what
 // TestOnlyConfigReadsTheEnvironment forbids outside internal/config.
 var serverEnv = []string{
-	"PURPLEOPS_ENV",
-	"PURPLEOPS_ADDR",
-	"PURPLEOPS_BASE_URL",
-	"PURPLEOPS_REQUEST_TIMEOUT",
-	"PURPLEOPS_SHUTDOWN_TIMEOUT",
-	"PURPLEOPS_TRUSTED_PROXIES",
-	"PURPLEOPS_DB_PATH",
-	"PURPLEOPS_EVIDENCE_DIR",
-	"PURPLEOPS_SESSION_SECRET",
-	"PURPLEOPS_ENCRYPTION_KEY",
-	"PURPLEOPS_MFA_PENDING_TTL",
-	"PURPLEOPS_LOG_LEVEL",
-	"PURPLEOPS_LOG_FORMAT",
-	"PURPLEOPS_CHROME_PATH",
+	"BLACKLIGHT_ENV",
+	"BLACKLIGHT_ADDR",
+	"BLACKLIGHT_BASE_URL",
+	"BLACKLIGHT_REQUEST_TIMEOUT",
+	"BLACKLIGHT_SHUTDOWN_TIMEOUT",
+	"BLACKLIGHT_TRUSTED_PROXIES",
+	"BLACKLIGHT_DB_PATH",
+	"BLACKLIGHT_EVIDENCE_DIR",
+	"BLACKLIGHT_SESSION_SECRET",
+	"BLACKLIGHT_ENCRYPTION_KEY",
+	"BLACKLIGHT_MFA_PENDING_TTL",
+	"BLACKLIGHT_LOG_LEVEL",
+	"BLACKLIGHT_LOG_FORMAT",
+	"BLACKLIGHT_CHROME_PATH",
 }
 
 // setEnv applies env for the duration of the test and empties every other

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { popsctlBinary } from './paths'
+import { blctlBinary } from './paths'
 
 const run = promisify(execFile)
 
@@ -9,7 +9,7 @@ const run = promisify(execFile)
 const seedTimeoutMs = 60_000
 
 /**
- * Runs `popsctl` against the database described by `env`, and returns its
+ * Runs `blctl` against the database described by `env`, and returns its
  * stdout.
  *
  * This is how a spec puts the system into a known state. Seeding through the
@@ -22,12 +22,12 @@ const seedTimeoutMs = 60_000
  * nothing is how a suite ends up asserting against an empty database and
  * passing.
  */
-export async function runPopsctl(args: readonly string[], env: NodeJS.ProcessEnv): Promise<string> {
+export async function runBlctl(args: readonly string[], env: NodeJS.ProcessEnv): Promise<string> {
   try {
-    const { stdout } = await run(popsctlBinary, [...args], { env, timeout: seedTimeoutMs })
+    const { stdout } = await run(blctlBinary, [...args], { env, timeout: seedTimeoutMs })
     return stdout
   } catch (error) {
-    throw new Error(`popsctl ${args.join(' ')}\n${describe(error)}`, { cause: error })
+    throw new Error(`blctl ${args.join(' ')}\n${describe(error)}`, { cause: error })
   }
 }
 

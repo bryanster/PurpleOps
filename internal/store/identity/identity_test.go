@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/identity"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // These tests run against a real migrated DuckDB file (see storetest), because

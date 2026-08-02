@@ -137,13 +137,13 @@ describe('the CSRF middleware', () => {
   }
 
   afterEach(() => {
-    document.cookie = 'pops_csrf=; max-age=0'
+    document.cookie = 'bl_csrf=; max-age=0'
   })
 
   it('attaches the token from the cookie to a state-changing request', async () => {
     // The acceptance criterion for the client half of M1-005: no component
     // touches this, and no call site opts in.
-    document.cookie = 'pops_csrf=the-derived-token'
+    document.cookie = 'bl_csrf=the-derived-token'
     const captured = captureLogout()
 
     await api.POST('/auth/logout')
@@ -152,7 +152,7 @@ describe('the CSRF middleware', () => {
   })
 
   it('sends no token on a request that changes nothing', async () => {
-    document.cookie = 'pops_csrf=the-derived-token'
+    document.cookie = 'bl_csrf=the-derived-token'
     const captured: { headers?: Headers } = {}
     server.use(
       get('/version', ({ request }) => {
@@ -178,7 +178,7 @@ describe('the CSRF middleware', () => {
 
   it('reads its own cookie rather than the first one it finds', async () => {
     document.cookie = 'other=first'
-    document.cookie = 'pops_csrf=the-derived-token'
+    document.cookie = 'bl_csrf=the-derived-token'
     const captured = captureLogout()
 
     await api.POST('/auth/logout')

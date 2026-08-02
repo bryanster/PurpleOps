@@ -1,4 +1,4 @@
-# PurpleOps, as one container.
+# Blacklight, as one container.
 #
 #     docker compose up --build
 #
@@ -8,22 +8,22 @@
 # fetched at runtime.
 #
 # For anything beyond a laptop, read docs/deploy.md first — at minimum you must
-# set PURPLEOPS_BASE_URL, PURPLEOPS_SESSION_SECRET and PURPLEOPS_ENCRYPTION_KEY.
+# set BLACKLIGHT_BASE_URL, BLACKLIGHT_SESSION_SECRET and BLACKLIGHT_ENCRYPTION_KEY.
 
-name: purpleops
+name: blacklight
 
 services:
-  purpleops:
+  blacklight:
     build:
       context: .
       dockerfile: deploy/Dockerfile
       args:
         # Overridable so a release build can stamp real values; the Makefile's
         # docker-build target passes what `git describe` says.
-        VERSION: ${PURPLEOPS_VERSION:-v2-dev}
-        COMMIT: ${PURPLEOPS_COMMIT:-unknown}
-        BUILD_DATE: ${PURPLEOPS_BUILD_DATE:-unknown}
-    image: purpleops:local
+        VERSION: ${BLACKLIGHT_VERSION:-v2-dev}
+        COMMIT: ${BLACKLIGHT_COMMIT:-unknown}
+        BUILD_DATE: ${BLACKLIGHT_BUILD_DATE:-unknown}
+    image: blacklight:local
 
     # Optional, and optional on purpose: `docker compose up` must work on a
     # clean clone, where .env does not exist. Copy .env.example to .env when you
@@ -32,11 +32,11 @@ services:
       - path: .env
         required: false
 
-    # Change the left-hand side to move the published port. PURPLEOPS_BASE_URL
+    # Change the left-hand side to move the published port. BLACKLIGHT_BASE_URL
     # has to agree with whatever a browser types — OIDC redirect URIs and report
     # share links are built from it — so if you move this, set that too.
     ports:
-      - "${PURPLEOPS_HOST_PORT:-8080}:8080"
+      - "${BLACKLIGHT_HOST_PORT:-8080}:8080"
 
     # Everything that must survive the container. The DuckDB file, its WAL, any
     # generated keys and uploaded evidence all live here; the image
@@ -46,7 +46,7 @@ services:
     # `docker compose down` keeps this volume. `docker compose down -v` deletes
     # it, and with it every engagement in the deployment.
     volumes:
-      - purpleops-data:/var/lib/purpleops
+      - blacklight-data:/var/lib/blacklight
 
     # Chromium's renderer processes use shared memory and the 64 MB default is
     # not enough; a starved renderer crashes mid-render (M6). Cheap insurance —
@@ -64,4 +64,4 @@ services:
     # inherits it from there. `docker compose ps` shows the state.
 
 volumes:
-  purpleops-data:
+  blacklight-data:

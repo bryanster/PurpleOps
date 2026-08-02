@@ -21,7 +21,7 @@ phone, it means reinstalling.
   invalidates all previous codes.
 - UI surfaces remaining unused count and warns below 3.
 - Every use writes to the activity log (`M1-015`) — recovery-code use is a security-relevant event.
-- `popsctl user reset-mfa --email` — the break-glass path for a locked-out admin, documented in
+- `blctl user reset-mfa --email` — the break-glass path for a locked-out admin, documented in
   `docs/security.md`.
 
 **Out**
@@ -39,7 +39,7 @@ phone, it means reinstalling.
       alphabet (no `0/O`, `1/l`).
 - [ ] Verification is throttled (`M1-004`) and constant-time against the stored hashes.
 - [ ] Disabling TOTP deletes the recovery codes.
-- [ ] `popsctl user reset-mfa` clears TOTP and recovery codes, writes an activity entry, and prints
+- [ ] `blctl user reset-mfa` clears TOTP and recovery codes, writes an activity entry, and prints
       a clear warning about what it just did.
 
 ## Tests
@@ -47,4 +47,4 @@ phone, it means reinstalling.
 - Generate → use one → count decrements → reuse rejected.
 - Regenerate invalidates old codes.
 - Recovery login yields `mfa_satisfied` session.
-- `popsctl user reset-mfa` integration test.
+- `blctl user reset-mfa` integration test.

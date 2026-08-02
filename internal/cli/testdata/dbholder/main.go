@@ -2,7 +2,7 @@
 //
 // DuckDB gives a database file to one process at a time, and that is invisible
 // from inside a single process: two opens of the same path there share one
-// instance and both succeed. So the test that asserts popsctl refuses a
+// instance and both succeed. So the test that asserts blctl refuses a
 // database the server is holding needs a real second process to do the holding
 // — this one, which opens the file and then does nothing until its stdin
 // closes.
@@ -18,8 +18,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // held is what the test waits for before it does anything: a holder that has

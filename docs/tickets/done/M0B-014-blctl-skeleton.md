@@ -1,4 +1,4 @@
-# M0B-014 — `popsctl` admin CLI skeleton
+# M0B-014 — `blctl` admin CLI skeleton
 
 **Milestone:** M0b · **Size:** S · **Depends on:** M0B-004
 
@@ -15,18 +15,18 @@ Building the skeleton now means later tickets add a subcommand instead of invent
 
 **In**
 
-- `cmd/popsctl` using the same config loading as the server, sharing `internal/*` packages — one
+- `cmd/blctl` using the same config loading as the server, sharing `internal/*` packages — one
   codebase, two entrypoints.
 - Command framework (`cobra` or `urfave/cli` — pick one, note why) with `--help` on every command.
 - Commands implemented now:
-  - `popsctl version`
-  - `popsctl migrate status` — list applied/pending migrations
-  - `popsctl migrate up` — apply pending
-  - `popsctl db info` — path, size, schema version, row counts per table
+  - `blctl version`
+  - `blctl migrate status` — list applied/pending migrations
+  - `blctl migrate up` — apply pending
+  - `blctl db info` — path, size, schema version, row counts per table
 - Registered-but-stubbed commands that exit non-zero with "not implemented in this milestone", so
   the surface is visible: `user create`, `content sync`, `backup`, `report render`.
 - Global flags: `--db`, `--log-level`, `--json` (machine-readable output).
-- `make build` produces `bin/popsctl` alongside the server; the Docker image includes it.
+- `make build` produces `bin/blctl` alongside the server; the Docker image includes it.
 
 **Out**
 
@@ -34,16 +34,16 @@ Building the skeleton now means later tickets add a subcommand instead of invent
 
 ## Acceptance criteria
 
-- [x] `popsctl --help` lists every command with a one-line description.
-- [x] `popsctl migrate status` on a fresh DB lists all migrations as pending; after `migrate up`,
+- [x] `blctl --help` lists every command with a one-line description.
+- [x] `blctl migrate status` on a fresh DB lists all migrations as pending; after `migrate up`,
       all as applied, with timestamps.
 - [x] Commands respect `--json` and emit parseable output on stdout, with human/log output on stderr,
-      so `popsctl db info --json | jq` works.
+      so `blctl db info --json | jq` works.
 - [x] Exit codes are meaningful: 0 success, 1 runtime failure, 2 usage error.
 - [x] The CLI refuses to open a database the server currently holds, with a clear message — DuckDB's
       single-writer rule (`M0B-003`) makes this a guaranteed confusion otherwise. Test it.
 - [x] Stub commands exit 1 with a message naming the milestone that will implement them.
-- [x] `popsctl` is in the Docker image and `docker compose exec app popsctl version` works.
+- [x] `blctl` is in the Docker image and `docker compose exec app blctl version` works.
 
 ## Tests
 
@@ -62,7 +62,7 @@ per-command `--help` and shell completion are all things this would otherwise gr
 through M7 add commands, and cobra's conventions are the ones an operator's fingers already know.
 Two dependencies, both of which only `internal/cli` imports — the server does not.
 
-The command tree is `internal/cli`, not `package main`. `cmd/popsctl` is thirty lines: a signal
+The command tree is `internal/cli`, not `package main`. `cmd/blctl` is thirty lines: a signal
 handler and `os.Exit(cli.Main(...))`. That is what makes the tests in the ticket possible — they
 call `cli.Main` with buffers and read the exit code back as a value, so nothing is spawned and the
 coverage profile means something.
@@ -71,12 +71,12 @@ coverage profile means something.
 
 The scope says "the same config loading as the server", and it very nearly is: the same
 `internal/config`, the same variables, the same parsers. But `config.Load` requires
-`PURPLEOPS_BASE_URL` and `PURPLEOPS_SESSION_SECRET`, and demanding a session secret before
-`popsctl db info` will open a file is a checklist with nothing behind it — an operator who hits it
+`BLACKLIGHT_BASE_URL` and `BLACKLIGHT_SESSION_SECRET`, and demanding a session secret before
+`blctl db info` will open a file is a checklist with nothing behind it — an operator who hits it
 once learns to export junk values, which is worse than not asking.
 
-So `config.LoadTool` was added: the bindings marked `tool` (`PURPLEOPS_DB_PATH`,
-`PURPLEOPS_LOG_LEVEL`, `PURPLEOPS_LOG_FORMAT`), parsed by the same code, returned as a `config.Tool`
+So `config.LoadTool` was added: the bindings marked `tool` (`BLACKLIGHT_DB_PATH`,
+`BLACKLIGHT_LOG_LEVEL`, `BLACKLIGHT_LOG_FORMAT`), parsed by the same code, returned as a `config.Tool`
 rather than a half-filled `Config`. The distinct type keeps that package's promise intact: every
 field of what you are handed was read and validated. `TestEveryToolFieldIsBoundToAToolVariable` ties
 the two together in both directions, the way `TestEveryConfigFieldIsBound` already does for the
@@ -115,16 +115,16 @@ typed `*usageError` carrying the command whose usage block to print. `--log-leve
 `pflag.Value` over `config.LogLevel` for the same reason: a bad level is rejected during parsing, so
 it exits 2 as a bad command line rather than 1 as a failure to run, and the message is config's own.
 
-A command group invoked without a subcommand — `popsctl migrate` — is a usage error and exit 2,
+A command group invoked without a subcommand — `blctl migrate` — is a usage error and exit 2,
 rather than help and exit 0. The invocation that reaches there is a script with a typo far more
 often than it is a person looking around, and a person looking around types `--help`, which still
-prints to stdout and exits 0. The root behaves the same way: bare `popsctl` exits 2.
+prints to stdout and exits 0. The root behaves the same way: bare `blctl` exits 2.
 
 ### Deviations from the ticket, small
 
-- **`docker compose exec app popsctl version`** — the compose service is named `purpleops`, not
+- **`docker compose exec app blctl version`** — the compose service is named `blacklight`, not
   `app` (`compose.yml` predates this ticket). Verified as
-  `docker compose exec purpleops popsctl version`, and as three checks in `deploy/smoke.sh`.
+  `docker compose exec blacklight blctl version`, and as three checks in `deploy/smoke.sh`.
 - **`db info` lists every schema, not the current one.** Migration `0001` creates `app` and
   `content`, so a listing filtered to `current_schema()` would show the migrator's bookkeeping table
   and nothing else from M3 onwards. Table names are reported qualified (`app.executions`).
@@ -135,7 +135,7 @@ prints to stdout and exits 0. The root behaves the same way: bare `popsctl` exit
 
 ### Everything else that moved
 
-- `deploy/Dockerfile` builds and ships `popsctl` (no `spa` tag — it imports no frontend); three
+- `deploy/Dockerfile` builds and ships `blctl` (no `spa` tag — it imports no frontend); three
   checks in `deploy/smoke.sh` cover it, including the refusal against the live server.
 - `docs/cli.md` is new, and is the operator-facing reference. `docs/deploy.md`,
   `docs/migrations.md`, `docs/testing.md`, `README.md` and `.env.example` point at it.

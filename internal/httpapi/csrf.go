@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // CSRFHeader is where a state-changing request echoes the value of the
-// pops_csrf cookie. It is declared as a parameter on the operations that need
+// bl_csrf cookie. It is declared as a parameter on the operations that need
 // it in api/openapi.yaml, and TestTheCSRFHeaderMatchesTheSpecification checks
 // that the two agree.
 //
@@ -68,7 +68,7 @@ var csrfExemptRoutes = map[string]string{
 // test is what stops it decaying the same way.
 //
 // What it enforces, for a state-changing request that authenticated by cookie:
-// the X-CSRF-Token header must equal the pops_csrf cookie (the double-submit),
+// the X-CSRF-Token header must equal the bl_csrf cookie (the double-submit),
 // *and* both must equal the value derived from this session's token
 // ([session.Manager.CSRFToken]). The second comparison is what a cookie an
 // attacker planted cannot satisfy.

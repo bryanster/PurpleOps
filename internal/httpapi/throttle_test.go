@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // Login throttling through the real chain (M1-004). The limiter's own behaviour

@@ -7,11 +7,11 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/blacklight/internal/config"
 )
 
 // The forwarding headers a reverse proxy sets. Only ever read from a peer in
-// PURPLEOPS_TRUSTED_PROXIES — see [realIP].
+// BLACKLIGHT_TRUSTED_PROXIES — see [realIP].
 const (
 	forwardedForHeader = "X-Forwarded-For"
 	realIPHeader       = "X-Real-Ip"

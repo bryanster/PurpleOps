@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.9
 #
-# The PurpleOps container image — the supported deployment artefact (PLAN.md §8).
+# The Blacklight container image — the supported deployment artefact (PLAN.md §8).
 #
 # Build it from the repository root, because the context is the whole repo:
 #
 #     make docker-build
-#     docker build -f deploy/Dockerfile -t purpleops:local .
+#     docker build -f deploy/Dockerfile -t blacklight:local .
 #
 # Three stages: the SPA, the server binary, and a runtime that carries Chromium
 # for M6's PDF rendering. Everything the image needs is baked in — first boot
@@ -90,7 +90,7 @@ COPY --from=web /src/web/dist ./web/dist
 
 # Version stamping. The Makefile passes real values; the defaults keep a bare
 # `docker build` honest rather than claiming a version it does not have.
-ARG MODULE=github.com/bryanster/purpleops
+ARG MODULE=github.com/bryanster/blacklight
 ARG VERSION=v2-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
@@ -106,7 +106,7 @@ ARG BUILD_DATE=unknown
 # linux/amd64,linux/arm64` runs the two builds in parallel instead of queueing
 # on one lock. The module cache is architecture-independent and stays shared.
 #
-# Both binaries, in one layer: popsctl is how an operator migrates, inspects and
+# Both binaries, in one layer: blctl is how an operator migrates, inspects and
 # (from M1) creates the first user, and an image without it means reaching for
 # `docker run` with a second image that has the same DuckDB version. It does not
 # import web/, so it gets no `spa` tag and embeds no frontend.
@@ -125,8 +125,8 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
         -X ${MODULE}/internal/version.version=${VERSION} \
         -X ${MODULE}/internal/version.commit=${COMMIT} \
         -X ${MODULE}/internal/version.buildDate=${BUILD_DATE}"; \
-    go build -tags spa -trimpath -ldflags "$ldflags" -o /out/purpleops ./cmd/purpleops; \
-    go build -trimpath -ldflags "$ldflags" -o /out/popsctl ./cmd/popsctl
+    go build -tags spa -trimpath -ldflags "$ldflags" -o /out/blacklight ./cmd/blacklight; \
+    go build -trimpath -ldflags "$ldflags" -o /out/blctl ./cmd/blctl
 
 # ─── Stage 3 · runtime ────────────────────────────────────────────────────────
 FROM debian:${DEBIAN_RELEASE}-slim AS runtime
@@ -182,9 +182,9 @@ ARG GID=10001
 #
 # Not --system: that reserves uids below 1000, and a five-digit uid is the point
 # — it cannot collide with a real account on a host that shares the namespace.
-RUN groupadd --gid ${GID} purpleops \
+RUN groupadd --gid ${GID} blacklight \
  && useradd --uid ${UID} --gid ${GID} --no-create-home --no-log-init \
-      --home-dir /var/lib/purpleops --shell /usr/sbin/nologin purpleops
+      --home-dir /var/lib/blacklight --shell /usr/sbin/nologin blacklight
 
 # One directory holds everything that must survive the container: the database,
 # its WAL, and uploaded evidence. Mount a volume here or lose your data — see
@@ -199,32 +199,32 @@ RUN groupadd --gid ${GID} purpleops \
 # No VOLUME instruction. It would make every `docker run` without -v leave an
 # anonymous volume behind, and it would not save the operator who meant to
 # persist their data anyway; compose declares the volume explicitly instead.
-RUN install -d -o purpleops -g purpleops -m 0750 \
-      /var/lib/purpleops \
-      /var/lib/purpleops/evidence
+RUN install -d -o blacklight -g blacklight -m 0750 \
+      /var/lib/blacklight \
+      /var/lib/blacklight/evidence
 
 # Defaults that make the image self-consistent. Everything here is overridable
 # from the environment (.env.example documents each one); these are only the
 # values that describe *this image's* filesystem rather than a deployment's
-# policy. PURPLEOPS_BASE_URL is one of the two required variables and has no
+# policy. BLACKLIGHT_BASE_URL is one of the two required variables and has no
 # sensible default — localhost is right for `docker compose up` on a laptop and
 # wrong for anything else, so docs/deploy.md leads with changing it.
-ENV PURPLEOPS_ADDR=:8080 \
-    PURPLEOPS_BASE_URL=http://localhost:8080 \
-    PURPLEOPS_DB_PATH=/var/lib/purpleops/purpleops.duckdb \
-    PURPLEOPS_EVIDENCE_DIR=/var/lib/purpleops/evidence \
-    PURPLEOPS_CHROME_PATH=/usr/bin/chromium
+ENV BLACKLIGHT_ADDR=:8080 \
+    BLACKLIGHT_BASE_URL=http://localhost:8080 \
+    BLACKLIGHT_DB_PATH=/var/lib/blacklight/blacklight.duckdb \
+    BLACKLIGHT_EVIDENCE_DIR=/var/lib/blacklight/evidence \
+    BLACKLIGHT_CHROME_PATH=/usr/bin/chromium
 
-COPY --from=build /out/purpleops /usr/local/bin/purpleops
-# On PATH, so `docker compose exec purpleops popsctl db info` is the whole
+COPY --from=build /out/blacklight /usr/local/bin/blacklight
+# On PATH, so `docker compose exec blacklight blctl db info` is the whole
 # command. It runs as the same user against the same volume, which is what
 # makes it the supported way to touch a running deployment's database.
-COPY --from=build /out/popsctl /usr/local/bin/popsctl
-COPY --chmod=0755 deploy/entrypoint.sh /usr/local/bin/purpleops-entrypoint
-COPY --chmod=0755 deploy/healthcheck.sh /usr/local/bin/purpleops-healthcheck
+COPY --from=build /out/blctl /usr/local/bin/blctl
+COPY --chmod=0755 deploy/entrypoint.sh /usr/local/bin/blacklight-entrypoint
+COPY --chmod=0755 deploy/healthcheck.sh /usr/local/bin/blacklight-healthcheck
 
-USER purpleops:purpleops
-WORKDIR /var/lib/purpleops
+USER blacklight:blacklight
+WORKDIR /var/lib/blacklight
 EXPOSE 8080
 
 # The health check is defined here rather than in compose.yml so that every way
@@ -234,13 +234,13 @@ EXPOSE 8080
 # start-period covers migrations on a cold database; failures during it do not
 # count against retries.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
-    CMD ["purpleops-healthcheck"]
+    CMD ["blacklight-healthcheck"]
 
 # The entrypoint does one job (see the script) and then execs, so the server is
 # PID 1 in all but name and SIGTERM reaches it directly. CMD is the command
 # rather than arguments, so `docker run <image> chromium --version` works.
-ENTRYPOINT ["purpleops-entrypoint"]
-CMD ["purpleops"]
+ENTRYPOINT ["blacklight-entrypoint"]
+CMD ["blacklight"]
 
 # Re-declared: a build argument does not cross a stage boundary, and these must
 # say the same thing as the binary's own --version. Last, so that changing them
@@ -248,9 +248,9 @@ CMD ["purpleops"]
 ARG VERSION=v2-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
-LABEL org.opencontainers.image.title="PurpleOps" \
+LABEL org.opencontainers.image.title="Blacklight" \
       org.opencontainers.image.description="Self-hosted purple-team assessment platform" \
-      org.opencontainers.image.source="https://github.com/bryanster/purpleops" \
+      org.opencontainers.image.source="https://github.com/bryanster/blacklight" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${COMMIT}" \

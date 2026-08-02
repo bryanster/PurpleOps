@@ -1,4 +1,4 @@
-module github.com/bryanster/purpleops
+module github.com/bryanster/blacklight
 
 go 1.25.0
 

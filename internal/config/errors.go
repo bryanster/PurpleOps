@@ -9,7 +9,7 @@ import (
 // names the variable, because "invalid config" tells an operator nothing about
 // which of ten values to go and fix.
 type FieldError struct {
-	// Name is the environment variable, e.g. "PURPLEOPS_BASE_URL".
+	// Name is the environment variable, e.g. "BLACKLIGHT_BASE_URL".
 	Name string
 	// Value is the offending value, echoed back so the operator can see what
 	// the process actually received (leading whitespace, a stray quote from a

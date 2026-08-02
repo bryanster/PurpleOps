@@ -14,7 +14,7 @@ with moving parts.
 
 ## The end-to-end suite
 
-[`e2e/`](../e2e) is a Playwright project of its own. It drives `bin/purpleops` — the binary, with
+[`e2e/`](../e2e) is a Playwright project of its own. It drives `bin/blacklight` — the binary, with
 this build's SPA embedded — over HTTP, against a DuckDB file created for the run and deleted after
 it. Nothing is mocked. If it passes, those pieces genuinely fit together.
 
@@ -43,14 +43,14 @@ it buys confidence nothing earned. `PLAN.md` §9 names it.
 
 The replacement has two modes and neither can pass silently:
 
-- **`BASE_URL` unset** — the harness owns the servers. Each spec file gets its own `purpleops`
+- **`BASE_URL` unset** — the harness owns the servers. Each spec file gets its own `blacklight`
   process on its own fresh database. A server that never becomes healthy fails the run, quoting the
   tail of its own log.
 - **`BASE_URL` set** — you are pointing the suite at a server you started. Global setup probes
   `$BASE_URL/api/v1/healthz` and **throws** if nothing healthy answers within the budget:
 
   ```
-  Error: No healthy PurpleOps server answered at http://127.0.0.1:45999/api/v1/healthz
+  Error: No healthy Blacklight server answered at http://127.0.0.1:45999/api/v1/healthz
     waited:       3065 ms of a 3000 ms budget
     last attempt: fetch failed: connect ECONNREFUSED 127.0.0.1:45999
   ```
@@ -82,7 +82,7 @@ workers.
 ### Seeding
 
 Put the system into a known state with `test.use({ seed: [...] })` at the top of a spec file. Each
-entry is an argument vector for [`popsctl`](../cmd/popsctl), run in order against that file's fresh
+entry is an argument vector for [`blctl`](../cmd/blctl), run in order against that file's fresh
 database **before its server boots**:
 
 ```ts
@@ -94,7 +94,7 @@ test.use({
 })
 ```
 
-Two reasons it is `popsctl` and not SQL. A fixture full of `INSERT`s drifts away from what the
+Two reasons it is `blctl` and not SQL. A fixture full of `INSERT`s drifts away from what the
 application actually writes, and the first thing it stops exercising is the validation that would
 have caught the bug. And DuckDB admits one writer to a file at a time, so a seed step *during* a
 test would fail on the running server's lock — before the server starts is not a limitation, it is
@@ -103,7 +103,7 @@ the only correct place.
 A failing seed step fails the spec file loudly. It never runs the tests against a half-seeded
 database.
 
-`popsctl` has the subcommand tree since `M0B-014` — `popsctl --help` lists it, and
+`blctl` has the subcommand tree since `M0B-014` — `blctl --help` lists it, and
 [`docs/cli.md`](cli.md) explains it. The two commands above are registered but not implemented
 yet: they arrive with M1 and M2, and a seed step that uses one fails loudly today, which is the
 correct outcome for a spec that depends on a feature nobody has built.
@@ -125,7 +125,7 @@ After a failed run, four things are waiting in `test-results/<test>/`:
 | `trace.zip` | What the browser did, step by step, with a DOM snapshot at each one |
 | `test-failed-1.png` | What the screen looked like when it gave up |
 | `video.webm` | How it got there |
-| `purpleops-server.log` | What the **server** thought of it — requests, status codes, errors |
+| `blacklight-server.log` | What the **server** thought of it — requests, status codes, errors |
 
 The server log is the one that is usually missing from other people's suites, and the one that
 usually has the answer. It is attached to the failing test automatically.
@@ -138,11 +138,11 @@ make e2e-report     # the HTML report of the last run, with all of the above lin
 When the question is what was actually *in* the database, keep it:
 
 ```sh
-PURPLEOPS_E2E_KEEP=1 npx playwright test
-# → PURPLEOPS_E2E_KEEP is set; databases and server logs kept in /tmp/purpleops-e2e-XXXX
+BLACKLIGHT_E2E_KEEP=1 npx playwright test
+# → BLACKLIGHT_E2E_KEEP is set; databases and server logs kept in /tmp/blacklight-e2e-XXXX
 ```
 
-Each spec file's directory under there holds its `purpleops.duckdb`, its `evidence/`, and its
+Each spec file's directory under there holds its `blacklight.duckdb`, its `evidence/`, and its
 `server.log`. Open the database with `duckdb`. Nothing else in the run refers to it, so delete it
 when you are done.
 

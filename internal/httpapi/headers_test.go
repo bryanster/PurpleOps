@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/blacklight/internal/config"
 )
 
 // TestSecurityHeadersAreOnEveryResponse walks the kinds of response this server
@@ -51,8 +51,8 @@ func TestHSTSFollowsTheBaseURL(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]string{
-		"https://purpleops.example.com": hstsValue,
-		"http://localhost:8080":         "",
+		"https://blacklight.example.com": hstsValue,
+		"http://localhost:8080":          "",
 	}
 
 	for baseURL, want := range tests {

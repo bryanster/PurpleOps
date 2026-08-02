@@ -23,10 +23,10 @@ npm run dev     # http://localhost:5173
 
 `npm run dev` proxies `/api` to a Go server on `http://localhost:8080`, so dev and production are
 both same-origin and neither side has any CORS configuration. Point it elsewhere with
-`PURPLEOPS_DEV_PROXY_TARGET`. Start the server with:
+`BLACKLIGHT_DEV_PROXY_TARGET`. Start the server with:
 
 ```sh
-go run ./cmd/purpleops     # needs PURPLEOPS_BASE_URL and friends — see ../.env.example
+go run ./cmd/blacklight     # needs BLACKLIGHT_BASE_URL and friends — see ../.env.example
 ```
 
 | Command              | What it does                                             |
@@ -88,7 +88,7 @@ Prettier and some of the stricter lint rules are switched off for that directory
 ## Theming
 
 Light and dark both matter — this tool gets used in dim rooms for hours. The preference is `light`,
-`dark`, or `system`, persisted to `localStorage` under `purpleops.theme`, and it resolves to a
+`dark`, or `system`, persisted to `localStorage` under `blacklight.theme`, and it resolves to a
 `dark` class on `<html>`.
 
 The awkward part is the first paint. The server sends `script-src 'self'`

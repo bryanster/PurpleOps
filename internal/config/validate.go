@@ -151,7 +151,7 @@ func checkDirWritable(dir string) error {
 		return errors.New("is not a directory")
 	}
 
-	probe, err := os.CreateTemp(dir, ".purpleops-write-probe-*")
+	probe, err := os.CreateTemp(dir, ".blacklight-write-probe-*")
 	if err != nil {
 		return errors.New("is not writable by this process")
 	}

@@ -1,4 +1,4 @@
-// Command purpleops is the PurpleOps server: a single binary serving the API,
+// Command blacklight is the Blacklight server: a single binary serving the API,
 // the embedded SPA and an embedded DuckDB database.
 //
 // Everything it needs is in the environment (internal/config) — there are no
@@ -17,12 +17,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/migrate"
-	"github.com/bryanster/purpleops/internal/version"
-	"github.com/bryanster/purpleops/web"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/migrate"
+	"github.com/bryanster/blacklight/internal/version"
+	"github.com/bryanster/blacklight/web"
 )
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 	defer stop()
 
 	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "purpleops:", err)
+		fmt.Fprintln(os.Stderr, "blacklight:", err)
 		os.Exit(1)
 	}
 }
@@ -43,7 +43,7 @@ func main() {
 // run is main with its environment passed in, so that everything below it is
 // reachable from a test.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err error) {
-	flags := flag.NewFlagSet("purpleops", flag.ContinueOnError)
+	flags := flag.NewFlagSet("blacklight", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	showVersion := flags.Bool("version", false, "print version information and exit")
 
@@ -114,7 +114,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err erro
 // newLogger builds the process logger from the configuration.
 //
 // It writes to stderr, leaving stdout for output a caller might parse
-// (--version today, popsctl's reports later), and it is created after the
+// (--version today, blctl's reports later), and it is created after the
 // configuration is loaded — so a configuration error is a plain sentence on
 // stderr rather than a JSON log line about the log format.
 func newLogger(cfg config.Log, w io.Writer) *slog.Logger {

@@ -66,7 +66,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/bryanster/purpleops
+        - github.com/bryanster/blacklight
 
 issues:
   max-issues-per-linter: 0

@@ -3,7 +3,7 @@ package authn
 import (
 	"context"
 
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // Subject is who the caller is, as far as this request is concerned: enough to

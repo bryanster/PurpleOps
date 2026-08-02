@@ -9,7 +9,7 @@ keys authenticate nothing." A token system that authenticates nothing is worse t
 the UI implies protection that doesn't exist.
 
 `PLAN.md` also makes the public REST API "the only integration surface in v1", so these tokens are
-how anyone automates against PurpleOps. They carry real weight.
+how anyone automates against Blacklight. They carry real weight.
 
 ## Scope
 
@@ -17,7 +17,7 @@ how anyone automates against PurpleOps. They carry real weight.
 
 - Migration: `service_token(id, name, token_hash, prefix, owner_user_id, scopes[], engagement_id
   NULL, created_at, expires_at, last_used_at, revoked_at, created_by)`.
-- Token format: `pops_<prefix>_<secret>` where `prefix` is a short public identifier stored in clear
+- Token format: `bl_<prefix>_<secret>` where `prefix` is a short public identifier stored in clear
   for lookup, and only the secret's hash is stored. Displayed **once** at creation.
 - Endpoints (admin, or owner for their own): create, list (never returning the secret), revoke.
 - Authentication: `Authorization: Bearer <token>` resolved in the same authn middleware as sessions

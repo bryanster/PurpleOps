@@ -5,7 +5,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/bryanster/purpleops/internal/store/migrate"
+	"github.com/bryanster/blacklight/internal/store/migrate"
 )
 
 // The set is validated by New, before a database is involved at all, so these

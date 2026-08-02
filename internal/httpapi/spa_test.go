@@ -8,8 +8,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // The UI these tests serve. A hand-built filesystem rather than the real
@@ -20,7 +20,7 @@ const (
 	testIndexHTML = `<!doctype html><html><head>` +
 		`<script type="module" src="/assets/index-lNm06wpq.js"></script>` +
 		`</head><body><div id="root"></div></body></html>`
-	testScript = "console.log('purpleops')\n"
+	testScript = "console.log('blacklight')\n"
 )
 
 func testUI() fstest.MapFS {
@@ -28,7 +28,7 @@ func testUI() fstest.MapFS {
 		"index.html":                        {Data: []byte(testIndexHTML)},
 		"theme-bootstrap.js":                {Data: []byte("// sets the theme\n")},
 		"favicon.svg":                       {Data: []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)},
-		"site.webmanifest":                  {Data: []byte(`{"name":"PurpleOps"}`)},
+		"site.webmanifest":                  {Data: []byte(`{"name":"Blacklight"}`)},
 		"assets/index-lNm06wpq.js":          {Data: []byte(testScript)},
 		"assets/index-By36rZtA.css":         {Data: []byte(":root{}\n")},
 		"assets/geist-latin-BgDaEnEv.woff2": {Data: []byte("wOF2")},

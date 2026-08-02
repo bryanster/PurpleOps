@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/password"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/authn/totp"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authn/totp"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // The second factor (M1-006): enrolling an authenticator, confirming it,
@@ -312,11 +312,11 @@ func (s *Service) checkCode(ctx context.Context, enrolment identity.TOTP, code s
 	secret, err := s.secrets.Open(enrolment.SecretEncrypted)
 	if err != nil {
 		// A row this key cannot open. That is an operational problem — a
-		// restored backup, a rotated PURPLEOPS_ENCRYPTION_KEY — and not a failed
+		// restored backup, a rotated BLACKLIGHT_ENCRYPTION_KEY — and not a failed
 		// code, and reporting it as one would leave nobody looking at it while
 		// everybody's codes quietly stopped working.
 		s.log.ErrorContext(ctx, "an enrolled authenticator secret could not be decrypted; "+
-			"has PURPLEOPS_ENCRYPTION_KEY changed?",
+			"has BLACKLIGHT_ENCRYPTION_KEY changed?",
 			slog.String("user_id", enrolment.UserID),
 			slog.String("error", err.Error()))
 		return 0, fmt.Errorf("authn: read the authenticator secret of user %q: %w",

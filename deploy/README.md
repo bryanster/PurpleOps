@@ -1,6 +1,6 @@
 # deploy/
 
-Deployment artefacts. The container image is the supported way to run PurpleOps (`PLAN.md` §8);
+Deployment artefacts. The container image is the supported way to run Blacklight (`PLAN.md` §8);
 [`docs/deploy.md`](../docs/deploy.md) is the operator-facing guide and explains all of this in
 context. This file is the map.
 

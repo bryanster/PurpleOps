@@ -27,7 +27,7 @@ those cheap.
 - `delta` holds before/after for changed fields, with **secrets and PII redacted** — never a
   password hash, token secret, or TOTP secret.
 - Append-only: no update or delete API, and a comment in the migration saying so. Retention/pruning
-  is a `popsctl` command, not an endpoint.
+  is a `blctl` command, not an endpoint.
 - Read API: `GET /activity` (platform, admin only) and `GET /engagements/{id}/activity` (members),
   paginated with the standard cursor convention (`M0B-005`), filterable by actor, verb, object.
 - Indexes for `(engagement_id, at DESC)` and `(actor_id, at DESC)`.

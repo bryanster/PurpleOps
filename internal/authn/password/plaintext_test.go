@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authn/password"
 )
 
 // theSecret is distinctive enough that finding it in any output is unambiguous.

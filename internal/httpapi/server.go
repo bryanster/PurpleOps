@@ -10,17 +10,17 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bryanster/purpleops/api"
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/secrets"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/authn/throttle"
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/api"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/secrets"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authn/throttle"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // BasePath is where the generated routes are mounted. It is the one server
@@ -48,7 +48,7 @@ type Deps struct {
 	Logger *slog.Logger
 
 	// UI is the built single-page app: index.html and the assets it loads,
-	// served on every path the API does not own (M0B-010). cmd/purpleops passes
+	// served on every path the API does not own (M0B-010). cmd/blacklight passes
 	// web.Dist(), which is either the embedded frontend or a placeholder page.
 	//
 	// Nil serves no UI at all — every unknown path is then the JSON 404 it was
@@ -255,17 +255,17 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 
 // totpIssuer is the name an authenticator app shows for this deployment.
 //
-// The host is in it because a person with an account on two PurpleOps
-// installations otherwise gets two entries called "PurpleOps" and no way to tell
+// The host is in it because a person with an account on two Blacklight
+// installations otherwise gets two entries called "Blacklight" and no way to tell
 // which is which. A colon would move the boundary between the issuer and the
 // account in the otpauth label, so a hostname carrying one — which no hostname
 // does — is refused by internal/authn/totp rather than silently mangled.
 func totpIssuer(cfg config.Config) string {
 	host := cfg.Server.BaseURL.Hostname()
 	if host == "" {
-		return "PurpleOps"
+		return "Blacklight"
 	}
-	return "PurpleOps (" + host + ")"
+	return "Blacklight (" + host + ")"
 }
 
 // strictHandler wraps the handlers in the generated strict-mode adapter, with

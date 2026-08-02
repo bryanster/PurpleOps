@@ -44,6 +44,6 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 
 RUN npm install -g @anthropic-ai/claude-code
 
-# Not set in the image: PURPLEOPS_* configuration. The server reads it from the
+# Not set in the image: BLACKLIGHT_* configuration. The server reads it from the
 # environment and refuses anything it cannot use, so a container-wide default
 # would be a value nobody chose, quietly in force. Copy .env.example to .env.

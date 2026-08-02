@@ -40,14 +40,14 @@
 //
 // # Schema
 //
-// The schema is owned by [github.com/bryanster/purpleops/internal/store/migrate],
+// The schema is owned by [github.com/bryanster/blacklight/internal/store/migrate],
 // which applies the SQL migrations embedded in the binary. A server calls
 // migrate.Up once at startup, after Open and before it accepts a request.
 //
 // # Repositories
 //
 // Repositories live in subpackages, one per area of the schema — the first is
-// [github.com/bryanster/purpleops/internal/store/identity]. Each takes a
+// [github.com/bryanster/blacklight/internal/store/identity]. Each takes a
 // database through its constructor and declares, in its own package, the
 // narrow interface it needs; nothing here hands out a *sql.DB, and there is no
 // package-level handle to reach for (PLAN.md §6).

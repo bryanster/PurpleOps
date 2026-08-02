@@ -120,7 +120,7 @@ describe('AppShell', () => {
       reachable.push(document.activeElement)
     }
 
-    expect(reachable).toContain(screen.getByRole('link', { name: 'PurpleOps' }))
+    expect(reachable).toContain(screen.getByRole('link', { name: 'Blacklight' }))
     expect(reachable).toContain(screen.getByRole('button', { name: /^Theme:/ }))
     expect(reachable).toContain(screen.getByRole('button', { name: 'Account' }))
     expect(reachable).toContain(screen.getByRole('link', { name: 'Version' }))

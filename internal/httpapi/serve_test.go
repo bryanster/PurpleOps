@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
+	"github.com/bryanster/blacklight/internal/config"
 )
 
 // TestShutdownLetsAnInFlightRequestFinish is the guarantee a rolling restart

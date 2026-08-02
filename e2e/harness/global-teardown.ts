@@ -11,7 +11,7 @@ import { runDirIfSet, runDirPrefix } from './paths'
  * left here is a few megabytes of DuckDB files per run, which add up fast on a
  * machine where the suite is run all day.
  *
- * `PURPLEOPS_E2E_KEEP=1` leaves it all in place and prints where, for the
+ * `BLACKLIGHT_E2E_KEEP=1` leaves it all in place and prints where, for the
  * failures the attached log does not explain — when the question is what is
  * actually *in* the database, you need the file.
  *
@@ -24,8 +24,8 @@ export default async function globalTeardown(): Promise<void> {
   if (dir === undefined || !path.basename(dir).startsWith(runDirPrefix)) {
     return
   }
-  if (process.env.PURPLEOPS_E2E_KEEP !== undefined && process.env.PURPLEOPS_E2E_KEEP !== '') {
-    console.log(`PURPLEOPS_E2E_KEEP is set; databases and server logs kept in ${dir}`)
+  if (process.env.BLACKLIGHT_E2E_KEEP !== undefined && process.env.BLACKLIGHT_E2E_KEEP !== '') {
+    console.log(`BLACKLIGHT_E2E_KEEP is set; databases and server logs kept in ${dir}`)
     return
   }
   await fs.rm(dir, { recursive: true, force: true })

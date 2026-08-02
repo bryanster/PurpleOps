@@ -18,7 +18,7 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
 
 /** localStorage key. Namespaced: a deployment may share an origin with nothing else today, but that is not a guarantee worth relying on. */
-export const THEME_STORAGE_KEY = 'purpleops.theme'
+export const THEME_STORAGE_KEY = 'blacklight.theme'
 
 /** The class shadcn/ui's palette switches on. Also hard-coded in public/theme-bootstrap.js. */
 export const DARK_CLASS = 'dark'

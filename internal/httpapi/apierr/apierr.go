@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // Error is a failure this API knows how to describe to a client: a [Code], the
@@ -43,7 +43,7 @@ func (e *Error) Status() int { return Status(e.code) }
 // Fields returns the field-level breakdown of a validation failure, and nothing
 // for every other code.
 //
-// It exists for the callers that are not HTTP responses: popsctl reports a
+// It exists for the callers that are not HTTP responses: blctl reports a
 // password that breaks the policy as a sentence rather than as a problem
 // document, and it should be the same sentence the API would have sent.
 func (e *Error) Fields() []FieldError { return e.fields }

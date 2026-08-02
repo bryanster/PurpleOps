@@ -8,7 +8,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 func main() {

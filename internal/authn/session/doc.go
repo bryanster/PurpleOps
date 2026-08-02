@@ -10,7 +10,7 @@
 //
 //   - The token exists in the cookie and nowhere else. What is stored is a keyed
 //     hash of it, so a copy of the database is not a set of live sessions, and
-//     rotating PURPLEOPS_SESSION_SECRET invalidates every one of them.
+//     rotating BLACKLIGHT_SESSION_SECRET invalidates every one of them.
 //   - [Token] redacts itself the way a password does. Printing one, logging one
 //     or serializing one produces a placeholder; reaching the characters takes
 //     [Token.Reveal], which greps.

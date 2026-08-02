@@ -148,7 +148,7 @@ type ChangePasswordRequest struct {
 // client.
 type CurrentUser struct {
 	// CsrfToken The double-submit CSRF token for this session (M1-005) — the same
-	// value as the `pops_csrf` cookie, which is where a browser client
+	// value as the `bl_csrf` cookie, which is where a browser client
 	// should read it from.
 	//
 	// It is here for a client that has no cookie jar to read, and it is
@@ -382,7 +382,7 @@ type TOTPEnrolment struct {
 	// authenticator directly.
 	//
 	//
-	// Examples: otpauth://totp/PurpleOps%20%28purpleops.internal%29:alice@example.com?algorithm=SHA1&digits=6&issuer=PurpleOps+%28purpleops.internal%29&period=30&secret=JBSWY3DPEHPK3PXP
+	// Examples: otpauth://totp/Blacklight%20%28blacklight.internal%29:alice@example.com?algorithm=SHA1&digits=6&issuer=Blacklight+%28blacklight.internal%29&period=30&secret=JBSWY3DPEHPK3PXP
 	OtpauthUri string `json:"otpauthUri"`
 
 	// QrCode The URI rendered as a PNG in a `data:` URI, ready to be the `src` of
@@ -482,7 +482,7 @@ type Unauthenticated = Problem
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-	// `pops_csrf` cookie, echoed back in this header.
+	// `bl_csrf` cookie, echoed back in this header.
 	//
 	// **Required in practice** on every state-changing request authenticated
 	// by the session cookie, even though it is declared optional here. The
@@ -501,7 +501,7 @@ type LogoutParams struct {
 // DisableTotpParams defines parameters for DisableTotp.
 type DisableTotpParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-	// `pops_csrf` cookie, echoed back in this header.
+	// `bl_csrf` cookie, echoed back in this header.
 	//
 	// **Required in practice** on every state-changing request authenticated
 	// by the session cookie, even though it is declared optional here. The
@@ -520,7 +520,7 @@ type DisableTotpParams struct {
 // ConfirmTotpParams defines parameters for ConfirmTotp.
 type ConfirmTotpParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-	// `pops_csrf` cookie, echoed back in this header.
+	// `bl_csrf` cookie, echoed back in this header.
 	//
 	// **Required in practice** on every state-changing request authenticated
 	// by the session cookie, even though it is declared optional here. The
@@ -539,7 +539,7 @@ type ConfirmTotpParams struct {
 // EnrollTotpParams defines parameters for EnrollTotp.
 type EnrollTotpParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-	// `pops_csrf` cookie, echoed back in this header.
+	// `bl_csrf` cookie, echoed back in this header.
 	//
 	// **Required in practice** on every state-changing request authenticated
 	// by the session cookie, even though it is declared optional here. The
@@ -558,7 +558,7 @@ type EnrollTotpParams struct {
 // ChangePasswordParams defines parameters for ChangePassword.
 type ChangePasswordParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
-	// `pops_csrf` cookie, echoed back in this header.
+	// `bl_csrf` cookie, echoed back in this header.
 	//
 	// **Required in practice** on every state-changing request authenticated
 	// by the session cookie, even though it is declared optional here. The

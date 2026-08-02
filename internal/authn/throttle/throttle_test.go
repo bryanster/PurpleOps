@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // The limiter, on a clock the test drives. Nothing here sleeps: a lockout is

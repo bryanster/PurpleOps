@@ -25,7 +25,7 @@ func TestDistHasAnIndexPage(t *testing.T) {
 	}
 
 	// The placeholder must say why it is there. Without the `spa` tag this is
-	// what an operator sees, and "PurpleOps has a blank page" is not a bug
+	// what an operator sees, and "Blacklight has a blank page" is not a bug
 	// report anyone can act on.
 	if !isSPA && !strings.Contains(string(page), "build tag") {
 		t.Errorf("the placeholder page does not explain itself:\n%s", page)

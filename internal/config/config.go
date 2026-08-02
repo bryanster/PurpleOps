@@ -11,8 +11,8 @@ import (
 )
 
 // prefix is shared by every variable this package reads, so an operator can see
-// at a glance which of the environment belongs to PurpleOps.
-const prefix = "PURPLEOPS_"
+// at a glance which of the environment belongs to Blacklight.
+const prefix = "BLACKLIGHT_"
 
 // The variables this package reads. Each one appears exactly three times: here,
 // in Config.bindings, and in .env.example — tests tie the three together.
@@ -39,7 +39,7 @@ const (
 	envChromePath      = prefix + "CHROME_PATH"
 )
 
-// Config is the whole configuration of a PurpleOps process. It is grouped by
+// Config is the whole configuration of a Blacklight process. It is grouped by
 // the thing being configured rather than flattened, so a constructor can take
 // the section it needs (cfg.Database) instead of the world.
 type Config struct {
@@ -175,7 +175,7 @@ type Report struct {
 	ChromePath string
 }
 
-// Tool is the configuration of an administrative process — popsctl, which
+// Tool is the configuration of an administrative process — blctl, which
 // shares this repository's packages with the server but serves no HTTP and
 // holds no sessions.
 //
@@ -199,7 +199,7 @@ type binding struct {
 	sensitive bool
 	// tool marks a variable the admin CLI reads as well as the server, and so
 	// the fields [Tool] carries. It is a small list on purpose: requiring a
-	// base URL and a session secret before `popsctl db info` will open a file
+	// base URL and a session secret before `blctl db info` will open a file
 	// is a checklist with nothing behind it, and an operator who hits it once
 	// learns to export junk values, which is worse than not asking.
 	tool bool
@@ -216,7 +216,7 @@ func (c *Config) bindings() []binding {
 		{name: envRequestTimeout, target: &c.Server.RequestTimeout, def: "30s"},
 		{name: envShutdownTimeout, target: &c.Server.ShutdownTimeout, def: "15s"},
 		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
-		{name: envDBPath, target: &c.Database.Path, def: "./purpleops.duckdb", tool: true},
+		{name: envDBPath, target: &c.Database.Path, def: "./blacklight.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
 		{name: envEncryptionKey, target: &c.Encryption.Key, required: true, sensitive: true},

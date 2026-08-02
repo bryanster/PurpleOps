@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // recoverer turns a panicking handler into a 500 problem document and a logged

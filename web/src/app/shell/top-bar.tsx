@@ -20,7 +20,7 @@ export function TopBar(): ReactNode {
         to="/"
         className="focus-visible:ring-ring/50 rounded-md font-semibold tracking-tight outline-none focus-visible:ring-3"
       >
-        PurpleOps
+        Blacklight
       </Link>
 
       <div className="flex items-center gap-1">

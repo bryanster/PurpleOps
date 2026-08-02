@@ -23,7 +23,7 @@ arrive — rather than being written under deadline pressure at M6.
   - **throws** if the server never becomes healthy. Never `process.exit(0)`, never skip.
 - Global teardown removing the temp database and evidence directory.
 - Seeding hook: a documented way to put the system into a known state before a spec. Prefer
-  `popsctl` commands (`M0B-014`) over direct SQL, so seeding exercises supported paths.
+  `blctl` commands (`M0B-014`) over direct SQL, so seeding exercises supported paths.
 - One real smoke spec: load the app, assert the shell renders, assert the version screen shows the
   version the binary reports.
 - Artifacts on failure: trace, screenshot, video, plus the **server log** — a failed E2E without the
@@ -99,14 +99,14 @@ job — the pool's failure already quotes the tail of the server's own log, whic
 useful:
 
 ```
-Error: No healthy PurpleOps server answered at http://127.0.0.1:62835/api/v1/healthz
+Error: No healthy Blacklight server answered at http://127.0.0.1:62835/api/v1/healthz
   waited:       752 ms of a 30000 ms budget
   last attempt: the process exited with status 1 before it became healthy
 
 smoke: the server the harness started never became healthy.
 
-Last 40 lines of /tmp/purpleops-e2e-l33CKG/w0-1-smoke/server.log:
-purpleops: PURPLEOPS_DB_PATH: the parent directory does not exist
+Last 40 lines of /tmp/blacklight-e2e-l33CKG/w0-1-smoke/server.log:
+blacklight: BLACKLIGHT_DB_PATH: the parent directory does not exist
 ```
 
 Note the two numbers on the `waited:` line. A run that used its whole budget was waiting; one that
@@ -115,7 +115,7 @@ have been a small lie in the second case.
 
 ### Seeding runs before the server boots, not inside a test
 
-DuckDB admits one writer to a database file at a time, so `popsctl` cannot open a database a running
+DuckDB admits one writer to a database file at a time, so `blctl` cannot open a database a running
 server is holding. A seed helper callable from within a test would therefore have failed on a lock
 the first time anyone used it for real.
 
@@ -130,7 +130,7 @@ The constraint turned out to be a better design than the one it ruled out: what 
 about the world is now visible at the top of it rather than buried in a `beforeEach`. A failing seed
 step fails the file loudly and never runs its tests against a half-seeded database.
 
-`popsctl` has only `--version` until `M0B-014`, which is what `specs/isolation.spec.ts` seeds with.
+`blctl` has only `--version` until `M0B-014`, which is what `specs/isolation.spec.ts` seeds with.
 
 ### `specs/isolation.spec.ts` — the harness checking itself
 
@@ -156,25 +156,25 @@ most common way a Playwright suite quietly stops testing anything.
 | Criterion | Command | Result |
 |---|---|---|
 | Starts its own server | `make e2e` | 3 passed |
-| Dead `BASE_URL` fails loudly | `BASE_URL=http://127.0.0.1:45999 PURPLEOPS_E2E_HEALTH_TIMEOUT_MS=3000 npx playwright test` | exit 1, message naming the URL, the elapsed time, the budget and `ECONNREFUSED` |
-| Missing binary fails loudly | `PURPLEOPS_E2E_BINARY=/nonexistent/purpleops npx playwright test` | exit 1, "is missing or not executable … run `make build`" |
+| Dead `BASE_URL` fails loudly | `BASE_URL=http://127.0.0.1:45999 BLACKLIGHT_E2E_HEALTH_TIMEOUT_MS=3000 npx playwright test` | exit 1, message naming the URL, the elapsed time, the budget and `ECONNREFUSED` |
+| Missing binary fails loudly | `BLACKLIGHT_E2E_BINARY=/nonexistent/blacklight npx playwright test` | exit 1, "is missing or not executable … run `make build`" |
 | Server dies at startup | binary replaced with one that exits 1 | exit 1, with the server's own stderr quoted |
-| Artifacts on failure | version assertion changed to a wrong value | `trace.zip`, `test-failed-1.png`, `video.webm`, `error-context.md` and `purpleops-server.log` in `test-results/<test>/` |
-| Clean database per file | `--repeat-each=2`, both file orders, each file alone | pass in every arrangement; `PURPLEOPS_E2E_KEEP=1` shows four distinct server directories for two files × two repeats |
+| Artifacts on failure | version assertion changed to a wrong value | `trace.zip`, `test-failed-1.png`, `video.webm`, `error-context.md` and `blacklight-server.log` in `test-results/<test>/` |
+| Clean database per file | `--repeat-each=2`, both file orders, each file alone | pass in every arrangement; `BLACKLIGHT_E2E_KEEP=1` shows four distinct server directories for two files × two repeats |
 
 Playwright has no `--shuffle`, so order is varied by naming the spec files explicitly in different
 orders. `docs/testing.md` says so where someone will read it.
 
 ### Smaller things
 
-- **`PURPLEOPS_ENV=development`** for the harness's servers. The suite drives a browser over plain
+- **`BLACKLIGHT_ENV=development`** for the harness's servers. The suite drives a browser over plain
   HTTP on loopback, and production posture makes session cookies `Secure` (M1). The production path
   over TLS is the container smoke test's territory. `harness/server.ts` says this where it is set.
-- **Every `PURPLEOPS_*` variable is stripped** from the environment the server is started with. A
+- **Every `BLACKLIGHT_*` variable is stripped** from the environment the server is started with. A
   `.env` sourced into a developer's shell is the normal way to run the server by hand, and it must
   not be able to decide which database the suite writes to — the first symptom would have been
   someone's own data changing.
-- **The port is reserved by the harness**, not by binding `:0` in the server: `PURPLEOPS_BASE_URL`
+- **The port is reserved by the harness**, not by binding `:0` in the server: `BLACKLIGHT_BASE_URL`
   has to be known at startup and cannot be set after the fact.
 - **The server log is copied into the test's output directory** before being attached, rather than
   attached where it lies. Global teardown deletes the run directory, and an attachment pointing into

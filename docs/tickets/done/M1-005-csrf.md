@@ -67,7 +67,7 @@ isn't an option.
 
 ### The token is derived from the session token, not stored
 
-`HMAC-SHA256(PURPLEOPS_SESSION_SECRET, "purpleops/csrf\0" || token)`. No column, no migration, and
+`HMAC-SHA256(BLACKLIGHT_SESSION_SECRET, "blacklight/csrf\0" || token)`. No column, no migration, and
 it rotates with the session for free — rotation replaces the token it is derived from, so there is
 nothing to remember to update.
 
@@ -140,7 +140,7 @@ read by a handler; enforcement is the middleware's.
   browser sends; `csrf_test.go` builds its requests by hand, which is the point of it.
 - **The SPA half** is the `openapi-fetch` middleware plus four tests in `web/src/api/client.test.ts`.
   There is no end-to-end Playwright case because there is no login UI until `M1-017`; the flow was
-  driven by hand instead — `popsctl user create`, login (both cookies set, `csrfToken` in the body),
+  driven by hand instead — `blctl user create`, login (both cookies set, `csrfToken` in the body),
   `GET /auth/me` with no header, a password change refused twice and then accepted, the CSRF cookie
   rotating with the session, logout with the rotated pair, and the replay coming back 401.
 

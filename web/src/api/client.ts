@@ -50,7 +50,7 @@ export function apiUrl(path: keyof paths): string {
  * `session.CSRFCookieName`; it is deliberately not `HttpOnly`, because reading
  * it here is the whole mechanism.
  */
-const CSRF_COOKIE = 'pops_csrf'
+const CSRF_COOKIE = 'bl_csrf'
 
 /** The header the token is echoed in. Matches `httpapi.CSRFHeader`. */
 const CSRF_HEADER = 'X-CSRF-Token'

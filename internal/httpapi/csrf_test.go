@@ -12,11 +12,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bryanster/purpleops/api"
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/session"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/api"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
 
 // CSRF, through the real chain (M1-005). Every request here is built by hand
@@ -220,7 +220,7 @@ func TestOnlyRealServiceTokenAuthenticationIsExempt(t *testing.T) {
 		sess := server.signIn(t)
 
 		request := httptest.NewRequest(http.MethodPost, logoutPath, nil)
-		request.Header.Set("Authorization", "Bearer pops_not_a_real_token")
+		request.Header.Set("Authorization", "Bearer bl_not_a_real_token")
 		request.AddCookie(sess)
 
 		if got := do(server.handler, request).Code; got != http.StatusForbidden {
@@ -232,7 +232,7 @@ func TestOnlyRealServiceTokenAuthenticationIsExempt(t *testing.T) {
 	t.Run("an invalid bearer token authenticates nobody", func(t *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, passwordPath, strings.NewReader(changePasswordBody))
 		request.Header.Set("Content-Type", "application/json")
-		request.Header.Set("Authorization", "Bearer pops_not_a_real_token")
+		request.Header.Set("Authorization", "Bearer bl_not_a_real_token")
 
 		if got := do(server.handler, request).Code; got != http.StatusUnauthorized {
 			t.Errorf("an invented bearer token with no cookie = %d, want 401", got)

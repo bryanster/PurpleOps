@@ -10,8 +10,8 @@
 // derived once at startup — because the ways to get authenticated encryption
 // wrong are all in the parameters.
 //
-// The key comes from PURPLEOPS_ENCRYPTION_KEY and deliberately not from
-// PURPLEOPS_SESSION_SECRET; internal/config says why, and docs/security.md says
+// The key comes from BLACKLIGHT_ENCRYPTION_KEY and deliberately not from
+// BLACKLIGHT_SESSION_SECRET; internal/config says why, and docs/security.md says
 // it again for the operator who has to keep both.
 package secrets
 
@@ -36,7 +36,7 @@ const keyBytes = 32
 // with the same configured value would pass its own label and get a different
 // key, so a ciphertext from one can never be opened by the other — which is
 // what stops a bug in a future caller turning into a way to read TOTP secrets.
-const derivationInfo = "purpleops/secrets/aes-256-gcm/v1"
+const derivationInfo = "blacklight/secrets/aes-256-gcm/v1"
 
 // encoding is base64url without padding, matching how every other opaque value
 // in this tree is spelled in a TEXT column.

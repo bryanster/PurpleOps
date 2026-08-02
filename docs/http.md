@@ -5,7 +5,7 @@ including the ones that never reach a handler — which is what makes it possibl
 can skip authorization" when M1 inserts that step (`M1-013`).
 
 `internal/httpapi.NewServer` builds the handler; `internal/httpapi.ListenAndServe` runs it.
-`cmd/purpleops` does nothing else: load the configuration, open the store, migrate, build, serve.
+`cmd/blacklight` does nothing else: load the configuration, open the store, migrate, build, serve.
 
 ## The chain
 
@@ -17,13 +17,13 @@ In order, outermost first:
 | 2 | `realIP` | Resolves the client address, honouring forwarding headers only from a configured proxy — see below |
 | 3 | `requestLogger` | One `slog` line per request: method, path, status, bytes, duration, request ID, client IP |
 | 4 | `recoverer` | A panic becomes a 500 problem document; the stack goes to the log and never to the client |
-| 5 | `timeout` | Puts `PURPLEOPS_REQUEST_TIMEOUT` on the request context |
+| 5 | `timeout` | Puts `BLACKLIGHT_REQUEST_TIMEOUT` on the request context |
 | 6 | `securityHeaders` | The response headers below |
 | 7 | `requestValidator` | Rejects anything `api/openapi.yaml` does not describe, before any handler runs |
 | 8 | `throttleCredentials` | Rations failed sign-in attempts, per account and per client address — see below |
 | 9 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
 | 10 | `requireCSRF` | Refuses a state-changing request that authenticated by cookie and carries no valid CSRF token — see [`docs/security.md`](security.md) |
-| 11 | `clearSpentChallenge` | A response wrapper: drops the `pops_mfa` cookie once the sign-in it belongs to has produced a session |
+| 11 | `clearSpentChallenge` | A response wrapper: drops the `bl_mfa` cookie once the sign-in it belongs to has produced a session |
 
 Only 7 to 11 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
 for an unknown path is still logged, still carries a request ID and still has the security headers.
@@ -55,8 +55,8 @@ out of the password endpoint too.
 
 | Limit | Keyed on | Default | Cleared by a successful sign-in |
 |---|---|---|---|
-| `PURPLEOPS_LOGIN_ACCOUNT_FAILURES` / `_LOCKOUT` | the normalized email address | 5 failures → 15 min | yes |
-| `PURPLEOPS_LOGIN_SOURCE_FAILURES` / `_LOCKOUT` | the client address | 50 failures → 15 min | **no** |
+| `BLACKLIGHT_LOGIN_ACCOUNT_FAILURES` / `_LOCKOUT` | the normalized email address | 5 failures → 15 min | yes |
+| `BLACKLIGHT_LOGIN_SOURCE_FAILURES` / `_LOCKOUT` | the client address | 50 failures → 15 min | **no** |
 
 Each further lockout of the same key doubles the wait, three times — 15m, 30m, 1h, 2h. Two things
 put a key back to the bottom of that ladder: a successful sign-in, and going quiet for the length of
@@ -82,22 +82,22 @@ Five things worth knowing before changing any of it:
   again between every guess. The login handler says so explicitly, through
   `markCredentialIncomplete`.
 
-Behind a reverse proxy the source limiter counts the proxy unless `PURPLEOPS_TRUSTED_PROXIES` names
+Behind a reverse proxy the source limiter counts the proxy unless `BLACKLIGHT_TRUSTED_PROXIES` names
 it — the same resolution the request log uses, described under *Behind a reverse proxy* below.
 
 ## Sessions
 
-The cookie is `pops_session`: `HttpOnly`, `Secure` (except `PURPLEOPS_ENV=development`),
+The cookie is `bl_session`: `HttpOnly`, `Secure` (except `BLACKLIGHT_ENV=development`),
 `SameSite=Strict`, `Path=/`, no `Domain`. Its value is 32 bytes from `crypto/rand`, base64url.
 
-**Only a keyed hash of the token is stored** — HMAC-SHA256 under `PURPLEOPS_SESSION_SECRET` — so a
+**Only a keyed hash of the token is stored** — HMAC-SHA256 under `BLACKLIGHT_SESSION_SECRET` — so a
 copy of the database is not a set of live sessions, and rotating that secret signs everybody out.
 `internal/authn/session` is the only package that decides whether a session is usable:
 
 | Ends a session | Setting |
 |---|---|
-| Absolute expiry, from when it was issued. Nothing extends it | `PURPLEOPS_SESSION_LIFETIME` (12h) |
-| Idle timeout, from when it was last used | `PURPLEOPS_SESSION_IDLE_TIMEOUT` (2h) |
+| Absolute expiry, from when it was issued. Nothing extends it | `BLACKLIGHT_SESSION_LIFETIME` (12h) |
+| Idle timeout, from when it was last used | `BLACKLIGHT_SESSION_IDLE_TIMEOUT` (2h) |
 | Revocation — logout, a password change elsewhere, an administrator | `revoked_at` on the row |
 | The account being disabled | `status` on the user, checked on every request |
 
@@ -105,7 +105,7 @@ copy of the database is not a set of live sessions, and rotating that secret sig
 (`PLAN.md` §1), and a column whose only consumer is a timeout measured in hours does not deserve the
 write lock on every read.
 
-The browser holds a second cookie beside it, `pops_csrf`, which is derived from the session token
+The browser holds a second cookie beside it, `bl_csrf`, which is derived from the session token
 and is deliberately readable by script. [`docs/security.md`](security.md) is the whole of that
 model; the one thing to know here is that the pair is issued together, rotated together and cleared
 together, by the CSRF middleware rather than by any handler.
@@ -115,7 +115,7 @@ expiry. It happens on sign-in (a new session), on a password change, on MFA bein
 (`M1-006`), and — when it lands — on a platform-role change. The token it replaces stops resolving
 to anything, which is what makes a session an attacker fixed before login worthless afterwards.
 
-A third cookie exists only between a correct password and a presented second factor: `pops_mfa`,
+A third cookie exists only between a correct password and a presented second factor: `bl_mfa`,
 scoped to `/api/v1/auth/mfa` and gone within minutes. It is not a session and nothing here resolves
 it into one — [`docs/security.md`](security.md), *Multi-factor authentication*, is that story.
 
@@ -164,7 +164,7 @@ decides what `/api/…` means.
 ## Behind a reverse proxy
 
 `X-Forwarded-For` and `X-Real-IP` are ignored unless the peer that opened the connection is listed
-in `PURPLEOPS_TRUSTED_PROXIES` (a comma-separated list of addresses or CIDR ranges). Unset — the
+in `BLACKLIGHT_TRUSTED_PROXIES` (a comma-separated list of addresses or CIDR ranges). Unset — the
 default — means the client address is always the address the connection came from.
 
 This matters because the client address is what login throttling counts (`M1-004`, above) and what the
@@ -187,7 +187,7 @@ Set on every response:
 | `Referrer-Policy` | `no-referrer` |
 | `X-Frame-Options` | `DENY` |
 | `Content-Security-Policy` | `default-src 'self'` and per-directive tightening; see `internal/httpapi/headers.go` |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` — **only** when `PURPLEOPS_BASE_URL` is `https://` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` — **only** when `BLACKLIGHT_BASE_URL` is `https://` |
 
 The CSP allows inline *styles*, because Radix — the primitives shadcn/ui is built on — writes style
 attributes when it positions a popover. Inline *scripts* are forbidden, which is the half that stops
@@ -201,8 +201,8 @@ development, use the Vite dev proxy rather than opening the API up.
 
 | Setting | Applies to |
 |---|---|
-| `PURPLEOPS_REQUEST_TIMEOUT` | The deadline on each request's context. A handler that respects its context — every database call does — gives up there, and the failure travels back as a 500 |
-| `PURPLEOPS_SHUTDOWN_TIMEOUT` | How long in-flight requests get after a termination signal |
+| `BLACKLIGHT_REQUEST_TIMEOUT` | The deadline on each request's context. A handler that respects its context — every database call does — gives up there, and the failure travels back as a 500 |
+| `BLACKLIGHT_SHUTDOWN_TIMEOUT` | How long in-flight requests get after a termination signal |
 | `readHeaderTimeout` (10s), `idleTimeout` (2m) | Constants in `serve.go`: properties of the protocol rather than of a deployment |
 
 There is deliberately no `ReadTimeout` or `WriteTimeout` on the server: the first would cap how long
@@ -212,7 +212,7 @@ both would fail as a truncated response rather than as anything a user could act
 ## Shutdown
 
 `SIGINT` or `SIGTERM` stops the listener, lets in-flight requests finish within
-`PURPLEOPS_SHUTDOWN_TIMEOUT`, closes the store, and exits 0. A request still running when the grace
+`BLACKLIGHT_SHUTDOWN_TIMEOUT`, closes the store, and exits 0. A request still running when the grace
 period expires is cut off — logged as a warning, still exit 0, because an orchestrator that asked
 for a stop should not be shown a crash.
 

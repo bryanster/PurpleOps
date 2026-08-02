@@ -125,7 +125,7 @@ constraint — the next one is a reason to revisit the whole pin rather than add
 ### What was verified, and what was not
 
 - `make lint test build` green; `make generate` twice in a row is byte-identical output.
-- The dev proxy again, against a real `go run ./cmd/purpleops`: `GET /api/v1/version` and
+- The dev proxy again, against a real `go run ./cmd/blacklight`: `GET /api/v1/version` and
   `/api/v1/healthz` through `http://localhost:5173` return the server's own JSON, and an unknown
   path returns `application/problem+json` — the exact shape the middleware turns into an `ApiError`.
 - **Not seen in a browser.** As with M0B-008, no browser tooling was available: the toast on a 5xx

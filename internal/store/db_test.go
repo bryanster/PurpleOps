@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/store"
-	"github.com/bryanster/purpleops/internal/store/storetest"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
 // These tests run against a real DuckDB file (see storetest), so they exercise
@@ -46,7 +46,7 @@ func TestOpenCreatesAUsableDatabase(t *testing.T) {
 func TestOpenRejectsAMissingParentDirectory(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "nested", "purpleops.duckdb")
+	path := filepath.Join(t.TempDir(), "nested", "blacklight.duckdb")
 	_, err := store.Open(t.Context(), config.Database{Path: path})
 	if err == nil {
 		t.Fatal("Open() = nil error, want a failure")
@@ -58,7 +58,7 @@ func TestOpenRejectsAMissingParentDirectory(t *testing.T) {
 func TestOpenRejectsAParentThatIsNotADirectory(t *testing.T) {
 	t.Parallel()
 
-	file := filepath.Join(t.TempDir(), "purpleops.duckdb")
+	file := filepath.Join(t.TempDir(), "blacklight.duckdb")
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestOpenRejectsAnUnwritableDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(dir, "purpleops.duckdb")
+	path := filepath.Join(dir, "blacklight.duckdb")
 	_, err := store.Open(t.Context(), config.Database{Path: path})
 	if err == nil {
 		t.Fatal("Open() = nil error, want a failure")
@@ -97,7 +97,7 @@ func TestOpenRejectsAnUnwritableDirectory(t *testing.T) {
 func TestOpenRejectsAPathContainingDSNOptions(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "purpleops.duckdb?access_mode=read_only")
+	path := filepath.Join(t.TempDir(), "blacklight.duckdb?access_mode=read_only")
 	_, err := store.Open(t.Context(), config.Database{Path: path})
 	if err == nil {
 		t.Fatal("Open() = nil error, want a failure")
@@ -120,7 +120,7 @@ func TestOpenRejectsAnEmptyPath(t *testing.T) {
 func TestReopenSeesCommittedData(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "purpleops.duckdb")
+	path := filepath.Join(t.TempDir(), "blacklight.duckdb")
 	ctx := t.Context()
 
 	first, err := store.Open(ctx, config.Database{Path: path})
@@ -417,7 +417,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 	t.Parallel()
 
 	db, err := store.Open(t.Context(), config.Database{
-		Path: filepath.Join(t.TempDir(), "purpleops.duckdb"),
+		Path: filepath.Join(t.TempDir(), "blacklight.duckdb"),
 	})
 	if err != nil {
 		t.Fatalf("Open() = %v", err)
@@ -447,7 +447,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 func TestCloseWaitsForAnInFlightWrite(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "purpleops.duckdb")
+	path := filepath.Join(t.TempDir(), "blacklight.duckdb")
 	ctx := t.Context()
 
 	db, err := store.Open(ctx, config.Database{Path: path})
@@ -517,7 +517,7 @@ func TestWriteAndHealthAfterCloseReportErrClosed(t *testing.T) {
 
 	ctx := t.Context()
 	db, err := store.Open(ctx, config.Database{
-		Path: filepath.Join(t.TempDir(), "purpleops.duckdb"),
+		Path: filepath.Join(t.TempDir(), "blacklight.duckdb"),
 	})
 	if err != nil {
 		t.Fatalf("Open() = %v", err)
@@ -544,7 +544,7 @@ func TestWriteQueuedAtCloseReturnsErrClosed(t *testing.T) {
 
 	ctx := t.Context()
 	db, err := store.Open(ctx, config.Database{
-		Path: filepath.Join(t.TempDir(), "purpleops.duckdb"),
+		Path: filepath.Join(t.TempDir(), "blacklight.duckdb"),
 	})
 	if err != nil {
 		t.Fatalf("Open() = %v", err)

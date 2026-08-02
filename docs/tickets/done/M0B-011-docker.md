@@ -41,7 +41,7 @@ git-clone-on-first-boot seeder.
       Verify by writing something and restarting.
 - [x] `docker compose down -v` destroys the data — documented in `docs/deploy.md` with a warning.
 - [x] The image healthcheck reports unhealthy when the DB is unavailable.
-- [x] Chromium is present and `chromium --version` runs inside the container; `PURPLEOPS_CHROME_PATH`
+- [x] Chromium is present and `chromium --version` runs inside the container; `BLACKLIGHT_CHROME_PATH`
       defaults correctly in the image.
 - [x] Final image size is recorded in the PR description. Under 500 MB with Chromium is the target;
       if it's larger, say why. — **over: ~640 MB unpacked / 260 MB compressed. See below.**
@@ -75,13 +75,13 @@ where `deploy/README.md` said it would, and is built with the repository as its 
 docker-build` and `make docker-smoke` are the entry points. Operator documentation is
 `docs/deploy.md`.
 
-**The clean-clone requirement forced a decision about the session secret.** `PURPLEOPS_SESSION_SECRET`
+**The clean-clone requirement forced a decision about the session secret.** `BLACKLIGHT_SESSION_SECRET`
 is required and correctly refuses placeholders, so `docker compose up` on a fresh clone would fail
 at startup — which contradicts the acceptance criterion. `deploy/entrypoint.sh` generates 32 bytes
 from `/dev/urandom` when the variable is unset, persists it on the data volume next to the database,
 reuses it on later starts so a restart does not log everybody out, and says all of this in the log
 in four lines. It is skipped entirely when the operator supplied a secret, and when the command is
-`purpleops --version`. `docs/deploy.md` states the three ways this is worse than setting the
+`blacklight --version`. `docs/deploy.md` states the three ways this is worse than setting the
 variable (tied to one volume, unshareable, unreadable from outside the container). The alternative —
 requiring `.env` before the first `up` — was rejected because the ticket's first acceptance
 criterion is explicit about a clean clone.
@@ -121,7 +121,7 @@ drivers), the Vulkan validation layer and the GTK icon themes — none of which 
 without a GPU can use; Chromium falls back to its bundled SwiftShader and `--print-to-pdf` was
 verified to still work. There is no smaller glibc-compatible headless Chromium to swap in: Google
 publishes `chrome-headless-shell` for amd64 only, which would give up arm64. Without Chromium the
-image would be ~290 MB, which is the shape of a future `purpleops:slim` if size ever outranks PDF
+image would be ~290 MB, which is the shape of a future `blacklight:slim` if size ever outranks PDF
 reports working out of the box.
 
 **Debian trixie, not bookworm.** Same release in all three stages, so the glibc the binary links
@@ -129,16 +129,16 @@ against is the glibc it finds. Chromium 151 rather than bookworm's older package
 
 **`deploy/smoke.sh` proves 14 things, not one.** Beyond polling health, it asserts the container
 runs as a non-root user with a writable data directory, serves the real embedded SPA rather than the
-`-tags spa` placeholder, has a working `PURPLEOPS_CHROME_PATH`, survives being destroyed and
+`-tags spa` placeholder, has a working `BLACKLIGHT_CHROME_PATH`, survives being destroyed and
 recreated on the same volume with its database, evidence and session secret intact, and that
-`purpleops-healthcheck` actually *fails* when nothing is answering. First boot runs with
+`blacklight-healthcheck` actually *fails* when nothing is answering. First boot runs with
 `--network none`, which is the cheap proof that nothing is fetched at runtime — a packet capture
 would be the rigorous version. `PLATFORM=linux/amd64 deploy/smoke.sh` runs the whole thing against
 the other architecture.
 
 **Health check via `curl`, in the image rather than in compose.** `HEALTHCHECK` in the Dockerfile
 means `docker run` and any third-party compose file inherit it; `compose.yml` says so in a comment
-rather than repeating it. The script reads the port out of `PURPLEOPS_ADDR` instead of hardcoding
+rather than repeating it. The script reads the port out of `BLACKLIGHT_ADDR` instead of hardcoding
 8080, and refuses port 0 rather than reporting a healthy container nobody is probing. The 503-on-dead-database
 half of the acceptance criterion is `TestHealthzReportsADeadDatabase`, which already existed;
 `curl --fail` is what turns that 503 into an unhealthy container, and the smoke test covers the

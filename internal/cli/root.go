@@ -3,8 +3,8 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/version"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 // newRoot builds the whole command tree. It takes the app rather than reading
@@ -12,11 +12,11 @@ import (
 func newRoot(a *app) *cobra.Command {
 	root := &cobra.Command{
 		Use:   name,
-		Short: "Administer a PurpleOps deployment",
-		Long: "popsctl administers a PurpleOps deployment from the command line: the database\n" +
+		Short: "Administer a Blacklight deployment",
+		Long: "blctl administers a Blacklight deployment from the command line: the database\n" +
 			"it stores everything in, the users who may sign in, and the content and reports\n" +
 			"built on top of them.\n\n" +
-			"It reads the same PURPLEOPS_* environment as the server (see .env.example) and\n" +
+			"It reads the same BLACKLIGHT_* environment as the server (see .env.example) and\n" +
 			"opens the same database file — which DuckDB will only hand to one process, so\n" +
 			"most commands need the server stopped, or must run inside its container.",
 
@@ -47,9 +47,9 @@ func newRoot(a *app) *cobra.Command {
 
 	flags := root.PersistentFlags()
 	flags.StringVar(&a.dbPath, "db", "",
-		"database file to work on (default: PURPLEOPS_DB_PATH, then ./purpleops.duckdb)")
+		"database file to work on (default: BLACKLIGHT_DB_PATH, then ./blacklight.duckdb)")
 	flags.Var(&logLevelFlag{level: &a.logLevel}, "log-level",
-		"log verbosity on stderr: debug, info, warn or error (default: PURPLEOPS_LOG_LEVEL)")
+		"log verbosity on stderr: debug, info, warn or error (default: BLACKLIGHT_LOG_LEVEL)")
 	flags.BoolVar(&a.jsonOut, "json", false,
 		"print the result as JSON on stdout, leaving stderr for logs")
 
@@ -65,7 +65,7 @@ func newRoot(a *app) *cobra.Command {
 	return root
 }
 
-// group is a command that exists to hold others: `popsctl migrate`, which does
+// group is a command that exists to hold others: `blctl migrate`, which does
 // nothing on its own.
 //
 // Running one without a subcommand is a usage error rather than a help page and
@@ -103,7 +103,7 @@ func subcommandArgs(cmd *cobra.Command, args []string) error {
 
 // logLevelFlag lets pflag parse a --log-level through config's own
 // [config.LogLevel], which means the flag accepts exactly what
-// PURPLEOPS_LOG_LEVEL accepts and says the same thing when it does not — and
+// BLACKLIGHT_LOG_LEVEL accepts and says the same thing when it does not — and
 // that a bad value is rejected during flag parsing, so it exits 2 as a bad
 // command line rather than 1 as a failure to run.
 type logLevelFlag struct {

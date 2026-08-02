@@ -24,7 +24,7 @@ const (
 )
 
 // Info is the build identity of this binary. It is the payload of the
-// `GET /version` endpoint (M0B-005) and of `purpleops --version`.
+// `GET /version` endpoint (M0B-005) and of `blacklight --version`.
 type Info struct {
 	// Version is the release identifier, e.g. "v2.1.0" or "v2.1.0-3-gabc1234".
 	Version string `json:"version"`

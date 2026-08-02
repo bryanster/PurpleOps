@@ -17,7 +17,7 @@ const attemptTimeoutMs = 2_000
 const pollIntervalMs = 100
 
 /** Default budget. Generous enough for a cold start under CI's disk. */
-export const defaultHealthTimeoutMs = Number(process.env.PURPLEOPS_E2E_HEALTH_TIMEOUT_MS ?? 30_000)
+export const defaultHealthTimeoutMs = Number(process.env.BLACKLIGHT_E2E_HEALTH_TIMEOUT_MS ?? 30_000)
 
 export interface WaitOptions {
   /** Total budget, in milliseconds. */
@@ -95,7 +95,7 @@ function describeFailure(
   hint: string | undefined,
 ): string {
   const lines = [
-    `No healthy PurpleOps server answered at ${url}`,
+    `No healthy Blacklight server answered at ${url}`,
     // Both numbers, because they differ for a reason worth seeing: a run that
     // used its whole budget was waiting, and one that stopped early knows the
     // thing it was waiting for is already dead.

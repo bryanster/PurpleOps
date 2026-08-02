@@ -1,5 +1,5 @@
-// Package cli is the command tree behind popsctl, the administrative CLI
-// (PLAN.md §6). cmd/popsctl is a main function over it and nothing else, so
+// Package cli is the command tree behind blctl, the administrative CLI
+// (PLAN.md §6). cmd/blctl is a main function over it and nothing else, so
 // every command is reachable from a test without spawning a process.
 //
 // It is the second entrypoint into one codebase: the same internal packages,
@@ -11,7 +11,7 @@
 //
 // The command's result goes to stdout; everything else — progress, warnings,
 // log lines, errors — goes to stderr. With --json the result is exactly one
-// JSON document, so `popsctl db info --json | jq` works while the log is still
+// JSON document, so `blctl db info --json | jq` works while the log is still
 // visible in the terminal.
 //
 // # Exit codes

@@ -20,7 +20,7 @@ CREATE TABLE app.user_totp (
 	user_id TEXT NOT NULL PRIMARY KEY,
 
 	-- The shared secret, AES-256-GCM under a key derived from
-	-- PURPLEOPS_ENCRYPTION_KEY, base64url. A copy of this file is not a set of
+	-- BLACKLIGHT_ENCRYPTION_KEY, base64url. A copy of this file is not a set of
 	-- working authenticators. The nonce is per record and travels in front of
 	-- the ciphertext; internal/authn/secrets is the only thing that reads this
 	-- column, and it never returns the plaintext to a caller that is not

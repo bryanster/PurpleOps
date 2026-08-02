@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/config"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // backoffSteps is how many times a lockout may double before it stops growing.

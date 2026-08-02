@@ -19,8 +19,8 @@ Second factor for local accounts. This ticket delivers the mechanism; `M1-008` m
   - `POST /auth/mfa/totp/verify` — used during login when a factor is pending.
   - `DELETE /auth/mfa/totp` — requires current password; refused if MFA is enforced for the user
     (`M1-008`).
-- Secret storage encrypted at rest with a key derived from `PURPLEOPS_SESSION_SECRET` (or a
-  dedicated `PURPLEOPS_ENCRYPTION_KEY` — decide, and document; a dedicated key is cleaner).
+- Secret storage encrypted at rest with a key derived from `BLACKLIGHT_SESSION_SECRET` (or a
+  dedicated `BLACKLIGHT_ENCRYPTION_KEY` — decide, and document; a dedicated key is cleaner).
 - Login flow integration: valid password + confirmed TOTP → a short-lived **pending** state
   (not a full session), which only becomes a session after `verify`. `session.mfa_satisfied` is set
   then.
@@ -67,8 +67,8 @@ Second factor for local accounts. This ticket delivers the mechanism; `M1-008` m
 
 ### The encryption key is its own variable, and required
 
-The ticket left the choice open and said a dedicated key is cleaner. It is `PURPLEOPS_ENCRYPTION_KEY`,
-required, and the server refuses to start when it equals `PURPLEOPS_SESSION_SECRET`.
+The ticket left the choice open and said a dedicated key is cleaner. It is `BLACKLIGHT_ENCRYPTION_KEY`,
+required, and the server refuses to start when it equals `BLACKLIGHT_SESSION_SECRET`.
 
 The argument is not tidiness, it is blast radius. Rotating the session secret is the documented way
 to sign everybody out (`.env.example`, `docs/deploy.md`) — a lever an operator is *meant* to pull. If
@@ -101,15 +101,15 @@ secret and M1-011's tokens will want it.
 
 ### The pending state is a cookie, not a body field
 
-`pops_mfa`, `HttpOnly`, `Secure`, `SameSite=Strict`, and `Path=/api/v1/auth/mfa` — scoped to the MFA
+`bl_mfa`, `HttpOnly`, `Secure`, `SameSite=Strict`, and `Path=/api/v1/auth/mfa` — scoped to the MFA
 endpoints and nothing else. A body field would have put a live credential where script can read it,
 which is exactly what the session token is kept out of.
 
 It lives in `internal/authn/challenge`, a separate package from `internal/authn/session` with its own
 cookie name, table and HMAC domain. That separation is what makes "a pending token is not a session"
 true in the plumbing rather than in a comment: the authentication middleware never resolves one, so
-a request carrying only `pops_mfa` is anonymous everywhere, and `GET /auth/me` answers it 401 whether
-the token arrives in its own cookie or is pasted into `pops_session`. Both are tested.
+a request carrying only `bl_mfa` is anonymous everywhere, and `GET /auth/me` answers it 401 whether
+the token arrives in its own cookie or is pasted into `bl_session`. Both are tested.
 
 ### A throttling hole the ticket does not mention, and the fix
 
@@ -157,9 +157,9 @@ app your users will use, and note here which one.
 
 ### Verified
 
-`make lint test build` green; `make generate` idempotent. Driven by hand against `./bin/purpleops`
-with a real DuckDB file: `popsctl user create`, login, enrol, confirm (204, session rotated,
+`make lint test build` green; `make generate` idempotent. Driven by hand against `./bin/blacklight`
+with a real DuckDB file: `blctl user create`, login, enrol, confirm (204, session rotated,
 `mfa.enrolled` and `mfa.satisfied` both true), logout, login again → `mfa_required` with only
-`pops_mfa` set, `GET /auth/me` on that cookie → 401, verify with the next window's code →
-`authenticated` with the session and CSRF cookies set and `pops_mfa` cleared, a second enrolment →
+`bl_mfa` set, `GET /auth/me` on that cookie → 401, verify with the next window's code →
+`authenticated` with the session and CSRF cookies set and `bl_mfa` cleared, a second enrolment →
 409, disable with the wrong password → 400 and with the right one → 204.

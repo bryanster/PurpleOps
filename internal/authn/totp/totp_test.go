@@ -35,7 +35,7 @@ func codeAt(t *testing.T, secret string, step int64) string {
 func newSecret(t *testing.T) string {
 	t.Helper()
 
-	enrolment, err := Generate("PurpleOps (test.internal)", "alice@example.com")
+	enrolment, err := Generate("Blacklight (test.internal)", "alice@example.com")
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestGenerateProducesAURIAnAppCanRead(t *testing.T) {
 	t.Parallel()
 
 	const (
-		issuer  = "PurpleOps (purpleops.internal)"
+		issuer  = "Blacklight (blacklight.internal)"
 		account = "alice@example.com"
 	)
 
@@ -225,10 +225,10 @@ func TestGenerateRefusesALabelThatWouldBeAmbiguous(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string][2]string{
-		"a colon in the issuer":  {"Purple:Ops", "alice@example.com"},
-		"a colon in the account": {"PurpleOps", "alice:example.com"},
+		"a colon in the issuer":  {"Black:light", "alice@example.com"},
+		"a colon in the account": {"Blacklight", "alice:example.com"},
 		"no issuer":              {"", "alice@example.com"},
-		"no account":             {"PurpleOps", "  "},
+		"no account":             {"Blacklight", "  "},
 	}
 	for name, args := range tests {
 		t.Run(name, func(t *testing.T) {

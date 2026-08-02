@@ -1,8 +1,8 @@
-# PurpleOps
+# Blacklight
 
-[![CI](https://github.com/bryanster/PurpleOps/actions/workflows/ci.yml/badge.svg)](https://github.com/bryanster/PurpleOps/actions/workflows/ci.yml)
+[![CI](https://github.com/bryanster/blacklight/actions/workflows/ci.yml/badge.svg)](https://github.com/bryanster/blacklight/actions/workflows/ci.yml)
 
-PurpleOps is a self-hosted purple-team assessment tool. Red and blue work through the same
+Blacklight is a self-hosted purple-team assessment tool. Red and blue work through the same
 engagement — an ordered chain of ATT&CK-mapped scenarios and steps — recording what was executed,
 what was prevented, what was detected and how quickly, and what changed on retest after
 remediation. The output is a report.
@@ -29,9 +29,9 @@ make build     # build the SPA and the binaries
 make run       # build, then start the server
 ```
 
-Both builds produce a second binary, `popsctl`, which administers a deployment from the command
+Both builds produce a second binary, `blctl`, which administers a deployment from the command
 line — migrations, database inspection, and the user and content management that arrive with M1 and
-M2. It is in the container image too: `docker compose exec purpleops popsctl --help`, and
+M2. It is in the container image too: `docker compose exec blacklight blctl --help`, and
 [`docs/cli.md`](docs/cli.md) for the rest.
 
 `make help` lists every target. There is a dev container with the toolchain already pinned and

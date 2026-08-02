@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 // TestTheRequestDeadlineEndsTheHandlersContext is what makes the timeout real:

@@ -13,14 +13,14 @@ func TestToolReadsWhatItNeedsAndNothingElse(t *testing.T) {
 	// Deliberately hostile: the two variables a server requires are absent,
 	// and one that is present is invalid.
 	cfg, errs := parseTool(map[string]string{
-		envDBPath: "/srv/purpleops/purpleops.duckdb",
+		envDBPath: "/srv/blacklight/blacklight.duckdb",
 		envAddr:   "not a listen address",
 	})
 	if len(errs) > 0 {
 		t.Fatalf("parseTool = %v, want no errors", errs)
 	}
 
-	if got, want := cfg.Database.Path, "/srv/purpleops/purpleops.duckdb"; got != want {
+	if got, want := cfg.Database.Path, "/srv/blacklight/blacklight.duckdb"; got != want {
 		t.Errorf("Database.Path = %q, want %q", got, want)
 	}
 	if got, want := cfg.Log.Level, LevelInfo; got != want {

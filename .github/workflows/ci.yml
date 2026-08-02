@@ -1,4 +1,4 @@
-# PurpleOps v2 — the pipeline that decides whether a change is mergeable.
+# Blacklight v2 — the pipeline that decides whether a change is mergeable.
 #
 # Two of these jobs exist because of named v1 failures (PLAN.md §4, §8):
 #
@@ -236,10 +236,10 @@ jobs:
           {
             echo '### linux/${{ matrix.arch }}'
             echo '```'
-            file bin/purpleops bin/popsctl
+            file bin/blacklight bin/blctl
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          for binary in bin/purpleops bin/popsctl; do
+          for binary in bin/blacklight bin/blctl; do
             described="$(file "${binary}")"
             echo "${described}"
             case "${described}" in

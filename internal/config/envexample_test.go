@@ -155,7 +155,7 @@ type assignment struct {
 
 // assignmentPattern matches a live or commented-out assignment. The variable
 // name has to follow the "#" immediately for a commented assignment, so prose
-// that happens to mention `PURPLEOPS_ENV=production` is not mistaken for one.
+// that happens to mention `BLACKLIGHT_ENV=production` is not mistaken for one.
 var assignmentPattern = regexp.MustCompile(`^(#?)(` + prefix + `[A-Z0-9_]+)=(.*)$`)
 
 func readEnvExample(t *testing.T) []assignment {

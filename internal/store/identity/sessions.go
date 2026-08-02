@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store"
 )
 
 const sessionColumns = `id, user_id, token_hash, created_at, last_seen_at,

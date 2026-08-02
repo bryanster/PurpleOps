@@ -11,10 +11,10 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bryanster/purpleops/internal/authn"
-	"github.com/bryanster/purpleops/internal/authn/challenge"
-	"github.com/bryanster/purpleops/internal/authn/throttle"
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/throttle"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // accountOf names the account a request is presenting a credential for, or ""

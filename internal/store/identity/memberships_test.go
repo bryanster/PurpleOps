@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bryanster/purpleops/internal/httpapi/apierr"
-	"github.com/bryanster/purpleops/internal/store/identity"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 func TestMembershipRoundTrips(t *testing.T) {
