@@ -161,3 +161,4 @@ both accept and add the reason to this list.
 | `web/src/api/schema.d.ts` | Generated. Do not edit |
 | `web/src/api/` | The typed client, the `ApiError` model and the query defaults — see its `README.md` |
 | [`docs/http.md`](http.md) | How the server runs it: the middleware chain, headers, proxies, timeouts and shutdown |
+| [`docs/security.md`](security.md) | The CSRF model: the two cookies, what is exempt and why |

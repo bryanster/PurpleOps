@@ -22,8 +22,9 @@ In order, outermost first:
 | 7 | `requestValidator` | Rejects anything `api/openapi.yaml` does not describe, before any handler runs |
 | 8 | `throttleCredentials` | Rations failed sign-in attempts, per account and per client address — see below |
 | 9 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
+| 10 | `requireCSRF` | Refuses a state-changing request that authenticated by cookie and carries no valid CSRF token — see [`docs/security.md`](security.md) |
 
-Only 7 to 9 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
+Only 7 to 10 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
 for an unknown path is still logged, still carries a request ID and still has the security headers.
 
 **The recoverer is inside the logger**, which is the reverse of what `M0B-006` proposed. The logger
@@ -37,7 +38,7 @@ authorization's job and happens in one place (`M1-013`). What step 8 *does* answ
 database failure: "the store did not answer" is not "you are not signed in", and reporting it as one
 would sign everybody out whenever the database hiccupped.
 
-M1-013 inserts authorization between 9 and the handlers, on the same router.
+M1-013 inserts authorization between 10 and the handlers, on the same router.
 
 ## Sign-in throttling
 
@@ -91,6 +92,11 @@ copy of the database is not a set of live sessions, and rotating that secret sig
 `last_seen_at` is written at most once a minute per session (`touchInterval`). Writes are serialized
 (`PLAN.md` §1), and a column whose only consumer is a timeout measured in hours does not deserve the
 write lock on every read.
+
+The browser holds a second cookie beside it, `pops_csrf`, which is derived from the session token
+and is deliberately readable by script. [`docs/security.md`](security.md) is the whole of that
+model; the one thing to know here is that the pair is issued together, rotated together and cleared
+together, by the CSRF middleware rather than by any handler.
 
 **Rotation replaces the token and keeps the session**: same row, same identifier, same absolute
 expiry. It happens on sign-in (a new session), on a password change, and — when they land — on MFA

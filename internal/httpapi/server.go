@@ -131,8 +131,12 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	//     authentication, so a locked-out caller costs nothing at all.
 	//  9. authentication: it resolves the session cookie into a subject and
 	//     decides nothing else (M1-003).
+	// 10. CSRF, also on the API router: a state-changing request that
+	//     authenticated by cookie must echo the CSRF token (M1-005). After
+	//     authentication, because whether it applies depends on *how* the
+	//     request authenticated and nothing else.
 	//
-	// M1-013 inserts authorization between 9 and the handlers, on the same
+	// M1-013 inserts authorization between 10 and the handlers, on the same
 	// router — one chain, so there is no route that can quietly avoid it.
 	router.Use(
 		requestID,
@@ -168,6 +172,7 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		validate,
 		throttleCredentials(limiter, responder, log),
 		authenticate(auth, responder, log),
+		requireCSRF(sessions, responder, log),
 	)
 	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,

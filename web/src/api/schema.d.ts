@@ -338,6 +338,17 @@ export interface components {
              *     their reach beyond it comes from `platformRole`, not from here.
              */
             memberships: components["schemas"]["EngagementMembership"][];
+            /**
+             * @description The double-submit CSRF token for this session (M1-005) — the same
+             *     value as the `pops_csrf` cookie, which is where a browser client
+             *     should read it from.
+             *
+             *     It is here for a client that has no cookie jar to read, and it is
+             *     not a secret in the way the session token is: it authorizes nothing
+             *     on its own. Absent for a caller authenticated by a service token,
+             *     which is not subject to the check.
+             */
+            csrfToken?: string;
         };
         /**
          * @description What somebody may do to this installation: `admin` manages users, content
@@ -493,6 +504,23 @@ export interface components {
         };
     };
     parameters: {
+        /**
+         * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+         *     `pops_csrf` cookie, echoed back in this header.
+         *
+         *     **Required in practice** on every state-changing request authenticated
+         *     by the session cookie, even though it is declared optional here. The
+         *     rule belongs to one middleware, which answers a missing or wrong token
+         *     with `403` and `code: "forbidden"`; declaring the parameter required
+         *     would make an *absent* header a `400` from the request validator and a
+         *     *wrong* one a `403`, splitting one rule across two layers and two status
+         *     codes for no gain to the caller.
+         *
+         *     A request authenticated by a service token does not send this and is not
+         *     subject to the check — CSRF is a property of cookies, which browsers
+         *     attach on their own.
+         */
+        CSRFToken: string;
         /** @description Maximum number of items to return. */
         Limit: number;
         /**
@@ -584,6 +612,10 @@ export interface operations {
                      *     `authenticated`. `HttpOnly`, `SameSite=Strict`, `Path=/`, and
                      *     `Secure` on every deployment that is not
                      *     `PURPLEOPS_ENV=development`.
+                     *
+                     *     A second `Set-Cookie` carries `pops_csrf` (M1-005), with the
+                     *     same attributes except that it is **not** `HttpOnly` — script
+                     *     has to read it to send `X-CSRF-Token`.
                      */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
@@ -601,7 +633,25 @@ export interface operations {
     logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `pops_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -610,12 +660,17 @@ export interface operations {
             /** @description The session is revoked and the cookie cleared. */
             204: {
                 headers: {
-                    /** @description The expired session cookie, which clears the browser's copy. */
+                    /**
+                     * @description The expired session cookie, which clears the browser's copy. The
+                     *     `pops_csrf` cookie is cleared alongside it, in a second
+                     *     `Set-Cookie` — the two are issued together and dropped together.
+                     */
                     "Set-Cookie": string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -644,7 +699,25 @@ export interface operations {
     changePassword: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `pops_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -657,7 +730,12 @@ export interface operations {
             /** @description The password was changed, this session rotated, and every other one revoked. */
             204: {
                 headers: {
-                    /** @description The rotated session cookie. The token it replaces stops working. */
+                    /**
+                     * @description The rotated session cookie. The token it replaces stops working,
+                     *     and the matching `pops_csrf` cookie is set in a second
+                     *     `Set-Cookie`: the CSRF token is derived from the session token,
+                     *     so it rotates with it.
+                     */
                     "Set-Cookie": string;
                     [name: string]: unknown;
                 };
@@ -665,6 +743,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
         };
     };

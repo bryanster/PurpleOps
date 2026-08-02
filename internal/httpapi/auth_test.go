@@ -53,6 +53,11 @@ type authServer struct {
 	handler http.Handler
 	db      *store.DB
 	logs    *logBuffer
+
+	// manager is a session manager built from the same configuration as the
+	// server's, so that a test can derive the CSRF token a session token maps
+	// to (M1-005) without reaching into the server it is testing.
+	manager *session.Manager
 }
 
 // newAuthServer builds the real chain over a migrated database. adjust changes
@@ -66,7 +71,12 @@ func newAuthServer(t *testing.T, adjust ...func(*config.Config)) *authServer {
 	}
 	db := storetest.Migrated(t)
 	handler, logs := newTestServerWith(t, cfg, db)
-	return &authServer{handler: handler, db: db, logs: logs}
+
+	manager, err := session.New(identity.NewSessions(db), session.OptionsFrom(cfg))
+	if err != nil {
+		t.Fatalf("building the test session manager: %v", err)
+	}
+	return &authServer{handler: handler, db: db, logs: logs, manager: manager}
 }
 
 // seedUser creates an account directly, which is what popsctl does — there is
@@ -93,13 +103,31 @@ func (s *authServer) seedUser(t *testing.T, adjust ...func(*identity.NewUser)) i
 }
 
 // post sends a JSON body, optionally carrying a session cookie.
+//
+// A session cookie brings its CSRF cookie and header with it, because that is
+// what a signed-in browser sends: the SPA's client attaches the header to every
+// state-changing request (M1-005), so a helper that left it out would be
+// testing a client nobody ships. The tests that are *about* CSRF build their
+// requests by hand for exactly that reason — see csrf_test.go.
 func (s *authServer) post(target, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	for _, cookie := range cookies {
 		request.AddCookie(cookie)
+		if cookie.Name == session.CookieName {
+			s.attachCSRF(request, cookie)
+		}
 	}
 	return do(s.handler, request)
+}
+
+// attachCSRF adds the CSRF cookie and header belonging to a session cookie.
+// The value is derived, not read from a previous response, so it is right even
+// for a session the server has since revoked or rotated away.
+func (s *authServer) attachCSRF(request *http.Request, sessionCookie *http.Cookie) {
+	token := s.manager.CSRFToken(session.Token(sessionCookie.Value))
+	request.AddCookie(&http.Cookie{Name: session.CSRFCookieName, Value: token})
+	request.Header.Set(CSRFHeader, token)
 }
 
 func (s *authServer) get(target string, cookies ...*http.Cookie) *httptest.ResponseRecorder {

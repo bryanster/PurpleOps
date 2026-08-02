@@ -233,7 +233,13 @@ func (s *Service) Authenticate(ctx context.Context, token session.Token) (Subjec
 		return Subject{}, fmt.Errorf("%w: user %s is %s",
 			session.ErrNoSession, user.ID, user.Status)
 	}
-	return subjectOf(user, found), nil
+
+	subject := subjectOf(user, found)
+	// Set here, where the cookie was actually resolved, rather than in
+	// subjectOf: this is the only function that knows a *cookie* is what proved
+	// it, and M1-011's equivalent will say MethodServiceToken in its own.
+	subject.Method = MethodCookie
+	return subject, nil
 }
 
 // Logout revokes the caller's session. It is idempotent: a session that has

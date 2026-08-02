@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0
+	github.com/oapi-codegen/runtime v1.6.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.54.0
 	golang.org/x/term v0.45.0
@@ -15,6 +16,7 @@ require (
 
 require (
 	github.com/apache/arrow-go/v18 v18.5.1 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.10505.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64 v0.10505.0 // indirect

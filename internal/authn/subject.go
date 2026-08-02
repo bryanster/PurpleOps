@@ -24,6 +24,13 @@ type Subject struct {
 
 	PlatformRole identity.PlatformRole
 
+	// Method is how this request proved who it is. It is here because CSRF
+	// protection turns on it and must not turn on anything a caller controls
+	// directly (M1-005): a request is exempt because it *arrived* bearing a
+	// service token that this server checked, not because it sent a header
+	// saying so.
+	Method Method
+
 	// SessionID is the session this request arrived on. It is what logout
 	// revokes and what a password change rotates, and it is never the token —
 	// that value exists in the cookie and nowhere else.
@@ -35,6 +42,27 @@ type Subject struct {
 	MFAEnforced  bool
 	MFASatisfied bool
 }
+
+// Method is a way of authenticating a request. There is one today; M1-011 adds
+// the other, and the CSRF middleware is written against the distinction now so
+// that adding it is not also a change to how CSRF decides (M1-005).
+type Method string
+
+const (
+	// MethodNone is an anonymous request. It is the zero value, so a Subject
+	// that nothing authenticated cannot pass for one that something did.
+	MethodNone Method = ""
+
+	// MethodCookie is a browser session cookie. These requests carry ambient
+	// authority — the browser attaches the cookie whether or not this
+	// application asked it to — and are the ones CSRF protection is for.
+	MethodCookie Method = "cookie"
+
+	// MethodServiceToken is an Authorization: Bearer service token (M1-011).
+	// Nothing attaches one on a caller's behalf, so there is no cross-site
+	// request to forge and CSRF does not apply (PLAN.md §4).
+	MethodServiceToken Method = "service_token"
+)
 
 // contextKey is unexported so that nothing outside this package can put a
 // Subject into a context, or take one out, without going through the two

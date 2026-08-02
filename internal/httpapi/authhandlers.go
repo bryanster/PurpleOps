@@ -41,7 +41,10 @@ func (h *handlers) Login(ctx context.Context, request gen.LoginRequestObject) (g
 	if err != nil {
 		return nil, err
 	}
-	user := currentUser(profile)
+	// Derived from the token that is going into the cookie, so the body and the
+	// two Set-Cookie headers describe the same session. The second cookie is
+	// added on the way out, by the CSRF middleware (M1-005) — see csrfWriter.
+	user := currentUser(profile, h.sessions.CSRFToken(result.Issued.Token))
 	cookie := h.sessions.Cookie(result.Issued.Token, result.Issued.Session.ExpiresAt).String()
 
 	return gen.Login200JSONResponse{
@@ -83,7 +86,10 @@ func (h *handlers) GetCurrentUser(ctx context.Context, _ gen.GetCurrentUserReque
 	if err != nil {
 		return nil, err
 	}
-	return gen.GetCurrentUser200JSONResponse(currentUser(profile)), nil
+	// Empty for a caller who did not authenticate by cookie, which is the one
+	// case where the field is absent from the body — there is no CSRF check on
+	// such a request to give it a token for.
+	return gen.GetCurrentUser200JSONResponse(currentUser(profile, csrfTokenFrom(ctx))), nil
 }
 
 // ChangePassword replaces the caller's own password, rotates this session onto a
@@ -113,7 +119,10 @@ func (h *handlers) ChangePassword(ctx context.Context, request gen.ChangePasswor
 // becomes JSON, so there is one answer to what /auth/me and the login response
 // contain — and nothing about the session token is in the struct it fills, so
 // there is nothing to leave out by mistake.
-func currentUser(profile authn.Profile) gen.CurrentUser {
+//
+// csrfToken is the one value here that is not part of the profile. It is "" for
+// a caller with no cookie session, and omitted from the body when it is.
+func currentUser(profile authn.Profile, csrfToken string) gen.CurrentUser {
 	memberships := make([]gen.EngagementMembership, 0, len(profile.Memberships))
 	for _, membership := range profile.Memberships {
 		memberships = append(memberships, gen.EngagementMembership{
@@ -123,7 +132,7 @@ func currentUser(profile authn.Profile) gen.CurrentUser {
 		})
 	}
 
-	return gen.CurrentUser{
+	user := gen.CurrentUser{
 		Id:           profile.User.ID,
 		Email:        profile.User.Email,
 		DisplayName:  profile.User.DisplayName,
@@ -134,4 +143,8 @@ func currentUser(profile authn.Profile) gen.CurrentUser {
 		},
 		Memberships: memberships,
 	}
+	if csrfToken != "" {
+		user.CsrfToken = &csrfToken
+	}
+	return user
 }

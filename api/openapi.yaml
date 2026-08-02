@@ -173,6 +173,10 @@ paths:
                 `authenticated`. `HttpOnly`, `SameSite=Strict`, `Path=/`, and
                 `Secure` on every deployment that is not
                 `PURPLEOPS_ENV=development`.
+
+                A second `Set-Cookie` carries `pops_csrf` (M1-005), with the
+                same attributes except that it is **not** `HttpOnly` — script
+                has to read it to send `X-CSRF-Token`.
               schema:
                 type: string
           content:
@@ -201,15 +205,22 @@ paths:
         wanted to be signed out, and they are.
       tags:
         - auth
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
       responses:
         "204":
           description: The session is revoked and the cookie cleared.
           headers:
             Set-Cookie:
-              description: The expired session cookie, which clears the browser's copy.
+              description: |
+                The expired session cookie, which clears the browser's copy. The
+                `pops_csrf` cookie is cleared alongside it, in a second
+                `Set-Cookie` — the two are issued together and dropped together.
               required: true
               schema:
                 type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -252,6 +263,8 @@ paths:
         change it from.
       tags:
         - auth
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
       requestBody:
         required: true
         content:
@@ -263,7 +276,11 @@ paths:
           description: The password was changed, this session rotated, and every other one revoked.
           headers:
             Set-Cookie:
-              description: The rotated session cookie. The token it replaces stops working.
+              description: |
+                The rotated session cookie. The token it replaces stops working,
+                and the matching `pops_csrf` cookie is set in a second
+                `Set-Cookie`: the CSRF token is derived from the session token,
+                so it rotates with it.
               required: true
               schema:
                 type: string
@@ -271,6 +288,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -287,7 +306,8 @@ components:
         State-changing requests additionally carry a double-submit CSRF token in
         `X-CSRF-Token` (M1-005). OpenAPI cannot express "this scheme also needs
         that header", so the header is declared as a parameter on the operations
-        that require it — it is not optional there.
+        that require it — see `CSRFToken` for why it is nevertheless declared
+        optional, and what happens when it is missing.
     bearerServiceToken:
       type: http
       scheme: bearer
@@ -299,6 +319,31 @@ components:
         the user who owns it.
 
   parameters:
+    # Referenced by every state-changing operation that a browser session may
+    # reach, so that the requirement is in the document a client is generated
+    # from rather than only in the server's middleware.
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: |
+        The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+        `pops_csrf` cookie, echoed back in this header.
+
+        **Required in practice** on every state-changing request authenticated
+        by the session cookie, even though it is declared optional here. The
+        rule belongs to one middleware, which answers a missing or wrong token
+        with `403` and `code: "forbidden"`; declaring the parameter required
+        would make an *absent* header a `400` from the request validator and a
+        *wrong* one a `403`, splitting one rule across two layers and two status
+        codes for no gain to the caller.
+
+        A request authenticated by a service token does not send this and is not
+        subject to the check — CSRF is a property of cookies, which browsers
+        attach on their own.
+      schema:
+        type: string
+
     # The two halves of the pagination convention. Every collection endpoint
     # references these rather than declaring its own, so `limit` means the same
     # thing everywhere and the generated clients share one page shape:
@@ -658,6 +703,17 @@ components:
             their reach beyond it comes from `platformRole`, not from here.
           items:
             $ref: "#/components/schemas/EngagementMembership"
+        csrfToken:
+          type: string
+          description: |
+            The double-submit CSRF token for this session (M1-005) — the same
+            value as the `pops_csrf` cookie, which is where a browser client
+            should read it from.
+
+            It is here for a client that has no cookie jar to read, and it is
+            not a secret in the way the session token is: it authorizes nothing
+            on its own. Absent for a caller authenticated by a service token,
+            which is not subject to the check.
 
     PlatformRole:
       type: string

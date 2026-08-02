@@ -52,6 +52,14 @@ export function get(
   return http.get(apiUrl(path), resolver)
 }
 
+/** The same, for an operation that changes something. */
+export function post(
+  path: keyof paths,
+  resolver: HttpResponseResolver,
+): ReturnType<typeof http.post> {
+  return http.post(apiUrl(path), resolver)
+}
+
 /**
  * An RFC 9457 problem document, served the way the real server serves one:
  * `application/problem+json`, the status repeated in the body, and the request

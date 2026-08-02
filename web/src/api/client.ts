@@ -45,6 +45,56 @@ export function apiUrl(path: keyof paths): string {
  * part is which dependency is down. Distinguishing the two on the media type is
  * exactly what `application/problem+json` is for.
  */
+/**
+ * The cookie the server issues the CSRF token in. Matches
+ * `session.CSRFCookieName`; it is deliberately not `HttpOnly`, because reading
+ * it here is the whole mechanism.
+ */
+const CSRF_COOKIE = 'pops_csrf'
+
+/** The header the token is echoed in. Matches `httpapi.CSRFHeader`. */
+const CSRF_HEADER = 'X-CSRF-Token'
+
+/** The methods that change nothing, and so carry no token. */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+/** The value of one cookie, or undefined when the browser holds none. */
+function readCookie(name: string): string | undefined {
+  const prefix = `${name}=`
+  for (const entry of document.cookie.split(';')) {
+    const trimmed = entry.trim()
+    if (trimmed.startsWith(prefix)) {
+      return decodeURIComponent(trimmed.slice(prefix.length))
+    }
+  }
+  return undefined
+}
+
+/**
+ * Attach the double-submit CSRF token to every state-changing request (M1-005).
+ *
+ * It is middleware so that no component, hook or mutation ever thinks about
+ * CSRF: the one thing a caller could get wrong here is forgetting, and there is
+ * nothing to forget. The server refuses a cookie-authenticated `POST`, `PUT`,
+ * `PATCH` or `DELETE` without it with a 403.
+ *
+ * A missing cookie sends no header, which is a 403 the server answers with a
+ * fresh cookie — so the next attempt works rather than the client having to
+ * detect and repair anything.
+ */
+const csrfMiddleware: Middleware = {
+  onRequest({ request }) {
+    if (SAFE_METHODS.has(request.method.toUpperCase())) {
+      return undefined
+    }
+    const token = readCookie(CSRF_COOKIE)
+    if (token !== undefined) {
+      request.headers.set(CSRF_HEADER, token)
+    }
+    return request
+  },
+}
+
 const problemMiddleware: Middleware = {
   async onResponse({ response }) {
     if (response.ok) {
@@ -73,6 +123,7 @@ export const api = createClient<paths>({
   fetch: (request) => globalThis.fetch(request),
 })
 
+api.use(csrfMiddleware)
 api.use(problemMiddleware)
 
 /**

@@ -1,10 +1,11 @@
 import { HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   get,
   internalError,
   notFound,
+  post,
   problem,
   TEST_REQUEST_ID,
   unhealthyFixture,
@@ -119,5 +120,70 @@ describe('the problem middleware', () => {
 
     expect(response.status).toBe(503)
     expect(error).toEqual(unhealthyFixture)
+  })
+})
+
+describe('the CSRF middleware', () => {
+  /** Records the headers of whatever request reaches the fake server. */
+  function captureLogout(): { headers?: Headers } {
+    const captured: { headers?: Headers } = {}
+    server.use(
+      post('/auth/logout', ({ request }) => {
+        captured.headers = request.headers
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    return captured
+  }
+
+  afterEach(() => {
+    document.cookie = 'pops_csrf=; max-age=0'
+  })
+
+  it('attaches the token from the cookie to a state-changing request', async () => {
+    // The acceptance criterion for the client half of M1-005: no component
+    // touches this, and no call site opts in.
+    document.cookie = 'pops_csrf=the-derived-token'
+    const captured = captureLogout()
+
+    await api.POST('/auth/logout')
+
+    expect(captured.headers?.get('X-CSRF-Token')).toBe('the-derived-token')
+  })
+
+  it('sends no token on a request that changes nothing', async () => {
+    document.cookie = 'pops_csrf=the-derived-token'
+    const captured: { headers?: Headers } = {}
+    server.use(
+      get('/version', ({ request }) => {
+        captured.headers = request.headers
+        return HttpResponse.json(versionFixture)
+      }),
+    )
+
+    await api.GET('/version')
+
+    expect(captured.headers?.get('X-CSRF-Token')).toBeNull()
+  })
+
+  it('sends no header when the browser holds no cookie', async () => {
+    // The server answers this with a 403 carrying a fresh cookie, so the retry
+    // works. Inventing a value here would only turn that into a confusing one.
+    const captured = captureLogout()
+
+    await api.POST('/auth/logout')
+
+    expect(captured.headers?.get('X-CSRF-Token')).toBeNull()
+  })
+
+  it('reads its own cookie rather than the first one it finds', async () => {
+    document.cookie = 'other=first'
+    document.cookie = 'pops_csrf=the-derived-token'
+    const captured = captureLogout()
+
+    await api.POST('/auth/logout')
+
+    expect(captured.headers?.get('X-CSRF-Token')).toBe('the-derived-token')
+    document.cookie = 'other=; max-age=0'
   })
 })

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 )
 
 // Defines values for EngagementRole.
@@ -146,6 +147,16 @@ type ChangePasswordRequest struct {
 // session token: the cookie is the only place that value exists outside the
 // client.
 type CurrentUser struct {
+	// CsrfToken The double-submit CSRF token for this session (M1-005) — the same
+	// value as the `pops_csrf` cookie, which is where a browser client
+	// should read it from.
+	//
+	// It is here for a client that has no cookie jar to read, and it is
+	// not a secret in the way the session token is: it authorizes nothing
+	// on its own. Absent for a caller authenticated by a service token,
+	// which is not subject to the check.
+	CsrfToken *string `json:"csrfToken,omitempty"`
+
 	// DisplayName The name to show for this person.
 	DisplayName string `json:"displayName"`
 
@@ -360,12 +371,22 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// CSRFToken defines model for CSRFToken.
+type CSRFToken = string
+
 // BadRequest RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
 //
 // Clients switch on `code`. `title` and `detail` are prose for a human and
 // may be reworded at any time.
 type BadRequest = Problem
+
+// Forbidden RFC 9457 problem detail — the only error shape this API produces, served
+// as `application/problem+json` (M0B-007).
+//
+// Clients switch on `code`. `title` and `detail` are prose for a human and
+// may be reworded at any time.
+type Forbidden = Problem
 
 // InternalError RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
@@ -388,6 +409,44 @@ type TooManyRequests = Problem
 // may be reworded at any time.
 type Unauthenticated = Problem
 
+// LogoutParams defines parameters for Logout.
+type LogoutParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `pops_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ChangePasswordParams defines parameters for ChangePassword.
+type ChangePasswordParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `pops_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -401,13 +460,13 @@ type ServerInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	// Logout End the current session.
 	// (POST /auth/logout)
-	Logout(w http.ResponseWriter, r *http.Request)
+	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
 	// GetCurrentUser Return the signed-in user, their platform role and their engagement memberships.
 	// (GET /auth/me)
 	GetCurrentUser(w http.ResponseWriter, r *http.Request)
 	// ChangePassword Change your own password.
 	// (POST /auth/password)
-	ChangePassword(w http.ResponseWriter, r *http.Request)
+	ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -428,7 +487,7 @@ func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout End the current session.
 // (POST /auth/logout)
-func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request, params LogoutParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -440,7 +499,7 @@ func (_ Unimplemented) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 // ChangePassword Change your own password.
 // (POST /auth/password)
-func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -482,8 +541,35 @@ func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request)
 // Logout operation middleware
 func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LogoutParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Logout(w, r)
+		siw.Handler.Logout(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -510,8 +596,35 @@ func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http
 // ChangePassword operation middleware
 func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangePasswordParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ChangePassword(w, r)
+		siw.Handler.ChangePassword(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -686,6 +799,8 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 
 type BadRequestApplicationProblemPlusJSONResponse Problem
 
+type ForbiddenApplicationProblemPlusJSONResponse Problem
+
 type InternalErrorApplicationProblemPlusJSONResponse Problem
 
 type TooManyRequestsResponseHeaders struct {
@@ -797,6 +912,7 @@ func (response Login500ApplicationProblemPlusJSONResponse) VisitLoginResponse(w 
 }
 
 type LogoutRequestObject struct {
+	Params LogoutParams
 }
 
 type LogoutResponseObject interface {
@@ -815,6 +931,22 @@ func (response Logout204Response) VisitLogoutResponse(w http.ResponseWriter) err
 	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(204)
 	return nil
+}
+
+type Logout403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response Logout403ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type Logout500ApplicationProblemPlusJSONResponse struct {
@@ -887,7 +1019,8 @@ func (response GetCurrentUser500ApplicationProblemPlusJSONResponse) VisitGetCurr
 }
 
 type ChangePasswordRequestObject struct {
-	Body *ChangePasswordJSONRequestBody
+	Params ChangePasswordParams
+	Body   *ChangePasswordJSONRequestBody
 }
 
 type ChangePasswordResponseObject interface {
@@ -936,6 +1069,22 @@ func (response ChangePassword401ApplicationProblemPlusJSONResponse) VisitChangeP
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword403ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1137,8 +1286,10 @@ func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout operation middleware
-func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request, params LogoutParams) {
 	var request LogoutRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
@@ -1185,8 +1336,10 @@ func (sh *strictHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) 
 }
 
 // ChangePassword operation middleware
-func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams) {
 	var request ChangePasswordRequestObject
+
+	request.Params = params
 
 	var body ChangePasswordJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

@@ -24,8 +24,8 @@ const CookieName = "pops_session"
 //     cookie over plain http, which is why config rejects a production
 //     deployment on a non-loopback http base URL.
 //   - SameSite=Strict, so the browser does not attach it to a request another
-//     site caused. It is most of a CSRF defence on its own; M1-005 adds the
-//     double-submit token for the rest.
+//     site caused. It is most of a CSRF defence on its own; csrf.go adds the
+//     double-submit token for the rest (M1-005).
 //   - Path=/ and no Domain. No Domain means the cookie is scoped to exactly this
 //     host — setting one would widen it to every subdomain, which on a shared
 //     domain hands the session to whoever runs the neighbours.
