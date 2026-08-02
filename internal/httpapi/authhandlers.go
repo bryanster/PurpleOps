@@ -29,12 +29,28 @@ func (h *handlers) Login(ctx context.Context, request gen.LoginRequestObject) (g
 	}
 
 	if result.Status != authn.LoginAuthenticated {
-		// No cookie and no user: the caller has proved a password and nothing
-		// more, and until the second factor is presented (M1-006) there is no
-		// session to describe.
-		return gen.Login200JSONResponse{
+		// No session cookie and no user: the caller has proved a password and
+		// nothing more, and until the second factor is presented (M1-006) there
+		// is no session to describe.
+		//
+		// The credential was right, so this is not a failed attempt — and it is
+		// not a finished one either. Saying so keeps the throttle from clearing
+		// the account's failure count, which would let somebody holding the
+		// password reset their code-guessing budget between every guess.
+		markCredentialIncomplete(ctx)
+
+		body := gen.Login200JSONResponse{
 			Body: gen.LoginResult{Status: gen.LoginStatusMfaRequired},
-		}, nil
+		}
+		if result.Challenge.Token != "" {
+			// A challenge the caller can actually answer. Its absence means MFA
+			// is enforced with nothing enrolled — the dead end M1-008 removes —
+			// and there is deliberately nothing to hand out in that case.
+			cookie := h.challenges.Cookie(
+				result.Challenge.Token, result.Challenge.Challenge.ExpiresAt).String()
+			body.Headers = gen.Login200ResponseHeaders{SetCookie: &cookie}
+		}
+		return body, nil
 	}
 
 	profile, err := h.auth.Profile(ctx, result.Subject)
@@ -137,11 +153,8 @@ func currentUser(profile authn.Profile, csrfToken string) gen.CurrentUser {
 		Email:        profile.User.Email,
 		DisplayName:  profile.User.DisplayName,
 		PlatformRole: gen.PlatformRole(profile.User.PlatformRole),
-		Mfa: gen.MFAState{
-			Enforced:  profile.User.MFAEnforced,
-			Satisfied: profile.MFASatisfied,
-		},
-		Memberships: memberships,
+		Mfa:          mfaState(profile),
+		Memberships:  memberships,
 	}
 	if csrfToken != "" {
 		user.CsrfToken = &csrfToken

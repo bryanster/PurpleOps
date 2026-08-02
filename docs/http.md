@@ -23,8 +23,9 @@ In order, outermost first:
 | 8 | `throttleCredentials` | Rations failed sign-in attempts, per account and per client address — see below |
 | 9 | `authenticate` | Resolves the session cookie into an `authn.Subject` on the context. Refuses nothing — see below |
 | 10 | `requireCSRF` | Refuses a state-changing request that authenticated by cookie and carries no valid CSRF token — see [`docs/security.md`](security.md) |
+| 11 | `clearSpentChallenge` | A response wrapper: drops the `pops_mfa` cookie once the sign-in it belongs to has produced a session |
 
-Only 7 to 10 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
+Only 7 to 11 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
 for an unknown path is still logged, still carries a request ID and still has the security headers.
 
 **The recoverer is inside the logger**, which is the reverse of what `M0B-006` proposed. The logger
@@ -38,13 +39,19 @@ authorization's job and happens in one place (`M1-013`). What step 8 *does* answ
 database failure: "the store did not answer" is not "you are not signed in", and reporting it as one
 would sign everybody out whenever the database hiccupped.
 
-M1-013 inserts authorization between 10 and the handlers, on the same router.
+M1-013 inserts authorization between 11 and the handlers, on the same router.
 
 ## Sign-in throttling
 
-Two limiters guard every endpoint where a credential is presented — today `POST /auth/login`, and
-the list is `credentialRoutes` in `internal/httpapi/throttle.go`. Both have to allow an attempt
-through, and a refusal is a `429` with `code: rate_limited` and a `Retry-After` in whole seconds.
+Two limiters guard every endpoint where a credential is presented — today `POST /auth/login` and
+`POST /auth/mfa/totp/verify`, and the list is `credentialAccounts` in
+`internal/httpapi/throttle.go`. Both have to allow an attempt through, and a refusal is a `429` with
+`code: rate_limited` and a `Retry-After` in whole seconds.
+
+The two endpoints name the account being attempted in different places — a body field for the
+password, the pending challenge behind the cookie for the code — which is why the table maps a route
+to a function rather than to a field name. They share one budget: five wrong codes lock the account
+out of the password endpoint too.
 
 | Limit | Keyed on | Default | Cleared by a successful sign-in |
 |---|---|---|---|
@@ -57,7 +64,7 @@ the longest lockout, which is also how the table is kept bounded. A success does
 *source* limit on purpose: an attacker who holds one valid account would otherwise top their
 spraying budget up with it.
 
-Four things worth knowing before changing any of it:
+Five things worth knowing before changing any of it:
 
 - **The right password during a lockout is refused too**, and no session is issued. A lockout that
   the right password ends is not a lockout — it is a delay on an attacker who has already won.
@@ -69,6 +76,11 @@ Four things worth knowing before changing any of it:
 - **The state is in memory and per-process**, and it is lost on restart. That is correct for the
   single-node deployment in `PLAN.md` §1 and for nothing else; a second node would need it shared,
   and nothing here would notice on its own.
+- **A login that answers `mfa_required` counts as neither a success nor a failure.** The outcome is
+  otherwise read from the status the handler produced, and a `200` would clear the account's failure
+  count — so somebody holding the password could reset their code-guessing budget by signing in
+  again between every guess. The login handler says so explicitly, through
+  `markCredentialIncomplete`.
 
 Behind a reverse proxy the source limiter counts the proxy unless `PURPLEOPS_TRUSTED_PROXIES` names
 it — the same resolution the request log uses, described under *Behind a reverse proxy* below.
@@ -99,9 +111,13 @@ model; the one thing to know here is that the pair is issued together, rotated t
 together, by the CSRF middleware rather than by any handler.
 
 **Rotation replaces the token and keeps the session**: same row, same identifier, same absolute
-expiry. It happens on sign-in (a new session), on a password change, and — when they land — on MFA
-completion and a platform-role change. The token it replaces stops resolving to anything, which is
-what makes a session an attacker fixed before login worthless afterwards.
+expiry. It happens on sign-in (a new session), on a password change, on MFA being satisfied
+(`M1-006`), and — when it lands — on a platform-role change. The token it replaces stops resolving
+to anything, which is what makes a session an attacker fixed before login worthless afterwards.
+
+A third cookie exists only between a correct password and a presented second factor: `pops_mfa`,
+scoped to `/api/v1/auth/mfa` and gone within minutes. It is not a session and nothing here resolves
+it into one — [`docs/security.md`](security.md), *Multi-factor authentication*, is that story.
 
 ## Serving the app
 

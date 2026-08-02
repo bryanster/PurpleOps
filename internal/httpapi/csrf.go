@@ -44,6 +44,15 @@ var csrfExemptRoutes = map[string]string{
 	// prevent, which costs the attacker their own credentials to mount.
 	"POST " + BasePath + "/auth/login": "no session exists yet; the credential in the body is the proof",
 
+	// The second half of the same sign-in, exempt for the same reason and with
+	// the same caveat: the caller normally has no session cookie, so the check
+	// would not apply anyway — and for the browser that happens to be holding a
+	// stale one it would turn "finish signing in" into a 403 that depends on
+	// what was in the cookie jar. The credential is the pending cookie plus a
+	// code from a device, which an attacker forging a cross-site request has
+	// neither of.
+	"POST " + BasePath + mfaPathPrefix + "/totp/verify": "no session exists yet; the pending cookie and the code are the proof",
+
 	// M1-009 and M1-010 add the SSO assertion callbacks here. They arrive as a
 	// cross-site POST from the identity provider by design, and their integrity
 	// comes from the signed assertion and the state/nonce they carry.

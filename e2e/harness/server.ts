@@ -172,7 +172,10 @@ function serverEnvironment(
   env.PURPLEOPS_DB_PATH = paths.dbPath
   env.PURPLEOPS_EVIDENCE_DIR = paths.evidenceDir
   // Real entropy per server: config rejects placeholders and low-variety values.
+  // Two distinct values, because config refuses a deployment that uses one for
+  // both — see .env.example on why the blast radii differ.
   env.PURPLEOPS_SESSION_SECRET = randomBytes(32).toString('base64')
+  env.PURPLEOPS_ENCRYPTION_KEY = randomBytes(32).toString('base64')
   // Debug and text: this log is read by a human staring at a failed run.
   env.PURPLEOPS_LOG_LEVEL = 'debug'
   env.PURPLEOPS_LOG_FORMAT = 'text'

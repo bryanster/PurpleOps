@@ -26,8 +26,10 @@ const (
 	envDBPath          = prefix + "DB_PATH"
 	envEvidenceDir     = prefix + "EVIDENCE_DIR"
 	envSessionSecret   = prefix + "SESSION_SECRET"
+	envEncryptionKey   = prefix + "ENCRYPTION_KEY"
 	envSessionLifetime = prefix + "SESSION_LIFETIME"
 	envSessionIdle     = prefix + "SESSION_IDLE_TIMEOUT"
+	envMFAPending      = prefix + "MFA_PENDING_TTL"
 	envAccountFailures = prefix + "LOGIN_ACCOUNT_FAILURES"
 	envAccountLockout  = prefix + "LOGIN_ACCOUNT_LOCKOUT"
 	envSourceFailures  = prefix + "LOGIN_SOURCE_FAILURES"
@@ -45,13 +47,15 @@ type Config struct {
 	// control; see the individual controls for what each relaxation is.
 	Env Environment
 
-	Server   Server
-	Database Database
-	Evidence Evidence
-	Session  Session
-	Throttle Throttle
-	Log      Log
-	Report   Report
+	Server     Server
+	Database   Database
+	Evidence   Evidence
+	Session    Session
+	Encryption Encryption
+	MFA        MFA
+	Throttle   Throttle
+	Log        Log
+	Report     Report
 }
 
 // Server is the HTTP listener and the public identity of this deployment.
@@ -112,6 +116,33 @@ type Session struct {
 	// one that protects an unattended browser, and it is necessarily shorter
 	// than Lifetime.
 	IdleTimeout time.Duration
+}
+
+// Encryption holds the key that protects the secrets this server stores on
+// behalf of somebody else — today the TOTP shared secrets of M1-006, later the
+// OIDC and SMTP credentials an operator hands over.
+//
+// It is deliberately *not* [Session.Secret]. Rotating the session secret is the
+// documented way to sign everybody out, and if these secrets were derived from
+// it that lever would also, silently, destroy every enrolled authenticator: the
+// database would still hold ciphertext that no key could open, and the only
+// symptom would be everyone's codes being wrong at once. Two keys, two blast
+// radii — see docs/security.md.
+type Encryption struct {
+	// Key is the input to the key derivation behind
+	// internal/authn/secrets. Losing it means the TOTP enrolments it protects
+	// cannot be read; changing it means the same. Neither is recoverable, which
+	// is why it has no default and is never generated per process.
+	Key Secret
+}
+
+// MFA is the timing of a second-factor challenge.
+type MFA struct {
+	// PendingTTL is how long the pending state between a correct password and a
+	// presented second factor lasts. It is short by design: it is not a session,
+	// it authorizes nothing except the verification endpoint, and a person who
+	// has their authenticator in their hand does not need five minutes.
+	PendingTTL time.Duration
 }
 
 // Throttle is how many failed sign-in attempts the server answers before it
@@ -188,8 +219,10 @@ func (c *Config) bindings() []binding {
 		{name: envDBPath, target: &c.Database.Path, def: "./purpleops.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
+		{name: envEncryptionKey, target: &c.Encryption.Key, required: true, sensitive: true},
 		{name: envSessionLifetime, target: &c.Session.Lifetime, def: "12h"},
 		{name: envSessionIdle, target: &c.Session.IdleTimeout, def: "2h"},
+		{name: envMFAPending, target: &c.MFA.PendingTTL, def: "5m"},
 		{name: envAccountFailures, target: &c.Throttle.AccountFailures, def: "5"},
 		{name: envAccountLockout, target: &c.Throttle.AccountLockout, def: "15m"},
 		{name: envSourceFailures, target: &c.Throttle.SourceFailures, def: "50"},

@@ -170,6 +170,65 @@ type NewSession struct {
 	MFASatisfied bool
 }
 
+// TOTP is one person's authenticator enrolment. There is at most one per user.
+type TOTP struct {
+	UserID string
+
+	// SecretEncrypted is the ciphertext exactly as stored. This package never
+	// looks inside it: producing and reading it belongs to
+	// internal/authn/secrets, and a repository that could decrypt would be a
+	// second place the key had to reach.
+	SecretEncrypted string
+
+	// ConfirmedAt is the zero time until the person has produced a code from
+	// this secret. An unconfirmed enrolment gates nothing — see 0004_mfa.sql.
+	ConfirmedAt time.Time
+
+	// LastUsedStep is the last TOTP time step this enrolment accepted, and 0
+	// before the first. It is the replay window; [TOTPs.Accept] is what advances
+	// it, and only ever forwards.
+	LastUsedStep int64
+
+	CreatedAt time.Time
+}
+
+// Confirmed reports whether this enrolment is one that may be required at
+// sign-in.
+func (t TOTP) Confirmed() bool { return !t.ConfirmedAt.IsZero() }
+
+// NewTOTP is the caller's half of enrolling: the ciphertext, and nothing else.
+// A new enrolment is always unconfirmed and has spent no step.
+type NewTOTP struct {
+	UserID          string
+	SecretEncrypted string
+}
+
+// MFAChallenge is the pending state between a correct password and a presented
+// second factor. It is not a session and nothing resolves it into a caller; see
+// 0004_mfa.sql.
+type MFAChallenge struct {
+	ID     string
+	UserID string
+
+	// TokenHash is the hash of the value in the cookie. As with a session, the
+	// token itself is never stored.
+	TokenHash string
+
+	CreatedAt time.Time
+	ExpiresAt time.Time
+
+	// ConsumedAt is the zero time until a code was accepted against this
+	// challenge. One correct code buys exactly one session.
+	ConsumedAt time.Time
+}
+
+// NewMFAChallenge is the caller's half of opening a challenge.
+type NewMFAChallenge struct {
+	UserID    string
+	TokenHash string
+	ExpiresAt time.Time
+}
+
 // Membership places one user in one engagement with one role.
 type Membership struct {
 	EngagementID string

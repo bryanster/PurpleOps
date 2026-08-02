@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -10,25 +11,44 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/bryanster/purpleops/internal/authn"
+	"github.com/bryanster/purpleops/internal/authn/challenge"
 	"github.com/bryanster/purpleops/internal/authn/throttle"
 	"github.com/bryanster/purpleops/internal/httpapi/apierr"
 )
 
-// credentialRoutes are the endpoints where a caller presents a credential, and
-// the field of the request body naming the account they are presenting it for.
+// accountOf names the account a request is presenting a credential for, or ""
+// when it cannot tell. An empty answer is not a hole: the source limiter needs
+// nothing from the request, and it is still counting.
+type accountOf func(*http.Request) string
+
+// credentialAccounts are the endpoints where a caller presents a credential, and
+// how to find the account they are presenting it for.
 //
 // A middleware rather than a check inside each handler, because the point of
 // M1-004 is that v1 had login rate limiting, lost it, and nothing noticed:
-// deleting this from the chain fails five tests in throttle_test.go. It is a
-// table rather than a route registration because the generated router owns the
-// routes (M0B-005): a path is added here, next to the others, instead of
-// somewhere a reader would have to know to look.
+// deleting this from the chain fails seven tests across throttle_test.go and
+// mfa_test.go. It is a table rather than a route registration because the
+// generated router owns the routes (M0B-005): a path is added here, next to the
+// others, instead of somewhere a reader would have to know to look.
 //
-// M1-006 adds the MFA verification endpoint, and M1-011 the service-token one —
-// whose credential is a header rather than a body field, and which therefore
-// needs an extractor here rather than a field name.
-var credentialRoutes = map[string]string{
-	BasePath + "/auth/login": "email",
+// The two entries need the account from different places, which is why the value
+// is a function rather than a field name. M1-011 adds the service-token
+// endpoint, whose credential is a header.
+func credentialAccounts(auth *authn.Service) map[string]accountOf {
+	return map[string]accountOf{
+		BasePath + "/auth/login": bodyField("email"),
+
+		// The body here is six digits and names nobody, so the account comes
+		// from the pending state the cookie stands for. It costs two reads on
+		// this one route, and without it a code-guessing attack would be
+		// counted only against the source limiter — which is far too generous,
+		// because it is sized for spraying across every account rather than for
+		// guessing one six-digit number.
+		BasePath + mfaPathPrefix + "/totp/verify": func(r *http.Request) string {
+			return auth.AccountForChallenge(r.Context(), challenge.FromRequest(r))
+		},
+	}
 }
 
 // maxCredentialBody is how much of a request body this middleware will read to
@@ -51,11 +71,18 @@ const maxCredentialBody = 64 << 10
 // database failing — is neither, because neither says anything about whether the
 // caller knows the password. That is what keeps the rule in one place instead of
 // asking every handler to report itself.
-func throttleCredentials(limiter *throttle.Limiter, responder *apierr.Responder,
-	log *slog.Logger) func(http.Handler) http.Handler {
+//
+// The one exception is a handler that answers 2xx without the exchange being
+// over: a login that returns mfa_required has checked a password and issued no
+// session. Counting that as a success would clear the account's failure count,
+// and an attacker who holds the password could then reset their code-guessing
+// budget by signing in again between every guess. Such a handler says so through
+// [markCredentialIncomplete], and the attempt counts as neither.
+func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountOf,
+	responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			field, guarded := credentialRoutes[routePath(r)]
+			account, guarded := accounts[routePath(r)]
 			if !guarded || r.Method != http.MethodPost {
 				next.ServeHTTP(w, r)
 				return
@@ -63,7 +90,7 @@ func throttleCredentials(limiter *throttle.Limiter, responder *apierr.Responder,
 
 			ctx := r.Context()
 			attempt := throttle.Attempt{
-				Account: accountField(r, field),
+				Account: account(r),
 				Source:  ClientIP(ctx),
 			}
 
@@ -79,8 +106,16 @@ func throttleCredentials(limiter *throttle.Limiter, responder *apierr.Responder,
 				return
 			}
 
+			outcome := &credentialOutcome{}
 			recorder := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-			next.ServeHTTP(recorder, r)
+			next.ServeHTTP(recorder, r.WithContext(withCredentialOutcome(ctx, outcome)))
+
+			if outcome.incomplete {
+				// The credential was right and the exchange is not over. Neither
+				// counted nor cleared: the failures already against this account
+				// stay where they are until something actually completes.
+				return
+			}
 
 			switch status := statusOf(recorder); {
 			case status == http.StatusUnauthorized:
@@ -104,7 +139,7 @@ func throttleCredentials(limiter *throttle.Limiter, responder *apierr.Responder,
 }
 
 // routePath is the request path with a trailing slash removed, which is the form
-// credentialRoutes is keyed by.
+// credentialAccounts is keyed by.
 //
 // "/auth/login/" is not a path this API serves — the validator answers it 404
 // before this middleware runs — but the throttle deciding that for itself is a
@@ -117,33 +152,63 @@ func routePath(r *http.Request) string {
 	return path
 }
 
-// accountField reads one string field out of a JSON request body and puts the
-// body back for the handler.
+// bodyField reads one string field out of a JSON request body and puts the body
+// back for the handler.
 //
 // It returns "" for anything it cannot read, and that is not a hole: an
 // unreadable body is one the handler will refuse as well, and the source
 // limiter — which needs nothing from the body — is still counting either way.
-func accountField(r *http.Request, field string) string {
-	if r.Body == nil {
-		return ""
-	}
+func bodyField(field string) accountOf {
+	return func(r *http.Request) string {
+		if r.Body == nil {
+			return ""
+		}
 
-	raw, err := io.ReadAll(io.LimitReader(r.Body, maxCredentialBody))
-	if err != nil {
-		return ""
-	}
-	// Put it back whatever happened below: this middleware is not the thing that
-	// decides whether the request is valid, so it must not be the thing that
-	// leaves the handler with an empty body.
-	r.Body = io.NopCloser(bytes.NewReader(raw))
+		raw, err := io.ReadAll(io.LimitReader(r.Body, maxCredentialBody))
+		if err != nil {
+			return ""
+		}
+		// Put it back whatever happened below: this middleware is not the thing
+		// that decides whether the request is valid, so it must not be the thing
+		// that leaves the handler with an empty body.
+		r.Body = io.NopCloser(bytes.NewReader(raw))
 
-	var body map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return ""
+		var body map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return ""
+		}
+		var value string
+		if err := json.Unmarshal(body[field], &value); err != nil {
+			return ""
+		}
+		return value
 	}
-	var value string
-	if err := json.Unmarshal(body[field], &value); err != nil {
-		return ""
+}
+
+// credentialOutcome is how a handler tells this middleware that its 2xx does not
+// mean the credential exchange finished. It is a pointer in the context rather
+// than a return value because the handler is several frames below and behind a
+// generated adapter that has no channel back.
+//
+// There is exactly one setter and one reader, both in this package, and the
+// default — an unset flag — is the conservative one: a handler that says nothing
+// is judged on its status, as every handler was before this existed.
+type credentialOutcome struct {
+	incomplete bool
+}
+
+type credentialOutcomeKey struct{}
+
+func withCredentialOutcome(ctx context.Context, outcome *credentialOutcome) context.Context {
+	return context.WithValue(ctx, credentialOutcomeKey{}, outcome)
+}
+
+// markCredentialIncomplete records that the credential presented on this request
+// was accepted and did not finish the exchange — a password that was right where
+// a second factor is still owed. It is a no-op on a request that did not come
+// through the throttle, which is every request outside the credential routes.
+func markCredentialIncomplete(ctx context.Context) {
+	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
+		outcome.incomplete = true
 	}
-	return value
 }

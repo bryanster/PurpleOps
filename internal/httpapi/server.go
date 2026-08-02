@@ -12,6 +12,8 @@ import (
 
 	"github.com/bryanster/purpleops/api"
 	"github.com/bryanster/purpleops/internal/authn"
+	"github.com/bryanster/purpleops/internal/authn/challenge"
+	"github.com/bryanster/purpleops/internal/authn/secrets"
 	"github.com/bryanster/purpleops/internal/authn/session"
 	"github.com/bryanster/purpleops/internal/authn/throttle"
 	"github.com/bryanster/purpleops/internal/config"
@@ -94,7 +96,7 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		return nil, err
 	}
 
-	auth, sessions, err := newAuthn(deps, log)
+	auth, sessions, challenges, err := newAuthn(deps, log)
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +137,10 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	//     authenticated by cookie must echo the CSRF token (M1-005). After
 	//     authentication, because whether it applies depends on *how* the
 	//     request authenticated and nothing else.
+	// 11. clearing the spent MFA challenge cookie (M1-006), which is a response
+	//     wrapper and decides nothing about the request.
 	//
-	// M1-013 inserts authorization between 10 and the handlers, on the same
+	// M1-013 inserts authorization between 11 and the handlers, on the same
 	// router — one chain, so there is no route that can quietly avoid it.
 	router.Use(
 		requestID,
@@ -170,11 +174,12 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	apiRouter.MethodNotAllowed(methodNotAllowed)
 	apiRouter.Use(
 		validate,
-		throttleCredentials(limiter, responder, log),
+		throttleCredentials(limiter, credentialAccounts(auth), responder, log),
 		authenticate(auth, responder, log),
 		requireCSRF(sessions, responder, log),
+		clearSpentChallenge(challenges),
 	)
-	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, log, responder), gen.ChiServerOptions{
+	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,
 		// Reached when the generated wrapper cannot bind a parameter. The
 		// validator rejects those first, so this is a belt-and-braces path —
@@ -207,27 +212,60 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	return router, nil
 }
 
-// newAuthn builds the session manager and the login service the middleware and
-// the auth handlers share.
+// newAuthn builds the session manager, the MFA challenge manager and the login
+// service the middleware and the auth handlers share.
 //
-// Both are built here rather than passed in [Deps] because they are made of
+// They are built here rather than passed in [Deps] because they are made of
 // things already there — the store and the configuration — and a caller who had
 // to assemble them could assemble two that disagreed about how long a session
 // lasts.
-func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, error) {
+func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *challenge.Manager, error) {
 	sessions, err := session.New(identity.NewSessions(deps.Store), session.OptionsFrom(deps.Config))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	auth, err := authn.NewService(
-		identity.NewUsers(deps.Store),
-		identity.NewMemberships(deps.Store),
-		sessions,
-		log)
+	// The pending cookie is scoped to the MFA endpoints and nothing else, so
+	// the path it is told about is this router's, not "/".
+	challenges, err := challenge.New(
+		identity.NewMFAChallenges(deps.Store),
+		challenge.OptionsFrom(deps.Config, BasePath+mfaPathPrefix))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return auth, sessions, nil
+	cipher, err := secrets.New(deps.Config.Encryption.Key.Reveal())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	auth, err := authn.NewService(authn.Deps{
+		Users:       identity.NewUsers(deps.Store),
+		Memberships: identity.NewMemberships(deps.Store),
+		TOTP:        identity.NewTOTPs(deps.Store),
+		Sessions:    sessions,
+		Challenges:  challenges,
+		Secrets:     cipher,
+		Issuer:      totpIssuer(deps.Config),
+		Log:         log,
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return auth, sessions, challenges, nil
+}
+
+// totpIssuer is the name an authenticator app shows for this deployment.
+//
+// The host is in it because a person with an account on two PurpleOps
+// installations otherwise gets two entries called "PurpleOps" and no way to tell
+// which is which. A colon would move the boundary between the issuer and the
+// account in the otpauth label, so a hostname carrying one — which no hostname
+// does — is refused by internal/authn/totp rather than silently mangled.
+func totpIssuer(cfg config.Config) string {
+	host := cfg.Server.BaseURL.Hostname()
+	if host == "" {
+		return "PurpleOps"
+	}
+	return "PurpleOps (" + host + ")"
 }
 
 // strictHandler wraps the handlers in the generated strict-mode adapter, with
@@ -235,9 +273,15 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, er
 // handler, and a response that will not serialize, then produce the same shape
 // as everything else (M0B-007).
 func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
-	log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+	challenges *challenge.Manager, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
 	return gen.NewStrictHandlerWithOptions(
-		&handlers{store: deps.Store, auth: auth, sessions: sessions, log: log},
+		&handlers{
+			store:      deps.Store,
+			auth:       auth,
+			sessions:   sessions,
+			challenges: challenges,
+			log:        log,
+		},
 		nil, // No strict middleware: the chain is chi's, so there is one of them.
 		gen.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  responder.Write,

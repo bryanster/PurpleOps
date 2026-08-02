@@ -3,11 +3,12 @@
 #     docker compose up --build
 #
 # That works from a clean clone with no further setup: the image carries the
-# database, the UI and Chromium, and the entrypoint generates a session secret
-# on first boot if you have not supplied one. Nothing is fetched at runtime.
+# database, the UI and Chromium, and the entrypoint generates the session secret
+# and the encryption key on first boot if you have not supplied them. Nothing is
+# fetched at runtime.
 #
 # For anything beyond a laptop, read docs/deploy.md first — at minimum you must
-# set PURPLEOPS_BASE_URL and PURPLEOPS_SESSION_SECRET.
+# set PURPLEOPS_BASE_URL, PURPLEOPS_SESSION_SECRET and PURPLEOPS_ENCRYPTION_KEY.
 
 name: purpleops
 
@@ -37,8 +38,8 @@ services:
     ports:
       - "${PURPLEOPS_HOST_PORT:-8080}:8080"
 
-    # Everything that must survive the container. The DuckDB file, its WAL, the
-    # generated session secret and uploaded evidence all live here; the image
+    # Everything that must survive the container. The DuckDB file, its WAL, any
+    # generated keys and uploaded evidence all live here; the image
     # creates the directory owned by uid 10001, and Docker seeds a new named
     # volume with that ownership, so the non-root user can write to it.
     #

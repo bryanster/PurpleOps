@@ -115,6 +115,21 @@ func BadCredentials(reason string) *Error {
 	}
 }
 
+// BadSecondFactor is the answer to every failed second-factor verification, and
+// exists for the same reason [BadCredentials] does: the caller is given no way
+// to make the response vary. A wrong code, a code already spent, an expired
+// pending state and no pending state at all produce byte-identical bodies
+// (M1-006), so nothing about the answer says how close a guess was.
+//
+// reason is the log's half, and is the only record of which it was.
+func BadSecondFactor(reason string) *Error {
+	return &Error{
+		code:   gen.ProblemCodeUnauthenticated,
+		detail: "the code is incorrect or the sign-in has expired; sign in again",
+		cause:  errors.New(reason),
+	}
+}
+
 // Forbidden reports that an authenticated caller may not do this.
 //
 // action describes what was attempted ("close engagement 018f…") and is for the

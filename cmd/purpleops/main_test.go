@@ -29,6 +29,7 @@ func TestRunStartsAndStopsCleanly(t *testing.T) {
 		"PURPLEOPS_DB_PATH":        filepath.Join(dir, "purpleops.duckdb"),
 		"PURPLEOPS_EVIDENCE_DIR":   filepath.Join(dir, "evidence"),
 		"PURPLEOPS_SESSION_SECRET": "Qk3nP7wZs9Lx2Vd4Rt6Yu8Ia0Oe5Cg1Hj3Mb7Nv9=",
+		"PURPLEOPS_ENCRYPTION_KEY": "7Xb2Fq8Jm4Ts6Wp0Zc3Vn5Ky9Ld1Ru7Ae5Gh2Bi4=",
 		"PURPLEOPS_LOG_FORMAT":     "json",
 	})
 
@@ -111,6 +112,8 @@ var serverEnv = []string{
 	"PURPLEOPS_DB_PATH",
 	"PURPLEOPS_EVIDENCE_DIR",
 	"PURPLEOPS_SESSION_SECRET",
+	"PURPLEOPS_ENCRYPTION_KEY",
+	"PURPLEOPS_MFA_PENDING_TTL",
 	"PURPLEOPS_LOG_LEVEL",
 	"PURPLEOPS_LOG_FORMAT",
 	"PURPLEOPS_CHROME_PATH",

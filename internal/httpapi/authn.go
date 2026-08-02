@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/bryanster/purpleops/internal/authn"
+	"github.com/bryanster/purpleops/internal/authn/challenge"
 	"github.com/bryanster/purpleops/internal/authn/session"
 	"github.com/bryanster/purpleops/internal/httpapi/apierr"
 )
@@ -20,7 +21,7 @@ import (
 // context — refusing is authorization's job, and it happens in one place
 // (M1-013) rather than in a middleware that would have to know which endpoints
 // are public. Until that lands, the handlers that need a caller say so
-// themselves; there are four of them and they are all in authhandlers.go.
+// themselves, in authhandlers.go and mfahandlers.go.
 //
 // A database failure is different, and is answered here: "the store did not
 // answer" is not the same as "you are not signed in", and reporting it as the
@@ -28,7 +29,12 @@ import (
 func authenticate(svc *authn.Service, responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := withOrigin(r.Context(), r)
+			// The pending token travels alongside the origin, and for the same
+			// reason: a strict handler is handed a context, not a request. It
+			// is *not* resolved here — a challenge is not a session, and
+			// nothing outside the verification endpoint may turn one into a
+			// caller (M1-006).
+			ctx := withPendingToken(withOrigin(r.Context(), r), challenge.FromRequest(r))
 
 			subject, err := svc.Authenticate(ctx, session.FromRequest(r))
 			switch {
@@ -85,8 +91,8 @@ func originFrom(ctx context.Context) session.Request {
 // arrived without a usable session.
 //
 // It is the one place a handler in this package turns "nobody" into a 401, so
-// that the four auth handlers cannot each phrase it differently. M1-013 moves
-// the decision out of handlers entirely; this is what it will replace.
+// that the handlers which need a caller cannot each phrase it differently.
+// M1-013 moves the decision out of handlers entirely; this is what it replaces.
 func subjectFrom(ctx context.Context) (authn.Subject, error) {
 	subject, ok := authn.SubjectFrom(ctx)
 	if !ok {

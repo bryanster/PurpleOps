@@ -50,6 +50,12 @@ func testConfig(t *testing.T) config.Config {
 			Lifetime:    12 * time.Hour,
 			IdleTimeout: 2 * time.Hour,
 		},
+		// Distinct from the session secret, as config insists a real deployment
+		// keeps them: it is what TOTP enrolments are encrypted under (M1-006).
+		Encryption: config.Encryption{
+			Key: config.NewSecret([]byte("test-encryption-key-also-not-real")),
+		},
+		MFA: config.MFA{PendingTTL: 5 * time.Minute},
 		// The documented defaults. A server cannot be built without them either
 		// — a zero threshold would lock out the first caller through the door —
 		// and the tests that are about throttling lower them.

@@ -13,12 +13,17 @@ import (
 // produces, and the shape every deployment should use.
 const testSecret = "kZ2rV8sQ1tYb7NxJ4mWc0PfLgH6dEuAiOoTpRySvXlU="
 
-// validEnv is the smallest environment that loads cleanly: the two required
+// testKey is a second one, and is deliberately not testSecret: the loader
+// refuses a deployment that uses one value for both.
+const testKey = "9Qd3JmE7uZpA0xTnCiL5wHrYbVsK2fGoP4jXeM8tUcR="
+
+// validEnv is the smallest environment that loads cleanly: the three required
 // variables and nothing else, so every other assertion is about a default.
 func validEnv() map[string]string {
 	return map[string]string{
 		envBaseURL:       "https://purpleops.internal",
 		envSessionSecret: testSecret,
+		envEncryptionKey: testKey,
 	}
 }
 
@@ -64,6 +69,12 @@ func TestParseAppliesDocumentedDefaults(t *testing.T) {
 	}
 	if cfg.Session.Secret.IsZero() {
 		t.Error("Session.Secret is zero, want the value from the environment")
+	}
+	if cfg.Encryption.Key.IsZero() {
+		t.Error("Encryption.Key is zero, want the value from the environment")
+	}
+	if got, want := cfg.MFA.PendingTTL, 5*time.Minute; got != want {
+		t.Errorf("MFA.PendingTTL = %v, want %v", got, want)
 	}
 	if got, want := cfg.Throttle, (Throttle{
 		AccountFailures: 5,
@@ -244,6 +255,29 @@ func TestFields(t *testing.T) {
 		name: "session secret accepts a long passphrase",
 		env:  map[string]string{envSessionSecret: "correct horse battery staple, and then some more of it"},
 	}, {
+		name: "the encryption key is held to the same strength as the session secret",
+		env:  map[string]string{envEncryptionKey: "short"},
+		wantErr: `PURPLEOPS_ENCRYPTION_KEY: must carry at least 32 bytes of secret material, ` +
+			`this carries 5`,
+	}, {
+		// The one check that only exists because there are two keys: sharing a
+		// value re-attaches the consequence of rotating one to the other.
+		name:    "the encryption key may not be the session secret",
+		env:     map[string]string{envEncryptionKey: testSecret},
+		wantErr: `PURPLEOPS_ENCRYPTION_KEY: must not be the same value as PURPLEOPS_SESSION_SECRET`,
+	}, {
+		name: "the pending MFA window accepts a duration",
+		env:  map[string]string{envMFAPending: "90s"},
+		check: func(t *testing.T, cfg Config) {
+			if got, want := cfg.MFA.PendingTTL, 90*time.Second; got != want {
+				t.Errorf("MFA.PendingTTL = %v, want %v", got, want)
+			}
+		},
+	}, {
+		name:    "the pending MFA window rejects a bare number",
+		env:     map[string]string{envMFAPending: "300"},
+		wantErr: `PURPLEOPS_MFA_PENDING_TTL: must be a duration with a unit`,
+	}, {
 		name: "throttle thresholds and lockouts",
 		env: map[string]string{
 			envAccountFailures: "3",
@@ -354,7 +388,11 @@ func TestEveryMissingRequiredVariableIsReported(t *testing.T) {
 	}
 	got := (&LoadError{Errs: errs}).Error()
 
-	for _, want := range []string{envBaseURL + ": must be set", envSessionSecret + ": must be set"} {
+	for _, want := range []string{
+		envBaseURL + ": must be set",
+		envSessionSecret + ": must be set",
+		envEncryptionKey + ": must be set",
+	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("error was\n\t%s\nwant it to contain\n\t%s", got, want)
 		}
@@ -457,6 +495,7 @@ func TestLoadReadsTheProcessEnvironment(t *testing.T) {
 
 	t.Setenv(envBaseURL, "https://purpleops.internal")
 	t.Setenv(envSessionSecret, testSecret)
+	t.Setenv(envEncryptionKey, testKey)
 	t.Setenv(envDBPath, filepath.Join(dir, "purpleops.duckdb"))
 	t.Setenv(envEvidenceDir, evidence)
 
@@ -520,6 +559,7 @@ func TestLoadCreatesNothingWhenTheConfigIsInvalid(t *testing.T) {
 
 	t.Setenv(envBaseURL, "not-a-url")
 	t.Setenv(envSessionSecret, testSecret)
+	t.Setenv(envEncryptionKey, testKey)
 	t.Setenv(envEvidenceDir, evidence)
 
 	if _, err := Load(); err == nil {

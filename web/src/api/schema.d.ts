@@ -73,9 +73,9 @@ export interface paths {
          *     has an account here. The server spends the same work on each, too.
          *
          *     A 200 does not always mean a session. When a second factor is required,
-         *     `status` is `mfa_required`, no cookie is set, and the caller must
-         *     complete the challenge (M1-006) before anything is signed in. Read
-         *     `status` rather than assuming.
+         *     `status` is `mfa_required`, no *session* cookie is set, and the caller
+         *     must post a code to `POST /auth/mfa/totp/verify` before anything is
+         *     signed in (M1-006). Read `status` rather than assuming.
          *
          *     Attempts are throttled per account and per client address (M1-004). Once
          *     either limit trips, every attempt is a 429 with a `Retry-After` — the
@@ -161,6 +161,128 @@ export interface paths {
          */
         post: operations["changePassword"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/totp/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start enrolling an authenticator app.
+         * @description Mints a fresh shared secret and returns it three ways: as an
+         *     `otpauth://` URI, as a QR code to point a camera at, and as the base32
+         *     string to type in when the camera will not focus.
+         *
+         *     The secret is **unconfirmed** until `POST /auth/mfa/totp/confirm`
+         *     succeeds. An unconfirmed secret gates nothing — a browser closed between
+         *     this call and that one leaves the account exactly as it was, which is
+         *     what stops a half-finished enrolment locking somebody out.
+         *
+         *     Calling this again replaces an unconfirmed secret, so a re-scan works.
+         *     It refuses with `409` when a *confirmed* authenticator already exists:
+         *     replacing one is `DELETE /auth/mfa/totp` followed by this, and that
+         *     needs the current password.
+         *
+         *     This is the only response that ever carries the secret.
+         */
+        post: operations["enrollTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an enrolment by presenting a code from it.
+         * @description Proves the authenticator was actually set up. On success the enrolment
+         *     becomes the second factor this account is asked for at sign-in, this
+         *     session is marked as having satisfied MFA, and it is rotated onto a new
+         *     token — satisfying a factor is a privilege change, and PLAN.md §4 wants
+         *     the token to change whenever that is true.
+         *
+         *     A wrong code is a `400` naming the `code` field, not a `401`: the caller
+         *     is signed in and this is a form to correct, not a session to re-establish.
+         *     It is deliberately not throttled — the only secret being guessed is the
+         *     caller's own, and getting it right grants them nothing they did not
+         *     already have.
+         */
+        post: operations["confirmTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/totp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a sign-in by presenting a code from your authenticator.
+         * @description The second half of a sign-in that answered `mfa_required`. It carries no
+         *     session — that is the point: the credential is the short-lived
+         *     `pops_mfa` cookie set by `POST /auth/login`, which authorizes nothing
+         *     except this endpoint and expires in minutes.
+         *
+         *     On success the pending state is spent, a session is issued with MFA
+         *     satisfied, and the `pops_mfa` cookie is cleared. One correct code buys
+         *     exactly one session.
+         *
+         *     Every way of failing is the same `401`: a wrong code, a code already
+         *     used, an expired pending state, and no pending state at all. Attempts
+         *     are throttled per account and per client address alongside password
+         *     attempts (M1-004), and the `429` is identical whichever limit closed.
+         */
+        post: operations["verifyTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove your authenticator.
+         * @description Requires the current password, for the same reason changing a password
+         *     does: a session left open on a shared machine must not be enough to take
+         *     the second factor off an account.
+         *
+         *     Refused with `403` when an administrator requires MFA of this person
+         *     (M1-008) — removing the factor would leave an account that cannot
+         *     satisfy a requirement it is still subject to.
+         */
+        delete: operations["disableTotp"];
         options?: never;
         head?: never;
         patch?: never;
@@ -381,6 +503,16 @@ export interface components {
         MFAState: {
             /** @description An administrator requires a second factor of this person. */
             enforced: boolean;
+            /**
+             * @description This person has a confirmed authenticator (M1-006). A *started* but
+             *     unconfirmed enrolment does not count — it gates nothing, so
+             *     reporting it as enrolled would be a lie the interface acted on.
+             *
+             *     Separate from `enforced` for the same reason `satisfied` is:
+             *     "required to" and "has" are different facts, and treating one as
+             *     evidence of the other is the hole M1-008 closes.
+             */
+            enrolled: boolean;
             /** @description A second factor was presented for *this* session. */
             satisfied: boolean;
         };
@@ -399,6 +531,54 @@ export interface components {
              *     one in the client.
              */
             newPassword: string;
+        };
+        /**
+         * @description A newly minted, unconfirmed authenticator secret, in the three forms a
+         *     person might need to get it into an app. Every field carries the same
+         *     secret; this is the only response in the API that does.
+         */
+        TOTPEnrolment: {
+            /**
+             * @description The `otpauth://totp/...` URI, for a client that can hand a URI to an
+             *     authenticator directly.
+             * @example otpauth://totp/PurpleOps%20%28purpleops.internal%29:alice@example.com?algorithm=SHA1&digits=6&issuer=PurpleOps+%28purpleops.internal%29&period=30&secret=JBSWY3DPEHPK3PXP
+             */
+            otpauthUri: string;
+            /**
+             * @description The base32 shared secret, for typing in by hand. It is the same
+             *     value that is inside `otpauthUri`, spelled out so a client does not
+             *     have to parse one to show the other.
+             * @example JBSWY3DPEHPK3PXP
+             */
+            secret: string;
+            /**
+             * @description The URI rendered as a PNG in a `data:` URI, ready to be the `src` of
+             *     an `<img>`. A data URI rather than SVG markup so that showing it
+             *     does not mean putting server-supplied markup into the page; the
+             *     content security policy already allows `img-src data:`.
+             * @example data:image/png;base64,iVBORw0KGgoAAAANSUhEUg…
+             */
+            qrCode: string;
+        };
+        /**
+         * @description A six-digit code from an authenticator app. The same body confirms an
+         *     enrolment and completes a sign-in.
+         */
+        TOTPCodeRequest: {
+            /**
+             * @description The code as the app shows it, without the space some apps put in the
+             *     middle. Six digits is the whole vocabulary — a value that is not six
+             *     digits is rejected as malformed rather than counted as a guess.
+             * @example 492817
+             */
+            code: string;
+        };
+        /**
+         * @description Body of `DELETE /auth/mfa/totp`. The current password is required for the
+         *     same reason `ChangePasswordRequest` asks for it.
+         */
+        DisableTOTPRequest: {
+            currentPassword: string;
         };
     };
     responses: {
@@ -603,19 +783,21 @@ export interface operations {
             /**
              * @description The credentials were correct. `status` says whether that was enough:
              *     `authenticated` means the session cookie in `Set-Cookie` is live,
-             *     `mfa_required` means it is not, and no cookie was set.
+             *     `mfa_required` means it is not.
              */
             200: {
                 headers: {
                     /**
-                     * @description The session cookie, present only when `status` is
-                     *     `authenticated`. `HttpOnly`, `SameSite=Strict`, `Path=/`, and
-                     *     `Secure` on every deployment that is not
-                     *     `PURPLEOPS_ENV=development`.
+                     * @description When `status` is `authenticated`: the session cookie, `HttpOnly`,
+                     *     `SameSite=Strict`, `Path=/`, and `Secure` on every deployment
+                     *     that is not `PURPLEOPS_ENV=development`. A second `Set-Cookie`
+                     *     carries `pops_csrf` (M1-005), with the same attributes except
+                     *     that it is **not** `HttpOnly` — script has to read it to send
+                     *     `X-CSRF-Token`.
                      *
-                     *     A second `Set-Cookie` carries `pops_csrf` (M1-005), with the
-                     *     same attributes except that it is **not** `HttpOnly` — script
-                     *     has to read it to send `X-CSRF-Token`.
+                     *     When `status` is `mfa_required`: the short-lived `pops_mfa`
+                     *     cookie instead, and no session cookie. It authorizes nothing but
+                     *     `POST /auth/mfa/totp/verify`; see the `mfaChallenge` scheme.
                      */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
@@ -737,6 +919,178 @@ export interface operations {
                      *     so it rotates with it.
                      */
                     "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    enrollTotp: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `pops_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A new, unconfirmed secret. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TOTPEnrolment"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    confirmTotp: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `pops_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TOTPCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description The enrolment is confirmed and this session rotated. */
+            204: {
+                headers: {
+                    /**
+                     * @description The rotated session cookie, with its matching `pops_csrf` cookie
+                     *     in a second `Set-Cookie`.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    verifyTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TOTPCodeRequest"];
+            };
+        };
+        responses: {
+            /**
+             * @description The code was correct. `status` is always `authenticated` — there is
+             *     no third factor to ask for.
+             */
+            200: {
+                headers: {
+                    /**
+                     * @description The session cookie, its `pops_csrf` companion, and the cleared
+                     *     `pops_mfa` cookie, in three `Set-Cookie` headers.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    disableTotp: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `pops_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableTOTPRequest"];
+            };
+        };
+        responses: {
+            /** @description The authenticator is removed. Removing one that was not there answers the same way. */
+            204: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content?: never;

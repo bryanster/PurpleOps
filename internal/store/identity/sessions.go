@@ -152,6 +152,30 @@ func (r *Sessions) Rotate(ctx context.Context, id, tokenHash string, at time.Tim
 	return rotated, nil
 }
 
+// SetMFASatisfied records that a second factor was presented for this session.
+//
+// It is a separate write from [Sessions.Rotate] rather than a parameter of it,
+// because rotation happens for four reasons (M1-003) and only one of them is
+// this. The caller does both, in that order — see session.Manager.SatisfyMFA.
+func (r *Sessions) SetMFASatisfied(ctx context.Context, id string) error {
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx,
+			`UPDATE app.session SET mfa_satisfied = TRUE WHERE id = ? AND revoked_at IS NULL`,
+			id)
+		if err != nil {
+			return err
+		}
+		// A revoked session is not-found here rather than a silent success: the
+		// caller is about to hand its token to a browser as an authenticated
+		// one, and it must not do that for a session that has ended.
+		return requireOneRow(result, "session", id)
+	})
+	if err != nil {
+		return fmt.Errorf("identity: mark session %q as having satisfied MFA: %w", id, err)
+	}
+	return nil
+}
+
 // SetLastSeenAt records that a session was used.
 func (r *Sessions) SetLastSeenAt(ctx context.Context, id string, at time.Time) error {
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {

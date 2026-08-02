@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/bryanster/purpleops/internal/authn"
+	"github.com/bryanster/purpleops/internal/authn/challenge"
 	"github.com/bryanster/purpleops/internal/authn/session"
 	"github.com/bryanster/purpleops/internal/httpapi/gen"
 	"github.com/bryanster/purpleops/internal/store"
@@ -17,11 +18,13 @@ import (
 type handlers struct {
 	store store.Store
 
-	// auth answers the questions the four endpoints in authhandlers.go ask;
-	// sessions is here for the one thing those endpoints do that is transport
-	// rather than policy — building the Set-Cookie header.
-	auth     *authn.Service
-	sessions *session.Manager
+	// auth answers the questions the endpoints in authhandlers.go and
+	// mfahandlers.go ask; sessions and challenges are here for the one thing
+	// those endpoints do that is transport rather than policy — building the
+	// Set-Cookie header.
+	auth       *authn.Service
+	sessions   *session.Manager
+	challenges *challenge.Manager
 
 	log *slog.Logger
 }

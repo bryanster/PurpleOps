@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -38,6 +39,21 @@ func (c *Config) validate() []error {
 			Msg: fmt.Sprintf("must use https when %s=%s, because browsers do not send "+
 				"secure session cookies over plain http (loopback hosts are exempt)",
 				envEnv, EnvProduction),
+		})
+	}
+
+	// The whole reason there are two keys is that they have different blast
+	// radii: rotating the session secret signs everybody out, and rotating the
+	// encryption key makes every enrolled authenticator unreadable. An operator
+	// who pastes one value into both has the second consequence attached to the
+	// first lever and no way to find that out except by pulling it.
+	if !c.Session.Secret.IsZero() && !c.Encryption.Key.IsZero() &&
+		bytes.Equal(c.Session.Secret.Reveal(), c.Encryption.Key.Reveal()) {
+		errs = append(errs, &FieldError{
+			Name: envEncryptionKey,
+			Msg: fmt.Sprintf("must not be the same value as %s: rotating the session secret is how "+
+				"you sign everybody out, and sharing it here would make that also destroy every "+
+				"enrolled authenticator", envSessionSecret),
 		})
 	}
 

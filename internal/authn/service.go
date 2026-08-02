@@ -7,17 +7,21 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/bryanster/purpleops/internal/authn/challenge"
 	"github.com/bryanster/purpleops/internal/authn/password"
+	"github.com/bryanster/purpleops/internal/authn/secrets"
 	"github.com/bryanster/purpleops/internal/authn/session"
 	"github.com/bryanster/purpleops/internal/httpapi/apierr"
 	"github.com/bryanster/purpleops/internal/store/identity"
 )
 
-// Users and Memberships are the parts of the identity store this package needs.
-// [*identity.Users] and [*identity.Memberships] satisfy them.
+// Users, Memberships and TOTPs are the parts of the identity store this package
+// needs. [*identity.Users], [*identity.Memberships] and [*identity.TOTPs]
+// satisfy them.
 type (
 	Users interface {
 		ByID(ctx context.Context, id string) (identity.User, error)
@@ -29,10 +33,47 @@ type (
 	Memberships interface {
 		ListByUser(ctx context.Context, userID string) ([]identity.Membership, error)
 	}
+
+	TOTPs interface {
+		ByUserID(ctx context.Context, userID string) (identity.TOTP, error)
+		Enroll(ctx context.Context, in identity.NewTOTP) (identity.TOTP, error)
+		Accept(ctx context.Context, userID string, step int64, at time.Time) (bool, error)
+		Delete(ctx context.Context, userID string) error
+	}
 )
 
+// Deps is everything a [Service] is built from. It is a struct rather than a
+// list of arguments because M1 keeps adding to it — SSO (M1-009, M1-010) and
+// service tokens (M1-011) both arrive here — and a positional constructor with
+// nine parameters is one a caller gets wrong silently.
+type Deps struct {
+	Users       Users
+	Memberships Memberships
+	TOTP        TOTPs
+
+	Sessions   *session.Manager
+	Challenges *challenge.Manager
+
+	// Secrets encrypts what this server holds on somebody else's behalf: today
+	// the TOTP shared secrets, which is the only thing that reads it.
+	Secrets *secrets.Cipher
+
+	// Issuer is what an authenticator app shows as the name of the entry. It
+	// names the deployment, so that somebody with an account on two of these can
+	// tell their two entries apart.
+	Issuer string
+
+	// Log receives what a response cannot carry. Nil means slog.Default().
+	Log *slog.Logger
+
+	// Now reads the clock. Nil means time.Now; a test supplies its own so that a
+	// TOTP window can be reached without waiting for one.
+	Now func() time.Time
+}
+
 // Service is the local login path: signing in, signing out, reporting who the
-// caller is, and changing one's own password.
+// caller is, changing one's own password, and the second factor that stands
+// between the first two (M1-006).
 //
 // It holds the rules that decide those things, so that the HTTP layer above it
 // does no more than translate. SSO (M1-009, M1-010) and service tokens (M1-011)
@@ -41,25 +82,58 @@ type (
 type Service struct {
 	users       Users
 	memberships Memberships
-	sessions    *session.Manager
-	log         *slog.Logger
+	totp        TOTPs
+
+	sessions   *session.Manager
+	challenges *challenge.Manager
+	secrets    *secrets.Cipher
+
+	issuer string
+	log    *slog.Logger
+	now    func() time.Time
 }
 
-// NewService returns a Service over the given repositories and session manager.
-// A nil logger means slog.Default().
-func NewService(users Users, memberships Memberships, sessions *session.Manager, log *slog.Logger) (*Service, error) {
+// NewService returns a Service over deps, or an error naming the dependency
+// that is missing. Everything is required: a Service with no cipher would enrol
+// authenticators it could not read back, and one with no challenge manager
+// would answer mfa_required with nothing to answer it.
+func NewService(deps Deps) (*Service, error) {
 	switch {
-	case users == nil:
+	case deps.Users == nil:
 		return nil, errors.New("authn: no user repository")
-	case memberships == nil:
+	case deps.Memberships == nil:
 		return nil, errors.New("authn: no membership repository")
-	case sessions == nil:
+	case deps.TOTP == nil:
+		return nil, errors.New("authn: no authenticator repository")
+	case deps.Sessions == nil:
 		return nil, errors.New("authn: no session manager")
+	case deps.Challenges == nil:
+		return nil, errors.New("authn: no MFA challenge manager")
+	case deps.Secrets == nil:
+		return nil, errors.New("authn: no cipher; enrolled secrets could not be stored")
+	case strings.TrimSpace(deps.Issuer) == "":
+		return nil, errors.New("authn: no issuer; authenticator apps would show an unnamed entry")
 	}
+
+	log := deps.Log
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Service{users: users, memberships: memberships, sessions: sessions, log: log}, nil
+	now := deps.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &Service{
+		users:       deps.Users,
+		memberships: deps.Memberships,
+		totp:        deps.TOTP,
+		sessions:    deps.Sessions,
+		challenges:  deps.Challenges,
+		secrets:     deps.Secrets,
+		issuer:      deps.Issuer,
+		log:         log,
+		now:         now,
+	}, nil
 }
 
 // LoginStatus is how far a sign-in got.
@@ -94,6 +168,13 @@ type LoginResult struct {
 	// [LoginAuthenticated].
 	Subject Subject
 	Issued  session.Issued
+
+	// Challenge is the pending state, and is zero unless Status is
+	// [LoginMFARequired] *and* there is a factor the caller can actually
+	// present. An account with MFA enforced but nothing enrolled produces
+	// mfa_required with no challenge — the credentials were right and there is
+	// no way forward, which is the dead end M1-008 exists to remove.
+	Challenge challenge.Issued
 }
 
 // Login checks an email address and password and, if nothing else is required,
@@ -150,13 +231,34 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 		s.upgradeHash(ctx, user, in.Password)
 	}
 
-	if user.MFAEnforced {
-		// Fail closed. An administrator has required a second factor of this
-		// person and this server cannot yet check one, so there is nothing to
-		// issue a session on the strength of. M1-006 through M1-008 turn this
-		// into a challenge the caller can answer; until then the credentials
-		// were right and that is all the caller is told.
+	enrolment, enrolled, err := s.confirmedTOTP(ctx, user.ID)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	switch {
+	case enrolled:
+		// A confirmed factor gates the sign-in whether or not an administrator
+		// requires one: somebody who set up an authenticator meant it to be
+		// asked for. The password was right and no session exists yet — what
+		// the caller gets is a challenge, which authorizes nothing but the
+		// verification endpoint.
+		issued, err := s.challenges.Open(ctx, user.ID)
+		if err != nil {
+			return LoginResult{}, err
+		}
 		s.log.InfoContext(ctx, "login requires a second factor",
+			slog.String("user_id", user.ID),
+			slog.String("challenge_id", issued.Challenge.ID),
+			slog.Time("enrolled_at", enrolment.ConfirmedAt))
+		return LoginResult{Status: LoginMFARequired, Challenge: issued}, nil
+
+	case user.MFAEnforced:
+		// Fail closed. An administrator requires a second factor of this person
+		// and they have not enrolled one, so there is nothing to issue a session
+		// on the strength of and nothing to challenge them with either. M1-008
+		// turns this into an enrolment the caller is walked through; until then
+		// the credentials were right and that is all they are told.
+		s.log.WarnContext(ctx, "login refused: MFA is enforced but nothing is enrolled",
 			slog.String("user_id", user.ID))
 		return LoginResult{Status: LoginMFARequired}, nil
 	}
@@ -262,6 +364,12 @@ type Profile struct {
 	User        identity.User
 	Memberships []identity.Membership
 
+	// MFAEnrolled is whether this person has a *confirmed* authenticator. An
+	// enrolment that was started and never confirmed is not one, because it
+	// gates nothing — reporting it as enrolled would be a lie the interface
+	// acted on.
+	MFAEnrolled bool
+
 	// MFASatisfied is a fact about the session the request arrived on, not about
 	// the user, which is why it is not read off User.
 	MFASatisfied bool
@@ -281,7 +389,16 @@ func (s *Service) Profile(ctx context.Context, subject Subject) (Profile, error)
 	if err != nil {
 		return Profile{}, err
 	}
-	return Profile{User: user, Memberships: memberships, MFASatisfied: subject.MFASatisfied}, nil
+	_, enrolled, err := s.confirmedTOTP(ctx, subject.UserID)
+	if err != nil {
+		return Profile{}, err
+	}
+	return Profile{
+		User:         user,
+		Memberships:  memberships,
+		MFAEnrolled:  enrolled,
+		MFASatisfied: subject.MFASatisfied,
+	}, nil
 }
 
 // ChangePassword replaces the caller's own password.
@@ -338,6 +455,12 @@ func (s *Service) ChangePassword(ctx context.Context, subject Subject, current, 
 	// the two leaves the other sessions gone rather than still live.
 	revoked, err := s.sessions.RevokeOthers(ctx, user.ID, subject.SessionID)
 	if err != nil {
+		return session.Issued{}, err
+	}
+	// And any half-finished sign-in with it. A pending challenge was opened by
+	// the password that has just been replaced; leaving it answerable would mean
+	// changing a password after a scare left one door on the old one open.
+	if err := s.challenges.Discard(ctx, user.ID); err != nil {
 		return session.Issued{}, err
 	}
 	issued, err := s.sessions.Rotate(ctx, subject.SessionID)

@@ -26,6 +26,8 @@ type repos struct {
 	identities  *identity.Identities
 	sessions    *identity.Sessions
 	memberships *identity.Memberships
+	totp        *identity.TOTPs
+	challenges  *identity.MFAChallenges
 }
 
 func newRepos(t *testing.T) repos {
@@ -38,6 +40,8 @@ func newRepos(t *testing.T) repos {
 		identities:  identity.NewIdentities(db),
 		sessions:    identity.NewSessions(db),
 		memberships: identity.NewMemberships(db),
+		totp:        identity.NewTOTPs(db),
+		challenges:  identity.NewMFAChallenges(db),
 	}
 }
 

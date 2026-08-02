@@ -105,10 +105,10 @@ func TestEnvExampleDocumentsEveryVariable(t *testing.T) {
 	}
 }
 
-// TestEnvExampleIsRejectedOnlyForItsPlaceholderSecret proves two things at
-// once: an untouched copy of the template cannot start a server (the shipped
-// secret is refused), and nothing else in the template is invalid.
-func TestEnvExampleIsRejectedOnlyForItsPlaceholderSecret(t *testing.T) {
+// TestEnvExampleIsRejectedOnlyForItsPlaceholderSecrets proves two things at
+// once: an untouched copy of the template cannot start a server (both shipped
+// secrets are refused), and nothing else in the template is invalid.
+func TestEnvExampleIsRejectedOnlyForItsPlaceholderSecrets(t *testing.T) {
 	env := make(map[string]string)
 	for _, a := range readEnvExample(t) {
 		if !a.commented {
@@ -119,17 +119,26 @@ func TestEnvExampleIsRejectedOnlyForItsPlaceholderSecret(t *testing.T) {
 	// parse, not Load: the template's paths are relative, and a test must not
 	// create directories in the source tree.
 	_, errs := parse(env)
-	if len(errs) != 1 {
-		t.Fatalf("parse(.env.example) reported %d problems, want exactly the placeholder secret: %v",
-			len(errs), errs)
+
+	rejected := make(map[string]bool, len(errs))
+	for _, err := range errs {
+		var fieldErr *FieldError
+		if !errors.As(err, &fieldErr) {
+			t.Fatalf("parse(.env.example) = %v, want a *FieldError", err)
+		}
+		rejected[fieldErr.Name] = true
 	}
 
-	var fieldErr *FieldError
-	if !errors.As(errs[0], &fieldErr) {
-		t.Fatalf("parse(.env.example) = %v, want a *FieldError", errs[0])
+	for _, name := range []string{envSessionSecret, envEncryptionKey} {
+		if !rejected[name] {
+			t.Errorf("parse(.env.example) accepted the shipped %s; an untouched copy of the "+
+				"template must not be able to start a server", name)
+		}
+		delete(rejected, name)
 	}
-	if fieldErr.Name != envSessionSecret {
-		t.Errorf("parse(.env.example) objected to %s, want %s", fieldErr.Name, envSessionSecret)
+	for name := range rejected {
+		t.Errorf("parse(.env.example) objected to %s, which the template is supposed to get right",
+			name)
 	}
 }
 

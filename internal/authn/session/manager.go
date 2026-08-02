@@ -22,6 +22,7 @@ type Store interface {
 	ByTokenHash(ctx context.Context, hash string) (identity.Session, error)
 	Rotate(ctx context.Context, id, tokenHash string, at time.Time) (identity.Session, error)
 	SetLastSeenAt(ctx context.Context, id string, at time.Time) error
+	SetMFASatisfied(ctx context.Context, id string) error
 	Revoke(ctx context.Context, id string, at time.Time) error
 	RevokeOthersForUser(ctx context.Context, userID, keepID string, at time.Time) (int64, error)
 }
@@ -249,6 +250,22 @@ func (m *Manager) Rotate(ctx context.Context, sessionID string) (Issued, error) 
 		return Issued{}, err
 	}
 	return Issued{Session: rotated, Token: token}, nil
+}
+
+// SatisfyMFA records that a second factor was presented for a session and
+// rotates it onto a new token, returning both.
+//
+// Both halves, in that order, because satisfying MFA is a privilege change: the
+// caller is more powerful afterwards than they were before, and PLAN.md §4 wants
+// the token they hold to change whenever that is true. The flag is written
+// first, so a failure between the two leaves a session that is correctly marked
+// and still on its old token rather than one that is on a new token and does not
+// know why.
+func (m *Manager) SatisfyMFA(ctx context.Context, sessionID string) (Issued, error) {
+	if err := m.store.SetMFASatisfied(ctx, sessionID); err != nil {
+		return Issued{}, err
+	}
+	return m.Rotate(ctx, sessionID)
 }
 
 // Revoke ends one session. Revoking one that has already ended is not an error:

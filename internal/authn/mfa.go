@@ -1,0 +1,326 @@
+package authn
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+
+	"github.com/bryanster/purpleops/internal/authn/challenge"
+	"github.com/bryanster/purpleops/internal/authn/password"
+	"github.com/bryanster/purpleops/internal/authn/session"
+	"github.com/bryanster/purpleops/internal/authn/totp"
+	"github.com/bryanster/purpleops/internal/httpapi/apierr"
+	"github.com/bryanster/purpleops/internal/store/identity"
+)
+
+// The second factor (M1-006): enrolling an authenticator, confirming it,
+// presenting it at sign-in, and removing it.
+//
+// The mechanism is here and the *enforcement* is M1-008's. What this file
+// establishes is that a confirmed factor is asked for, that presenting one is
+// the only way from a pending state to a session, and that a code cannot be
+// used twice — the three things v1 either did not have or had somewhere a
+// handler could skip.
+
+// EnrollTOTP mints a new, unconfirmed authenticator secret for the caller.
+//
+// Unconfirmed is the whole design: until [Service.ConfirmTOTP] succeeds this
+// changes nothing about signing in, so a person who scans the QR code and then
+// closes the tab has not locked themselves out. Calling it again replaces an
+// unconfirmed secret, which is what makes a second attempt at the scan work.
+//
+// A *confirmed* enrolment is not replaced — that is [apierr.Conflict], and the
+// way past it is [Service.DisableTOTP], which asks for the current password.
+// Otherwise a borrowed session would be enough to swap somebody's second factor
+// for one the borrower holds.
+func (s *Service) EnrollTOTP(ctx context.Context, subject Subject) (totp.Enrolment, error) {
+	user, err := s.users.ByID(ctx, subject.UserID)
+	if err != nil {
+		return totp.Enrolment{}, err
+	}
+
+	if _, enrolled, err := s.confirmedTOTP(ctx, user.ID); err != nil {
+		return totp.Enrolment{}, err
+	} else if enrolled {
+		return totp.Enrolment{}, apierr.Conflict(
+			"an authenticator is already enrolled; remove it before enrolling another")
+	}
+
+	enrolment, err := totp.Generate(s.issuer, user.Email)
+	if err != nil {
+		return totp.Enrolment{}, err
+	}
+	sealed, err := s.secrets.Seal([]byte(enrolment.Secret))
+	if err != nil {
+		return totp.Enrolment{}, err
+	}
+	if _, err := s.totp.Enroll(ctx, identity.NewTOTP{
+		UserID:          user.ID,
+		SecretEncrypted: sealed,
+	}); err != nil {
+		return totp.Enrolment{}, err
+	}
+
+	// The secret is not in this line and must never be: [totp.Enrolment] holds
+	// it in three fields, and every one of them is the same credential.
+	s.log.InfoContext(ctx, "authenticator enrolment started",
+		slog.String("user_id", user.ID))
+
+	return enrolment, nil
+}
+
+// ConfirmTOTP finishes an enrolment by checking a code from it, and returns the
+// caller's rotated session.
+//
+// Success does three things at once, and they are one event: the enrolment
+// becomes confirmed, the code's step is spent so it cannot be replayed, and the
+// session is marked as having satisfied MFA and rotated onto a new token.
+//
+// A wrong code is a field error rather than a 401. The caller is signed in and
+// is confirming their own secret, so there is nothing to give away and a form
+// can put the message next to the input — and, for the same reason, this is not
+// throttled: the only secret being guessed is the caller's own.
+func (s *Service) ConfirmTOTP(ctx context.Context, subject Subject, code string) (session.Issued, error) {
+	enrolment, err := s.totp.ByUserID(ctx, subject.UserID)
+	if err != nil {
+		// Not-found flows through as a 404: there is nothing to confirm, which
+		// is a client that has lost track of the flow rather than a bad code.
+		return session.Issued{}, err
+	}
+
+	step, err := s.checkCode(ctx, enrolment, code)
+	switch {
+	case errors.Is(err, totp.ErrNoMatch):
+		return session.Issued{}, apierr.Validation(apierr.Field("code",
+			"is not correct — check your authenticator and try the current code"))
+	case err != nil:
+		return session.Issued{}, err
+	}
+
+	accepted, err := s.totp.Accept(ctx, subject.UserID, step, s.now())
+	if err != nil {
+		return session.Issued{}, err
+	}
+	if !accepted {
+		// The step was spent between the check and the write, which for a
+		// confirmation means the same code was submitted twice. Answered
+		// identically to a wrong code: it is wrong now.
+		return session.Issued{}, apierr.Validation(apierr.Field("code",
+			"has already been used — wait for the next one"))
+	}
+
+	issued, err := s.sessions.SatisfyMFA(ctx, subject.SessionID)
+	if err != nil {
+		return session.Issued{}, err
+	}
+
+	s.log.InfoContext(ctx, "authenticator enrolment confirmed",
+		slog.String("user_id", subject.UserID),
+		slog.String("session_id", subject.SessionID))
+
+	return issued, nil
+}
+
+// VerifyResult is a completed sign-in: the caller, and the session they leave
+// with.
+type VerifyResult struct {
+	Subject Subject
+	Issued  session.Issued
+}
+
+// VerifyTOTP turns a pending state and a code into a session.
+//
+// Every way of failing is [apierr.BadSecondFactor] — no pending state, one that
+// expired or was already spent, an account disabled since the password was
+// checked, no enrolment, a wrong code, and a replayed one. They are one answer
+// because a caller cannot act differently on the difference and an attacker
+// could: "that code was right but stale" is a much smaller search space than
+// "no".
+//
+// The order is what makes one correct code buy exactly one session. The code is
+// checked first and its step spent atomically; only then is the challenge spent,
+// also atomically; only then is a session issued. Two requests racing with the
+// same code lose at the first of those, and two racing with different codes on
+// one challenge lose at the second.
+func (s *Service) VerifyTOTP(ctx context.Context, token challenge.Token, code string,
+	req session.Request) (VerifyResult, error) {
+	pending, err := s.challenges.Resolve(ctx, token)
+	if errors.Is(err, challenge.ErrNoChallenge) {
+		return VerifyResult{}, apierr.BadSecondFactor(err.Error())
+	}
+	if err != nil {
+		return VerifyResult{}, err
+	}
+
+	user, err := s.users.ByID(ctx, pending.UserID)
+	if errors.Is(err, apierr.ErrNotFound) {
+		return VerifyResult{}, apierr.BadSecondFactor(
+			"challenge " + pending.ID + " belongs to user " + pending.UserID + ", which is gone")
+	}
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	if user.Status != identity.StatusActive {
+		// Disabling somebody between their password and their code must stop
+		// them here, not when the challenge happens to expire.
+		return VerifyResult{}, apierr.BadSecondFactor(
+			"user " + user.ID + " is " + string(user.Status))
+	}
+
+	enrolment, enrolled, err := s.confirmedTOTP(ctx, user.ID)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	if !enrolled {
+		// Removed between the password and the code. There is nothing to check
+		// against, so there is nothing to accept.
+		return VerifyResult{}, apierr.BadSecondFactor("user " + user.ID + " has no confirmed authenticator")
+	}
+
+	step, err := s.checkCode(ctx, enrolment, code)
+	switch {
+	case errors.Is(err, totp.ErrNoMatch):
+		return VerifyResult{}, apierr.BadSecondFactor("code mismatch for user " + user.ID)
+	case err != nil:
+		return VerifyResult{}, err
+	}
+
+	accepted, err := s.totp.Accept(ctx, user.ID, step, s.now())
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	if !accepted {
+		return VerifyResult{}, apierr.BadSecondFactor(
+			fmt.Sprintf("step %d has already been used by user %s", step, user.ID))
+	}
+
+	spent, err := s.challenges.Spend(ctx, pending.ID)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	if !spent {
+		return VerifyResult{}, apierr.BadSecondFactor("challenge " + pending.ID + " was already spent")
+	}
+
+	// A fresh session, exactly as password-only login issues one, and with
+	// mfa_satisfied set — this is the one path that sets it at issue time
+	// rather than by marking an existing session (see ConfirmTOTP).
+	issued, err := s.sessions.Issue(ctx, user.ID, req, true)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	if err := s.users.SetLastLoginAt(ctx, user.ID, issued.Session.CreatedAt); err != nil {
+		return VerifyResult{}, err
+	}
+
+	s.log.InfoContext(ctx, "login completed with a second factor",
+		slog.String("user_id", user.ID),
+		slog.String("session_id", issued.Session.ID))
+
+	return VerifyResult{Subject: subjectOf(user, issued.Session), Issued: issued}, nil
+}
+
+// DisableTOTP removes the caller's authenticator.
+//
+// It requires the current password for the same reason changing one does: a
+// session left open on a shared machine must not be enough to take the second
+// factor off an account. It is refused outright while an administrator requires
+// MFA of this person — removing the factor would leave an account subject to a
+// requirement it can no longer satisfy, which is a lockout rather than a choice.
+func (s *Service) DisableTOTP(ctx context.Context, subject Subject, current password.Plaintext) error {
+	user, err := s.users.ByID(ctx, subject.UserID)
+	if err != nil {
+		return err
+	}
+
+	if user.MFAEnforced {
+		return apierr.Forbidden("remove the authenticator of user " + user.ID +
+			", for whom MFA is enforced")
+	}
+	if user.PasswordHash == "" {
+		return apierr.Validation(apierr.Field("currentPassword",
+			"this account signs in through an identity provider and has no password here"))
+	}
+
+	ok, _, err := password.Verify(current, user.PasswordHash)
+	if err != nil {
+		return fmt.Errorf("authn: verify the password of user %q: %w", user.ID, err)
+	}
+	if !ok {
+		return apierr.Validation(apierr.Field("currentPassword", "is not correct"))
+	}
+
+	if err := s.totp.Delete(ctx, user.ID); err != nil {
+		return err
+	}
+
+	// Warn rather than info: an authenticator disappearing is the event somebody
+	// reads back after an account is taken over, and it should stand out from
+	// the successful sign-ins around it.
+	s.log.WarnContext(ctx, "authenticator removed",
+		slog.String("user_id", user.ID),
+		slog.String("session_id", subject.SessionID))
+
+	return nil
+}
+
+// AccountForChallenge returns the email address a pending token belongs to, or
+// "" when the token stands for nothing usable.
+//
+// It exists for the throttle (M1-004), which keys on the account being
+// attempted and cannot read one out of a body that contains only six digits.
+// The answer never reaches a response — it reaches the limiter and the log —
+// so this is not a way to turn a pending token into an address.
+func (s *Service) AccountForChallenge(ctx context.Context, token challenge.Token) string {
+	pending, err := s.challenges.Resolve(ctx, token)
+	if err != nil {
+		return ""
+	}
+	user, err := s.users.ByID(ctx, pending.UserID)
+	if err != nil {
+		return ""
+	}
+	return user.Email
+}
+
+// confirmedTOTP returns a user's enrolment and whether it is one that counts.
+//
+// "Counts" means confirmed. A started-but-unconfirmed enrolment is reported as
+// not enrolled everywhere in this package, which is what makes the acceptance
+// criterion — a half-finished enrolment cannot lock a user out — true in the
+// login path, in the profile and in the verification path at once, rather than
+// three times over.
+func (s *Service) confirmedTOTP(ctx context.Context, userID string) (identity.TOTP, bool, error) {
+	enrolment, err := s.totp.ByUserID(ctx, userID)
+	if errors.Is(err, apierr.ErrNotFound) {
+		return identity.TOTP{}, false, nil
+	}
+	if err != nil {
+		return identity.TOTP{}, false, err
+	}
+	return enrolment, enrolment.Confirmed(), nil
+}
+
+// checkCode decrypts an enrolment's secret and reports which step the code
+// belongs to, or [totp.ErrNoMatch].
+//
+// The plaintext secret exists only inside this function. It is never returned,
+// never logged and never stored on the Service — the cipher is the only thing
+// that holds it in any durable form.
+func (s *Service) checkCode(ctx context.Context, enrolment identity.TOTP, code string) (int64, error) {
+	secret, err := s.secrets.Open(enrolment.SecretEncrypted)
+	if err != nil {
+		// A row this key cannot open. That is an operational problem — a
+		// restored backup, a rotated PURPLEOPS_ENCRYPTION_KEY — and not a failed
+		// code, and reporting it as one would leave nobody looking at it while
+		// everybody's codes quietly stopped working.
+		s.log.ErrorContext(ctx, "an enrolled authenticator secret could not be decrypted; "+
+			"has PURPLEOPS_ENCRYPTION_KEY changed?",
+			slog.String("user_id", enrolment.UserID),
+			slog.String("error", err.Error()))
+		return 0, fmt.Errorf("authn: read the authenticator secret of user %q: %w",
+			enrolment.UserID, err)
+	}
+	return totp.Validate(string(secret), code, s.now(), enrolment.LastUsedStep)
+}

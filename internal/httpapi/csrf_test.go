@@ -26,12 +26,25 @@ import (
 
 const changePasswordBody = `{"currentPassword":"` + testPassword + `","newPassword":"` + testNewPass + `"}`
 
+// totpCodeBody is a syntactically valid code that is not the right one. What
+// these tests want is a body the request validator accepts, so that whatever
+// answers is the CSRF middleware rather than the schema.
+const totpCodeBody = `{"code":"000000"}`
+
 // forge builds the request a cross-site attacker can cause: the browser
 // attaches the cookies, and the attacker chooses everything else. header and
 // csrfCookie are omitted when empty, which is the state an attacker is actually
 // in — they cannot read this origin's cookies, so they cannot echo one.
 func (s *authServer) forge(target, body string, sess *http.Cookie, csrfCookie, header string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+	return s.forgeMethod(http.MethodPost, target, body, sess, csrfCookie, header)
+}
+
+// forgeMethod is forge for the route walk, which has to use each route's own
+// method — one of the MFA endpoints is a DELETE, and sending it a POST would
+// test the 405 path rather than the CSRF one.
+func (s *authServer) forgeMethod(method, target, body string, sess *http.Cookie,
+	csrfCookie, header string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if sess != nil {
 		request.AddCookie(sess)
@@ -359,6 +372,14 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/auth/login":    {body: `{"email":"nobody@example.com","password":"whatever it is"}`, exempt: true},
 	"POST " + BasePath + "/auth/logout":   {body: ""},
 	"POST " + BasePath + "/auth/password": {body: changePasswordBody},
+
+	"POST " + BasePath + "/auth/mfa/totp/enroll":  {body: ""},
+	"POST " + BasePath + "/auth/mfa/totp/confirm": {body: totpCodeBody},
+	"POST " + BasePath + "/auth/mfa/totp/verify": {
+		body:   totpCodeBody,
+		exempt: true, // The second half of a sign-in; see csrfExemptRoutes.
+	},
+	"DELETE " + BasePath + "/auth/mfa/totp": {body: `{"currentPassword":"` + testPassword + `"}`},
 }
 
 func TestEveryMutatingRouteIsCoveredByCSRF(t *testing.T) {
@@ -391,7 +412,7 @@ func TestEveryMutatingRouteIsCoveredByCSRF(t *testing.T) {
 		// A request with a live session and no token at all. Anything not
 		// exempt must be refused before its handler runs.
 		sess := server.signIn(t)
-		got := server.forge(strings.TrimSuffix(route, "/"), expectation.body, sess, "", "").Code
+		got := server.forgeMethod(method, strings.TrimSuffix(route, "/"), expectation.body, sess, "", "").Code
 		switch {
 		case expectation.exempt && got == http.StatusForbidden:
 			t.Errorf("%s is listed as exempt but was refused with 403", key)

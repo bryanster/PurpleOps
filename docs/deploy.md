@@ -26,7 +26,7 @@ seconds and makes no network request.
 
 That works with no configuration at all, which is fine for a laptop and not fine for anything else.
 Before anyone else can reach it, read [Configuration](#configuration) — at minimum you must set
-`PURPLEOPS_BASE_URL` and `PURPLEOPS_SESSION_SECRET`.
+`PURPLEOPS_BASE_URL`, `PURPLEOPS_SESSION_SECRET` and `PURPLEOPS_ENCRYPTION_KEY`.
 
 | Command | What it does |
 |---|---|
@@ -37,9 +37,9 @@ Before anyone else can reach it, read [Configuration](#configuration) — at min
 | `docker compose down -v` | Stop, remove, **and delete the data volume** |
 
 > ⚠️ **`docker compose down -v` is irreversible.** The `-v` deletes the named volume, and with it the
-> database, every uploaded evidence file and the generated session secret. There is no undo and no
-> prompt. Take a [backup](#backup-and-restore) first, or use `docker compose down` — which keeps
-> everything — unless deleting the deployment is exactly what you meant.
+> database, every uploaded evidence file and any generated keys. There is no undo and no prompt.
+> Take a [backup](#backup-and-restore) first, or use `docker compose down` — which keeps everything
+> — unless deleting the deployment is exactly what you meant.
 
 ---
 
@@ -59,7 +59,7 @@ A value the server cannot use is a **startup error naming the variable**, never 
 If the container exits immediately, `docker compose logs` has a sentence telling you which variable
 and why.
 
-### The two that matter
+### The three that matter
 
 **`PURPLEOPS_BASE_URL`** — the absolute URL your users type. OIDC and SAML redirect URIs and report
 share links are built from it and cannot be derived from a request without trusting a proxy header,
@@ -89,6 +89,31 @@ If you do not set it, the container's entrypoint generates one on first boot and
 
 Set the variable yourself for anything you would be upset to lose. Rotating it — either variable or
 file — logs everybody out, which is also how you revoke every session at once.
+
+**`PURPLEOPS_ENCRYPTION_KEY`** — encrypts what the server holds on somebody else's behalf, which
+today means the TOTP shared secrets people enrol (`docs/security.md`, *Multi-factor
+authentication*). Same shape as the session secret: at least 32 bytes of real entropy, generated the
+same way, and it must **not** be the same value — the server refuses to start if the two match.
+
+```sh
+PURPLEOPS_ENCRYPTION_KEY=$(openssl rand -base64 32)
+```
+
+They are separate because their consequences are, and this is the part worth reading twice:
+
+| | Rotating `PURPLEOPS_SESSION_SECRET` | Rotating or losing `PURPLEOPS_ENCRYPTION_KEY` |
+|---|---|---|
+| What happens | everybody is signed out | every enrolled authenticator stops working |
+| Is it recoverable? | yes — people sign in again | **no** — everyone must re-enrol from scratch |
+| Would you notice? | immediately, and you meant to | only when codes start being rejected |
+
+Rotating the session secret is a lever you are meant to pull. If the same value were also the
+encryption key, pulling it would silently destroy every second factor in the deployment — which is
+why sharing one value between them is a startup error rather than a note in this file.
+
+The entrypoint generates this one on first boot too, at `/var/lib/purpleops/encryption.key`, with
+the same caveats and one more: **back it up with the database.** A restored database whose
+encryption key is gone is a deployment where nobody with MFA can sign in.
 
 ### Sessions
 
@@ -254,8 +279,14 @@ docker compose start
 The volume is called `purpleops_purpleops-data`: compose prefixes the volume name with the project
 name. `docker volume ls` confirms it.
 
-Keep the archive somewhere the deployment is not. It contains the session secret and every piece of
-evidence anyone has uploaded — treat it as classified as the engagements it describes.
+Keep the archive somewhere the deployment is not. It contains the session secret, the encryption
+key and every piece of evidence anyone has uploaded — treat it as classified as the engagements it
+describes.
+
+If you supplied `PURPLEOPS_SESSION_SECRET` and `PURPLEOPS_ENCRYPTION_KEY` yourself, they are in your
+environment and not in this archive: back them up wherever you keep the rest of your secrets. A
+restored database without its encryption key is one where nobody with an authenticator enrolled can
+sign in, and there is no way back from that except an administrator resetting each of them.
 
 ### Restore
 
