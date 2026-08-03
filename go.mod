@@ -1,6 +1,6 @@
 module github.com/bryanster/purpleops
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/crewjam/saml v0.5.1
@@ -58,7 +58,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.59.0 // indirect
+	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/richardlehane/mscfb v1.0.6 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/russellhaering/goxmldsig v1.4.0 // indirect
