@@ -15,18 +15,21 @@ FROM golang:1.25-trixie
 
 # make: the Makefile is the interface to everything in this repo, and the Go
 #   image does not ship it.
+# sudo: passwordless for the non-root remote user — package installs and the
+#   occasional root-only debug step without rebuilding the image.
 # The rest: git over https and ssh, and the handful of things that make a shell
 #   in here usable rather than a puzzle.
 RUN apt-get update \
-     && apt-get install -y --no-install-recommends \
-     ca-certificates \
-     git \
-     jq \
-     less \
-     make \
-     openssh-client \
-     unzip \
-     && rm -rf /var/lib/apt/lists/*
+	&& apt-get install -y --no-install-recommends \
+		ca-certificates \
+		git \
+		jq \
+		less \
+		make \
+		openssh-client \
+		sudo \
+		unzip \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Node, taken from the official image rather than installed from a distribution
 # repository, because the version has to be *exact*: .prototools, web/.nvmrc and
@@ -38,13 +41,36 @@ RUN apt-get update \
 COPY --from=node:24.18.1-trixie-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=node:24.18.1-trixie-slim /usr/local/bin/node /usr/local/bin/node
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-     && ln -sf /usr/local/lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
-     && node --version && npm --version
+	&& ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+	&& ln -sf /usr/local/lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
+	&& node --version && npm --version
 
 RUN npm install -g @anthropic-ai/claude-code
+
+# Non-root development user. remoteUser in devcontainer.json matches this name;
+# the docker-outside-of-docker feature then adds it to the docker group so
+# `make docker-build` works without sudo. updateRemoteUserUID (the default)
+# rewrites the uid/gid at create time to match the host user, so bind-mounted
+# sources stay writable.
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN groupadd --gid ${USER_GID} ${USERNAME} \
+	&& useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} \
+	&& echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
+	&& chmod 0440 /etc/sudoers.d/${USERNAME} \
+	&& mkdir -p /go/pkg/mod /go/bin \
+	&& chown -R ${USERNAME}:${USERNAME} /go /home/${USERNAME}
+
+# Oh My Pi (omp). PI_INSTALL_DIR overrides the installer default of
+# $HOME/.local/bin so the binary lands on the shared PATH for the non-root
+# user rather than under /root. --binary skips the bun source path; we only
+# need the released agent binary in this image.
+ENV PI_INSTALL_DIR=/usr/local/bin
+RUN curl -fsSL https://omp.sh/install | sh -s -- --binary \
+	&& omp --version
 
 # Not set in the image: BLACKLIGHT_* configuration. The server reads it from the
 # environment and refuses anything it cannot use, so a container-wide default
 # would be a value nobody chose, quietly in force. Copy .env.example to .env.
-RUN curl -fsSL https://omp.sh/install | sh
+USER ${USERNAME}

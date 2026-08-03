@@ -22,20 +22,24 @@
     8080, // the server — BLACKLIGHT_ADDR
     5173 // `npm --prefix web run dev`, which proxies /api to 8080
   ],
-  "remoteUser": "root",
+  // Non-root: matches the vscode user created in the Dockerfile. The docker
+  // feature adds this user to the docker group; updateRemoteUserUID (default
+  // true) aligns the uid with the host so the workspace bind mount is writable.
+  "remoteUser": "vscode",
   // The local ssh-agent is forwarded automatically by the Dev Containers
   // extension. Do not bind-mount ${localEnv:SSH_AUTH_SOCK}: agents such as
   // Secretive keep their socket under ~/Library/Containers, which Docker
   // Desktop cannot share.
   "mounts": [
-    "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.omp,target=/home/vscode/.omp,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
     // Named volumes, so a container rebuild does not re-download every module
     // and recompile every package. Both are caches: deleting them costs time
-    // and nothing else.
+    // and nothing else. Paths are under the non-root home / shared GOPATH.
     "source=blacklight-go-mod,target=/go/pkg/mod,type=volume",
-    "source=blacklight-go-build,target=/root/.cache/go-build,type=volume"
+    "source=blacklight-go-build,target=/home/vscode/.cache/go-build,type=volume"
   ],
   "customizations": {
     "vscode": {

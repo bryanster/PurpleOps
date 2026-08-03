@@ -8,6 +8,14 @@ It carries the same base as `deploy/Dockerfile`'s build stage — same Go, same 
 glibc. The DuckDB driver is cgo, so "it compiles in my editor" and "it compiles in the release
 image" should not be two different questions.
 
+The container runs as the non-root `vscode` user (passwordless `sudo` when needed). Rebuild after
+pulling these changes; if Go module or build caches were created as root under the old image, drop
+them once:
+
+```sh
+docker volume rm blacklight-go-mod blacklight-go-build
+```
+
 ## What is in it, and what is not
 
 | | |
@@ -17,12 +25,16 @@ image" should not be two different questions.
 | `make`, git, jq | The Makefile is the interface to this repository |
 | Docker CLI | Via the `docker-outside-of-docker` feature, pointed at the host daemon — so `make docker-build` and `make docker-smoke` work, sharing the host's layer cache |
 | Claude Code | `npm install -g @anthropic-ai/claude-code` |
+| Oh My Pi (`omp`) | Prebuilt binary from [omp.sh](https://omp.sh/install) into `/usr/local/bin` (shared PATH; not root's `~/.local/bin`) |
 | **Not** golangci-lint or oapi-codegen | The Makefile pins both and installs them into `./bin`. A second copy in the image is a second version to drift. `make tools` runs as `postCreateCommand` |
 | **Not** a database container | v2's database is a file inside the process. v1 needed compose for MongoDB; there is nothing left to orchestrate |
 | **Not** any `BLACKLIGHT_*` value | The server refuses configuration it cannot use, so a container-wide default would be a value nobody chose, quietly in force. `cp .env.example .env` |
 
 Ports 8080 (the server) and 5173 (`npm --prefix web run dev`, which proxies `/api` to 8080) are
 forwarded.
+
+Host `~/.gitconfig`, `~/.ssh`, `~/.claude`, and `~/.omp` are bind-mounted into the `vscode` home so
+git identity, keys, and agent config survive rebuilds.
 
 ## Caches
 
