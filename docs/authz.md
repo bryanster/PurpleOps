@@ -102,7 +102,8 @@ is a server that refuses to start. See [`docs/api.md`](api.md#authorization) for
 Edit the rule table in `internal/authz/policy.go` and run `make generate`. Everything else follows:
 
 - Adding an `Action` without a rule fails the exhaustiveness test — silence is not a permission.
-- The permission matrix in `internal/authz`'s tests enumerates from the same table, so a new action
-  arrives with its whole row asserted.
+- The permission matrix (`internal/authz/matrix_test.go`) fails until somebody writes down, by hand,
+  what every role may do with the new action. It enumerates the actions from the same enum but states
+  the answers independently — a matrix that computed them the way `Can` does would agree with a bug.
 - Role names exist only in `internal/authz`. A role string anywhere else in the Go tree fails a test,
   which is the direct fix for v1's two contradictory definitions of "blue".

@@ -56,7 +56,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
-| **M1 — Identity & access** | in progress — 13/18 | [18 tickets](#m1--identity--access) |
+| **M1 — Identity & access** | in progress — 14/18 | [18 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
@@ -115,7 +115,7 @@ here traces to a named defect in `PLAN.md` §4 — the regression cases are the 
 | [M1-011](done/M1-011-service-tokens.md) ✅ | Scoped service tokens, actually enforced | L |
 | [M1-012](done/M1-012-authz-policy.md) ✅ | Central `authz.Can` policy engine | L |
 | [M1-013](done/M1-013-authz-middleware.md) ✅ | One authorization middleware, zero handler checks | M |
-| [M1-014](M1-014-permission-matrix-tests.md) | Full role × action × resource matrix tests | M |
+| [M1-014](done/M1-014-permission-matrix-tests.md) ✅ | Full role × action × resource matrix tests | M |
 | [M1-015](M1-015-activity-log.md) | Append-only activity log | M |
 | [M1-016](M1-016-user-management-api.md) | Admin user management API | M |
 | [M1-017](M1-017-auth-ui.md) | Login, MFA, account and admin UI | L |
