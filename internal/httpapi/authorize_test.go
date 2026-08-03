@@ -12,6 +12,7 @@ package httpapi
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -277,21 +278,36 @@ func assertStartupFailure(t *testing.T, err error, wants ...string) {
 	}
 }
 
-// TestTheServerRefusesToStartWithNothingToLoadAnEngagementFrom is the same
-// discipline one level down. An operation that acts on something an engagement
-// owns needs the facts about that engagement; a build with no way to load them
-// must not start and then answer 500 at the first request — the failure belongs
-// on the machine of whoever added the endpoint.
-func TestTheServerRefusesToStartWithNothingToLoadAnEngagementFrom(t *testing.T) {
+// TestAuthorizeRefusesEngagementOpsWithoutALoader keeps the fail-closed check
+// on [authorize] itself: a build that somehow skipped the default in
+// [newServer] still cannot serve an engagement-scoped operation with nothing
+// to load seats from.
+func TestAuthorizeRefusesEngagementOpsWithoutALoader(t *testing.T) {
+	t.Parallel()
+
+	doc := fixtureSpec(t, engagementSpec)
+	_, err := authorize(doc, nil, apierr.NewResponder(slog.Default()), slog.Default())
+	if err == nil {
+		t.Fatal("authorize accepted an engagement-scoped operation with no Ownership")
+	}
+	if !strings.Contains(err.Error(), "Ownership") {
+		t.Errorf("error = %q, want it to name what is missing", err)
+	}
+}
+
+// TestNewServerDefaultsOwnershipForEngagementOps is the production path:
+// leaving Deps.Ownership nil installs a membership-backed loader so the
+// activity feed (M1-015) can start before M3 owns engagements.
+func TestNewServerDefaultsOwnershipForEngagementOps(t *testing.T) {
 	t.Parallel()
 
 	deps := Deps{Config: testConfig(t), Store: stubStore{}} // no Ownership
-	_, err := newServer(deps, fixtureSpec(t, engagementSpec), nil)
-	if err == nil {
-		t.Fatal("the server was built with an engagement-scoped operation and nothing to load an engagement from")
+	server, err := newServer(deps, fixtureSpec(t, engagementSpec), nil)
+	if err != nil {
+		t.Fatalf("newServer with default Ownership: %v", err)
 	}
-	if !strings.Contains(err.Error(), "Deps.Ownership") {
-		t.Errorf("error = %q, want it to name what is missing", err)
+	if server == nil {
+		t.Fatal("nil server")
 	}
 }
 

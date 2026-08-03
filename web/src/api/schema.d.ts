@@ -734,6 +734,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the installation-wide activity log.
+         * @description Administrators only. Platform events — logins, lockouts, token lifecycle,
+         *     MFA changes, role changes — with no engagement. Engagement-scoped rows
+         *     are not included; use `GET /engagements/{engagementId}/activity` for
+         *     those.
+         *
+         *     Newest first. Pagination is the standard cursor convention. Filter by
+         *     actor, verb or object to narrow an incident review.
+         */
+        get: operations["listActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one engagement's activity log.
+         * @description Members of the engagement, and platform administrators. The rows that
+         *     name this engagement — comments, executions, membership changes once
+         *     those exist — newest first.
+         *
+         *     A non-member is answered 404 rather than 403, so the existence of an
+         *     engagement is not confirmed to someone outside it.
+         */
+        get: operations["listEngagementActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1300,6 +1351,68 @@ export interface components {
         RegenerateRecoveryCodesRequest: {
             currentPassword: string;
         };
+        /**
+         * @description One row of the append-only activity log (M1-015). Drives the SSE feed
+         *     (M4) and the report timeline (M6). There is no update or delete.
+         */
+        ActivityEntry: {
+            /**
+             * Format: uuid
+             * @description UUIDv7. Sortable by creation; the stable tiebreaker when two rows share a timestamp.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The engagement this entry belongs to. Absent on platform events
+             *     (logins, token lifecycle, role changes).
+             */
+            engagementId?: string;
+            /**
+             * Format: uuid
+             * @description Who did it. Absent when the actor is unknown — a failed login that
+             *     named no account.
+             */
+            actorId?: string;
+            /**
+             * @description What happened, spelled `object.past_tense_verb`. Examples:
+             *     `session.login`, `session.login_failed`, `token.created`,
+             *     `mfa.enrolled`.
+             * @example session.login
+             */
+            verb: string;
+            /**
+             * @description The kind of thing acted on (`user`, `session`, `service_token`, …).
+             * @example session
+             */
+            objectType: string;
+            /** @description The identifier of the thing acted on. */
+            objectId: string;
+            /**
+             * @description Before/after for changed fields, already redacted. Never a password
+             *     hash, token secret, TOTP secret, session token or recovery code.
+             *     Absent when there is nothing useful to say beyond the verb.
+             */
+            delta?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: date-time
+             * @description When it happened, UTC.
+             */
+            at: string;
+        };
+        /**
+         * @description One page of the activity log. `nextCursor` is taken verbatim from a
+         *     previous response; absent (or null) means there is no further page.
+         */
+        ActivityPage: {
+            items: components["schemas"]["ActivityEntry"][];
+            /**
+             * @description Opaque cursor for the next page. Pass it back as `cursor`. Clients
+             *     must not parse or construct one.
+             */
+            nextCursor?: string | null;
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -1455,6 +1568,19 @@ export interface components {
          *     implementation detail — clients must not parse or construct one.
          */
         Cursor: string;
+        /** @description The engagement whose activity is being listed. */
+        EngagementId: string;
+        /** @description Restrict to entries whose actor is this user id. */
+        ActivityActor: string;
+        /**
+         * @description Restrict to one verb, spelled `object.past_tense_verb` (for example
+         *     `session.login` or `token.created`).
+         */
+        ActivityVerb: string;
+        /** @description Restrict to entries whose object is of this type (for example `user` or `session`). */
+        ActivityObjectType: string;
+        /** @description Restrict to entries whose object has this identifier. */
+        ActivityObjectId: string;
     };
     requestBodies: never;
     headers: never;
@@ -2355,6 +2481,98 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of items to return. */
+                limit?: components["parameters"]["Limit"];
+                /**
+                 * @description Opaque cursor taken verbatim from the `nextCursor` of a previous
+                 *     response. Absent means "from the beginning". Its contents are an
+                 *     implementation detail — clients must not parse or construct one.
+                 */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Restrict to entries whose actor is this user id. */
+                actor?: components["parameters"]["ActivityActor"];
+                /**
+                 * @description Restrict to one verb, spelled `object.past_tense_verb` (for example
+                 *     `session.login` or `token.created`).
+                 */
+                verb?: components["parameters"]["ActivityVerb"];
+                /** @description Restrict to entries whose object is of this type (for example `user` or `session`). */
+                objectType?: components["parameters"]["ActivityObjectType"];
+                /** @description Restrict to entries whose object has this identifier. */
+                objectId?: components["parameters"]["ActivityObjectId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of activity entries, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listEngagementActivity: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of items to return. */
+                limit?: components["parameters"]["Limit"];
+                /**
+                 * @description Opaque cursor taken verbatim from the `nextCursor` of a previous
+                 *     response. Absent means "from the beginning". Its contents are an
+                 *     implementation detail — clients must not parse or construct one.
+                 */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Restrict to entries whose actor is this user id. */
+                actor?: components["parameters"]["ActivityActor"];
+                /**
+                 * @description Restrict to one verb, spelled `object.past_tense_verb` (for example
+                 *     `session.login` or `token.created`).
+                 */
+                verb?: components["parameters"]["ActivityVerb"];
+                /** @description Restrict to entries whose object is of this type (for example `user` or `session`). */
+                objectType?: components["parameters"]["ActivityObjectType"];
+                /** @description Restrict to entries whose object has this identifier. */
+                objectId?: components["parameters"]["ActivityObjectId"];
+            };
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of activity entries, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

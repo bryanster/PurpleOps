@@ -2,6 +2,7 @@ package servicetoken
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -23,10 +25,10 @@ import (
 // dependency is the five methods it calls rather than everything a database
 // happens to offer — and so a test can substitute one that fails on demand.
 type Store interface {
-	Create(ctx context.Context, in identity.NewServiceToken) (identity.ServiceToken, error)
+	Create(ctx context.Context, in identity.NewServiceToken, after ...identity.After) (identity.ServiceToken, error)
 	ByPrefix(ctx context.Context, prefix string) (identity.ServiceToken, error)
 	ListByOwner(ctx context.Context, ownerUserID string) ([]identity.ServiceToken, error)
-	Revoke(ctx context.Context, id, ownerUserID string, at time.Time) (identity.ServiceToken, error)
+	Revoke(ctx context.Context, id, ownerUserID string, at time.Time, after ...identity.After) (identity.ServiceToken, error)
 	SetLastUsedAt(ctx context.Context, id string, at time.Time) error
 }
 
@@ -96,6 +98,10 @@ type Options struct {
 
 	// Log receives what a response cannot carry. Nil means slog.Default().
 	Log *slog.Logger
+
+	// Activity records token.created / token.revoked / token.first_used
+	// (M1-015). Nil skips the durable row.
+	Activity *events.Log
 }
 
 // OptionsFrom derives the token policy from the process configuration.
@@ -120,8 +126,9 @@ func OptionsFrom(cfg config.Config) (Options, error) {
 // honest subject: the scopes as stored, the binding as stored, and nothing
 // inferred.
 type Manager struct {
-	store  Store
-	hasher *Hasher
+	store    Store
+	hasher   *Hasher
+	activity *events.Log
 
 	maxLifetime time.Duration
 	now         func() time.Time
@@ -167,6 +174,7 @@ func New(store Store, opts Options) (*Manager, error) {
 	return &Manager{
 		store:       store,
 		hasher:      opts.Hasher,
+		activity:    opts.Activity,
 		maxLifetime: maxLifetime,
 		now:         now,
 		background:  background,
@@ -248,16 +256,11 @@ func (m *Manager) Issue(ctx context.Context, in NewToken) (Issued, error) {
 		Scopes:       scopes,
 		EngagementID: in.EngagementID,
 		ExpiresAt:    expires,
-	})
+	}, m.createdAfter(in, name, parts.prefix, scopes, expires))
 	if err != nil {
 		return Issued{}, err
 	}
 
-	// M1-015 gives this a durable home in the activity log, with the verb
-	// token.created. Until then this line is the record, and it carries what
-	// that entry will: who, which token, what it may do, and for how long.
-	// Never the secret — see [Token], whose every rendering is [redacted], so
-	// that putting one here would take deliberate effort.
 	m.log.InfoContext(ctx, "service token created",
 		slog.String("token_id", created.ID),
 		slog.String("owner_user_id", created.OwnerUserID),
@@ -268,6 +271,32 @@ func (m *Manager) Issue(ctx context.Context, in NewToken) (Issued, error) {
 		slog.Time("expires_at", created.ExpiresAt))
 
 	return Issued{ServiceToken: created, Token: secret}, nil
+}
+
+func (m *Manager) createdAfter(in NewToken, name, prefix string, scopes []authz.TokenScope, expires time.Time) identity.After {
+	if m.activity == nil {
+		return nil
+	}
+	scopeNames := make([]string, len(scopes))
+	for i, s := range scopes {
+		scopeNames[i] = string(s)
+	}
+	return func(ctx context.Context, tx *sql.Tx) error {
+		return m.activity.Record(ctx, tx, events.Entry{
+			ActorID:    in.CreatedBy,
+			Verb:       events.VerbTokenCreated,
+			ObjectType: events.ObjectToken,
+			ObjectID:   identity.AfterEntityID(ctx),
+			Delta: events.Delta(map[string]any{
+				"name":          name,
+				"scopes":        scopeNames,
+				"prefix":        prefix,
+				"expires_at":    expires.UTC().Format(time.RFC3339),
+				"owner_user_id": in.OwnerUserID,
+				"engagement_id": in.EngagementID,
+			}),
+		})
+	}
 }
 
 // Resolve returns the token a presented value stands for, and records that it
@@ -365,19 +394,32 @@ func (m *Manager) recordUse(ctx context.Context, t identity.ServiceToken) {
 
 	if !seenBefore && t.LastUsedAt.IsZero() {
 		// The moment a token stops being a credential somebody made and starts
-		// being one something is using. It is worth a line of its own because
-		// it is the one an incident review looks for — "when did this start
-		// being used, and from where" — and because a token that is *never*
-		// used is worth noticing too, which is only visible if the first use is.
-		//
-		// M1-015 gives it the verb token.first_used. Both conditions are
-		// required: the column is the durable answer and survives a restart,
-		// and the map is what stops two requests arriving together from both
-		// reading a zero column and both reporting a first use.
+		// being one something is using. Both conditions are required: the column
+		// is the durable answer and survives a restart, and the map is what
+		// stops two requests arriving together from both reading a zero column
+		// and both reporting a first use.
 		m.log.InfoContext(ctx, "service token used for the first time",
 			slog.String("token_id", t.ID),
 			slog.String("owner_user_id", t.OwnerUserID),
 			slog.String("prefix", t.Prefix))
+		if m.activity != nil {
+			// No sibling mutation on this path — last_used_at is written in the
+			// background — so the activity row stands alone.
+			if err := m.activity.RecordAlone(ctx, events.Entry{
+				ActorID:    t.OwnerUserID,
+				Verb:       events.VerbTokenFirstUsed,
+				ObjectType: events.ObjectToken,
+				ObjectID:   t.ID,
+				Delta: events.Delta(map[string]any{
+					"prefix":        t.Prefix,
+					"owner_user_id": t.OwnerUserID,
+				}),
+			}); err != nil {
+				m.log.WarnContext(ctx, "could not record token.first_used",
+					slog.String("token_id", t.ID),
+					slog.String("error", err.Error()))
+			}
+		}
 	}
 
 	// Detached from the request's context: this outlives the response, and a
@@ -417,13 +459,11 @@ func (m *Manager) List(ctx context.Context, ownerUserID string) ([]identity.Serv
 // from one that does not exist — see [identity.ServiceTokens.Revoke], where the
 // ownership is part of the statement rather than a check in front of it.
 func (m *Manager) Revoke(ctx context.Context, id, ownerUserID string) (identity.ServiceToken, error) {
-	revoked, err := m.store.Revoke(ctx, id, ownerUserID, m.now())
+	revoked, err := m.store.Revoke(ctx, id, ownerUserID, m.now(), m.revokedAfter(ownerUserID))
 	if err != nil {
 		return identity.ServiceToken{}, err
 	}
 
-	// As with creation: M1-015's token.revoked entry is the durable record, and
-	// this is it until then.
 	m.log.InfoContext(ctx, "service token revoked",
 		slog.String("token_id", revoked.ID),
 		slog.String("owner_user_id", revoked.OwnerUserID),
@@ -431,6 +471,20 @@ func (m *Manager) Revoke(ctx context.Context, id, ownerUserID string) (identity.
 		slog.Time("revoked_at", revoked.RevokedAt))
 
 	return revoked, nil
+}
+
+func (m *Manager) revokedAfter(actorID string) identity.After {
+	if m.activity == nil {
+		return nil
+	}
+	return func(ctx context.Context, tx *sql.Tx) error {
+		return m.activity.Record(ctx, tx, events.Entry{
+			ActorID:    actorID,
+			Verb:       events.VerbTokenRevoked,
+			ObjectType: events.ObjectToken,
+			ObjectID:   identity.AfterEntityID(ctx),
+		})
+	}
 }
 
 // checkName holds a token's label to something a person can act on.

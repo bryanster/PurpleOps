@@ -23,9 +23,11 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
 	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/activity"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/settings"
 )
@@ -64,11 +66,9 @@ type Deps struct {
 	UI fs.FS
 
 	// Ownership loads the facts an engagement-scoped authorization decision
-	// needs (M1-013). Nil until M3 brings engagements, and safe to leave nil
-	// only until then: [NewServer] refuses to build a server whose
-	// specification maps any operation to something an engagement owns while
-	// this is absent, so the gap is a startup failure rather than a decision
-	// made without the facts.
+	// needs (M1-013). Nil defaults to a membership-table loader sufficient for
+	// the activity feed (M1-015); M3 replaces it with one that also knows
+	// whether an engagement exists and whether it runs blind.
 	Ownership Ownership
 }
 
@@ -104,6 +104,11 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	if log == nil {
 		log = slog.Default()
 	}
+	if deps.Ownership == nil {
+		// Engagement-scoped routes (the activity feed today) need a loader.
+		// Memberships are enough until M3 owns engagements themselves.
+		deps.Ownership = NewMembershipOwnership(identity.NewMemberships(deps.Store))
+	}
 	responder := apierr.NewResponder(log)
 
 	validate, err := requestValidator(doc, responder)
@@ -119,7 +124,9 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		return nil, err
 	}
 
-	auth, sessions, challenges, err := newAuthn(deps, log)
+	activityLog := events.New(activity.New(deps.Store))
+
+	auth, sessions, challenges, err := newAuthn(deps, activityLog, log)
 	if err != nil {
 		return nil, err
 	}
@@ -213,14 +220,14 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	apiRouter.MethodNotAllowed(methodNotAllowed)
 	apiRouter.Use(
 		validate,
-		throttleCredentials(limiter, credentialAccounts(auth), responder, log),
+		throttleCredentials(limiter, credentialAccounts(auth), activityLog, responder, log),
 		authenticate(auth, responder, log),
 		requireCSRF(sessions, responder, log),
 		clearSpentChallenge(challenges),
 		requireMFAEnrolment(responder, log),
 		authorized,
 	)
-	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, provider, federation, log, responder),
+	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, provider, federation, activityLog, log, responder),
 		gen.ChiServerOptions{
 			BaseRouter: apiRouter,
 			// Reached when the generated wrapper cannot bind a parameter. The
@@ -261,8 +268,10 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 // things already there — the store and the configuration — and a caller who had
 // to assemble them could assemble two that disagreed about how long a session
 // lasts.
-func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *challenge.Manager, error) {
-	sessions, err := session.New(identity.NewSessions(deps.Store), session.OptionsFrom(deps.Config))
+func newAuthn(deps Deps, activityLog *events.Log, log *slog.Logger) (*authn.Service, *session.Manager, *challenge.Manager, error) {
+	sessionOpts := session.OptionsFrom(deps.Config)
+	sessionOpts.Activity = activityLog
+	sessions, err := session.New(identity.NewSessions(deps.Store), sessionOpts)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -296,6 +305,7 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 		return nil, nil, nil, err
 	}
 	tokenOptions.Log = log
+	tokenOptions.Activity = activityLog
 	tokens, err := servicetoken.New(identity.NewServiceTokens(deps.Store), tokenOptions)
 	if err != nil {
 		return nil, nil, nil, err
@@ -313,6 +323,7 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 		Tokens:        tokens,
 		Secrets:       cipher,
 		Recovery:      hasher,
+		Activity:      activityLog,
 		Issuer:        totpIssuer(deps.Config),
 		Log:           log,
 	})
@@ -460,7 +471,7 @@ func totpIssuer(cfg config.Config) string {
 // as everything else (M0B-007).
 func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	challenges *challenge.Manager, provider *oidc.Provider, federation *saml.Provider,
-	log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+	activityLog *events.Log, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
 	return gen.NewStrictHandlerWithOptions(
 		&handlers{
 			store:      deps.Store,
@@ -469,6 +480,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			challenges: challenges,
 			oidc:       provider,
 			saml:       federation,
+			activity:   activityLog,
 			log:        log,
 		},
 		nil, // No strict middleware: the chain is chi's, so there is one of them.

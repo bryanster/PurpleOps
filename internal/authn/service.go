@@ -18,6 +18,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/servicetoken"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authz"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -96,6 +97,10 @@ type Deps struct {
 	// separately from the same configured material.
 	Recovery *recovery.Hasher
 
+	// Activity is the append-only security event log (M1-015). Nil skips
+	// durable rows; production always sets it.
+	Activity *events.Log
+
 	// Issuer is what an authenticator app shows as the name of the entry. It
 	// names the deployment, so that somebody with an account on two of these can
 	// tell their two entries apart.
@@ -130,6 +135,7 @@ type Service struct {
 	tokens     *servicetoken.Manager
 	secrets    *secrets.Cipher
 	recovery   *recovery.Hasher
+	activity   *events.Log
 
 	issuer string
 	log    *slog.Logger
@@ -188,6 +194,7 @@ func NewService(deps Deps) (*Service, error) {
 		tokens:        deps.Tokens,
 		secrets:       deps.Secrets,
 		recovery:      deps.Recovery,
+		activity:      deps.Activity,
 		issuer:        deps.Issuer,
 		log:           log,
 		now:           now,
@@ -256,6 +263,7 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 		if _, _, decoyErr := password.Verify(in.Password, decoyHash()); decoyErr != nil {
 			return LoginResult{}, fmt.Errorf("authn: verify against the decoy hash: %w", decoyErr)
 		}
+		s.recordLoginFailed(ctx, in, "unknown_email")
 		return LoginResult{}, apierr.BadCredentials("no account holds that address")
 	case err != nil:
 		return LoginResult{}, err
@@ -280,10 +288,13 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 	// against a decoy and means nothing.
 	switch {
 	case user.PasswordHash == "":
+		s.recordLoginFailed(ctx, in, "no_local_password")
 		return LoginResult{}, apierr.BadCredentials("user " + user.ID + " has no local password")
 	case !ok:
+		s.recordLoginFailed(ctx, in, "password_mismatch")
 		return LoginResult{}, apierr.BadCredentials("password mismatch for user " + user.ID)
 	case user.Status != identity.StatusActive:
+		s.recordLoginFailed(ctx, in, "account_"+string(user.Status))
 		return LoginResult{}, apierr.BadCredentials(
 			"user " + user.ID + " is " + string(user.Status))
 	}
@@ -293,6 +304,42 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 	}
 
 	return s.completeSignIn(ctx, user, in.Request)
+}
+
+// recordLoginFailed appends session.login_failed. Failures here are logged and
+// swallowed: refusing a 401 because the audit row could not be written would
+// turn bookkeeping into an outage, and the credentials were wrong either way.
+func (s *Service) recordLoginFailed(ctx context.Context, in Login, reason string) {
+	if s.activity == nil {
+		return
+	}
+	if err := s.activity.RecordAlone(ctx, events.Entry{
+		Verb:       events.VerbSessionLoginFailed,
+		ObjectType: events.ObjectLogin,
+		ObjectID:   "unknown",
+		Delta: events.Delta(map[string]any{
+			"email":  in.Email,
+			"ip":     in.Request.IP,
+			"reason": reason,
+		}),
+	}); err != nil {
+		s.log.WarnContext(ctx, "could not record session.login_failed",
+			slog.String("error", err.Error()))
+	}
+}
+
+// recordAlone writes an activity row that has no sibling mutation. A failure is
+// logged and swallowed so audit bookkeeping cannot break the auth flow that
+// already succeeded.
+func (s *Service) recordAlone(ctx context.Context, e events.Entry) {
+	if s.activity == nil {
+		return
+	}
+	if err := s.activity.RecordAlone(ctx, e); err != nil {
+		s.log.WarnContext(ctx, "could not record activity",
+			slog.String("verb", string(e.Verb)),
+			slog.String("error", err.Error()))
+	}
 }
 
 // completeSignIn is everything a sign-in does once the credentials are settled:
@@ -521,7 +568,7 @@ func (s *Service) Logout(ctx context.Context, subject Subject) error {
 	if subject.SessionID == "" {
 		return nil
 	}
-	if err := s.sessions.Revoke(ctx, subject.SessionID); err != nil {
+	if err := s.sessions.RevokeAs(ctx, subject.SessionID, subject.UserID); err != nil {
 		return err
 	}
 	s.log.InfoContext(ctx, "logout",
@@ -676,6 +723,12 @@ func (s *Service) ChangePassword(ctx context.Context, subject Subject, current, 
 		slog.String("user_id", user.ID),
 		slog.String("session_id", subject.SessionID),
 		slog.Int64("other_sessions_revoked", revoked))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    user.ID,
+		Verb:       events.VerbUserPasswordChanged,
+		ObjectType: events.ObjectUser,
+		ObjectID:   user.ID,
+	})
 
 	return issued, nil
 }

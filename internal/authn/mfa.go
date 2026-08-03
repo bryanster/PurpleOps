@@ -10,6 +10,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/password"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authn/totp"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -143,6 +144,12 @@ func (s *Service) ConfirmTOTP(ctx context.Context, subject Subject, code string)
 	s.log.InfoContext(ctx, "authenticator enrolment confirmed",
 		slog.String("user_id", subject.UserID),
 		slog.String("session_id", subject.SessionID))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    subject.UserID,
+		Verb:       events.VerbMFAEnrolled,
+		ObjectType: events.ObjectTOTP,
+		ObjectID:   subject.UserID,
+	})
 
 	return ConfirmResult{Issued: issued, Recovery: set}, nil
 }
@@ -303,6 +310,12 @@ func (s *Service) DisableTOTP(ctx context.Context, subject Subject, current pass
 	s.log.WarnContext(ctx, "authenticator and recovery codes removed",
 		slog.String("user_id", user.ID),
 		slog.String("session_id", subject.SessionID))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    user.ID,
+		Verb:       events.VerbMFADisabled,
+		ObjectType: events.ObjectTOTP,
+		ObjectID:   user.ID,
+	})
 
 	return nil
 }

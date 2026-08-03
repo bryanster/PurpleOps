@@ -9,6 +9,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/oidc"
 	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/version"
@@ -34,6 +35,10 @@ type handlers struct {
 	// than guessing at. A deployment may have either, both, or neither.
 	oidc *oidc.Provider
 	saml *saml.Provider
+
+	// activity is the append-only log (M1-015). Nil only in tests that never
+	// hit the list endpoints.
+	activity *events.Log
 
 	log *slog.Logger
 }

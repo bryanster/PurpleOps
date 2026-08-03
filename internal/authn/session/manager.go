@@ -2,11 +2,13 @@ package session
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -18,12 +20,12 @@ import (
 // dependency is the six methods it calls rather than everything a database
 // happens to offer — and so that a test can substitute one that fails on demand.
 type Store interface {
-	Create(ctx context.Context, in identity.NewSession) (identity.Session, error)
+	Create(ctx context.Context, in identity.NewSession, after ...identity.After) (identity.Session, error)
 	ByTokenHash(ctx context.Context, hash string) (identity.Session, error)
 	Rotate(ctx context.Context, id, tokenHash string, at time.Time) (identity.Session, error)
 	SetLastSeenAt(ctx context.Context, id string, at time.Time) error
 	SetMFASatisfied(ctx context.Context, id string) error
-	Revoke(ctx context.Context, id string, at time.Time) error
+	Revoke(ctx context.Context, id string, at time.Time, after ...identity.After) error
 	RevokeOthersForUser(ctx context.Context, userID, keepID string, at time.Time) (int64, error)
 }
 
@@ -68,6 +70,11 @@ type Options struct {
 	// Now reads the clock. Nil means time.Now; a test supplies its own so that
 	// expiry and idleness can be reached without sleeping.
 	Now func() time.Time
+
+	// Activity records session.login / session.logout in the same transaction
+	// as the session change (M1-015). Nil skips the durable row; tests that do
+	// not care about the feed leave it unset.
+	Activity *events.Log
 }
 
 // OptionsFrom derives the session policy from the process configuration.
@@ -89,8 +96,9 @@ func OptionsFrom(cfg config.Config) Options {
 // [New]; the zero value has no secret and would hash every token to the same
 // thing.
 type Manager struct {
-	store  Store
-	secret []byte
+	store    Store
+	secret   []byte
+	activity *events.Log
 
 	lifetime    time.Duration
 	idleTimeout time.Duration
@@ -126,6 +134,7 @@ func New(store Store, opts Options) (*Manager, error) {
 	return &Manager{
 		store:       store,
 		secret:      opts.Secret,
+		activity:    opts.Activity,
 		lifetime:    opts.Lifetime,
 		idleTimeout: opts.IdleTimeout,
 		secure:      opts.Secure,
@@ -166,11 +175,32 @@ func (m *Manager) Issue(ctx context.Context, userID string, req Request, mfaSati
 		IP:           req.IP,
 		UserAgent:    req.UserAgent,
 		MFASatisfied: mfaSatisfied,
-	})
+	}, m.loginAfter(userID, req, mfaSatisfied))
 	if err != nil {
 		return Issued{}, err
 	}
 	return Issued{Session: created, Token: token}, nil
+}
+
+// loginAfter records session.login on the Create transaction. The session id
+// is read from the context the store sets before running the hook.
+func (m *Manager) loginAfter(userID string, req Request, mfaSatisfied bool) identity.After {
+	if m.activity == nil {
+		return nil
+	}
+	return func(ctx context.Context, tx *sql.Tx) error {
+		return m.activity.Record(ctx, tx, events.Entry{
+			ActorID:    userID,
+			Verb:       events.VerbSessionLogin,
+			ObjectType: events.ObjectSession,
+			ObjectID:   identity.AfterEntityID(ctx),
+			Delta: events.Delta(map[string]any{
+				"ip":            req.IP,
+				"user_agent":    req.UserAgent,
+				"mfa_satisfied": mfaSatisfied,
+			}),
+		})
+	}
 }
 
 // Resolve returns the session a token stands for, and records that it was used.
@@ -271,7 +301,28 @@ func (m *Manager) SatisfyMFA(ctx context.Context, sessionID string) (Issued, err
 // Revoke ends one session. Revoking one that has already ended is not an error:
 // the caller wanted it gone, and it is.
 func (m *Manager) Revoke(ctx context.Context, sessionID string) error {
-	return m.store.Revoke(ctx, sessionID, m.now())
+	return m.RevokeAs(ctx, sessionID, "")
+}
+
+// RevokeAs ends one session and attributes the session.logout activity row to
+// actorID when it is known (a voluntary logout). An empty actorID is fine for
+// paths that only know the session identifier.
+func (m *Manager) RevokeAs(ctx context.Context, sessionID, actorID string) error {
+	return m.store.Revoke(ctx, sessionID, m.now(), m.logoutAfter(sessionID, actorID))
+}
+
+func (m *Manager) logoutAfter(sessionID, actorID string) identity.After {
+	if m.activity == nil {
+		return nil
+	}
+	return func(ctx context.Context, tx *sql.Tx) error {
+		return m.activity.Record(ctx, tx, events.Entry{
+			ActorID:    actorID,
+			Verb:       events.VerbSessionLogout,
+			ObjectType: events.ObjectSession,
+			ObjectID:   sessionID,
+		})
+	}
 }
 
 // RevokeOthers ends every session a user has except one, and reports how many.

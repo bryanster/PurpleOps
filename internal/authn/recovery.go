@@ -11,6 +11,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/password"
 	"github.com/bryanster/blacklight/internal/authn/recovery"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -73,12 +74,17 @@ func (s *Service) issueRecoveryCodes(ctx context.Context, userID string) (Recove
 	}
 
 	// The count is safe to log and is the thing an operator wants to see; the
-	// codes are not and never appear. M1-015 gives this a durable home in the
-	// activity log — minting a set of credentials that bypass a second factor
-	// belongs in an audit trail, and this line is the record until then.
+	// codes are not and never appear.
 	s.log.InfoContext(ctx, "recovery codes issued",
 		slog.String("user_id", userID),
 		slog.Int("count", len(codes)))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    userID,
+		Verb:       events.VerbMFARecoveryIssued,
+		ObjectType: events.ObjectRecoveryCode,
+		ObjectID:   userID,
+		Delta:      events.Delta(map[string]any{"count": len(codes)}),
+	})
 
 	return RecoveryCodeSet{Codes: codes, GeneratedAt: stored[0].CreatedAt}, nil
 }
@@ -182,15 +188,22 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, token challenge.Token,
 	}
 	// Warn, not info. Somebody signing in with a recovery code has either lost
 	// their authenticator or is using a code that was not theirs to hold, and
-	// both are worth standing out from the sign-ins around them. This is the
-	// security-relevant event M1-007 wants written to M1-015's activity log;
-	// until that exists this line is the record, which is why it carries what an
-	// entry would.
+	// both are worth standing out from the sign-ins around them.
 	s.log.WarnContext(ctx, "login completed with a recovery code",
 		slog.String("user_id", user.ID),
 		slog.String("session_id", issued.Session.ID),
 		slog.String("code_id", matched.ID),
 		slog.Int("codes_remaining", remaining))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    user.ID,
+		Verb:       events.VerbMFARecoveryUsed,
+		ObjectType: events.ObjectRecoveryCode,
+		ObjectID:   matched.ID,
+		Delta: events.Delta(map[string]any{
+			"session_id":      issued.Session.ID,
+			"codes_remaining": remaining,
+		}),
+	})
 
 	return VerifyResult{Subject: subjectOf(user, issued.Session), Issued: issued}, nil
 }

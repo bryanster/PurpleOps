@@ -43,18 +43,18 @@ those cheap.
 
 ## Acceptance criteria
 
-- [ ] An activity row is written in the same transaction as its change: if the change rolls back, no
+- [x] An activity row is written in the same transaction as its change: if the change rolls back, no
       row exists. Test with a deliberately failing write.
-- [ ] There is no code path that updates or deletes an activity row.
-- [ ] `delta` never contains a password hash, token secret, TOTP secret, or session token — a test
+- [x] There is no code path that updates or deletes an activity row.
+- [x] `delta` never contains a password hash, token secret, TOTP secret, or session token — a test
       records a full set of M1 events and greps the serialized rows for known secret values.
-- [ ] Failed logins record the attempted email and source IP but **no password material**, and are
+- [x] Failed logins record the attempted email and source IP but **no password material**, and are
       readable by an admin.
-- [ ] A non-admin cannot read the platform activity feed; a non-member cannot read an engagement's
+- [x] A non-admin cannot read the platform activity feed; a non-member cannot read an engagement's
       (via `M1-013`, not a handler check).
-- [ ] Listing 10,000 entries is paginated and the query uses the index (check the plan; DuckDB makes
+- [x] Listing 10,000 entries is paginated and the query uses the index (check the plan; DuckDB makes
       this easy).
-- [ ] Timestamps are UTC and ordering is stable for entries in the same millisecond (UUIDv7 id as
+- [x] Timestamps are UTC and ordering is stable for entries in the same millisecond (UUIDv7 id as
       tiebreaker — the reason for that ID choice).
 
 ## Tests
@@ -63,3 +63,27 @@ those cheap.
 - Redaction test across all M1 verbs.
 - Authorization tests through the matrix in `M1-014`.
 - Pagination and ordering tests, including same-timestamp entries.
+
+## Implementation notes
+
+- **Recorder API.** Ticket sketched `Record(ctx, entry)`. The implementation is
+  `events.Log.Record(ctx, tx, entry)` so the caller's write transaction is explicit, plus
+  `RecordAlone(ctx, entry)` for events with no sibling mutation (failed login, lockout,
+  first token use). Same-tx is the default for Create/Revoke paths via `identity.After` hooks.
+- **Column `"at"`.** SQL reserved word; quoted in migration and queries. Indexes use `"at" DESC`.
+- **Store layout.** SQL in `internal/store/activity`; verbs/redaction/facade in `internal/events`.
+  No Update/Delete methods exist on the repository.
+- **Ownership default.** `GET /engagements/{id}/activity` is engagement-scoped, so the server
+  needs an `Ownership` loader. Until M3, `NewMembershipOwnership` answers Seats from
+  `engagement_member` and treats any path engagement id as existing (not blind). `newServer`
+  installs it when `Deps.Ownership` is nil. M3 replaces Facts with a real engagement row check.
+- **Authz.** Platform feed: `activity.read` / `ResourcePlatform` / admin. Engagement feed:
+  `engagement.read` / `ResourceEngagement` / members + admins; non-members concealed to 404.
+- **M1 wiring.** session.login/logout (same-tx After on Sessions.Create/Revoke);
+  session.login_failed + login.throttled (RecordAlone); token.created/revoked (same-tx);
+  token.first_used (RecordAlone); mfa.enrolled/disabled/recovery_*; user.password_changed;
+  user.created + sso.provisioned/linked + user.role_changed on federated paths.
+  Admin user create/disable/role-change API is M1-016 (verbs ready).
+- **Cursor.** Opaque base64url of `RFC3339Nano|id`; list orders by `"at" DESC, id DESC`.
+- **SSE readiness.** Rows are append-only, UUIDv7-ordered, engagement-scoped index matches
+  M4 Last-Event-ID plans; no schema change expected for the hub.

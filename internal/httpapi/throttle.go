@@ -15,6 +15,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/challenge"
 	"github.com/bryanster/blacklight/internal/authn/servicetoken"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
@@ -90,7 +91,7 @@ const maxCredentialBody = 64 << 10
 // budget by signing in again between every guess. Such a handler says so through
 // [markCredentialIncomplete], and the attempt counts as neither.
 func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountOf,
-	responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
+	activity *events.Log, responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -128,19 +129,39 @@ func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountO
 				for _, lockout := range limiter.Failed(attempt) {
 					// Warn, not info: this is the line an operator is looking for
 					// when somebody reports they cannot sign in, and the line that
-					// says an attack is in progress. M1-015 gives it a durable
-					// home in the activity log — this is the record until then,
-					// and the reason the account is named.
+					// says an attack is in progress.
 					log.WarnContext(ctx, "locked out after repeated failed sign-in attempts",
 						slog.String("scope", string(lockout.Scope)),
 						slog.String("key", lockout.Key),
 						slog.String("client_ip", attempt.Source),
 						slog.Duration("retry_after", lockout.RetryAfter))
+					recordLoginThrottled(ctx, activity, log, attempt, lockout)
 				}
 			case status >= 200 && status < 300:
 				limiter.Succeeded(attempt)
 			}
 		})
+	}
+}
+
+func recordLoginThrottled(ctx context.Context, activity *events.Log, log *slog.Logger,
+	attempt throttle.Attempt, lockout throttle.Lockout) {
+	if activity == nil {
+		return
+	}
+	if err := activity.RecordAlone(ctx, events.Entry{
+		Verb:       events.VerbLoginThrottled,
+		ObjectType: events.ObjectLogin,
+		ObjectID:   lockout.Key,
+		Delta: events.Delta(map[string]any{
+			"scope":       string(lockout.Scope),
+			"key":         lockout.Key,
+			"ip":          attempt.Source,
+			"retry_after": lockout.RetryAfter.String(),
+		}),
+	}); err != nil {
+		log.WarnContext(ctx, "could not record login.throttled",
+			slog.String("error", err.Error()))
 	}
 }
 

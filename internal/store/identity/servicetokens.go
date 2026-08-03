@@ -55,7 +55,10 @@ func NewServiceTokens(db DB) *ServiceTokens { return &ServiceTokens{db: db} }
 //
 // Both accounts it names are checked inside the write transaction, which is
 // where 0003_user_updatable moved the rule the foreign keys used to enforce.
-func (r *ServiceTokens) Create(ctx context.Context, in NewServiceToken) (ServiceToken, error) {
+//
+// after runs inside the same transaction after the insert, so a side effect
+// that fails (an activity row, today) rolls the token back with it (M1-015).
+func (r *ServiceTokens) Create(ctx context.Context, in NewServiceToken, after ...After) (ServiceToken, error) {
 	id, err := newID()
 	if err != nil {
 		return ServiceToken{}, err
@@ -77,8 +80,12 @@ func (r *ServiceTokens) Create(ctx context.Context, in NewServiceToken) (Service
 			toStorage(in.ExpiresAt)); err != nil {
 			return err
 		}
+		var err error
 		created, err = scanServiceToken(tx.QueryRowContext(ctx, selectServiceToken+`WHERE id = ?`, id))
-		return err
+		if err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, created.ID), tx, after)
 	})
 	switch {
 	case store.IsUniqueViolation(err):
@@ -147,22 +154,32 @@ func (r *ServiceTokens) ListByOwner(ctx context.Context, ownerUserID string) ([]
 // Revoking a token that has already been revoked keeps the original timestamp —
 // the first revocation is when access actually stopped — and is not an error,
 // because the caller's intent is satisfied either way.
-func (r *ServiceTokens) Revoke(ctx context.Context, id, ownerUserID string, at time.Time) (ServiceToken, error) {
+func (r *ServiceTokens) Revoke(ctx context.Context, id, ownerUserID string, at time.Time, after ...After) (ServiceToken, error) {
 	var revoked ServiceToken
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
+		result, err := tx.ExecContext(ctx,
 			`UPDATE app.service_token SET revoked_at = ?
 			 WHERE id = ? AND owner_user_id = ? AND revoked_at IS NULL`,
-			toStorage(at), id, ownerUserID); err != nil {
+			toStorage(at), id, ownerUserID)
+		if err != nil {
 			return err
 		}
-		var err error
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("counting the affected rows: %w", err)
+		}
 		revoked, err = scanServiceToken(tx.QueryRowContext(ctx,
 			selectServiceToken+`WHERE id = ? AND owner_user_id = ?`, id, ownerUserID))
 		if errors.Is(err, sql.ErrNoRows) {
 			return apierr.NotFound("service token", id)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		if affected == 1 {
+			return runAfter(WithAfterEntity(ctx, revoked.ID), tx, after)
+		}
+		return nil
 	})
 	if err != nil {
 		return ServiceToken{}, fmt.Errorf("identity: revoke service token %q: %w", id, err)

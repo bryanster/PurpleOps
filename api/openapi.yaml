@@ -97,6 +97,8 @@ tags:
     description: Scenarios and the steps that make up an attack chain (M3).
   - name: executions
     description: One step run in one round — red execution, blue detection, evidence (M3).
+  - name: activity
+    description: Append-only activity log — platform feed and per-engagement timeline (M1-015).
   - name: collaboration
     description: Comments, activity, presence and the live event stream (M4).
   - name: analytics
@@ -1277,6 +1279,89 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /activity:
+    get:
+      operationId: listActivity
+      summary: List the installation-wide activity log.
+      description: |
+        Administrators only. Platform events — logins, lockouts, token lifecycle,
+        MFA changes, role changes — with no engagement. Engagement-scoped rows
+        are not included; use `GET /engagements/{engagementId}/activity` for
+        those.
+
+        Newest first. Pagination is the standard cursor convention. Filter by
+        actor, verb or object to narrow an incident review.
+      tags:
+        - activity
+      x-authz-action: activity.read
+      x-authz-resource:
+        type: platform
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/ActivityActor"
+        - $ref: "#/components/parameters/ActivityVerb"
+        - $ref: "#/components/parameters/ActivityObjectType"
+        - $ref: "#/components/parameters/ActivityObjectId"
+      responses:
+        "200":
+          description: A page of activity entries, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/activity:
+    get:
+      operationId: listEngagementActivity
+      summary: List one engagement's activity log.
+      description: |
+        Members of the engagement, and platform administrators. The rows that
+        name this engagement — comments, executions, membership changes once
+        those exist — newest first.
+
+        A non-member is answered 404 rather than 403, so the existence of an
+        engagement is not confirmed to someone outside it.
+      tags:
+        - activity
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/ActivityActor"
+        - $ref: "#/components/parameters/ActivityVerb"
+        - $ref: "#/components/parameters/ActivityObjectType"
+        - $ref: "#/components/parameters/ActivityObjectId"
+      responses:
+        "200":
+          description: A page of activity entries, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     cookieSession:
@@ -1368,6 +1453,56 @@ components:
       schema:
         type: string
         minLength: 1
+
+    EngagementId:
+      name: engagementId
+      in: path
+      required: true
+      description: The engagement whose activity is being listed.
+      schema:
+        type: string
+        format: uuid
+
+    ActivityActor:
+      name: actor
+      in: query
+      required: false
+      description: Restrict to entries whose actor is this user id.
+      schema:
+        type: string
+        format: uuid
+
+    ActivityVerb:
+      name: verb
+      in: query
+      required: false
+      description: |
+        Restrict to one verb, spelled `object.past_tense_verb` (for example
+        `session.login` or `token.created`).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+
+    ActivityObjectType:
+      name: objectType
+      in: query
+      required: false
+      description: Restrict to entries whose object is of this type (for example `user` or `session`).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+
+    ActivityObjectId:
+      name: objectId
+      in: query
+      required: false
+      description: Restrict to entries whose object has this identifier.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
 
   responses:
     # One reusable response per problem code, so an operation cannot invent its
@@ -2275,3 +2410,78 @@ components:
           type: string
           minLength: 1
           maxLength: 1024
+
+    ActivityEntry:
+      type: object
+      description: |
+        One row of the append-only activity log (M1-015). Drives the SSE feed
+        (M4) and the report timeline (M6). There is no update or delete.
+      required:
+        - id
+        - verb
+        - objectType
+        - objectId
+        - at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7. Sortable by creation; the stable tiebreaker when two rows share a timestamp.
+        engagementId:
+          type: string
+          format: uuid
+          description: |
+            The engagement this entry belongs to. Absent on platform events
+            (logins, token lifecycle, role changes).
+        actorId:
+          type: string
+          format: uuid
+          description: |
+            Who did it. Absent when the actor is unknown — a failed login that
+            named no account.
+        verb:
+          type: string
+          description: |
+            What happened, spelled `object.past_tense_verb`. Examples:
+            `session.login`, `session.login_failed`, `token.created`,
+            `mfa.enrolled`.
+          examples:
+            - session.login
+        objectType:
+          type: string
+          description: The kind of thing acted on (`user`, `session`, `service_token`, …).
+          examples:
+            - session
+        objectId:
+          type: string
+          description: The identifier of the thing acted on.
+        delta:
+          type: object
+          additionalProperties: true
+          description: |
+            Before/after for changed fields, already redacted. Never a password
+            hash, token secret, TOTP secret, session token or recovery code.
+            Absent when there is nothing useful to say beyond the verb.
+        at:
+          type: string
+          format: date-time
+          description: When it happened, UTC.
+
+    ActivityPage:
+      type: object
+      description: |
+        One page of the activity log. `nextCursor` is taken verbatim from a
+        previous response; absent (or null) means there is no further page.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEntry"
+        nextCursor:
+          type: [string, "null"]
+          minLength: 1
+          description: |
+            Opaque cursor for the next page. Pass it back as `cursor`. Clients
+            must not parse or construct one.

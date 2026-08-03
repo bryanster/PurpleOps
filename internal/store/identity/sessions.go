@@ -38,7 +38,9 @@ func NewSessions(db DB) *Sessions { return &Sessions{db: db} }
 // Create stores a new session and returns it as stored. created_at and
 // last_seen_at are set to now; a session has been seen at the moment it is
 // made.
-func (r *Sessions) Create(ctx context.Context, in NewSession) (Session, error) {
+//
+// after runs inside the same transaction after the insert (M1-015).
+func (r *Sessions) Create(ctx context.Context, in NewSession, after ...After) (Session, error) {
 	id, err := newID()
 	if err != nil {
 		return Session{}, err
@@ -55,12 +57,16 @@ func (r *Sessions) Create(ctx context.Context, in NewSession) (Session, error) {
 			in.IP, in.UserAgent, in.MFASatisfied); err != nil {
 			return err
 		}
+		var err error
 		created, err = scanSession(tx.QueryRowContext(ctx, selectSession+`WHERE id = ?`, id))
-		return err
+		if err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, created.ID), tx, after)
 	})
 	switch {
 	case store.IsUniqueViolation(err):
-		// Two sessions cannot share a token hash. With a random token this
+		// Two sessions cannot share a token hash. With a random one this
 		// never happens, so it means the caller reused one — worth failing on
 		// rather than quietly handing out a second cookie for one session.
 		return Session{}, apierr.Conflict("that session token is already in use")
@@ -195,7 +201,9 @@ func (r *Sessions) SetLastSeenAt(ctx context.Context, id string, at time.Time) e
 // Revoke ends one session. Revoking an already-revoked session keeps the
 // original timestamp: the first revocation is the one that took effect, and
 // overwriting it would lose when access actually stopped.
-func (r *Sessions) Revoke(ctx context.Context, id string, at time.Time) error {
+//
+// after runs only when this call actually ends the session (M1-015).
+func (r *Sessions) Revoke(ctx context.Context, id string, at time.Time, after ...After) error {
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx,
 			`UPDATE app.session SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
@@ -208,7 +216,7 @@ func (r *Sessions) Revoke(ctx context.Context, id string, at time.Time) error {
 			return fmt.Errorf("counting the affected rows: %w", err)
 		}
 		if affected == 1 {
-			return nil
+			return runAfter(WithAfterEntity(ctx, id), tx, after)
 		}
 		// Nothing was updated: either the session is gone, or it was already
 		// revoked — which is not a failure, because the caller's intent is

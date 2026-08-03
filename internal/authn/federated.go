@@ -9,6 +9,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authz"
+	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -163,6 +164,17 @@ func (s *Service) federatedUser(ctx context.Context, in FederatedLogin) (identit
 				slog.String("provider", string(in.Provider)),
 				slog.String("subject", in.Subject),
 				slog.String("email", existing.Email))
+			s.recordAlone(ctx, events.Entry{
+				ActorID:    existing.ID,
+				Verb:       events.VerbSSOLinked,
+				ObjectType: events.ObjectIdentity,
+				ObjectID:   existing.ID,
+				Delta: events.Delta(map[string]any{
+					"provider": string(in.Provider),
+					"subject":  in.Subject,
+					"email":    existing.Email,
+				}),
+			})
 			return existing, nil
 		case !errors.Is(err, apierr.ErrNotFound):
 			return identity.User{}, err
@@ -236,6 +248,28 @@ func (s *Service) provision(ctx context.Context, in FederatedLogin) (identity.Us
 		slog.String("subject", in.Subject),
 		slog.String("email", created.Email),
 		slog.String("platform_role", string(created.PlatformRole)))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    created.ID,
+		Verb:       events.VerbUserCreated,
+		ObjectType: events.ObjectUser,
+		ObjectID:   created.ID,
+		Delta: events.Delta(map[string]any{
+			"email":         created.Email,
+			"platform_role": string(created.PlatformRole),
+			"provider":      string(in.Provider),
+		}),
+	})
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    created.ID,
+		Verb:       events.VerbSSOProvisioned,
+		ObjectType: events.ObjectIdentity,
+		ObjectID:   created.ID,
+		Delta: events.Delta(map[string]any{
+			"provider": string(in.Provider),
+			"subject":  in.Subject,
+			"email":    created.Email,
+		}),
+	})
 	return created, nil
 }
 
@@ -273,5 +307,16 @@ func (s *Service) applyMappedRole(ctx context.Context, user identity.User, in Fe
 		slog.String("provider", string(in.Provider)),
 		slog.String("from", string(was)),
 		slog.String("to", string(updated.PlatformRole)))
+	s.recordAlone(ctx, events.Entry{
+		ActorID:    updated.ID,
+		Verb:       events.VerbUserRoleChanged,
+		ObjectType: events.ObjectUser,
+		ObjectID:   updated.ID,
+		Delta: events.Delta(map[string]any{
+			"from":     string(was),
+			"to":       string(updated.PlatformRole),
+			"provider": string(in.Provider),
+		}),
+	})
 	return updated, nil
 }

@@ -47,27 +47,43 @@ func newStore() *memStore {
 	return &memStore{byID: map[string]identity.ServiceToken{}, byPrefix: map[string]string{}}
 }
 
-func (s *memStore) Create(_ context.Context, in identity.NewServiceToken) (identity.ServiceToken, error) {
+func (s *memStore) Create(ctx context.Context, in identity.NewServiceToken, after ...identity.After) (identity.ServiceToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failWith != nil {
 		return identity.ServiceToken{}, s.failWith
 	}
+	if _, exists := s.byPrefix[in.Prefix]; exists {
+		return identity.ServiceToken{}, apierr.Conflict("that token prefix is already in use")
+	}
 
+	id := fmt.Sprintf("tok-%d", len(s.byID)+1)
 	token := identity.ServiceToken{
-		ID:           fmt.Sprintf("token-%d", len(s.byID)+1),
+		ID:           id,
 		Name:         in.Name,
 		Prefix:       in.Prefix,
 		TokenHash:    in.TokenHash,
 		OwnerUserID:  in.OwnerUserID,
 		CreatedBy:    in.CreatedBy,
-		Scopes:       in.Scopes,
+		Scopes:       append([]authz.TokenScope(nil), in.Scopes...),
 		EngagementID: in.EngagementID,
 		CreatedAt:    time.Now().UTC(),
 		ExpiresAt:    in.ExpiresAt.UTC(),
 	}
 	s.byID[token.ID] = token
 	s.byPrefix[token.Prefix] = token.ID
+	for _, fn := range after {
+		if fn == nil {
+			continue
+		}
+		// No real transaction in the mem store; After still runs so a nil
+		// activity path and a failing one are both exercised.
+		if err := fn(identity.WithAfterEntity(ctx, token.ID), nil); err != nil {
+			delete(s.byID, token.ID)
+			delete(s.byPrefix, token.Prefix)
+			return identity.ServiceToken{}, err
+		}
+	}
 	return token, nil
 }
 
@@ -101,7 +117,7 @@ func (s *memStore) ListByOwner(_ context.Context, ownerUserID string) ([]identit
 	return out, nil
 }
 
-func (s *memStore) Revoke(_ context.Context, id, ownerUserID string, at time.Time) (identity.ServiceToken, error) {
+func (s *memStore) Revoke(ctx context.Context, id, ownerUserID string, at time.Time, after ...identity.After) (identity.ServiceToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failWith != nil {
@@ -115,6 +131,14 @@ func (s *memStore) Revoke(_ context.Context, id, ownerUserID string, at time.Tim
 	if token.RevokedAt.IsZero() {
 		token.RevokedAt = at.UTC()
 		s.byID[id] = token
+	}
+	for _, fn := range after {
+		if fn == nil {
+			continue
+		}
+		if err := fn(identity.WithAfterEntity(ctx, token.ID), nil); err != nil {
+			return identity.ServiceToken{}, err
+		}
 	}
 	return token, nil
 }

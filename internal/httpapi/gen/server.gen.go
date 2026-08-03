@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -211,6 +212,55 @@ func (e TokenScope) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// ActivityEntry One row of the append-only activity log (M1-015). Drives the SSE feed
+// (M4) and the report timeline (M6). There is no update or delete.
+type ActivityEntry struct {
+	// ActorId Who did it. Absent when the actor is unknown — a failed login that
+	// named no account.
+	ActorId *openapi_types.UUID `json:"actorId,omitempty"`
+
+	// At When it happened, UTC.
+	At time.Time `json:"at"`
+
+	// Delta Before/after for changed fields, already redacted. Never a password
+	// hash, token secret, TOTP secret, session token or recovery code.
+	// Absent when there is nothing useful to say beyond the verb.
+	Delta *map[string]interface{} `json:"delta,omitempty"`
+
+	// EngagementId The engagement this entry belongs to. Absent on platform events
+	// (logins, token lifecycle, role changes).
+	EngagementId *openapi_types.UUID `json:"engagementId,omitempty"`
+
+	// Id UUIDv7. Sortable by creation; the stable tiebreaker when two rows share a timestamp.
+	Id openapi_types.UUID `json:"id"`
+
+	// ObjectId The identifier of the thing acted on.
+	ObjectId string `json:"objectId"`
+
+	// ObjectType The kind of thing acted on (`user`, `session`, `service_token`, …).
+	//
+	// Examples: session
+	ObjectType string `json:"objectType"`
+
+	// Verb What happened, spelled `object.past_tense_verb`. Examples:
+	// `session.login`, `session.login_failed`, `token.created`,
+	// `mfa.enrolled`.
+	//
+	//
+	// Examples: session.login
+	Verb string `json:"verb"`
+}
+
+// ActivityPage One page of the activity log. `nextCursor` is taken verbatim from a
+// previous response; absent (or null) means there is no further page.
+type ActivityPage struct {
+	Items []ActivityEntry `json:"items"`
+
+	// NextCursor Opaque cursor for the next page. Pass it back as `cursor`. Clients
+	// must not parse or construct one.
+	NextCursor nullable.Nullable[string] `json:"nextCursor,omitempty"`
 }
 
 // AuthProviders What the login page may offer. It is deliberately a list rather than a
@@ -762,8 +812,29 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// ActivityActor defines model for ActivityActor.
+type ActivityActor = openapi_types.UUID
+
+// ActivityObjectId defines model for ActivityObjectId.
+type ActivityObjectId = string
+
+// ActivityObjectType defines model for ActivityObjectType.
+type ActivityObjectType = string
+
+// ActivityVerb defines model for ActivityVerb.
+type ActivityVerb = string
+
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
+
+// Cursor defines model for Cursor.
+type Cursor = string
+
+// EngagementId defines model for EngagementId.
+type EngagementId = openapi_types.UUID
+
+// Limit defines model for Limit.
+type Limit = int
 
 // BadRequest RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
@@ -813,6 +884,30 @@ type TooManyRequests = Problem
 // Clients switch on `code`. `title` and `detail` are prose for a human and
 // may be reworded at any time.
 type Unauthenticated = Problem
+
+// ListActivityParams defines parameters for ListActivity.
+type ListActivityParams struct {
+	// Limit Maximum number of items to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor taken verbatim from the `nextCursor` of a previous
+	// response. Absent means "from the beginning". Its contents are an
+	// implementation detail — clients must not parse or construct one.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Actor Restrict to entries whose actor is this user id.
+	Actor *ActivityActor `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Verb Restrict to one verb, spelled `object.past_tense_verb` (for example
+	// `session.login` or `token.created`).
+	Verb *ActivityVerb `form:"verb,omitempty" json:"verb,omitempty"`
+
+	// ObjectType Restrict to entries whose object is of this type (for example `user` or `session`).
+	ObjectType *ActivityObjectType `form:"objectType,omitempty" json:"objectType,omitempty"`
+
+	// ObjectId Restrict to entries whose object has this identifier.
+	ObjectId *ActivityObjectId `form:"objectId,omitempty" json:"objectId,omitempty"`
+}
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
@@ -1011,6 +1106,30 @@ type RevokeServiceTokenParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// ListEngagementActivityParams defines parameters for ListEngagementActivity.
+type ListEngagementActivityParams struct {
+	// Limit Maximum number of items to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor taken verbatim from the `nextCursor` of a previous
+	// response. Absent means "from the beginning". Its contents are an
+	// implementation detail — clients must not parse or construct one.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Actor Restrict to entries whose actor is this user id.
+	Actor *ActivityActor `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Verb Restrict to one verb, spelled `object.past_tense_verb` (for example
+	// `session.login` or `token.created`).
+	Verb *ActivityVerb `form:"verb,omitempty" json:"verb,omitempty"`
+
+	// ObjectType Restrict to entries whose object is of this type (for example `user` or `session`).
+	ObjectType *ActivityObjectType `form:"objectType,omitempty" json:"objectType,omitempty"`
+
+	// ObjectId Restrict to entries whose object has this identifier.
+	ObjectId *ActivityObjectId `form:"objectId,omitempty" json:"objectId,omitempty"`
+}
+
 // SetMfaPolicyParams defines parameters for SetMfaPolicy.
 type SetMfaPolicyParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -1062,6 +1181,9 @@ type SetMfaPolicyJSONRequestBody = MFAPolicy
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListActivity List the installation-wide activity log.
+	// (GET /activity)
+	ListActivity(w http.ResponseWriter, r *http.Request, params ListActivityParams)
 	// Login Sign in with an email address and password.
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -1119,6 +1241,9 @@ type ServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
+	// ListEngagementActivity List one engagement's activity log.
+	// (GET /engagements/{engagementId}/activity)
+	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1136,6 +1261,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// ListActivity List the installation-wide activity log.
+// (GET /activity)
+func (_ Unimplemented) ListActivity(w http.ResponseWriter, r *http.Request, params ListActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // Login Sign in with an email address and password.
 // (POST /auth/login)
@@ -1251,6 +1382,12 @@ func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListEngagementActivity List one engagement's activity log.
+// (GET /engagements/{engagementId}/activity)
+func (_ Unimplemented) ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetHealth Report whether the server and its dependencies are healthy.
 // (GET /healthz)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -1283,6 +1420,104 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListActivity operation middleware
+func (siw *ServerInterfaceWrapper) ListActivity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListActivityParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor", r.URL.Query(), &params.Actor, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "verb" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "verb", r.URL.Query(), &params.Verb, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "verb"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "verb", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "objectType" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "objectType", r.URL.Query(), &params.ObjectType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "objectType"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "objectType", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "objectId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "objectId", r.URL.Query(), &params.ObjectId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "objectId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "objectId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListActivity(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -1871,6 +2106,113 @@ func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListEngagementActivity operation middleware
+func (siw *ServerInterfaceWrapper) ListEngagementActivity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEngagementActivityParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor", r.URL.Query(), &params.Actor, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "verb" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "verb", r.URL.Query(), &params.Verb, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "verb"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "verb", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "objectType" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "objectType", r.URL.Query(), &params.ObjectType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "objectType"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "objectType", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "objectId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "objectId", r.URL.Query(), &params.ObjectId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "objectId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "objectId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEngagementActivity(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -2136,6 +2478,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/mfa", wrapper.SetMfaPolicy)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/activity", wrapper.ListActivity)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/activity", wrapper.ListEngagementActivity)
+	})
 
 	return r
 }
@@ -2160,6 +2508,92 @@ type TooManyRequestsApplicationProblemPlusJSONResponse struct {
 }
 
 type UnauthenticatedApplicationProblemPlusJSONResponse Problem
+
+type ListActivityRequestObject struct {
+	Params ListActivityParams
+}
+
+type ListActivityResponseObject interface {
+	VisitListActivityResponse(w http.ResponseWriter) error
+}
+
+type ListActivity200JSONResponse ActivityPage
+
+func (response ListActivity200JSONResponse) VisitListActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListActivity400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListActivity400ApplicationProblemPlusJSONResponse) VisitListActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListActivity401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListActivity401ApplicationProblemPlusJSONResponse) VisitListActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListActivity403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListActivity403ApplicationProblemPlusJSONResponse) VisitListActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListActivity500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListActivity500ApplicationProblemPlusJSONResponse) VisitListActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type LoginRequestObject struct {
 	Body *LoginJSONRequestBody
@@ -3740,6 +4174,109 @@ func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRev
 	return err
 }
 
+type ListEngagementActivityRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       ListEngagementActivityParams
+}
+
+type ListEngagementActivityResponseObject interface {
+	VisitListEngagementActivityResponse(w http.ResponseWriter) error
+}
+
+type ListEngagementActivity200JSONResponse ActivityPage
+
+func (response ListEngagementActivity200JSONResponse) VisitListEngagementActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementActivity400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementActivity400ApplicationProblemPlusJSONResponse) VisitListEngagementActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementActivity401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementActivity401ApplicationProblemPlusJSONResponse) VisitListEngagementActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementActivity403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementActivity403ApplicationProblemPlusJSONResponse) VisitListEngagementActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementActivity404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementActivity404ApplicationProblemPlusJSONResponse) VisitListEngagementActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementActivity500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementActivity500ApplicationProblemPlusJSONResponse) VisitListEngagementActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -3986,6 +4523,9 @@ func (response GetVersion500ApplicationProblemPlusJSONResponse) VisitGetVersionR
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListActivity List the installation-wide activity log.
+	// (GET /activity)
+	ListActivity(ctx context.Context, request ListActivityRequestObject) (ListActivityResponseObject, error)
 	// Login Sign in with an email address and password.
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -4043,6 +4583,9 @@ type StrictServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
+	// ListEngagementActivity List one engagement's activity log.
+	// (GET /engagements/{engagementId}/activity)
+	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -4094,6 +4637,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListActivity operation middleware
+func (sh *strictHandler) ListActivity(w http.ResponseWriter, r *http.Request, params ListActivityParams) {
+	var request ListActivityRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListActivity(ctx, request.(ListActivityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListActivity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListActivityResponseObject); ok {
+		if err := validResponse.VisitListActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // Login operation middleware
@@ -4635,6 +5204,33 @@ func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeServiceTokenResponseObject); ok {
 		if err := validResponse.VisitRevokeServiceTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEngagementActivity operation middleware
+func (sh *strictHandler) ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams) {
+	var request ListEngagementActivityRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEngagementActivity(ctx, request.(ListEngagementActivityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEngagementActivity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEngagementActivityResponseObject); ok {
+		if err := validResponse.VisitListEngagementActivityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
