@@ -60,8 +60,8 @@ var enrolmentOnlyRoutes = map[string]string{
 }
 
 // requireMFAEnrolment refuses a confined session everywhere except
-// [enrolmentOnlyRoutes]. It is the last step of the chain described in
-// internal/httpapi/server.go, immediately in front of the handlers.
+// [enrolmentOnlyRoutes]. It is step 12 of the chain described in
+// internal/httpapi/server.go, immediately before authorization.
 //
 // The state it acts on is decided in [authn.Service.Authenticate] and read off
 // the subject, not re-derived here — see [authn.Subject.MFAEnrolmentRequired].
@@ -69,8 +69,8 @@ var enrolmentOnlyRoutes = map[string]string{
 //
 // Anonymous requests pass straight through. Nothing is being enforced against
 // somebody who has not signed in, and the endpoints they can reach are decided
-// by authorization (M1-013), which is a different question and will sit next to
-// this one.
+// by authorization (M1-013), which is a different question and sits immediately
+// after this in the chain.
 func requireMFAEnrolment(responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

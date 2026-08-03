@@ -19,9 +19,9 @@ import (
 // It decides nothing about access. A request with no cookie, an expired session
 // or a revoked one goes through exactly as it arrived, with no subject in its
 // context — refusing is authorization's job, and it happens in one place
-// (M1-013) rather than in a middleware that would have to know which endpoints
-// are public. Until that lands, the handlers that need a caller say so
-// themselves, in authhandlers.go and mfahandlers.go.
+// (authorize.go, M1-013) rather than in a middleware that would have to know
+// which endpoints are public. Which ones are is a fact api/openapi.yaml carries,
+// and only that middleware reads it.
 //
 // A database failure is different, and is answered here: "the store did not
 // answer" is not the same as "you are not signed in", and reporting it as the
@@ -90,9 +90,12 @@ func originFrom(ctx context.Context) session.Request {
 // subjectFrom returns the caller, or [apierr.Unauthenticated] for a request that
 // arrived without a usable session.
 //
-// It is the one place a handler in this package turns "nobody" into a 401, so
-// that the handlers which need a caller cannot each phrase it differently.
-// M1-013 moves the decision out of handlers entirely; this is what it replaces.
+// It is how a handler takes the caller off the context, and not a decision: the
+// authorization middleware has already refused an anonymous request to anything
+// that is not declared public, so the error below is unreachable through the
+// server's own chain. It stays because a handler that reads a subject has to do
+// something when there is none, and 401 is the honest answer — a nil dereference
+// is not.
 func subjectFrom(ctx context.Context) (authn.Subject, error) {
 	subject, ok := authn.SubjectFrom(ctx)
 	if !ok {

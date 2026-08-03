@@ -10,7 +10,9 @@ is a review rejection.
 ## Adding an endpoint
 
 1. **Edit `api/openapi.yaml`.** Add the path, its `operationId`, `summary`, `tags`, request body if
-   any, every response you intend to return, and the problem responses it can fail with.
+   any, every response you intend to return, the problem responses it can fail with, and **what it
+   requires of its caller** — see [Authorization](#authorization). Leaving the last one out fails
+   `go test ./api` and, if you get that far, stops the server from starting.
 2. **`make generate`.** `oapi-codegen` rewrites `internal/httpapi/gen/server.gen.go` from
    `api/codegen-server.yaml`, and `openapi-typescript` rewrites `web/src/api/schema.d.ts`. Never
    edit either; both are overwritten and CI compares them against a fresh run.
@@ -70,7 +72,7 @@ stay separate:
 |---|---|
 | `security` in this document | which credential an operation is *for*, and what a generated client sends |
 | `authenticate` (`internal/httpapi/authn.go`) | who the caller is, if anybody. It refuses nothing |
-| `authz` (M1-013) | whether this caller may do this |
+| `x-authz-*` in this document, enforced by `internal/httpapi/authorize.go` | whether this caller may do this |
 
 The `kin-openapi` request validator refuses to serve any operation carrying a security requirement
 unless it is given an `AuthenticationFunc` (`openapi3filter.ErrAuthenticationServiceMissing`).
@@ -79,8 +81,62 @@ says why that is not a stub: the validator runs before the cookie has been resol
 question it could answer is "is there a cookie header", and a 401 from it would not be this API's
 401. **Do not put an access check there.**
 
-Until M1-013 lands, an endpoint that needs a caller says so itself — `subjectFrom(ctx)` in
-`internal/httpapi/authn.go`, which is the one place that turns "nobody" into a 401.
+## Authorization
+
+`security` says which credential an operation takes. `x-authz-*` says what holding it entitles you
+to, and every operation declares exactly one of three things. There is no default: an operation that
+says nothing fails `go test ./api`, and `NewServer` refuses to build a chain over a document with a
+gap in it.
+
+```yaml
+    get:
+      operationId: getEngagement
+      x-authz-action: engagement.read                        # the action, by its wire name
+      x-authz-resource: {type: engagement, engagement: engagementId}
+```
+
+```yaml
+    get:
+      operationId: getCurrentUser
+      x-authz-self: true                                     # signed in, acting on your own account
+      x-authz-because: your own profile, and the only account this operation can name is the one that asked.
+```
+
+```yaml
+    post:
+      operationId: login
+      x-authz-public: true                                   # no credential, no permission
+      x-authz-because: this endpoint issues the credential; requiring one to reach it would be a closed door with the key inside.
+```
+
+**`x-authz-action`** names an action from the rule table in `internal/authz` — the wire names are
+the left-hand column of [`docs/authz.md`](authz.md). A name that package does not define is
+refused, because an operation mapped to an action nobody wrote a rule for is an unprotected
+operation.
+
+**`x-authz-resource`** says where the thing being acted on is named in the request:
+
+| Key | Meaning |
+|---|---|
+| `type` | the resource kind. Must be the one the action acts on — the check exists so the endpoint and the rule table cannot read differently |
+| `engagement` | the path parameter carrying the owning engagement's id. **Required** for anything an engagement owns; without it, nobody needs a membership to reach it |
+| `param` | the path parameter carrying the resource's own id. Omit it where the operation names none, and for `type: engagement`, where `engagement` already does |
+
+Both parameters must be ones the operation actually declares, or the mapping is refused.
+
+**The two exemptions** each require a one-line `x-authz-because`, for the reason `csrfExemptRoutes`
+and `enrolmentOnlyRoutes` in `internal/httpapi` require one: an exemption nobody had to justify is
+an exemption nobody reviewed.
+
+- `x-authz-public` — no credential and no permission: health, version, and the sign-in exchanges
+  that issue the credential everything else needs. `security: []` implies this, and an operation
+  that declares no credential *and* requires a permission is refused: nobody could satisfy it.
+- `x-authz-self` — a signed-in caller acting on their own account. It is only honest while the
+  operation has no way to name anybody else's, so an operation with **any path parameter** may not
+  claim it. `/users/{userId}` needs an action, however the description is worded.
+
+What happens to a refused request — 403, or 404 where confirming existence is the leak — is in
+[`docs/http.md`](http.md#authorization).
 
 ## Errors
 

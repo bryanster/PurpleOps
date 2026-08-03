@@ -37,10 +37,38 @@ servers:
   - url: /api/v1
     description: This deployment.
 
+# Every operation additionally declares what it requires of its *caller*, in one
+# of three forms (M1-013). `api/authz.go` reads them, `api/authz_test.go` fails
+# CI on a gap, and internal/httpapi refuses to start the server on one — so an
+# endpoint added without a thought about permission never becomes an endpoint
+# anybody can reach.
+#
+#   x-authz-action: settings.read          # the authz action, by its wire name
+#   x-authz-resource: {type: platform}     # and what it acts on
+#
+#   x-authz-self: true                     # a signed-in caller, acting on their
+#   x-authz-because: …                     # own account and nothing else
+#
+#   x-authz-public: true                   # no credential, no permission
+#   x-authz-because: …
+#
+# `x-authz-resource` names the path parameters the identifiers come from:
+# `{type: engagement, engagement: engagementId}`, and for something inside an
+# engagement, `{type: execution, engagement: engagementId, param: executionId}`.
+# An engagement-scoped resource must name its engagement; without one, nobody
+# needs a membership to reach it.
+#
+# The three are exclusive and one is mandatory. Absence is not permission.
+#
 # Authenticated by default. An operation that is genuinely public overrides this
 # with `security: []` and says why in its description — so forgetting to think
 # about auth fails closed rather than open, which is the failure mode PLAN.md §4
 # is written against.
+#
+# `security` and `x-authz-*` are separate questions: the first is which
+# credential an operation takes, the second is what holding it entitles you to.
+# `POST /auth/logout` takes a session cookie and requires no permission at all;
+# `POST /auth/mfa/totp/verify` takes the pending-MFA cookie instead of a session.
 #
 # Note: the kin-openapi request validator refuses to serve any operation that
 # carries a security requirement unless it is given an AuthenticationFunc
@@ -92,6 +120,8 @@ paths:
         document.
       tags:
         - system
+      x-authz-public: true
+      x-authz-because: an orchestrator has no account, and a health check that needs one reports on the wrong thing.
       security: []
       responses:
         "200":
@@ -119,6 +149,8 @@ paths:
         of software whose source is public anyway.
       tags:
         - system
+      x-authz-public: true
+      x-authz-because: the login page shows it, and it names software whose source is public anyway.
       security: []
       responses:
         "200":
@@ -160,6 +192,8 @@ paths:
         that does not.
       tags:
         - auth
+      x-authz-public: true
+      x-authz-because: this endpoint issues the credential; requiring one to reach it would be a closed door with the key inside.
       security: []
       requestBody:
         required: true
@@ -221,6 +255,8 @@ paths:
         wanted to be signed out, and they are.
       tags:
         - auth
+      x-authz-public: true
+      x-authz-because: ending a session grants nothing, and a caller with no session is answered the same 204.
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       responses:
@@ -253,6 +289,8 @@ paths:
         stays in the cookie.
       tags:
         - auth
+      x-authz-self: true
+      x-authz-because: your own profile, and the only account this operation can name is the one that asked.
       responses:
         "200":
           description: The current user.
@@ -279,6 +317,8 @@ paths:
         change it from.
       tags:
         - auth
+      x-authz-self: true
+      x-authz-because: your own password, proved with the current one; no role makes it more or less allowed.
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       requestBody:
@@ -331,6 +371,8 @@ paths:
         This is the only response that ever carries the secret.
       tags:
         - auth
+      x-authz-self: true
+      x-authz-because: your own second factor, on your own account.
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       responses:
@@ -374,6 +416,8 @@ paths:
         already have.
       tags:
         - auth
+      x-authz-self: true
+      x-authz-because: the other half of enrolling your own second factor.
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       requestBody:
@@ -430,6 +474,8 @@ paths:
         attempts (M1-004), and the `429` is identical whichever limit closed.
       tags:
         - auth
+      x-authz-public: true
+      x-authz-because: half of a sign-in, on the pending cookie; there is no session yet to hold a permission.
       security:
         - mfaChallenge: []
       responses:
@@ -487,6 +533,8 @@ paths:
         TOTP attempts (M1-004).
       tags:
         - auth
+      x-authz-public: true
+      x-authz-because: the same half of the same sign-in, reached with a printed code instead.
       security:
         - mfaChallenge: []
       requestBody:
@@ -545,6 +593,8 @@ paths:
         outside the client.
       tags:
         - auth
+      x-authz-self: true
+      x-authz-because: your own recovery codes, proved with your own password and a session that satisfied MFA.
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       requestBody:
@@ -593,6 +643,8 @@ paths:
         whether this call will be refused.
       tags:
         - auth
+      x-authz-self: true
+      x-authz-because: removing your own second factor, proved with your own password.
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       requestBody:
@@ -626,6 +678,9 @@ paths:
         that produced it.
       tags:
         - settings
+      x-authz-action: settings.read
+      x-authz-resource:
+        type: platform
       responses:
         "200":
           description: The policy as it stands.
@@ -658,6 +713,9 @@ paths:
         make everybody enrol again.
       tags:
         - settings
+      x-authz-action: settings.manage
+      x-authz-resource:
+        type: platform
       parameters:
         - $ref: "#/components/parameters/CSRFToken"
       requestBody:

@@ -14,6 +14,7 @@
 // single point where any error becomes a response. Nothing here writes an error
 // body of its own.
 //
-// Implemented by M0B-005 (generated server), M0B-007 (errors) and M0B-006
-// (routing, middleware).
+// Implemented by M0B-005 (generated server), M0B-007 (errors), M0B-006
+// (routing, middleware) and M1-013 (the one authorization middleware, in
+// authorize.go — the only caller of authz.Can in the tree).
 package httpapi

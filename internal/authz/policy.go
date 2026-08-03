@@ -69,9 +69,9 @@ const (
 	// seat, and an administrator who wants the unblinded view can have it by
 	// not sitting in it. An administrator who is not a member is unaffected.
 	//
-	// M1-013 additionally filters unrevealed steps in the query layer, so a
-	// rule that forgot this guard still could not leak one. Both, deliberately:
-	// this is the belt, that is the braces.
+	// internal/store/blind additionally filters unrevealed steps in the query
+	// layer (M1-013), so a rule that forgot this guard still could not leak
+	// one. Both, deliberately: this is the belt, that is the braces.
 	GuardBlindMode Guard = "blind-mode"
 )
 

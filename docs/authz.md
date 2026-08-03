@@ -85,6 +85,14 @@ holder was an administrator stops being an administrator's token the moment they
 
 Scopes are deliberately coarse; the full list is derived from the tables above.
 
+## Where this is enforced
+
+In one middleware, `internal/httpapi/authorize.go`, which is the only caller of `authz.Can` in the
+tree — a test fails the build if a second one appears. Each operation in `api/openapi.yaml` names the
+action it needs (`x-authz-action`), or carries a written exemption; an operation that names neither
+is a server that refuses to start. See [`docs/api.md`](api.md#authorization) for the mapping and
+[`docs/http.md`](http.md#authorization) for what a refusal looks like on the wire.
+
 ## Changing this model
 
 Edit the rule table in `internal/authz/policy.go` and run `make generate`. Everything else follows:

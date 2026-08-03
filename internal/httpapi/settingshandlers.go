@@ -8,24 +8,19 @@ import (
 )
 
 // The platform settings endpoints (M1-008). Like every other handler in this
-// package they translate and nothing else: what the policy means, who may change
-// it and what changing it does to the sessions already open all live in
-// internal/authn.
+// package they translate and nothing else: what the policy means and what
+// changing it does to the sessions already open live in internal/authn.
 //
-// That includes the administrator check, which is deliberately *not* here.
-// PLAN.md §4 is explicit that no handler makes its own role decision, and M1-013
-// moves the check into one middleware in front of all of them; until it lands
-// the check sits in the service, on the same side of the boundary as the rule it
-// protects.
+// *Who* may change it is not decided here, or there. api/openapi.yaml maps these
+// two operations to `settings.read` and `settings.manage`, and the authorization
+// middleware refuses anybody who does not hold them before either function below
+// is entered (M1-013). A handler in this package cannot make a role decision:
+// TestNoHandlerDecidesForItself fails the build if one of these files so much as
+// imports internal/authz.
 
 // GetMfaPolicy reports the platform-wide MFA policy.
 func (h *handlers) GetMfaPolicy(ctx context.Context, _ gen.GetMfaPolicyRequestObject) (gen.GetMfaPolicyResponseObject, error) {
-	subject, err := subjectFrom(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	policy, err := h.auth.MFAPolicy(ctx, subject)
+	policy, err := h.auth.MFAPolicy(ctx)
 	if err != nil {
 		return nil, err
 	}

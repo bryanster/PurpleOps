@@ -1,8 +1,8 @@
 # Serving HTTP
 
 One process, one router, one middleware chain. Every request the server answers goes through it —
-including the ones that never reach a handler — which is what makes it possible to say "no endpoint
-can skip authorization" when M1 inserts that step (`M1-013`).
+including the ones that never reach a handler — which is what makes "no endpoint can skip
+authorization" a property of the build rather than a rule people follow (`M1-013`).
 
 `internal/httpapi.NewServer` builds the handler; `internal/httpapi.ListenAndServe` runs it.
 `cmd/blacklight` does nothing else: load the configuration, open the store, migrate, build, serve.
@@ -25,8 +25,9 @@ In order, outermost first:
 | 10 | `requireCSRF` | Refuses a state-changing request that authenticated by cookie and carries no valid CSRF token — see [`docs/security.md`](security.md) |
 | 11 | `clearSpentChallenge` | A response wrapper: drops the `bl_mfa` cookie once the sign-in it belongs to has produced a session |
 | 12 | `requireMFAEnrolment` | Refuses a session that must enrol a second factor before it may do anything else, with `403 mfa_enrolment_required` — see [`docs/security.md`](security.md) |
+| 13 | `authorize` | The one place that decides what a caller may do. Refuses with `403 forbidden`, or `404 not_found` where confirming the resource exists is itself the leak — see below |
 
-Only 7 to 12 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
+Only 7 to 13 are mounted on the API router (under `/api/v1`); the rest apply to everything, so a 404
 for an unknown path is still logged, still carries a request ID and still has the security headers.
 
 **The recoverer is inside the logger**, which is the reverse of what `M0B-006` proposed. The logger
@@ -36,11 +37,48 @@ success. `TestALoggedPanicReportsTheStatusTheClientSaw` is the test that says so
 
 **Authentication decides who, not whether.** A request with no cookie, an expired session or a
 revoked one goes through step 9 exactly as it arrived, with no subject on its context; refusing is
-authorization's job and happens in one place (`M1-013`). What step 9 *does* answer for itself is a
-database failure: "the store did not answer" is not "you are not signed in", and reporting it as one
-would sign everybody out whenever the database hiccupped.
+step 13's job. What step 9 *does* answer for itself is a database failure: "the store did not
+answer" is not "you are not signed in", and reporting it as one would sign everybody out whenever
+the database hiccupped.
 
-M1-013 inserts authorization between 11 and the handlers, on the same router.
+## Authorization
+
+Step 13 is the whole of it. `internal/httpapi/authorize.go` resolves the request to its operation,
+looks up what that operation requires, loads the facts, and calls `authz.Can` — which is the only
+function in the system that answers "may they?", and the only call site of it. No handler makes a
+role decision, and `TestNoHandlerDecidesForItself` fails the build if a handler file so much as
+imports `internal/authz`.
+
+**Where the mapping lives.** In `api/openapi.yaml`, on the operation, as `x-authz-action` /
+`x-authz-resource` — or as an explicit `x-authz-public` or `x-authz-self` exemption carrying a
+written reason. See [`docs/api.md`](api.md#authorization) for the shape and
+[`docs/authz.md`](authz.md) for the rule table itself.
+
+**A gap is a server that does not start.** `api.Requirements` refuses a document in which any
+operation is silent, and `NewServer` calls it before it opens a socket. Absence never means open —
+which is the mechanism that prevents a future repeat of v1's ungated `/manage/access`. The same
+check runs in CI (`go test ./api`), so the failure normally arrives on the machine of whoever added
+the endpoint.
+
+**403 or 404.** The policy decides, not this middleware: `authz.Decision.Conceal` is set by the rule
+that refused, because the rule is what knows *why*. Working it out here from the shape of the
+subject would be a second place making a permission decision.
+
+| Resource | Refusal | Why |
+|---|---|---|
+| Anything an engagement owns, asked about by a non-member | **404** | `PLAN.md` §4: non-members get nothing on an engagement, *including its existence*. A 403 confirms the identifier is real, and an identifier that answers 403 among neighbours that answer 404 is an engagement somebody has enumerated |
+| A step that has not been revealed, asked about by the blue side of a blind engagement | **404** | Learning that a step exists is most of what blind mode withholds |
+| Everything else | **403**, `code: forbidden` | The caller may know the thing exists; they may not act on it |
+
+Neither body says anything about the resource or the rule. The reason a decision carries names
+roles, identifiers and actions, and it goes to the log and to the activity log (`M1-015`) — never to
+the response.
+
+**Blind mode has two fences.** The policy withholds an unrevealed step from the blue seat
+(`authz.GuardBlindMode`), and `internal/store/blind` filters the same rows in SQL at the repository
+boundary. Both, deliberately: a single fence is one edit away from not being there, and the second
+one holds even for an endpoint whose rule was got wrong. The two are checked against each other in
+`internal/store/blind`'s tests, so they cannot drift into disagreeing about who blue is.
 
 ## Sign-in throttling
 

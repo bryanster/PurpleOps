@@ -7,6 +7,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -89,7 +90,52 @@ func requestValidator(doc *openapi3.T, responder *apierr.Responder) (func(http.H
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(withSpecRoute(r.Context(), route, pathParams)))
 		})
 	}, nil
+}
+
+// specRoute is the operation a request resolved to, and the path parameters that
+// resolution produced.
+//
+// It is recorded here because the authorization middleware needs both and
+// resolving them a second time would mean a second route table — the one thing
+// M1-013 is written to avoid, since two tables disagree the moment one of them
+// is edited. This one is kin-openapi's, built from the same document the
+// validator enforces, so an operation the validator has heard of is an operation
+// authorization has heard of.
+type specRoute struct {
+	// OperationID is the key the authorization mapping is filed under
+	// (api.Requirements). Never empty for a route from this document:
+	// TestEveryOperationHasAUniqueOperationID is the guarantee.
+	OperationID string
+
+	// PathParams are the path parameters, by name, as the router extracted
+	// them. Authorization reads the resource identifiers out of these rather
+	// than out of chi's own parameters, so that the names in api/openapi.yaml
+	// are the names that count.
+	PathParams map[string]string
+}
+
+// specRouteKey is this file's context key, its own type for the reason every
+// other one in this package is.
+type specRouteKey struct{}
+
+func withSpecRoute(ctx context.Context, route *routers.Route, pathParams map[string]string) context.Context {
+	return context.WithValue(ctx, specRouteKey{}, specRoute{
+		OperationID: route.Operation.OperationID,
+		PathParams:  pathParams,
+	})
+}
+
+// specRouteFrom returns the operation this request resolved to, and false for a
+// request that never went through the validator.
+//
+// The false case is not a hole to be filled with a permissive default. It means
+// this middleware did not run, which on the one chain this server has cannot
+// happen — so [authorize] answers it as a fault rather than deciding without
+// knowing what was asked.
+func specRouteFrom(ctx context.Context) (specRoute, bool) {
+	route, ok := ctx.Value(specRouteKey{}).(specRoute)
+	return route, ok
 }

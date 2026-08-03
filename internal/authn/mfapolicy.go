@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/bryanster/blacklight/internal/authz"
-	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/settings"
 )
@@ -80,20 +79,25 @@ func (p MFAPolicy) Requires(user identity.User) bool {
 		user.MFAEnforced
 }
 
-// MFAPolicy returns the platform policy. Administrators only: it says how hard
-// this deployment is to break into, which is not a fact every account needs.
+// MFAPolicy returns the platform policy. Administrators only — enforced by the
+// authorization middleware, which refuses anybody without `settings.read` before
+// the handler that calls this is entered (M1-013). There is deliberately no
+// check here: a second one would be a second definition of who an administrator
+// is, and PLAN.md §4's whole complaint about v1 is that it had forty of them.
 //
 // What an ordinary caller needs — whether the requirement applies to *them* — is
 // on their profile as [Profile.MFARequired], and needs no permission to read
 // because it is a fact about themselves.
-func (s *Service) MFAPolicy(ctx context.Context, subject Subject) (MFAPolicy, error) {
-	if err := requireAdmin(subject, "read the platform MFA policy"); err != nil {
-		return MFAPolicy{}, err
-	}
+func (s *Service) MFAPolicy(ctx context.Context) (MFAPolicy, error) {
 	return s.mfaPolicy(ctx)
 }
 
 // SetMFAPolicy replaces the platform policy and returns it as stored.
+//
+// Administrators only, for the reason [Service.MFAPolicy] is, and by the same
+// mechanism: `settings.manage` is required by the middleware in front of the
+// handler. subject is still here, and is not a permission — it is who to record
+// as having changed it, on the row and in the log.
 //
 // Both fields, always: the request carries a whole policy rather than a change
 // to one field of it, so two administrators editing at once cannot each keep
@@ -105,10 +109,6 @@ func (s *Service) MFAPolicy(ctx context.Context, subject Subject) (MFAPolicy, er
 // implemented — and turning one off leaves every enrolment and every recovery
 // code exactly where it was.
 func (s *Service) SetMFAPolicy(ctx context.Context, subject Subject, policy MFAPolicy) (MFAPolicy, error) {
-	if err := requireAdmin(subject, "change the platform MFA policy"); err != nil {
-		return MFAPolicy{}, err
-	}
-
 	if err := s.settings.Put(ctx, map[string]string{
 		keyMFARequiredForAll:    strconv.FormatBool(policy.RequiredForAll),
 		keyMFARequiredForAdmins: strconv.FormatBool(policy.RequiredForAdmins),
@@ -181,26 +181,6 @@ func storedBool(stored map[string]settings.Setting, key string) (bool, error) {
 			key, setting.Value, err)
 	}
 	return value, nil
-}
-
-// requireAdmin refuses a caller who is not a platform administrator.
-//
-// It is the one role decision this package makes, and it is temporary: M1-013
-// moves every authorization decision into one middleware in front of the
-// handlers, and PLAN.md §4 is explicit that no handler — and by extension no
-// service called by exactly one handler — makes its own. Until that middleware
-// exists, the settings endpoints would be reachable by any signed-in account,
-// which is v1's ungated /manage/access with a different path.
-//
-// Written here rather than in the handler so that the check is on the same side
-// of the boundary as the rule it protects, and so that deleting it in M1-013 is
-// one edit in one file.
-func requireAdmin(subject Subject, action string) error {
-	if subject.PlatformRole != authz.PlatformRoleAdmin {
-		return apierr.Forbidden(fmt.Sprintf("%s as %s (user %s)",
-			action, subject.PlatformRole, subject.UserID))
-	}
-	return nil
 }
 
 // loginOutcome is the row of M1-008's table that a sign-in landed on. It is an

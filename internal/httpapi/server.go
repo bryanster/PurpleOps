@@ -57,6 +57,14 @@ type Deps struct {
 	// before this existed, which is what the tests in this package that are
 	// about the API want.
 	UI fs.FS
+
+	// Ownership loads the facts an engagement-scoped authorization decision
+	// needs (M1-013). Nil until M3 brings engagements, and safe to leave nil
+	// only until then: [NewServer] refuses to build a server whose
+	// specification maps any operation to something an engagement owns while
+	// this is absent, so the gap is a startup failure rather than a decision
+	// made without the facts.
+	Ownership Ownership
 }
 
 // NewServer builds the HTTP handler: the middleware chain, the routes
@@ -94,6 +102,14 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	responder := apierr.NewResponder(log)
 
 	validate, err := requestValidator(doc, responder)
+	if err != nil {
+		return nil, err
+	}
+
+	// Before anything else is built, because this is the one that fails on a
+	// specification with a gap in it — and a server that would serve an
+	// unprotected endpoint should not get as far as opening a socket.
+	authorized, err := authorize(doc, deps.Ownership, responder, log)
 	if err != nil {
 		return nil, err
 	}
@@ -145,9 +161,11 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	//     is required to hold a second factor and holds none may reach the
 	//     enrolment endpoints and nothing else. After authentication, because
 	//     the state it acts on is decided there.
-	//
-	// M1-013 inserts authorization between 12 and the handlers, on the same
-	// router — one chain, so there is no route that can quietly avoid it.
+	// 13. authorization (M1-013): the one place that decides what a caller may
+	//     do, immediately in front of the handlers and on the same router — so
+	//     there is no route that can quietly avoid it. Last, because it is the
+	//     step that needs everything the ones above establish, and because a
+	//     request refused here has already been counted, logged and identified.
 	router.Use(
 		requestID,
 		realIP(deps.Config.Server.TrustedProxies),
@@ -185,6 +203,7 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		requireCSRF(sessions, responder, log),
 		clearSpentChallenge(challenges),
 		requireMFAEnrolment(responder, log),
+		authorized,
 	)
 	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, log, responder), gen.ChiServerOptions{
 		BaseRouter: apiRouter,

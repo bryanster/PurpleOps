@@ -33,6 +33,13 @@ paths:
       summary: Create a widget.
       tags: [system]
       security: []
+      # Required of every operation, fixture or not — newServer refuses to build
+      # a chain over a document with a gap in its authorization mapping
+      # (M1-013), which is a rule this fixture is subject to like any other. It
+      # is public because the subject here is validation and a permission would
+      # only be one more thing between the request and the assertion.
+      x-authz-public: true
+      x-authz-because: a fixture for the request validator, which runs before authorization anyway.
       requestBody:
         required: true
         content:
