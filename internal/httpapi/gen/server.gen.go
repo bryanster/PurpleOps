@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -133,6 +135,39 @@ func (e ProblemCode) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for SSOProviderId.
+const (
+	SSOProviderIdOidc SSOProviderId = "oidc"
+	SSOProviderIdSaml SSOProviderId = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SSOProviderId enum.
+func (e SSOProviderId) Valid() bool {
+	switch e {
+	case SSOProviderIdOidc:
+		return true
+	case SSOProviderIdSaml:
+		return true
+	default:
+		return false
+	}
+}
+
+// AuthProviders What the login page may offer. It is deliberately a list rather than a
+// set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
+// renders this array needed no change when it arrived.
+type AuthProviders struct {
+	// Password Whether local email-and-password sign-in is offered. Always true
+	// today; it is stated rather than assumed so that a deployment which
+	// later turns it off has somewhere to say so.
+	Password bool `json:"password"`
+
+	// Sso Every single sign-on provider that is configured **and** reachable
+	// right now. A configured provider that cannot be discovered is absent
+	// rather than listed-and-broken.
+	Sso []SSOProvider `json:"sso"`
 }
 
 // ChangePasswordRequest Body of `POST /auth/password`. The current password is required even
@@ -478,6 +513,25 @@ type RegenerateRecoveryCodesRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 }
 
+// SSOProvider One single sign-on button.
+type SSOProvider struct {
+	// Id Which protocol this provider speaks.
+	Id SSOProviderId `json:"id"`
+
+	// Label What to write on the button. It names the protocol rather than the
+	// provider: the issuer URL is configuration, and putting it on a public
+	// page would tell an unauthenticated caller which directory this
+	// organization uses.
+	Label string `json:"label"`
+
+	// StartUrl Where to send the browser to begin. A path within this deployment,
+	// relative to the API base — navigate to it, do not fetch it.
+	StartUrl string `json:"startUrl"`
+}
+
+// SSOProviderId Which protocol this provider speaks.
+type SSOProviderId string
+
 // TOTPCodeRequest A six-digit code from an authenticator app. The same body confirms an
 // enrolment and completes a sign-in.
 type TOTPCodeRequest struct {
@@ -690,6 +744,29 @@ type EnrollTotpParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// CompleteOidcSignInParams defines parameters for CompleteOidcSignIn.
+type CompleteOidcSignInParams struct {
+	// Code The authorization code, when the provider is granting one.
+	Code *string `form:"code,omitempty" json:"code,omitempty"`
+
+	// State The opaque value this sign-in was started with. Required in practice; a callback without one is refused.
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+
+	// Error The provider's error code, when it is refusing rather than granting — `access_denied` when consent was declined.
+	Error *string `form:"error,omitempty" json:"error,omitempty"`
+
+	// ErrorDescription The provider's prose about that error. It is logged and never rendered.
+	ErrorDescription *string `form:"error_description,omitempty" json:"error_description,omitempty"`
+}
+
+// StartOidcSignInParams defines parameters for StartOidcSignIn.
+type StartOidcSignInParams struct {
+	// ReturnTo A path within this application to return to after signing in, such
+	// as `/engagements/018f…`. Absolute URLs, scheme-relative URLs and
+	// anything containing a backslash or a control character are refused.
+	ReturnTo *string `form:"return_to,omitempty" json:"return_to,omitempty"`
+}
+
 // ChangePasswordParams defines parameters for ChangePassword.
 type ChangePasswordParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -707,6 +784,28 @@ type ChangePasswordParams struct {
 	// subject to the check — CSRF is a property of cookies, which browsers
 	// attach on their own.
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// CompleteSamlSignInFormdataBody defines parameters for CompleteSamlSignIn.
+type CompleteSamlSignInFormdataBody struct {
+	// RelayState Echoed back from the authentication request, or set by the
+	// provider for an IdP-initiated sign-in. It is **not** trusted
+	// and nothing is read out of it: the SAML profile caps it at 80
+	// bytes, which is too small to seal, so everything this sign-in
+	// needs to remember is in the `bl_saml` cookie instead.
+	RelayState *string `form:"RelayState,omitempty" json:"RelayState,omitempty"`
+
+	// SAMLResponse The base64-encoded `<samlp:Response>`.
+	SAMLResponse string `form:"SAMLResponse" json:"SAMLResponse"`
+}
+
+// StartSamlSignInParams defines parameters for StartSamlSignIn.
+type StartSamlSignInParams struct {
+	// ReturnTo A path within this application to return to after signing in. The
+	// same rule as `GET /auth/oidc/start`: absolute URLs, scheme-relative
+	// URLs and anything containing a backslash or a control character are
+	// refused.
+	ReturnTo *string `form:"return_to,omitempty" json:"return_to,omitempty"`
 }
 
 // SetMfaPolicyParams defines parameters for SetMfaPolicy.
@@ -749,6 +848,9 @@ type VerifyTotpJSONRequestBody = TOTPCodeRequest
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
 
+// CompleteSamlSignInFormdataRequestBody defines body for CompleteSamlSignIn for application/x-www-form-urlencoded ContentType.
+type CompleteSamlSignInFormdataRequestBody CompleteSamlSignInFormdataBody
+
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
 
@@ -781,9 +883,27 @@ type ServerInterface interface {
 	// VerifyTotp Complete a sign-in by presenting a code from your authenticator.
 	// (POST /auth/mfa/totp/verify)
 	VerifyTotp(w http.ResponseWriter, r *http.Request)
+	// CompleteOidcSignIn Complete a single sign-on and issue a session.
+	// (GET /auth/oidc/callback)
+	CompleteOidcSignIn(w http.ResponseWriter, r *http.Request, params CompleteOidcSignInParams)
+	// StartOidcSignIn Begin a single sign-on through the configured OIDC provider.
+	// (GET /auth/oidc/start)
+	StartOidcSignIn(w http.ResponseWriter, r *http.Request, params StartOidcSignInParams)
 	// ChangePassword Change your own password.
 	// (POST /auth/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams)
+	// GetAuthProviders List the ways this deployment can be signed in to.
+	// (GET /auth/providers)
+	GetAuthProviders(w http.ResponseWriter, r *http.Request)
+	// CompleteSamlSignIn Consume a SAML assertion and issue a session.
+	// (POST /auth/saml/acs)
+	CompleteSamlSignIn(w http.ResponseWriter, r *http.Request)
+	// GetSamlMetadata Serve this deployment's SAML service provider metadata.
+	// (GET /auth/saml/metadata)
+	GetSamlMetadata(w http.ResponseWriter, r *http.Request)
+	// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
+	// (GET /auth/saml/start)
+	StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -856,9 +976,45 @@ func (_ Unimplemented) VerifyTotp(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// CompleteOidcSignIn Complete a single sign-on and issue a session.
+// (GET /auth/oidc/callback)
+func (_ Unimplemented) CompleteOidcSignIn(w http.ResponseWriter, r *http.Request, params CompleteOidcSignInParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// StartOidcSignIn Begin a single sign-on through the configured OIDC provider.
+// (GET /auth/oidc/start)
+func (_ Unimplemented) StartOidcSignIn(w http.ResponseWriter, r *http.Request, params StartOidcSignInParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ChangePassword Change your own password.
 // (POST /auth/password)
 func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAuthProviders List the ways this deployment can be signed in to.
+// (GET /auth/providers)
+func (_ Unimplemented) GetAuthProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CompleteSamlSignIn Consume a SAML assertion and issue a session.
+// (POST /auth/saml/acs)
+func (_ Unimplemented) CompleteSamlSignIn(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSamlMetadata Serve this deployment's SAML service provider metadata.
+// (GET /auth/saml/metadata)
+func (_ Unimplemented) GetSamlMetadata(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
+// (GET /auth/saml/start)
+func (_ Unimplemented) StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1156,6 +1312,111 @@ func (siw *ServerInterfaceWrapper) VerifyTotp(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// CompleteOidcSignIn operation middleware
+func (siw *ServerInterfaceWrapper) CompleteOidcSignIn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CompleteOidcSignInParams
+
+	// ------------- Optional query parameter "code" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "code", r.URL.Query(), &params.Code, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "error" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "error", r.URL.Query(), &params.Error, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "error"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "error", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "error_description" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "error_description", r.URL.Query(), &params.ErrorDescription, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "error_description"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "error_description", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteOidcSignIn(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartOidcSignIn operation middleware
+func (siw *ServerInterfaceWrapper) StartOidcSignIn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StartOidcSignInParams
+
+	// ------------- Optional query parameter "return_to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "return_to", r.URL.Query(), &params.ReturnTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "return_to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "return_to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartOidcSignIn(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ChangePassword operation middleware
 func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
@@ -1188,6 +1449,81 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangePassword(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuthProviders operation middleware
+func (siw *ServerInterfaceWrapper) GetAuthProviders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuthProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteSamlSignIn operation middleware
+func (siw *ServerInterfaceWrapper) CompleteSamlSignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteSamlSignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSamlMetadata operation middleware
+func (siw *ServerInterfaceWrapper) GetSamlMetadata(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSamlMetadata(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartSamlSignIn operation middleware
+func (siw *ServerInterfaceWrapper) StartSamlSignIn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StartSamlSignInParams
+
+	// ------------- Optional query parameter "return_to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "return_to", r.URL.Query(), &params.ReturnTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "return_to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "return_to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartSamlSignIn(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1428,6 +1764,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/auth/mfa/totp", wrapper.DisableTotp)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/providers", wrapper.GetAuthProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/oidc/start", wrapper.StartOidcSignIn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/oidc/callback", wrapper.CompleteOidcSignIn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/saml/metadata", wrapper.GetSamlMetadata)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/saml/start", wrapper.StartSamlSignIn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/saml/acs", wrapper.CompleteSamlSignIn)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/mfa", wrapper.GetMfaPolicy)
@@ -2235,6 +2589,182 @@ func (response VerifyTotp500ApplicationProblemPlusJSONResponse) VisitVerifyTotpR
 	return err
 }
 
+type CompleteOidcSignInRequestObject struct {
+	Params CompleteOidcSignInParams
+}
+
+type CompleteOidcSignInResponseObject interface {
+	VisitCompleteOidcSignInResponse(w http.ResponseWriter) error
+}
+
+type CompleteOidcSignIn302ResponseHeaders struct {
+	Location  string
+	SetCookie string
+}
+
+type CompleteOidcSignIn302Response struct {
+	Headers CompleteOidcSignIn302ResponseHeaders
+}
+
+func (response CompleteOidcSignIn302Response) VisitCompleteOidcSignInResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(302)
+	return nil
+}
+
+type CompleteOidcSignIn400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOidcSignIn400ApplicationProblemPlusJSONResponse) VisitCompleteOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOidcSignIn401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOidcSignIn401ApplicationProblemPlusJSONResponse) VisitCompleteOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOidcSignIn403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOidcSignIn403ApplicationProblemPlusJSONResponse) VisitCompleteOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOidcSignIn404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOidcSignIn404ApplicationProblemPlusJSONResponse) VisitCompleteOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOidcSignIn500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOidcSignIn500ApplicationProblemPlusJSONResponse) VisitCompleteOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOidcSignInRequestObject struct {
+	Params StartOidcSignInParams
+}
+
+type StartOidcSignInResponseObject interface {
+	VisitStartOidcSignInResponse(w http.ResponseWriter) error
+}
+
+type StartOidcSignIn302ResponseHeaders struct {
+	Location  string
+	SetCookie string
+}
+
+type StartOidcSignIn302Response struct {
+	Headers StartOidcSignIn302ResponseHeaders
+}
+
+func (response StartOidcSignIn302Response) VisitStartOidcSignInResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(302)
+	return nil
+}
+
+type StartOidcSignIn400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response StartOidcSignIn400ApplicationProblemPlusJSONResponse) VisitStartOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOidcSignIn404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response StartOidcSignIn404ApplicationProblemPlusJSONResponse) VisitStartOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartOidcSignIn500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response StartOidcSignIn500ApplicationProblemPlusJSONResponse) VisitStartOidcSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ChangePasswordRequestObject struct {
 	Params ChangePasswordParams
 	Body   *ChangePasswordJSONRequestBody
@@ -2311,6 +2841,278 @@ type ChangePassword500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ChangePassword500ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthProvidersRequestObject struct {
+}
+
+type GetAuthProvidersResponseObject interface {
+	VisitGetAuthProvidersResponse(w http.ResponseWriter) error
+}
+
+type GetAuthProviders200JSONResponse AuthProviders
+
+func (response GetAuthProviders200JSONResponse) VisitGetAuthProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAuthProviders500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAuthProviders500ApplicationProblemPlusJSONResponse) VisitGetAuthProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSamlSignInRequestObject struct {
+	Body *CompleteSamlSignInFormdataRequestBody
+}
+
+type CompleteSamlSignInResponseObject interface {
+	VisitCompleteSamlSignInResponse(w http.ResponseWriter) error
+}
+
+type CompleteSamlSignIn302ResponseHeaders struct {
+	Location  string
+	SetCookie string
+}
+
+type CompleteSamlSignIn302Response struct {
+	Headers CompleteSamlSignIn302ResponseHeaders
+}
+
+func (response CompleteSamlSignIn302Response) VisitCompleteSamlSignInResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(302)
+	return nil
+}
+
+type CompleteSamlSignIn400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSamlSignIn400ApplicationProblemPlusJSONResponse) VisitCompleteSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSamlSignIn401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSamlSignIn401ApplicationProblemPlusJSONResponse) VisitCompleteSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSamlSignIn403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSamlSignIn403ApplicationProblemPlusJSONResponse) VisitCompleteSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSamlSignIn404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSamlSignIn404ApplicationProblemPlusJSONResponse) VisitCompleteSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSamlSignIn500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSamlSignIn500ApplicationProblemPlusJSONResponse) VisitCompleteSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlMetadataRequestObject struct {
+}
+
+type GetSamlMetadataResponseObject interface {
+	VisitGetSamlMetadataResponse(w http.ResponseWriter) error
+}
+
+type GetSamlMetadata200ApplicationsamlmetadataXmlResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetSamlMetadata200ApplicationsamlmetadataXmlResponse) VisitGetSamlMetadataResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/samlmetadata+xml")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetSamlMetadata404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetSamlMetadata404ApplicationProblemPlusJSONResponse) VisitGetSamlMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlMetadata500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetSamlMetadata500ApplicationProblemPlusJSONResponse) VisitGetSamlMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartSamlSignInRequestObject struct {
+	Params StartSamlSignInParams
+}
+
+type StartSamlSignInResponseObject interface {
+	VisitStartSamlSignInResponse(w http.ResponseWriter) error
+}
+
+type StartSamlSignIn302ResponseHeaders struct {
+	Location  string
+	SetCookie string
+}
+
+type StartSamlSignIn302Response struct {
+	Headers StartSamlSignIn302ResponseHeaders
+}
+
+func (response StartSamlSignIn302Response) VisitStartSamlSignInResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(302)
+	return nil
+}
+
+type StartSamlSignIn400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response StartSamlSignIn400ApplicationProblemPlusJSONResponse) VisitStartSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartSamlSignIn404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response StartSamlSignIn404ApplicationProblemPlusJSONResponse) VisitStartSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartSamlSignIn500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response StartSamlSignIn500ApplicationProblemPlusJSONResponse) VisitStartSamlSignInResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2595,9 +3397,27 @@ type StrictServerInterface interface {
 	// VerifyTotp Complete a sign-in by presenting a code from your authenticator.
 	// (POST /auth/mfa/totp/verify)
 	VerifyTotp(ctx context.Context, request VerifyTotpRequestObject) (VerifyTotpResponseObject, error)
+	// CompleteOidcSignIn Complete a single sign-on and issue a session.
+	// (GET /auth/oidc/callback)
+	CompleteOidcSignIn(ctx context.Context, request CompleteOidcSignInRequestObject) (CompleteOidcSignInResponseObject, error)
+	// StartOidcSignIn Begin a single sign-on through the configured OIDC provider.
+	// (GET /auth/oidc/start)
+	StartOidcSignIn(ctx context.Context, request StartOidcSignInRequestObject) (StartOidcSignInResponseObject, error)
 	// ChangePassword Change your own password.
 	// (POST /auth/password)
 	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
+	// GetAuthProviders List the ways this deployment can be signed in to.
+	// (GET /auth/providers)
+	GetAuthProviders(ctx context.Context, request GetAuthProvidersRequestObject) (GetAuthProvidersResponseObject, error)
+	// CompleteSamlSignIn Consume a SAML assertion and issue a session.
+	// (POST /auth/saml/acs)
+	CompleteSamlSignIn(ctx context.Context, request CompleteSamlSignInRequestObject) (CompleteSamlSignInResponseObject, error)
+	// GetSamlMetadata Serve this deployment's SAML service provider metadata.
+	// (GET /auth/saml/metadata)
+	GetSamlMetadata(ctx context.Context, request GetSamlMetadataRequestObject) (GetSamlMetadataResponseObject, error)
+	// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
+	// (GET /auth/saml/start)
+	StartSamlSignIn(ctx context.Context, request StartSamlSignInRequestObject) (StartSamlSignInResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -2919,6 +3739,58 @@ func (sh *strictHandler) VerifyTotp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CompleteOidcSignIn operation middleware
+func (sh *strictHandler) CompleteOidcSignIn(w http.ResponseWriter, r *http.Request, params CompleteOidcSignInParams) {
+	var request CompleteOidcSignInRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteOidcSignIn(ctx, request.(CompleteOidcSignInRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteOidcSignIn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteOidcSignInResponseObject); ok {
+		if err := validResponse.VisitCompleteOidcSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartOidcSignIn operation middleware
+func (sh *strictHandler) StartOidcSignIn(w http.ResponseWriter, r *http.Request, params StartOidcSignInParams) {
+	var request StartOidcSignInRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartOidcSignIn(ctx, request.(StartOidcSignInRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartOidcSignIn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartOidcSignInResponseObject); ok {
+		if err := validResponse.VisitStartOidcSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ChangePassword operation middleware
 func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams) {
 	var request ChangePasswordRequestObject
@@ -2945,6 +3817,115 @@ func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
 		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAuthProviders operation middleware
+func (sh *strictHandler) GetAuthProviders(w http.ResponseWriter, r *http.Request) {
+	var request GetAuthProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAuthProviders(ctx, request.(GetAuthProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAuthProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAuthProvidersResponseObject); ok {
+		if err := validResponse.VisitGetAuthProvidersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteSamlSignIn operation middleware
+func (sh *strictHandler) CompleteSamlSignIn(w http.ResponseWriter, r *http.Request) {
+	var request CompleteSamlSignInRequestObject
+
+	if err := r.ParseForm(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode formdata: %w", err))
+		return
+	}
+	var body CompleteSamlSignInFormdataRequestBody
+	if err := runtime.BindForm(&body, r.Form, nil, nil); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't bind formdata: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteSamlSignIn(ctx, request.(CompleteSamlSignInRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteSamlSignIn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteSamlSignInResponseObject); ok {
+		if err := validResponse.VisitCompleteSamlSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSamlMetadata operation middleware
+func (sh *strictHandler) GetSamlMetadata(w http.ResponseWriter, r *http.Request) {
+	var request GetSamlMetadataRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSamlMetadata(ctx, request.(GetSamlMetadataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSamlMetadata")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSamlMetadataResponseObject); ok {
+		if err := validResponse.VisitGetSamlMetadataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartSamlSignIn operation middleware
+func (sh *strictHandler) StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams) {
+	var request StartSamlSignInRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartSamlSignIn(ctx, request.(StartSamlSignInRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartSamlSignIn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartSamlSignInResponseObject); ok {
+		if err := validResponse.VisitStartSamlSignInResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

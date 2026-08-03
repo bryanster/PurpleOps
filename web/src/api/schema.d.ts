@@ -379,6 +379,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the ways this deployment can be signed in to.
+         * @description Public, because it is what the login page reads *before* anybody has
+         *     signed in — it is the list of buttons to draw.
+         *
+         *     `password` is whether local sign-in is offered, and `sso` is one entry
+         *     per configured single sign-on provider, each with the URL to send the
+         *     browser to.
+         *
+         *     A provider that is configured but cannot be reached is **absent** from
+         *     `sso` (M1-009). That is deliberate and it is the point of this endpoint:
+         *     a button that leads to a provider which is down is worse than no button,
+         *     and an identity provider having a bad morning must never be the reason
+         *     nobody can get in. It reappears on its own, with no restart, once the
+         *     provider answers again.
+         *
+         *     It reveals that a deployment has single sign-on and which protocol, which
+         *     is visible from the sign-in page of every such product and is not a
+         *     secret. It reveals nothing about the client, the issuer or the mapping.
+         */
+        get: operations["getAuthProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Begin a single sign-on through the configured OIDC provider.
+         * @description Redirects the browser to the identity provider's authorization endpoint
+         *     with PKCE, `state` and `nonce`, and sets a short-lived, sealed cookie
+         *     holding all three (M1-009). It is a navigation rather than a fetch: send
+         *     the browser here, do not call it with `fetch`.
+         *
+         *     `return_to` is where to land afterwards and must be a path within this
+         *     application — a relative path beginning with a single `/`. Anything else
+         *     is a `400`: an endpoint that redirects wherever a query parameter says is
+         *     an open redirect, and an open redirect on the login path is a credible
+         *     phishing page on your own domain.
+         *
+         *     `404` when no provider is configured, or when the configured one cannot
+         *     be reached. Local sign-in is unaffected either way.
+         */
+        get: operations["startOidcSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Complete a single sign-on and issue a session.
+         * @description Where the identity provider sends the browser back. Register
+         *     `<BLACKLIGHT_BASE_URL>/api/v1/auth/oidc/callback` as the redirect URI at
+         *     the provider; it must match byte for byte.
+         *
+         *     On success this behaves exactly like `POST /auth/login` with `status:
+         *     authenticated`: the session cookie and the `bl_csrf` cookie are set, and
+         *     the browser is redirected to `return_to` — or to `/` when the sign-in
+         *     named none. The pending-state cookie is cleared, which is what makes a
+         *     `state` single-use.
+         *
+         *     The failures are worth telling apart, and none of them is a redirect:
+         *
+         *     - `401` — the callback does not belong to a sign-in this browser started
+         *       (no cookie, a `state` that does not match, an expired one), or the ID
+         *       token did not verify. Start again.
+         *     - `403` — the provider vouched for somebody this deployment has no
+         *       account for and `BLACKLIGHT_OIDC_AUTO_PROVISION` is off, or the account
+         *       is disabled. The message says which and what to do about it; no account
+         *       is created.
+         *     - `404` — no provider is configured.
+         *
+         *     A second factor still applies. An account that also has a local password
+         *     and a confirmed authenticator is answered `mfa_required` in the same way
+         *     a local sign-in is, and lands on the code entry page rather than signed
+         *     in (M1-006, M1-008).
+         */
+        get: operations["completeOidcSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/saml/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve this deployment's SAML service provider metadata.
+         * @description The XML an identity provider administrator uploads, or points their
+         *     console at, to register this deployment as a service provider (M1-010).
+         *     It carries the entity ID, the assertion consumer service URL and the
+         *     signing certificate.
+         *
+         *     It is public and it is meant to be: every field in it is something the
+         *     identity provider is about to be told anyway, and half of them are
+         *     already visible in the authentication request the browser carries. The
+         *     **private** key never appears here — only the certificate, which is the
+         *     public half.
+         *
+         *     `404` when this deployment has no SAML configured.
+         */
+        get: operations["getSamlMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/saml/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Begin a single sign-on through the configured SAML provider.
+         * @description Redirects the browser to the identity provider's single sign-on service
+         *     with a signed `AuthnRequest` (HTTP-Redirect binding), and sets a
+         *     short-lived, sealed cookie holding that request's ID and where to land
+         *     afterwards. It is a navigation rather than a fetch: send the browser
+         *     here, do not call it with `fetch`.
+         *
+         *     `return_to` is where to land afterwards and must be a path within this
+         *     application, exactly as it is for `GET /auth/oidc/start`, and for the
+         *     same reason: an endpoint that redirects wherever a query parameter says
+         *     is an open redirect on the login path.
+         *
+         *     `404` when no provider is configured, or when the configured one's
+         *     metadata could not be read. Local sign-in is unaffected either way.
+         */
+        get: operations["startSamlSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/saml/acs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Consume a SAML assertion and issue a session.
+         * @description The assertion consumer service. The identity provider POSTs a form here
+         *     from the browser; register
+         *     `<BLACKLIGHT_BASE_URL>/api/v1/auth/saml/acs` as the ACS URL, and it must
+         *     match byte for byte — it is checked against the assertion's `Recipient`
+         *     and the response's `Destination`.
+         *
+         *     On success this behaves exactly like `POST /auth/login` with `status:
+         *     authenticated`: the session cookie and the `bl_csrf` cookie are set, and
+         *     the browser is redirected to the path the sign-in named, or to `/`.
+         *
+         *     Both SP-initiated and IdP-initiated sign-in are accepted. An
+         *     SP-initiated one is additionally bound to the browser that started it —
+         *     the sealed cookie names the request ID the assertion must answer, so an
+         *     assertion delivered into somebody else's browser is refused. An
+         *     IdP-initiated one has no request to answer and so cannot have that
+         *     binding; set `BLACKLIGHT_SAML_ALLOW_IDP_INITIATED=false` on a deployment
+         *     that does not need it.
+         *
+         *     The failures, and none of them is a redirect:
+         *
+         *     - `401` — the assertion was rejected. Unsigned, signed by a key that is
+         *       not the provider's, tampered with, outside its validity window,
+         *       addressed to somebody else, or one that has already been used. Which
+         *       of those it was is in the log and never in the response.
+         *     - `403` — the assertion was good and this deployment will not sign that
+         *       person in: no account and `BLACKLIGHT_SAML_AUTO_PROVISION` is off, or
+         *       the account is disabled.
+         *     - `404` — no provider is configured.
+         *
+         *     A second factor still applies, exactly as it does for OIDC (M1-006,
+         *     M1-008).
+         */
+        post: operations["completeSamlSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/mfa": {
         parameters: {
             query?: never;
@@ -579,6 +804,45 @@ export interface components {
              *     factor has no session and has not been told who they are yet.
              */
             user?: components["schemas"]["CurrentUser"];
+        };
+        /**
+         * @description What the login page may offer. It is deliberately a list rather than a
+         *     set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
+         *     renders this array needed no change when it arrived.
+         */
+        AuthProviders: {
+            /**
+             * @description Whether local email-and-password sign-in is offered. Always true
+             *     today; it is stated rather than assumed so that a deployment which
+             *     later turns it off has somewhere to say so.
+             */
+            password: boolean;
+            /**
+             * @description Every single sign-on provider that is configured **and** reachable
+             *     right now. A configured provider that cannot be discovered is absent
+             *     rather than listed-and-broken.
+             */
+            sso: components["schemas"]["SSOProvider"][];
+        };
+        /** @description One single sign-on button. */
+        SSOProvider: {
+            /**
+             * @description Which protocol this provider speaks.
+             * @enum {string}
+             */
+            id: "oidc" | "saml";
+            /**
+             * @description What to write on the button. It names the protocol rather than the
+             *     provider: the issuer URL is configuration, and putting it on a public
+             *     page would tell an unauthenticated caller which directory this
+             *     organization uses.
+             */
+            label: string;
+            /**
+             * @description Where to send the browser to begin. A path within this deployment,
+             *     relative to the API base — navigate to it, do not fetch it.
+             */
+            startUrl: string;
         };
         /**
          * @description The caller, as `GET /auth/me` reports them. It carries nothing about the
@@ -1469,6 +1733,233 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAuthProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sign-in methods on offer right now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthProviders"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    startOidcSignIn: {
+        parameters: {
+            query?: {
+                /**
+                 * @description A path within this application to return to after signing in, such
+                 *     as `/engagements/018f…`. Absolute URLs, scheme-relative URLs and
+                 *     anything containing a backslash or a control character are refused.
+                 */
+                return_to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description Go to the identity provider. The `Set-Cookie` carries the sealed
+             *     pending state, which the callback needs.
+             */
+            302: {
+                headers: {
+                    /** @description The provider's authorization endpoint, with the request parameters. */
+                    Location: string;
+                    /**
+                     * @description The `bl_oidc` cookie: `HttpOnly`, `SameSite=Lax`, scoped to the
+                     *     OIDC endpoints, and `Secure` on every deployment that is not
+                     *     `BLACKLIGHT_ENV=development`. Lax rather than Strict because the
+                     *     callback is a top-level navigation from another site, and a
+                     *     Strict cookie is not sent on one.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    completeOidcSignIn: {
+        parameters: {
+            query?: {
+                /** @description The authorization code, when the provider is granting one. */
+                code?: string;
+                /** @description The opaque value this sign-in was started with. Required in practice; a callback without one is refused. */
+                state?: string;
+                /** @description The provider's error code, when it is refusing rather than granting — `access_denied` when consent was declined. */
+                error?: string;
+                /** @description The provider's prose about that error. It is logged and never rendered. */
+                error_description?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description Signed in. The browser is sent to the path the sign-in named, or to
+             *     `/`.
+             */
+            302: {
+                headers: {
+                    /** @description A path within this application, never an absolute URL. */
+                    Location: string;
+                    /**
+                     * @description The session cookie, with `bl_csrf` and the cleared `bl_oidc` in
+                     *     further `Set-Cookie` headers. When a second factor is required,
+                     *     the short-lived `bl_mfa` cookie instead of the session — read
+                     *     `Location`, which is the code entry page in that case.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getSamlMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The service provider metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/samlmetadata+xml": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    startSamlSignIn: {
+        parameters: {
+            query?: {
+                /**
+                 * @description A path within this application to return to after signing in. The
+                 *     same rule as `GET /auth/oidc/start`: absolute URLs, scheme-relative
+                 *     URLs and anything containing a backslash or a control character are
+                 *     refused.
+                 */
+                return_to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description Go to the identity provider. The `Set-Cookie` carries the sealed
+             *     pending request, which the assertion consumer needs.
+             */
+            302: {
+                headers: {
+                    /** @description The provider's single sign-on service, with the encoded request. */
+                    Location: string;
+                    /**
+                     * @description The `bl_saml` cookie: `HttpOnly`, `Secure`, and
+                     *     `SameSite=None` — which is the one cookie in this application
+                     *     that is neither Strict nor Lax. The assertion arrives as a
+                     *     cross-site **POST**, and a browser sends neither a Strict nor a
+                     *     Lax cookie on one, so anything stricter would mean the cookie
+                     *     never comes back and no sign-in ever completes.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    completeSamlSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The form the identity provider POSTs, per the SAML 2.0 HTTP-POST
+         *     binding. Nothing else is accepted: the binding defines these two
+         *     fields and a provider sending a third is one this deployment does not
+         *     understand.
+         */
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @description The base64-encoded `<samlp:Response>`. */
+                    SAMLResponse: string;
+                    /**
+                     * @description Echoed back from the authentication request, or set by the
+                     *     provider for an IdP-initiated sign-in. It is **not** trusted
+                     *     and nothing is read out of it: the SAML profile caps it at 80
+                     *     bytes, which is too small to seal, so everything this sign-in
+                     *     needs to remember is in the `bl_saml` cookie instead.
+                     */
+                    RelayState?: string;
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description Signed in. The browser is sent to the path the sign-in named, or to
+             *     `/`.
+             */
+            302: {
+                headers: {
+                    /** @description A path within this application, never an absolute URL. */
+                    Location: string;
+                    /**
+                     * @description The session cookie, with `bl_csrf` and the cleared `bl_saml` in
+                     *     further `Set-Cookie` headers. When a second factor is required,
+                     *     the short-lived `bl_mfa` cookie instead of the session — read
+                     *     `Location`, which is the code entry page in that case.
+                     */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

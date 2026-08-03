@@ -24,6 +24,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // keyBytes is 32: AES-256. The configured key material is run through HKDF to
@@ -37,6 +38,14 @@ const keyBytes = 32
 // key, so a ciphertext from one can never be opened by the other — which is
 // what stops a bug in a future caller turning into a way to read TOTP secrets.
 const derivationInfo = "blacklight/secrets/aes-256-gcm/v1"
+
+// purposeInfo is the same label with a caller's purpose in it — see [NewFor].
+// The purpose is in the middle rather than appended, so no purpose can ever
+// produce the string above: a Cipher from [New] and one from [NewFor] hold
+// different keys whatever anybody passes.
+func purposeInfo(purpose string) string {
+	return "blacklight/secrets/" + purpose + "/aes-256-gcm/v1"
+}
 
 // encoding is base64url without padding, matching how every other opaque value
 // in this tree is spelled in a TEXT column.
@@ -64,7 +73,26 @@ type Cipher struct {
 // 32 bytes by HKDF-SHA256. The length check is on the input, because HKDF will
 // happily produce a well-formed key from four bytes of entropy and the result
 // would be a well-formed key nobody has to guess very hard.
-func New(key []byte) (*Cipher, error) {
+func New(key []byte) (*Cipher, error) { return newCipher(key, derivationInfo) }
+
+// NewFor returns a Cipher over the same key material under a *different* derived
+// key, named by purpose — "oidc-state" for the sealed single sign-on state of
+// M1-009.
+//
+// It exists so that a second thing this server encrypts is encrypted under its
+// own key rather than under the TOTP secrets' one. Nothing about the two uses
+// suggests a shared key would be broken today; the point is that they fail
+// separately. A bug that let a caller open one of these values cannot be turned
+// into a way to read an enrolled authenticator, and a value from one context
+// cannot be replayed into the other, because it will not decrypt there.
+func NewFor(key []byte, purpose string) (*Cipher, error) {
+	if strings.TrimSpace(purpose) == "" {
+		return nil, errors.New("secrets: no purpose; a derived key has to be named after what it is for")
+	}
+	return newCipher(key, purposeInfo(purpose))
+}
+
+func newCipher(key []byte, info string) (*Cipher, error) {
 	if len(key) < keyBytes {
 		return nil, fmt.Errorf("secrets: the encryption key carries %d bytes, want at least %d",
 			len(key), keyBytes)
@@ -73,7 +101,7 @@ func New(key []byte) (*Cipher, error) {
 	// No salt: there is one key and it is already high-entropy, so the salt
 	// would be a constant with nothing to do. The info string is what separates
 	// this derivation from any other.
-	derived, err := hkdf.Key(sha256.New, key, nil, derivationInfo, keyBytes)
+	derived, err := hkdf.Key(sha256.New, key, nil, info, keyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("secrets: derive the encryption key: %w", err)
 	}

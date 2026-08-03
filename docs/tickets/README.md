@@ -56,7 +56,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 |---|---|---|
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
-| **M1 — Identity & access** | in progress — 10/17 | [17 tickets](#m1--identity--access) |
+| **M1 — Identity & access** | in progress — 12/17 | [17 tickets](#m1--identity--access) |
 | M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
@@ -110,8 +110,8 @@ here traces to a named defect in `PLAN.md` §4 — the regression cases are the 
 | [M1-006](done/M1-006-totp.md) ✅ | TOTP enrolment and verification | M |
 | [M1-007](done/M1-007-recovery-codes.md) ✅ | MFA recovery codes | S |
 | [M1-008](done/M1-008-mfa-enforcement.md) ✅ | Admin-enforced MFA (closes the skip-enrolment hole) | M |
-| [M1-009](M1-009-oidc.md) | OIDC discovery login + group→role mapping | L |
-| [M1-010](M1-010-saml.md) | SAML 2.0 service provider | L |
+| [M1-009](done/M1-009-oidc.md) ✅ | OIDC discovery login + group→role mapping | L |
+| [M1-010](done/M1-010-saml.md) ✅ | SAML 2.0 service provider | L |
 | [M1-011](M1-011-service-tokens.md) | Scoped service tokens, actually enforced | L |
 | [M1-012](done/M1-012-authz-policy.md) ✅ | Central `authz.Can` policy engine | L |
 | [M1-013](done/M1-013-authz-middleware.md) ✅ | One authorization middleware, zero handler checks | M |

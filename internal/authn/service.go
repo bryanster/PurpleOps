@@ -28,6 +28,7 @@ type (
 	Users interface {
 		ByID(ctx context.Context, id string) (identity.User, error)
 		ByEmail(ctx context.Context, email string) (identity.User, error)
+		Create(ctx context.Context, u identity.NewUser) (identity.User, error)
 		Update(ctx context.Context, u identity.User) (identity.User, error)
 		SetLastLoginAt(ctx context.Context, id string, at time.Time) error
 	}
@@ -61,6 +62,13 @@ type Deps struct {
 	Memberships   Memberships
 	TOTP          TOTPs
 	RecoveryCodes RecoveryCodes
+
+	// Identities is the login methods attached to an account. It is what the
+	// federated sign-in path (M1-009) looks an account up by, and it is required
+	// whether or not this deployment has an identity provider configured — a
+	// Service that could not answer "whose subject is this?" would answer it
+	// wrongly rather than not at all.
+	Identities Identities
 
 	// Settings holds the platform MFA policy (M1-008), which is read on every
 	// sign-in and on every request made with a session that has not satisfied
@@ -106,6 +114,7 @@ type Service struct {
 	memberships   Memberships
 	totp          TOTPs
 	recoveryCodes RecoveryCodes
+	identities    Identities
 	settings      Settings
 
 	sessions   *session.Manager
@@ -132,6 +141,8 @@ func NewService(deps Deps) (*Service, error) {
 		return nil, errors.New("authn: no authenticator repository")
 	case deps.RecoveryCodes == nil:
 		return nil, errors.New("authn: no recovery code repository")
+	case deps.Identities == nil:
+		return nil, errors.New("authn: no identity repository; a federated sign-in could not find an account")
 	case deps.Settings == nil:
 		return nil, errors.New("authn: no settings store; the MFA policy could not be read")
 	case deps.Sessions == nil:
@@ -159,6 +170,7 @@ func NewService(deps Deps) (*Service, error) {
 		memberships:   deps.Memberships,
 		totp:          deps.TOTP,
 		recoveryCodes: deps.RecoveryCodes,
+		identities:    deps.Identities,
 		settings:      deps.Settings,
 		sessions:      deps.Sessions,
 		challenges:    deps.Challenges,
@@ -268,6 +280,18 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 		s.upgradeHash(ctx, user, in.Password)
 	}
 
+	return s.completeSignIn(ctx, user, in.Request)
+}
+
+// completeSignIn is everything a sign-in does once the credentials are settled:
+// evaluate the MFA policy, and issue whatever that leaves — a session, a
+// challenge, or a session confined to enrolling.
+//
+// It is shared by the two ways of arriving here, local (above) and federated
+// (federated.go). That sharing is the point: the rules about second factors and
+// what a session may do are M1-006's and M1-008's, and a second sign-in path
+// with its own copy of them is how one of the two ends up exempt.
+func (s *Service) completeSignIn(ctx context.Context, user identity.User, req session.Request) (LoginResult, error) {
 	// Policy first, enrolment second. Asking them the other way round is the
 	// defect M1-008 closes: enforcement that consults enrolment state is
 	// enforcement that stops applying to whoever skipped enrolling.
@@ -303,7 +327,7 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 		// nothing else (see [Service.Authenticate] and the gate in
 		// internal/httpapi), so the requirement is something they can satisfy
 		// rather than a door that will not open.
-		issued, err := s.issueSession(ctx, user, in.Request)
+		issued, err := s.issueSession(ctx, user, req)
 		if err != nil {
 			return LoginResult{}, err
 		}
@@ -320,7 +344,7 @@ func (s *Service) Login(ctx context.Context, in Login) (LoginResult, error) {
 		}, nil
 
 	default:
-		issued, err := s.issueSession(ctx, user, in.Request)
+		issued, err := s.issueSession(ctx, user, req)
 		if err != nil {
 			return LoginResult{}, err
 		}

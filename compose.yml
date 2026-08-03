@@ -63,5 +63,51 @@ services:
     # that `docker run` and any other compose file get it too, and compose
     # inherits it from there. `docker compose ps` shows the state.
 
+  # A Keycloak realm to develop single sign-on against — OpenID Connect (M1-009)
+  # and SAML 2.0 (M1-010). Development only, and behind a profile so that
+  # `docker compose up` never starts it:
+  #
+  #     docker compose --profile sso up keycloak
+  #
+  # It imports deploy/keycloak/blacklight-realm.json on every start, in dev mode,
+  # with an in-memory database — so the realm is exactly what is in the file and
+  # nothing survives a restart. That is what makes it reproducible; it is also
+  # why it must never be deployed.
+  #
+  # The realm holds one client per protocol, two groups (blacklight-admins,
+  # blacklight-users) and three users to sign in as. The credentials are in the
+  # file, and docs/sso-oidc.md and docs/sso-saml.md have the environment to run
+  # Blacklight against each.
+  keycloak:
+    profiles: [sso]
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # The admin console, at http://localhost:8081/admin. Dev-only credentials
+      # for a dev-only container; there is nothing here worth protecting.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The issuer every token carries and every redirect uses. It has to be the
+      # URL a *browser* types, because the browser and this server both compare
+      # it — which is why this is localhost and not the container name.
+      KC_HOSTNAME: http://localhost:8081
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_HOST_PORT:-8081}:8080"
+    volumes:
+      - ./deploy/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # Keycloak 26 serves its health endpoints on the management port (9000)
+      # and ships no curl, so this goes through the JVM's own client.
+      test:
+        [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\nHost: localhost\\nConnection: close\\n\\n' >&3 && grep -q '\"status\": \"UP\"' <&3",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
 volumes:
   blacklight-data:

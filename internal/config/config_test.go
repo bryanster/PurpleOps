@@ -1,7 +1,11 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -347,6 +351,114 @@ func TestFields(t *testing.T) {
 		env:     map[string]string{envChromePath: regularFile(t)},
 		wantErr: `BLACKLIGHT_CHROME_PATH: must be executable`,
 	}, {
+		name: "oidc is off by default",
+		env:  map[string]string{},
+		check: func(t *testing.T, cfg Config) {
+			if cfg.OIDC.Enabled() {
+				t.Error("OIDC.Enabled() is true with no issuer configured")
+			}
+		},
+	}, {
+		// The one normalization the base URL performs and this must not: an
+		// issuer identifier is compared byte for byte with the `iss` claim.
+		name: "oidc issuer keeps its trailing slash",
+		env: map[string]string{
+			envOIDCIssuer:   "https://tenant.example.com/",
+			envOIDCClientID: "blacklight",
+		},
+		check: func(t *testing.T, cfg Config) {
+			if got, want := cfg.OIDC.Issuer.String(), "https://tenant.example.com/"; got != want {
+				t.Errorf("OIDC.Issuer = %q, want %q", got, want)
+			}
+			if !cfg.OIDC.Enabled() {
+				t.Error("OIDC.Enabled() is false with an issuer configured")
+			}
+		},
+	}, {
+		name:    "oidc issuer rejects a value with no scheme",
+		env:     map[string]string{envOIDCIssuer: "idp.example.com", envOIDCClientID: "blacklight"},
+		wantErr: `BLACKLIGHT_OIDC_ISSUER: must be an absolute URL, got "idp.example.com"`,
+	}, {
+		name:    "oidc issuer rejects a query string",
+		env:     map[string]string{envOIDCIssuer: "https://idp.example.com?realm=x", envOIDCClientID: "blacklight"},
+		wantErr: `BLACKLIGHT_OIDC_ISSUER: must not contain a query string or fragment`,
+	}, {
+		name:    "oidc issuer must be https in production",
+		env:     map[string]string{envOIDCIssuer: "http://idp.example.com", envOIDCClientID: "blacklight"},
+		wantErr: `BLACKLIGHT_OIDC_ISSUER: must use https when BLACKLIGHT_ENV=production`,
+	}, {
+		name: "oidc issuer may be plain http on loopback",
+		env: map[string]string{
+			envOIDCIssuer:   "http://localhost:8081/realms/blacklight",
+			envOIDCClientID: "blacklight",
+		},
+	}, {
+		name:    "oidc needs a client id",
+		env:     map[string]string{envOIDCIssuer: "https://idp.example.com"},
+		wantErr: `BLACKLIGHT_OIDC_CLIENT_ID: must be set when BLACKLIGHT_OIDC_ISSUER is`,
+	}, {
+		// Half-configured is the case worth a startup error: it looks configured
+		// and offers no single sign-on at all.
+		name:    "oidc rejects a client id with no issuer",
+		env:     map[string]string{envOIDCClientID: "blacklight"},
+		wantErr: `BLACKLIGHT_OIDC_CLIENT_ID: is set, but BLACKLIGHT_OIDC_ISSUER is not`,
+	}, {
+		name:    "oidc rejects a role map with no issuer",
+		env:     map[string]string{envOIDCRoleMap: "staff=member"},
+		wantErr: `BLACKLIGHT_OIDC_ROLE_MAP: is set, but BLACKLIGHT_OIDC_ISSUER is not`,
+	}, {
+		name:    "oidc rejects auto-provisioning with no issuer",
+		env:     map[string]string{envOIDCProvision: "true"},
+		wantErr: `BLACKLIGHT_OIDC_AUTO_PROVISION: is set, but BLACKLIGHT_OIDC_ISSUER is not`,
+	}, {
+		name: "oidc scopes accept a space-separated list",
+		env:  map[string]string{envOIDCScopes: "openid email"},
+		check: func(t *testing.T, cfg Config) {
+			if got, want := cfg.OIDC.Scopes.String(), "openid email"; got != want {
+				t.Errorf("OIDC.Scopes = %q, want %q", got, want)
+			}
+		},
+	}, {
+		name:    "oidc scopes must include openid",
+		env:     map[string]string{envOIDCScopes: "profile email"},
+		wantErr: `BLACKLIGHT_OIDC_SCOPES: must include the "openid" scope`,
+	}, {
+		name: "oidc role map parses group=role pairs",
+		env:  map[string]string{envOIDCIssuer: "https://idp.example.com", envOIDCClientID: "x", envOIDCRoleMap: "admins=admin, staff=member"},
+		check: func(t *testing.T, cfg Config) {
+			role, ok := cfg.OIDC.RoleMap.Role([]string{"staff"})
+			if !ok || role.Valid() != true || string(role) != "member" {
+				t.Errorf("Role([staff]) = %q, %v, want the member role", role, ok)
+			}
+			if _, ok := cfg.OIDC.RoleMap.Role([]string{"nobody"}); ok {
+				t.Error("Role([nobody]) matched, want no mapping for an unlisted group")
+			}
+		},
+	}, {
+		name:    "oidc role map rejects an unknown role",
+		env:     map[string]string{envOIDCIssuer: "https://idp.example.com", envOIDCClientID: "x", envOIDCRoleMap: "admins=superuser"},
+		wantErr: `BLACKLIGHT_OIDC_ROLE_MAP: maps the group "admins" onto the role "superuser", which is not one of`,
+	}, {
+		name:    "oidc role map rejects a pair with no role",
+		env:     map[string]string{envOIDCIssuer: "https://idp.example.com", envOIDCClientID: "x", envOIDCRoleMap: "admins"},
+		wantErr: `BLACKLIGHT_OIDC_ROLE_MAP: must be a comma-separated list of group=role pairs`,
+	}, {
+		name:    "oidc role map rejects a group listed twice",
+		env:     map[string]string{envOIDCIssuer: "https://idp.example.com", envOIDCClientID: "x", envOIDCRoleMap: "admins=admin,admins=member"},
+		wantErr: `BLACKLIGHT_OIDC_ROLE_MAP: maps the group "admins" twice`,
+	}, {
+		name: "oidc auto-provision reads a boolean",
+		env:  map[string]string{envOIDCIssuer: "https://idp.example.com", envOIDCClientID: "x", envOIDCProvision: "true"},
+		check: func(t *testing.T, cfg Config) {
+			if !cfg.OIDC.AutoProvision {
+				t.Error("OIDC.AutoProvision is false, want true")
+			}
+		},
+	}, {
+		name:    "oidc auto-provision rejects anything else",
+		env:     map[string]string{envOIDCProvision: "yes please"},
+		wantErr: `BLACKLIGHT_OIDC_AUTO_PROVISION: must be "true" or "false", got "yes please"`,
+	}, {
 		name: "values are trimmed",
 		env:  map[string]string{envLogLevel: "  warn  "},
 		check: func(t *testing.T, cfg Config) {
@@ -471,13 +583,89 @@ func TestSecretValueNeverReachesAnError(t *testing.T) {
 
 // TestEverySecretFieldIsMarkedSensitive stops the next secret from being added
 // with the flag that keeps it out of error messages left off.
+//
+// Both redacting types are checked. A ForeignSecret holds a credential this
+// deployment did not choose rather than one it generated, which changes what is
+// validated and changes nothing at all about where the value may appear.
 func TestEverySecretFieldIsMarkedSensitive(t *testing.T) {
 	var cfg Config
 	for _, b := range cfg.bindings() {
-		if _, isSecret := b.target.(*Secret); isSecret && !b.sensitive {
-			t.Errorf("binding %s holds a Secret but is not marked sensitive", b.name)
+		switch b.target.(type) {
+		case *Secret, *ForeignSecret:
+			if !b.sensitive {
+				t.Errorf("binding %s holds a secret but is not marked sensitive", b.name)
+			}
 		}
 	}
+}
+
+// TestTheClientSecretNeverLeaves is M1-009's acceptance criterion about the
+// client secret, as an assertion: it may reach the provider's token endpoint and
+// nowhere else. Rendering a Config is the way it would escape by accident — a
+// startup log line, a debug endpoint, an error — so every ordinary rendering is
+// checked here rather than trusted to the type's tests.
+func TestTheClientSecretNeverLeaves(t *testing.T) {
+	const secret = "s3cr3t-from-the-identity-provider"
+
+	cfg, errs := parse(envWith(map[string]string{
+		envOIDCIssuer:   "https://idp.example.com",
+		envOIDCClientID: "blacklight",
+		envOIDCSecret:   secret,
+	}))
+	if len(errs) > 0 {
+		t.Fatalf("parse() = %v, want no errors", errs)
+	}
+	if got := string(cfg.OIDC.ClientSecret.Reveal()); got != secret {
+		t.Fatalf("ClientSecret.Reveal() = %q, want the configured value", got)
+	}
+
+	for _, rendering := range []string{
+		fmt.Sprintf("%v", cfg),
+		fmt.Sprintf("%+v", cfg),
+		fmt.Sprintf("%#v", cfg),
+		cfg.OIDC.ClientSecret.String(),
+		mustMarshal(t, cfg),
+		logLine(t, cfg),
+	} {
+		if strings.Contains(rendering, secret) {
+			t.Errorf("the client secret appears in a rendering of the config:\n\t%s", rendering)
+		}
+	}
+}
+
+// TestAWeakClientSecretIsAccepted records the deliberate difference between the
+// two secret types. The provider generated this value; refusing to start because
+// it is short, or because it contains a word on the weak list, would be this
+// server rejecting a credential nobody here can regenerate.
+func TestAWeakClientSecretIsAccepted(t *testing.T) {
+	_, errs := parse(envWith(map[string]string{
+		envOIDCIssuer:   "https://idp.example.com",
+		envOIDCClientID: "blacklight",
+		envOIDCSecret:   "example-secret",
+	}))
+	if len(errs) > 0 {
+		t.Errorf("parse() = %v, want a provider-issued secret to be accepted as it is", errs)
+	}
+}
+
+func mustMarshal(t *testing.T, cfg Config) string {
+	t.Helper()
+
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshalling the config: %v", err)
+	}
+	return string(encoded)
+}
+
+// logLine renders the config the way a startup log would, which is the rendering
+// most likely to be added later by somebody who has not read this file.
+func logLine(t *testing.T, cfg Config) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Info("configuration", slog.Any("config", cfg))
+	return buf.String()
 }
 
 func TestEveryVariableUsesThePrefix(t *testing.T) {

@@ -30,6 +30,25 @@ const (
 	envSessionLifetime = prefix + "SESSION_LIFETIME"
 	envSessionIdle     = prefix + "SESSION_IDLE_TIMEOUT"
 	envMFAPending      = prefix + "MFA_PENDING_TTL"
+	envOIDCIssuer      = prefix + "OIDC_ISSUER"
+	envOIDCClientID    = prefix + "OIDC_CLIENT_ID"
+	envOIDCSecret      = prefix + "OIDC_CLIENT_SECRET"
+	envOIDCScopes      = prefix + "OIDC_SCOPES"
+	envOIDCGroupsClaim = prefix + "OIDC_GROUPS_CLAIM"
+	envOIDCRoleMap     = prefix + "OIDC_ROLE_MAP"
+	envOIDCProvision   = prefix + "OIDC_AUTO_PROVISION"
+	envSAMLMetaURL     = prefix + "SAML_IDP_METADATA_URL"
+	envSAMLMetaFile    = prefix + "SAML_IDP_METADATA_FILE"
+	envSAMLEntityID    = prefix + "SAML_ENTITY_ID"
+	envSAMLCertFile    = prefix + "SAML_CERT_FILE"
+	envSAMLKeyFile     = prefix + "SAML_KEY_FILE"
+	envSAMLEmailAttr   = prefix + "SAML_EMAIL_ATTRIBUTE"
+	envSAMLNameAttr    = prefix + "SAML_NAME_ATTRIBUTE"
+	envSAMLGroupsAttr  = prefix + "SAML_GROUPS_ATTRIBUTE"
+	envSAMLRoleMap     = prefix + "SAML_ROLE_MAP"
+	envSAMLProvision   = prefix + "SAML_AUTO_PROVISION"
+	envSAMLIDPInit     = prefix + "SAML_ALLOW_IDP_INITIATED"
+	envSAMLClockSkew   = prefix + "SAML_CLOCK_SKEW"
 	envAccountFailures = prefix + "LOGIN_ACCOUNT_FAILURES"
 	envAccountLockout  = prefix + "LOGIN_ACCOUNT_LOCKOUT"
 	envSourceFailures  = prefix + "LOGIN_SOURCE_FAILURES"
@@ -53,6 +72,8 @@ type Config struct {
 	Session    Session
 	Encryption Encryption
 	MFA        MFA
+	OIDC       OIDC
+	SAML       SAML
 	Throttle   Throttle
 	Log        Log
 	Report     Report
@@ -145,6 +166,161 @@ type MFA struct {
 	PendingTTL time.Duration
 }
 
+// OIDC configures single sign-on against an OpenID Connect provider (M1-009).
+//
+// The whole section is optional, and Issuer is the switch: with no issuer there
+// is no OIDC, the start endpoint answers 404 and `GET /auth/providers` offers
+// local login alone. That is deliberate and it is what stops a broken identity
+// provider from being an outage — v1's SSO could not be turned off without a
+// redeploy, and PLAN.md §4 asks for a login page that still works when the
+// provider does not.
+//
+// Everything here is read once at startup. Rotating a client secret is a
+// restart, which is the same as every other secret this process holds.
+type OIDC struct {
+	// Issuer is the provider's issuer identifier — the URL its discovery
+	// document lives under, and the exact string every ID token's `iss` claim
+	// must equal. Discovery is `<issuer>/.well-known/openid-configuration`;
+	// nothing here is hand-configured per provider, which is the point of using
+	// discovery at all.
+	Issuer IssuerURL
+
+	// ClientID is this deployment's registration at the provider. It is not a
+	// secret — it travels in the authorization URL a browser follows — and it is
+	// what an ID token's `aud` claim must contain.
+	ClientID string
+
+	// ClientSecret authenticates the token exchange, which happens server to
+	// server. It never reaches a browser, a log or a response; see
+	// [ForeignSecret], and TestTheClientSecretNeverLeaves.
+	//
+	// Empty means a public client: the authorization code is bound to this
+	// deployment by PKCE alone. That is a supported configuration — some
+	// providers issue no secret for a confidential client — and PKCE is required
+	// either way, so nothing weakens by leaving it out.
+	ClientSecret ForeignSecret
+
+	// Scopes are what the authorization request asks for. The default asks for
+	// the profile, the address and the groups, because role mapping needs the
+	// last of those and there is no second round trip to fetch them later.
+	Scopes Scopes
+
+	// GroupsClaim is where in the ID token the groups are. Providers disagree:
+	// Keycloak and Authentik call it `groups`, Entra calls it `roles` unless you
+	// configure a groups claim, Okta calls it whatever the claim you added is
+	// called.
+	GroupsClaim string
+
+	// RoleMap turns those groups into a platform role, re-evaluated at every
+	// login. Empty means every federated user is an ordinary member.
+	//
+	// A mapping that produces no administrators is allowed. It is a mapping, not
+	// a safety mechanism: the local administrator account is what a deployment
+	// falls back on, and refusing this configuration would only teach an
+	// operator to write a mapping they did not mean.
+	RoleMap RoleMap
+
+	// AutoProvision creates an account the first time somebody the provider
+	// vouches for arrives. Off by default: on a deployment whose provider hosts
+	// the whole company, on means the whole company has an account here.
+	AutoProvision bool
+}
+
+// Enabled reports whether this deployment offers single sign-on at all.
+func (o OIDC) Enabled() bool { return !o.Issuer.IsZero() }
+
+// SAML configures single sign-on against a SAML 2.0 identity provider
+// (M1-010). Nobody chooses SAML in 2026; enterprises still require it, which is
+// the whole argument for this section existing beside [OIDC].
+//
+// It is optional in exactly the way OIDC is, and the identity provider's
+// metadata is the switch: with neither [SAML.MetadataURL] nor
+// [SAML.MetadataFile] there is no SAML, the endpoints answer 404 and
+// `GET /auth/providers` does not draw the button. A deployment may configure
+// both protocols, one, or neither, and none of the three affects local login.
+//
+// Read once at startup, including the two files: rotating the service provider
+// key is a restart, and so is a change of the identity provider's certificate
+// when the metadata is a file rather than a URL.
+type SAML struct {
+	// MetadataURL is where the identity provider publishes its metadata, and
+	// MetadataFile is that same document saved to disk. Exactly one of them is
+	// set; [Config.validate] refuses both and refuses a half-configured
+	// section.
+	//
+	// The URL is the better of the two — it is how a rotated signing
+	// certificate reaches this deployment without anybody editing a file — and
+	// it is also the one that puts this deployment's ability to offer single
+	// sign-on at the mercy of somebody else's web server. Both are supported
+	// because both are what real identity providers hand out: some publish a
+	// URL, and some give you an XML document in a browser download and nothing
+	// else.
+	MetadataURL  URL
+	MetadataFile string
+
+	// EntityID is what this deployment calls itself to the identity provider,
+	// and is the value every assertion's `Audience` must carry. Empty means the
+	// metadata URL of this deployment, which is the conventional default and
+	// the one the metadata document advertises.
+	EntityID string
+
+	// CertFile and KeyFile are the PEM files holding this service provider's
+	// certificate and its private key. The certificate is published in the
+	// metadata and used by the identity provider to check the signature on an
+	// authentication request; the key signs those requests and never leaves
+	// this process — it is not logged, not served, and not in the environment,
+	// which is the reason these are paths rather than pasted PEM.
+	CertFile string
+	KeyFile  string
+
+	// EmailAttribute, NameAttribute and GroupsAttribute are the assertion
+	// attributes to read each fact out of, best first. They are lists because
+	// no two identity providers agree on a spelling: the same address is `mail`
+	// at one, an OID at the next, and a schemas.xmlsoap.org URL at a third, and
+	// an operator should not have to discover which before their first login
+	// works. Both the `Name` and the `FriendlyName` of an attribute are
+	// matched.
+	EmailAttribute  Names
+	NameAttribute   Names
+	GroupsAttribute Names
+
+	// RoleMap turns the groups in an assertion into a platform role, on every
+	// sign-in, exactly as [OIDC.RoleMap] does — it is the same type, evaluated
+	// by the same code.
+	RoleMap RoleMap
+
+	// AutoProvision creates an account the first time somebody the provider
+	// vouches for arrives. Off by default, for the reason [OIDC.AutoProvision]
+	// gives.
+	AutoProvision bool
+
+	// AllowIDPInitiated accepts an assertion that answers no authentication
+	// request from here — somebody clicking a Blacklight tile in their
+	// provider's application portal, which is how a great many enterprises
+	// expect SAML to work.
+	//
+	// On by default, and it is a real tradeoff rather than an oversight. An
+	// SP-initiated sign-in is bound to the browser that started it: the sealed
+	// cookie names a request ID, and the assertion has to answer that ID, so an
+	// assertion captured or minted for somebody else cannot be delivered into
+	// your browser to sign you in as them. An IdP-initiated sign-in has no
+	// request to answer, so it has no such binding — that is inherent in the
+	// profile and not something an implementation can fix. Turn it off on a
+	// deployment nobody reaches from a portal.
+	AllowIDPInitiated bool
+
+	// ClockSkew is how far the identity provider's clock may be from this
+	// server's before an assertion inside its stated validity window is refused
+	// for being outside it. Bounded rather than open-ended: it widens every
+	// window in the profile, so a generous value here is a replay window that
+	// stays open after the assertion was supposed to have expired.
+	ClockSkew time.Duration
+}
+
+// Enabled reports whether this deployment offers SAML at all: the identity
+// provider's metadata is the switch, in either of its two spellings.
+func (s SAML) Enabled() bool { return !s.MetadataURL.IsZero() || s.MetadataFile != "" }
+
 // Throttle is how many failed sign-in attempts the server answers before it
 // starts refusing them (M1-004). Two independent limits, both enforced.
 type Throttle struct {
@@ -223,6 +399,36 @@ func (c *Config) bindings() []binding {
 		{name: envSessionLifetime, target: &c.Session.Lifetime, def: "12h"},
 		{name: envSessionIdle, target: &c.Session.IdleTimeout, def: "2h"},
 		{name: envMFAPending, target: &c.MFA.PendingTTL, def: "5m"},
+		{name: envOIDCIssuer, target: &c.OIDC.Issuer},
+		{name: envOIDCClientID, target: &c.OIDC.ClientID},
+		{name: envOIDCSecret, target: &c.OIDC.ClientSecret, sensitive: true},
+		{name: envOIDCScopes, target: &c.OIDC.Scopes, def: "openid profile email groups"},
+		{name: envOIDCGroupsClaim, target: &c.OIDC.GroupsClaim, def: "groups"},
+		{name: envOIDCRoleMap, target: &c.OIDC.RoleMap},
+		{name: envOIDCProvision, target: &c.OIDC.AutoProvision, def: "false"},
+		{name: envSAMLMetaURL, target: &c.SAML.MetadataURL},
+		{name: envSAMLMetaFile, target: &c.SAML.MetadataFile},
+		{name: envSAMLEntityID, target: &c.SAML.EntityID},
+		{name: envSAMLCertFile, target: &c.SAML.CertFile},
+		{name: envSAMLKeyFile, target: &c.SAML.KeyFile},
+		// The defaults are a tour of how little the identity providers agree.
+		// Ordered best first, and generous on purpose: the cost of an extra
+		// name nobody's provider sends is nothing, and the cost of a missing one
+		// is an operator debugging an empty display name on their first login.
+		{name: envSAMLEmailAttr, target: &c.SAML.EmailAttribute,
+			def: "email,mail,urn:oid:0.9.2342.19200300.100.1.3," +
+				"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"},
+		{name: envSAMLNameAttr, target: &c.SAML.NameAttribute,
+			def: "displayName,name,cn,urn:oid:2.16.840.1.113730.3.1.241," +
+				"http://schemas.microsoft.com/identity/claims/displayname," +
+				"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"},
+		{name: envSAMLGroupsAttr, target: &c.SAML.GroupsAttribute,
+			def: "groups,memberOf,Group,http://schemas.xmlsoap.org/claims/Group," +
+				"http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"},
+		{name: envSAMLRoleMap, target: &c.SAML.RoleMap},
+		{name: envSAMLProvision, target: &c.SAML.AutoProvision, def: "false"},
+		{name: envSAMLIDPInit, target: &c.SAML.AllowIDPInitiated, def: "true"},
+		{name: envSAMLClockSkew, target: &c.SAML.ClockSkew, def: "2m"},
 		{name: envAccountFailures, target: &c.Throttle.AccountFailures, def: "5"},
 		{name: envAccountLockout, target: &c.Throttle.AccountLockout, def: "15m"},
 		{name: envSourceFailures, target: &c.Throttle.SourceFailures, def: "50"},
@@ -355,6 +561,16 @@ func (b binding) set(raw string) error {
 	switch target := b.target.(type) {
 	case *string:
 		*target = raw
+	case *bool:
+		// strconv.ParseBool's vocabulary: 1/t/T/TRUE/true/True and the same for
+		// false. Wider than an operator needs and narrower than "anything that is
+		// not empty is true", which is the reading that turns a typo into a
+		// setting nobody meant to change.
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			return errors.New(`must be "true" or "false"`)
+		}
+		*target = v
 	case *int:
 		n, err := strconv.Atoi(raw)
 		if err != nil {

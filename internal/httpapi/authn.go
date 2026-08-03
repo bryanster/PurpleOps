@@ -33,8 +33,12 @@ func authenticate(svc *authn.Service, responder *apierr.Responder, log *slog.Log
 			// reason: a strict handler is handed a context, not a request. It
 			// is *not* resolved here — a challenge is not a session, and
 			// nothing outside the verification endpoint may turn one into a
-			// caller (M1-006).
-			ctx := withPendingToken(withOrigin(r.Context(), r), challenge.FromRequest(r))
+			// caller (M1-006). The sealed single sign-on state rides along for
+			// the same mechanical reason and with the same caveat: they are
+			// opaque values here, opened by internal/authn/oidc (M1-009) and
+			// internal/authn/saml (M1-010).
+			ctx := withSSOState(
+				withPendingToken(withOrigin(r.Context(), r), challenge.FromRequest(r)), r)
 
 			subject, err := svc.Authenticate(ctx, session.FromRequest(r))
 			switch {

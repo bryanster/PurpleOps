@@ -316,3 +316,31 @@ session — so an account of which a second factor is required still has one req
 next sign-in is confined to enrolling a new authenticator. That is the break-glass path in full: it
 turns "locked out" into "enrol again", and it never turns enforcement off behind an administrator's
 back.
+
+## Single sign-on
+
+An account reached through an identity provider is an account like any other here: the same session,
+the same cookie, the same rotation, and the same authorization decisions. What changes is only how
+the person proved who they are, and two rules follow from that.
+
+**A confirmed authenticator is still asked for.** Somebody who enrolled one meets the code entry
+screen whichever door they came in through, because enrolling was their decision and single sign-on
+is not a way around it.
+
+**An account with no local password is exempt from being *required* to enrol.** `MFAPolicy.Requires`
+returns false for one, and the comment there says why: there is no local sign-in for a local second
+factor to stand behind, so the factor is the provider's to enforce. Turning the platform policy on
+therefore does not confine every federated account to an enrolment screen it has no reason to be at.
+
+Both protocols land on the same code for all of that. `authn.SignInWithFederatedIdentity` decides
+which account a verified assertion becomes, and it neither knows nor cares which of them produced
+one — which is why SAML (M1-010) was a second caller rather than a second copy of these rules.
+
+**An assertion is single-use.** OpenID Connect binds an ID token to one exchange with a nonce; SAML
+has no equivalent, so a signed assertion stays a working credential for its whole validity window
+unless somebody remembers it. `app.saml_assertion` is that memory — a table rather than a map in the
+process, because a restart inside that window would otherwise be a scheduled hole in it.
+
+The rest — the protocols, the state and nonce, the key rotation handling, and what a group in the
+identity provider does to a role here — is [`docs/sso-oidc.md`](sso-oidc.md) and
+[`docs/sso-saml.md`](sso-saml.md).

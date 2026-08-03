@@ -8,11 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/bryanster/blacklight/internal/authz"
 )
 
 // The types in this file own the validation that can be done from the value
@@ -159,6 +162,250 @@ func (u *URL) UnmarshalText(text []byte) error {
 	parsed.RawPath = ""
 	u.URL = parsed
 	return nil
+}
+
+// IssuerURL is an OpenID Connect issuer identifier (M1-009).
+//
+// It is deliberately not [URL]. An issuer identifier is compared byte for byte
+// against the `iss` claim of every ID token, and against the `issuer` field of
+// the discovery document — so the one normalization [URL] performs, stripping a
+// trailing slash, is the one thing that must not happen here. Auth0 issues
+// tokens whose `iss` ends in a slash; canonicalizing it away would make every
+// token from such a provider fail verification, with no message saying why.
+//
+// The rest of the checks are the same, and for the same reasons.
+type IssuerURL struct {
+	*url.URL
+}
+
+// IsZero reports whether an issuer was configured at all. It is what
+// [OIDC.Enabled] reads: no issuer means no single sign-on, not a broken one.
+func (u IssuerURL) IsZero() bool { return u.URL == nil }
+
+// String renders the issuer exactly as it was configured, which is the form
+// that has to match the token.
+func (u IssuerURL) String() string {
+	if u.URL == nil {
+		return ""
+	}
+	return u.URL.String()
+}
+
+// MarshalText is the inverse of UnmarshalText, so a dumped config shows the
+// issuer rather than the fields of net/url.URL.
+func (u IssuerURL) MarshalText() ([]byte, error) { return []byte(u.String()), nil }
+
+func (u *IssuerURL) UnmarshalText(text []byte) error {
+	raw := strings.TrimSpace(string(text))
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return errors.New("must be an absolute URL")
+	}
+	switch {
+	case parsed.Scheme != "http" && parsed.Scheme != "https":
+		return errors.New("must use scheme http or https")
+	case parsed.User != nil:
+		return errors.New("must not contain credentials")
+	case parsed.RawQuery != "" || parsed.Fragment != "":
+		// OpenID Connect Discovery 1.0 §2 says as much: an issuer identifier
+		// carries no query and no fragment.
+		return errors.New("must not contain a query string or fragment")
+	}
+	u.URL = parsed
+	return nil
+}
+
+// Scopes is a list of OAuth 2.0 scopes, written space- or comma-separated —
+// space is how a provider's own documentation spells them, and a comma is what
+// somebody used to the rest of this file will type.
+type Scopes struct {
+	values []string
+}
+
+// scopeOpenID is the one scope that makes a request an OpenID Connect request
+// rather than a bare OAuth 2.0 one. Without it a provider returns no ID token,
+// and this deployment authenticates nobody.
+const scopeOpenID = "openid"
+
+// IsZero reports whether the list is empty.
+func (s Scopes) IsZero() bool { return len(s.values) == 0 }
+
+// Values returns the scopes, in the order they were written.
+func (s Scopes) Values() []string { return slices.Clone(s.values) }
+
+// Contains reports whether the list includes a scope.
+func (s Scopes) Contains(scope string) bool { return slices.Contains(s.values, scope) }
+
+// String renders the list the way a provider's documentation does.
+func (s Scopes) String() string { return strings.Join(s.values, " ") }
+
+// MarshalText is the inverse of UnmarshalText.
+func (s Scopes) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
+func (s *Scopes) UnmarshalText(text []byte) error {
+	var values []string
+	for _, field := range strings.FieldsFunc(string(text), func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	}) {
+		if !slices.Contains(values, field) {
+			values = append(values, field)
+		}
+	}
+	if !slices.Contains(values, scopeOpenID) {
+		// Checked here rather than silently prepended: a deployment whose
+		// operator removed it meant something by that, and what they would get
+		// is a login that fails at the far end with a provider's error message.
+		return fmt.Errorf("must include the %q scope, or the provider returns no ID token and "+
+			"nobody can sign in", scopeOpenID)
+	}
+	s.values = values
+	return nil
+}
+
+// Names is an ordered list of alternative names for one thing, written
+// comma-separated: the SAML assertion attributes an address might arrive in
+// (M1-010), best first.
+//
+// Order is meaning here, which is why this is not [Scopes] with a different
+// separator. The first name that is present wins, so a provider that sends both
+// `mail` and an OID spelling of it is read once, from the one the operator put
+// first — and reordering the list is how they change that.
+//
+// Only a comma separates: an attribute name is frequently a URL, and splitting
+// on whitespace as well would be fine right up until somebody's directory emits
+// a name with a space in it.
+type Names struct {
+	values []string
+}
+
+// IsZero reports whether the list is empty.
+func (n Names) IsZero() bool { return len(n.values) == 0 }
+
+// Values returns the names, in the order they were written.
+func (n Names) Values() []string { return slices.Clone(n.values) }
+
+// String renders the list as it is written in the environment.
+func (n Names) String() string { return strings.Join(n.values, ",") }
+
+// MarshalText is the inverse of UnmarshalText.
+func (n Names) MarshalText() ([]byte, error) { return []byte(n.String()), nil }
+
+func (n *Names) UnmarshalText(text []byte) error {
+	var values []string
+	for _, field := range strings.Split(string(text), ",") {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue // a trailing comma, not worth an error
+		}
+		// Duplicates are dropped rather than refused: a repeated name is a
+		// second lookup that can never win, so it means nothing either way, and
+		// failing to start over one would be a startup error about a typo with
+		// no consequence.
+		if !slices.Contains(values, field) {
+			values = append(values, field)
+		}
+	}
+	if len(values) == 0 {
+		return errors.New("must name at least one attribute")
+	}
+	n.values = values
+	return nil
+}
+
+// RoleMap maps a group at the identity provider onto a platform role, written
+// as `group=role` pairs: `blacklight-admins=admin,everyone=member`.
+//
+// It is evaluated on every single sign-on, so a group removed at the provider
+// takes effect here at the person's next login — including a demotion out of
+// admin. An unmapped group contributes nothing; somebody in no mapped group at
+// all gets the least authority the platform has.
+type RoleMap struct {
+	// byGroup is the parsed mapping. The empty map is a valid configuration: it
+	// means every federated user is an ordinary member, which is a defensible
+	// posture and not an error.
+	byGroup map[string]authz.PlatformRole
+}
+
+// IsZero reports whether any mapping was configured.
+func (m RoleMap) IsZero() bool { return len(m.byGroup) == 0 }
+
+// Role returns the strongest role any of these groups maps to, and false when
+// none of them maps to anything.
+//
+// Strongest, not first: somebody in both an administrators group and an
+// everyone group is an administrator, and which order the provider happened to
+// list their groups in must not decide that.
+func (m RoleMap) Role(groups []string) (authz.PlatformRole, bool) {
+	var best authz.PlatformRole
+	found := false
+	for _, group := range groups {
+		mapped, ok := m.byGroup[group]
+		if !ok {
+			continue
+		}
+		// authz.PlatformRoles() is ordered by authority, so the lower index wins.
+		if !found || slices.Index(authz.PlatformRoles(), mapped) < slices.Index(authz.PlatformRoles(), best) {
+			best, found = mapped, true
+		}
+	}
+	return best, found
+}
+
+// Groups returns the mapped group names, sorted, for a startup log line that
+// says what this deployment will honour.
+func (m RoleMap) Groups() []string { return slices.Sorted(maps.Keys(m.byGroup)) }
+
+// String renders the mapping the way it is written in the environment.
+func (m RoleMap) String() string {
+	pairs := make([]string, 0, len(m.byGroup))
+	for _, group := range m.Groups() {
+		pairs = append(pairs, group+"="+string(m.byGroup[group]))
+	}
+	return strings.Join(pairs, ",")
+}
+
+// MarshalText is the inverse of UnmarshalText.
+func (m RoleMap) MarshalText() ([]byte, error) { return []byte(m.String()), nil }
+
+func (m *RoleMap) UnmarshalText(text []byte) error {
+	byGroup := make(map[string]authz.PlatformRole)
+	for _, field := range strings.Split(string(text), ",") {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue // a trailing comma, not worth an error
+		}
+		group, role, ok := strings.Cut(field, "=")
+		group, role = strings.TrimSpace(group), strings.TrimSpace(role)
+		if !ok || group == "" || role == "" {
+			return fmt.Errorf(`must be a comma-separated list of group=role pairs, such as `+
+				`"blacklight-admins=%s,staff=%s", but %s is not one of those`,
+				authz.PlatformRoles()[0], authz.PlatformRoles()[1], strconv.Quote(field))
+		}
+		if !authz.PlatformRole(role).Valid() {
+			return fmt.Errorf("maps the group %s onto the role %s, which is not one of %s",
+				strconv.Quote(group), strconv.Quote(role), roleList())
+		}
+		if existing, dup := byGroup[group]; dup {
+			return fmt.Errorf("maps the group %s twice, onto %s and onto %s",
+				strconv.Quote(group), existing, role)
+		}
+		byGroup[group] = authz.PlatformRole(role)
+	}
+	if len(byGroup) == 0 {
+		return errors.New("must list at least one group=role pair, or be left unset")
+	}
+	m.byGroup = byGroup
+	return nil
+}
+
+// roleList names the platform roles for an error message, read from the one
+// place they are defined.
+func roleList() string {
+	quoted := make([]string, 0, len(authz.PlatformRoles()))
+	for _, role := range authz.PlatformRoles() {
+		quoted = append(quoted, strconv.Quote(string(role)))
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // CIDRs is a set of network ranges, parsed from a comma-separated list.
@@ -308,6 +555,28 @@ func (s *Secret) UnmarshalText(text []byte) error {
 			"(generate one with `openssl rand -base64 32`)", reason)
 	}
 	s.b = []byte(raw)
+	return nil
+}
+
+// ForeignSecret is a credential this deployment was *given* rather than one it
+// chose: today the OIDC client secret, tomorrow an SMTP password. It redacts
+// exactly as [Secret] does — the embedded type is what provides that — and
+// enforces none of the strength policy.
+//
+// The policy is deliberately absent. A client secret is generated by the
+// identity provider; refusing to start because Entra's happens to be 40
+// characters, or because Keycloak's contains the letters of a word on the weak
+// list, would be this server rejecting a credential it has no say over and
+// cannot regenerate. What [Secret] protects is the material an operator
+// generates for *us*, where "openssl rand -base64 32" is advice we can give.
+type ForeignSecret struct {
+	Secret
+}
+
+func (s *ForeignSecret) UnmarshalText(text []byte) error {
+	// Trimmed like every other value here: a trailing newline from a `docker
+	// secret` file or a copy-paste is a typo, not part of the credential.
+	s.Secret = NewSecret([]byte(strings.TrimSpace(string(text))))
 	return nil
 }
 

@@ -1,0 +1,182 @@
+{
+  "realm": "blacklight",
+  "enabled": true,
+  "displayName": "Blacklight (development)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "blacklight",
+      "name": "Blacklight",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "development-only-client-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "http://localhost:8080/api/v1/auth/oidc/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "http://localhost:8080/api/v1/auth/saml/metadata",
+      "name": "Blacklight (SAML)",
+      "enabled": true,
+      "protocol": "saml",
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "http://localhost:8080/api/v1/auth/saml/acs"
+      ],
+      "adminUrl": "http://localhost:8080/api/v1/auth/saml/acs",
+      "attributes": {
+        "saml.assertion.signature": "true",
+        "saml.server.signature": "false",
+        "saml.client.signature": "false",
+        "saml.signature.algorithm": "RSA_SHA256",
+        "saml_name_id_format": "persistent",
+        "saml_force_name_id_format": "true",
+        "saml.authnstatement": "true",
+        "saml_assertion_consumer_url_post": "http://localhost:8080/api/v1/auth/saml/acs",
+        "saml_single_logout_service_url_post": ""
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "email",
+            "friendly.name": "email",
+            "attribute.name": "email",
+            "attribute.nameformat": "Basic"
+          }
+        },
+        {
+          "name": "displayName",
+          "protocol": "saml",
+          "protocolMapper": "saml-user-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "displayName",
+            "friendly.name": "displayName",
+            "attribute.name": "displayName",
+            "attribute.nameformat": "Basic"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "saml",
+          "protocolMapper": "saml-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "friendly.name": "groups",
+            "attribute.name": "groups",
+            "attribute.nameformat": "Basic",
+            "single": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "blacklight-admins",
+      "path": "/blacklight-admins"
+    },
+    {
+      "name": "blacklight-users",
+      "path": "/blacklight-users"
+    }
+  ],
+  "users": [
+    {
+      "username": "rowan",
+      "enabled": true,
+      "attributes": {
+        "displayName": ["Rowan Ash"]
+      },
+      "email": "rowan@example.com",
+      "emailVerified": true,
+      "firstName": "Rowan",
+      "lastName": "Ash",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "blacklight",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/blacklight-admins"
+      ]
+    },
+    {
+      "username": "sam",
+      "enabled": true,
+      "attributes": {
+        "displayName": ["Sam Okafor"]
+      },
+      "email": "sam@example.com",
+      "emailVerified": true,
+      "firstName": "Sam",
+      "lastName": "Okafor",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "blacklight",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/blacklight-users"
+      ]
+    },
+    {
+      "username": "jules",
+      "enabled": true,
+      "attributes": {
+        "displayName": ["Jules Nkemelu"]
+      },
+      "email": "jules@example.com",
+      "emailVerified": false,
+      "firstName": "Jules",
+      "lastName": "Nkemelu",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "blacklight",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,11 +1,13 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
@@ -13,7 +15,9 @@ import (
 	"github.com/bryanster/blacklight/api"
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/oidc"
 	"github.com/bryanster/blacklight/internal/authn/recovery"
+	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/secrets"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
@@ -119,6 +123,16 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		return nil, err
 	}
 
+	provider, err := newOIDC(deps, log)
+	if err != nil {
+		return nil, err
+	}
+
+	federation, err := newSAML(deps, log)
+	if err != nil {
+		return nil, err
+	}
+
 	policy := throttle.PolicyFrom(deps.Config)
 	policy.Log = log
 	limiter, err := throttle.New(policy)
@@ -205,14 +219,15 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		requireMFAEnrolment(responder, log),
 		authorized,
 	)
-	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, log, responder), gen.ChiServerOptions{
-		BaseRouter: apiRouter,
-		// Reached when the generated wrapper cannot bind a parameter. The
-		// validator rejects those first, so this is a belt-and-braces path —
-		// but its default writes http.Error, which would be the one response in
-		// the application that is not a problem document.
-		ErrorHandlerFunc: responder.Write,
-	})
+	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, provider, federation, log, responder),
+		gen.ChiServerOptions{
+			BaseRouter: apiRouter,
+			// Reached when the generated wrapper cannot bind a parameter. The
+			// validator rejects those first, so this is a belt-and-braces path —
+			// but its default writes http.Error, which would be the one response in
+			// the application that is not a problem document.
+			ErrorHandlerFunc: responder.Write,
+		})
 	if extraRoutes != nil {
 		extraRoutes(apiRouter)
 	}
@@ -276,6 +291,7 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 		Memberships:   identity.NewMemberships(deps.Store),
 		TOTP:          identity.NewTOTPs(deps.Store),
 		RecoveryCodes: identity.NewRecoveryCodes(deps.Store),
+		Identities:    identity.NewIdentities(deps.Store),
 		Settings:      settings.New(deps.Store),
 		Sessions:      sessions,
 		Challenges:    challenges,
@@ -288,6 +304,123 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 		return nil, nil, nil, err
 	}
 	return auth, sessions, challenges, nil
+}
+
+// newOIDC builds the single sign-on provider, or returns nil when this
+// deployment has none configured (M1-009).
+//
+// Nil is a supported state and the default one: every endpoint that needs a
+// provider answers 404 without it, and `GET /auth/providers` offers a password
+// and nothing else. Only a configuration this server cannot make sense of is an
+// error here — a provider that cannot be *reached* is not, which is the whole
+// point of the next paragraph.
+//
+// Discovery is kicked off in the background and its result is ignored. A server
+// that waited for it would start slowly on a good day and not at all on a bad
+// one, and the page it would have served — the one with local sign-in on it — is
+// exactly what somebody needs when the identity provider is down. The provider
+// retries on its own; nothing has to be restarted when it comes back.
+func newOIDC(deps Deps, log *slog.Logger) (*oidc.Provider, error) {
+	if !deps.Config.OIDC.Enabled() {
+		return nil, nil
+	}
+
+	opts := oidc.OptionsFrom(deps.Config, deps.Config.Server.BaseURL.String(), BasePath)
+	// The server's logger, not the process default: everything this provider
+	// reports about a sign-in belongs in the same log as the request that caused
+	// it.
+	opts.Log = log
+
+	provider, err := oidc.New(opts)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("single sign-on is configured",
+		slog.String("issuer", provider.Issuer()),
+		slog.Bool("auto_provision", provider.AutoProvision()))
+
+	// Detached from any request, and given a deadline of its own: this outlives
+	// the call that started it and must not outlive the process's patience. The
+	// error is the provider's to log — it does so, with the issuer and the reason
+	// — and a goroutine has nowhere to return one to.
+	go discoverInBackground(provider, log)
+
+	return provider, nil
+}
+
+// discoverInBackground performs the startup discovery attempt.
+//
+// being built, and the attempt deliberately outlives that call.
+//
+//nolint:contextcheck // There is no request context here: this is the server
+func discoverInBackground(provider *oidc.Provider, log *slog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), oidcStartupDiscovery)
+	defer cancel()
+
+	if err := provider.Refresh(ctx); err != nil {
+		// The provider has already logged this at warn, with the issuer and the
+		// reason. All that is left to say is that nothing is broken by it.
+		log.DebugContext(ctx, "single sign-on will be offered once the provider answers",
+			slog.String("issuer", provider.Issuer()))
+	}
+}
+
+// oidcStartupDiscovery bounds the discovery attempt made at startup. It is
+// generous: nothing waits for it.
+const oidcStartupDiscovery = 30 * time.Second
+
+// newSAML builds the SAML service provider, or returns nil when this deployment
+// has none configured (M1-010).
+//
+// Everything [newOIDC] says applies here, including the part that matters most:
+// a provider whose metadata cannot be *read* is not a startup failure. The
+// difference is that a deployment configured with a metadata file has already
+// read it — [saml.OptionsFrom] does, so an unreadable or malformed file is a
+// configuration error with the variable's name in it, which is right, because
+// nothing about a local file is going to improve while the server runs.
+func newSAML(deps Deps, log *slog.Logger) (*saml.Provider, error) {
+	if !deps.Config.SAML.Enabled() {
+		return nil, nil
+	}
+
+	opts, err := saml.OptionsFrom(deps.Config, deps.Config.Server.BaseURL.String(), BasePath)
+	if err != nil {
+		return nil, err
+	}
+	opts.Log = log
+	// The replay cache, which is the one thing in this package that SAML needs
+	// and OIDC does not: an assertion has no nonce, so nothing but a record of
+	// what has been accepted stops it being accepted twice.
+	opts.Assertions = identity.NewSAMLAssertions(deps.Store)
+
+	provider, err := saml.New(opts)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("SAML single sign-on is configured",
+		slog.String("entity_id", provider.EntityID()),
+		slog.Bool("auto_provision", provider.AutoProvision()))
+
+	go readMetadataInBackground(provider, log)
+
+	return provider, nil
+}
+
+// readMetadataInBackground performs the startup metadata read.
+//
+// being built, and the attempt deliberately outlives that call.
+//
+//nolint:contextcheck // There is no request context here: this is the server
+func readMetadataInBackground(provider *saml.Provider, log *slog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), oidcStartupDiscovery)
+	defer cancel()
+
+	if err := provider.Refresh(ctx); err != nil {
+		// The provider has already logged this at warn, with the URL and the
+		// reason. All that is left to say is that nothing is broken by it.
+		log.DebugContext(ctx, "SAML sign-in will be offered once the identity provider answers",
+			slog.String("entity_id", provider.EntityID()))
+	}
 }
 
 // totpIssuer is the name an authenticator app shows for this deployment.
@@ -310,13 +443,16 @@ func totpIssuer(cfg config.Config) string {
 // handler, and a response that will not serialize, then produce the same shape
 // as everything else (M0B-007).
 func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
-	challenges *challenge.Manager, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+	challenges *challenge.Manager, provider *oidc.Provider, federation *saml.Provider,
+	log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
 	return gen.NewStrictHandlerWithOptions(
 		&handlers{
 			store:      deps.Store,
 			auth:       auth,
 			sessions:   sessions,
 			challenges: challenges,
+			oidc:       provider,
+			saml:       federation,
 			log:        log,
 		},
 		nil, // No strict middleware: the chain is chi's, so there is one of them.

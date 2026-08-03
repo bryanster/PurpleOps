@@ -23,6 +23,12 @@ import (
 // process builds it, a place for its log to go, and the two ways of reading a
 // response body that the assertions need.
 
+// testBaseURL is where a browser reaches the server under test. It is a
+// constant because the SAML tests (M1-010) build an assertion consumer URL from
+// it and mint assertions addressed to that exact string — the identity provider
+// and this server have to agree on it byte for byte.
+const testBaseURL = "http://localhost:8080"
+
 // testConfig is a plausible production configuration. Tests that care about a
 // particular value — an https base URL, a short request timeout — copy it and
 // change that one field, so the rest stays realistic.
@@ -30,7 +36,7 @@ func testConfig(t *testing.T) config.Config {
 	t.Helper()
 
 	var baseURL config.URL
-	if err := baseURL.UnmarshalText([]byte("http://localhost:8080")); err != nil {
+	if err := baseURL.UnmarshalText([]byte(testBaseURL)); err != nil {
 		t.Fatalf("parsing the test base URL: %v", err)
 	}
 	return config.Config{

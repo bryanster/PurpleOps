@@ -6,6 +6,8 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/oidc"
+	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
@@ -25,6 +27,13 @@ type handlers struct {
 	auth       *authn.Service
 	sessions   *session.Manager
 	challenges *challenge.Manager
+
+	// oidc and saml are the configured single sign-on providers, and each is nil
+	// on a deployment with none — which is the default for both, and which the
+	// endpoints in oidchandlers.go and samlhandlers.go answer 404 for rather
+	// than guessing at. A deployment may have either, both, or neither.
+	oidc *oidc.Provider
+	saml *saml.Provider
 
 	log *slog.Logger
 }

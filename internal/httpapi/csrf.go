@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -60,10 +61,28 @@ var csrfExemptRoutes = map[string]string{
 	// a caller who has not started a sign-in has nothing to present.
 	"POST " + BasePath + mfaPathPrefix + "/recovery/verify": "no session exists yet; the pending cookie and the code are the proof",
 
-	// M1-009 and M1-010 add the SSO assertion callbacks here. They arrive as a
-	// cross-site POST from the identity provider by design, and their integrity
-	// comes from the signed assertion and the state/nonce they carry.
+	// The SAML assertion consumer (M1-010). It is a cross-site POST from the
+	// identity provider *by design* — that is what the HTTP-POST binding is —
+	// so the double-submit check could never pass here: there is no way for the
+	// identity provider's form to carry a header, and no session to protect
+	// anyway.
+	//
+	// What stands in its place is stronger than a CSRF token rather than weaker.
+	// The body is an XML document signed by the identity provider, audience- and
+	// recipient-restricted to this deployment, valid for a few minutes, refused
+	// if it has been seen before — and, for a sign-in that started here, bound
+	// to *this browser* by a request ID in a sealed cookie that the assertion
+	// has to name. An attacker who could forge a cross-site POST to this route
+	// still has to produce a signed assertion, which is the whole point.
+	//
+	// The OIDC callback is not in this list because it is a GET, and safe
+	// methods are exempt above.
+	"POST " + BasePath + samlACSPath: "the signed, replay-checked assertion is the proof, and the identity provider's cross-site POST could not carry a header",
 }
+
+// samlACSPath is the assertion consumer's path, from the package that owns it,
+// so the exemption above cannot drift from the route it exempts.
+const samlACSPath = saml.ACSPath
 
 // requireCSRF is the double-submit check, and step 10 of the chain described in
 // internal/httpapi/server.go.

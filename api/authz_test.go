@@ -61,6 +61,14 @@ func TestTheMappingIsAnExemptionOrAPermissionAndNeverBoth(t *testing.T) {
 		"verifyTotp": true, "verifyRecoveryCode": true,
 		"getCurrentUser": true, "changePassword": true, "enrollTotp": true,
 		"confirmTotp": true, "regenerateRecoveryCodes": true, "disableTotp": true,
+		// The single sign-on half of the same door (M1-009): the list of
+		// buttons the login page draws, and the two halves of an exchange that
+		// issues the credential everything else needs.
+		"getAuthProviders": true, "startOidcSignIn": true, "completeOidcSignIn": true,
+		// The SAML half of it (M1-010): the same two halves of the same
+		// exchange, plus the metadata an identity provider administrator has to
+		// be able to fetch before anybody here has an account to fetch it with.
+		"getSamlMetadata": true, "startSamlSignIn": true, "completeSamlSignIn": true,
 	}
 
 	for id, requirement := range requirements {

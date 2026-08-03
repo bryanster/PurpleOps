@@ -136,6 +136,49 @@ func TestARotatedKeyCannotReadTheOldValues(t *testing.T) {
 	}
 }
 
+// TestEachPurposeGetsItsOwnKey is what [NewFor] is for: two uses of the same
+// configured key material must not be able to read each other's values, so a
+// mistake in one cannot become a way into the other.
+func TestEachPurposeGetsItsOwnKey(t *testing.T) {
+	t.Parallel()
+
+	key := []byte("kZ2rV8sQ1tYb7NxJ4mWc0PfLgH6dEuAiOoTpRySvXlU=")
+
+	totp, err := New(key)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	state, err := NewFor(key, "oidc-state")
+	if err != nil {
+		t.Fatalf("NewFor: %v", err)
+	}
+	other, err := NewFor(key, "something-else")
+	if err != nil {
+		t.Fatalf("NewFor: %v", err)
+	}
+
+	sealed, err := state.Seal([]byte("the pending single sign-on"))
+	if err != nil {
+		t.Fatalf("Seal: %v", err)
+	}
+	if opened, err := state.Open(sealed); err != nil || string(opened) != "the pending single sign-on" {
+		t.Fatalf("Open under its own key = %q, %v", opened, err)
+	}
+	for name, cipher := range map[string]*Cipher{"the default purpose": totp, "another purpose": other} {
+		if _, err := cipher.Open(sealed); !errors.Is(err, ErrCorrupt) {
+			t.Errorf("%s opened a value sealed for oidc-state (err = %v)", name, err)
+		}
+	}
+}
+
+func TestNewForRefusesAnUnnamedPurpose(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NewFor([]byte("kZ2rV8sQ1tYb7NxJ4mWc0PfLgH6dEuAiOoTpRySvXlU="), "  "); err == nil {
+		t.Fatal("NewFor accepted an empty purpose, want an error")
+	}
+}
+
 func TestNewRefusesKeyMaterialThatIsTooShort(t *testing.T) {
 	t.Parallel()
 

@@ -166,6 +166,28 @@ func MFAEnrolmentRequired(action string) *Error {
 	}
 }
 
+// SignInRefused reports that somebody proved who they are and still may not in:
+// an identity provider vouched for them and this deployment has no account for
+// them, or the one it has is disabled (M1-009).
+//
+// It is a [Forbidden] with a detail the caller is actually told, which is the
+// difference between it and that constructor. Forbidden hides its reason because
+// what a caller may not do is often a description of something they may not know
+// about; here there is nothing to hide — the person has authenticated, the
+// subject is their own account, and "ask an administrator to create one" is the
+// only thing that gets them any further. A fixed sentence instead would send
+// somebody who signed in perfectly well to a support queue.
+//
+// detail is that sentence. reason is the log's half: which subject, at which
+// provider, and why.
+func SignInRefused(detail, reason string) *Error {
+	return &Error{
+		code:   gen.ProblemCodeForbidden,
+		detail: detail,
+		cause:  errors.New(reason),
+	}
+}
+
 // MethodNotAllowed reports that the path exists but not with this method.
 //
 // Normally this comes from the request validator rather than from a handler —

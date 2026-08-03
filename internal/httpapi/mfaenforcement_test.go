@@ -447,7 +447,8 @@ func TestAConfinedSessionCanOnlyReachTheEnrolmentRoutes(t *testing.T) {
 		// say nothing about whether the route is gated. The bodies come from
 		// csrfCoverage, which already holds one per mutating route — a second
 		// table would drift from it.
-		recorder := server.request(method, route, csrfCoverage[key].body, confined)
+		recorder := server.request(method, route,
+			csrfCoverage[key].body, mediaTypeOf(csrfCoverage[key].mediaType), confined)
 		_, allowed := enrolmentOnlyRoutes[key]
 
 		refusedByTheGate := recorder.Code == http.StatusForbidden &&
@@ -476,9 +477,9 @@ func TestAConfinedSessionCanOnlyReachTheEnrolmentRoutes(t *testing.T) {
 // request sends method to target with a session cookie and, for the methods that
 // need one, its CSRF token. It exists for the route walk above, which has to
 // issue every method the router serves.
-func (s *authServer) request(method, target, body string, sess *http.Cookie) *httptest.ResponseRecorder {
+func (s *authServer) request(method, target, body, mediaType string, sess *http.Cookie) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", mediaType)
 	if sess != nil {
 		request.AddCookie(sess)
 		s.attachCSRF(request, sess)

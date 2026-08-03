@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -41,16 +42,16 @@ const recoveryCodeBody = `{"code":"0000-0000-0000-0000-0000"}`
 // csrfCookie are omitted when empty, which is the state an attacker is actually
 // in — they cannot read this origin's cookies, so they cannot echo one.
 func (s *authServer) forge(target, body string, sess *http.Cookie, csrfCookie, header string) *httptest.ResponseRecorder {
-	return s.forgeMethod(http.MethodPost, target, body, sess, csrfCookie, header)
+	return s.forgeMethod(http.MethodPost, target, body, jsonMediaType, sess, csrfCookie, header)
 }
 
 // forgeMethod is forge for the route walk, which has to use each route's own
 // method — one of the MFA endpoints is a DELETE, and sending it a POST would
 // test the 405 path rather than the CSRF one.
-func (s *authServer) forgeMethod(method, target, body string, sess *http.Cookie,
+func (s *authServer) forgeMethod(method, target, body, mediaType string, sess *http.Cookie,
 	csrfCookie, header string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", mediaType)
 	if sess != nil {
 		request.AddCookie(sess)
 	}
@@ -371,8 +372,12 @@ func TestCurrentUserReportsTheCSRFToken(t *testing.T) {
 // PLAN.md §4 records that v1's CSRF protection was added and then removed. This
 // is the test that would have noticed.
 var csrfCoverage = map[string]struct {
-	body   string
-	exempt bool
+	body string
+	// mediaType is what to send the body as. Empty means JSON, which every
+	// route but one takes; the SAML assertion consumer is a form, because that
+	// is what the HTTP-POST binding posts.
+	mediaType string
+	exempt    bool
 }{
 	"POST " + BasePath + "/auth/login":    {body: `{"email":"nobody@example.com","password":"whatever it is"}`, exempt: true},
 	"POST " + BasePath + "/auth/logout":   {body: ""},
@@ -397,6 +402,31 @@ var csrfCoverage = map[string]struct {
 	"PUT " + BasePath + "/settings/mfa": {
 		body: `{"requiredForAll":true,"requiredForAdmins":true}`,
 	},
+
+	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
+	// and the value is nonsense on purpose: what the two walks need is a request
+	// the *validator* accepts, so that whatever answers it is the middleware
+	// under test rather than a 400 about the shape of the body.
+	"POST " + BasePath + "/auth/saml/acs": {
+		body:      "SAMLResponse=" + url.QueryEscape("not-an-assertion"),
+		mediaType: formMediaType,
+		exempt:    true, // A cross-site POST from the identity provider; see csrfExemptRoutes.
+	},
+}
+
+// The two media types the walks send.
+const (
+	jsonMediaType = "application/json"
+	formMediaType = "application/x-www-form-urlencoded"
+)
+
+// mediaTypeOf defaults an unset [csrfCoverage] media type to JSON, which is what
+// all but one of the routes take.
+func mediaTypeOf(declared string) string {
+	if declared == "" {
+		return jsonMediaType
+	}
+	return declared
 }
 
 func TestEveryMutatingRouteIsCoveredByCSRF(t *testing.T) {
@@ -429,7 +459,8 @@ func TestEveryMutatingRouteIsCoveredByCSRF(t *testing.T) {
 		// A request with a live session and no token at all. Anything not
 		// exempt must be refused before its handler runs.
 		sess := server.signIn(t)
-		got := server.forgeMethod(method, strings.TrimSuffix(route, "/"), expectation.body, sess, "", "").Code
+		got := server.forgeMethod(method, strings.TrimSuffix(route, "/"),
+			expectation.body, mediaTypeOf(expectation.mediaType), sess, "", "").Code
 		switch {
 		case expectation.exempt && got == http.StatusForbidden:
 			t.Errorf("%s is listed as exempt but was refused with 403", key)
