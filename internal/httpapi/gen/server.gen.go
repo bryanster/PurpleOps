@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for EngagementRole.
@@ -155,6 +156,63 @@ func (e SSOProviderId) Valid() bool {
 	}
 }
 
+// Defines values for ServiceTokenStatus.
+const (
+	ServiceTokenStatusActive  ServiceTokenStatus = "active"
+	ServiceTokenStatusExpired ServiceTokenStatus = "expired"
+	ServiceTokenStatusRevoked ServiceTokenStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ServiceTokenStatus enum.
+func (e ServiceTokenStatus) Valid() bool {
+	switch e {
+	case ServiceTokenStatusActive:
+		return true
+	case ServiceTokenStatusExpired:
+		return true
+	case ServiceTokenStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenScope.
+const (
+	TokenScopeAdminRead        TokenScope = "admin:read"
+	TokenScopeAdminWrite       TokenScope = "admin:write"
+	TokenScopeContentRead      TokenScope = "content:read"
+	TokenScopeContentSync      TokenScope = "content:sync"
+	TokenScopeEngagementsRead  TokenScope = "engagements:read"
+	TokenScopeEngagementsWrite TokenScope = "engagements:write"
+	TokenScopeReportsRead      TokenScope = "reports:read"
+	TokenScopeReportsWrite     TokenScope = "reports:write"
+)
+
+// Valid indicates whether the value is a known member of the TokenScope enum.
+func (e TokenScope) Valid() bool {
+	switch e {
+	case TokenScopeAdminRead:
+		return true
+	case TokenScopeAdminWrite:
+		return true
+	case TokenScopeContentRead:
+		return true
+	case TokenScopeContentSync:
+		return true
+	case TokenScopeEngagementsRead:
+		return true
+	case TokenScopeEngagementsWrite:
+		return true
+	case TokenScopeReportsRead:
+		return true
+	case TokenScopeReportsWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // AuthProviders What the login page may offer. It is deliberately a list rather than a
 // set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
 // renders this array needed no change when it arrived.
@@ -182,6 +240,44 @@ type ChangePasswordRequest struct {
 	// is one definition of an acceptable password rather than one here and
 	// one in the client.
 	NewPassword string `json:"newPassword"`
+}
+
+// CreateServiceTokenRequest Body of `POST /auth/tokens`. The owner is the caller and is not a field.
+type CreateServiceTokenRequest struct {
+	// EngagementId Bind the token to one engagement. Omit for a token that may reach
+	// every engagement you can. It cannot widen what you may reach.
+	EngagementId *openapi_types.UUID `json:"engagementId,omitempty"`
+
+	// ExpiresAt When the token should stop working. Required, must be in the future,
+	// and at most one year out — `400` otherwise, naming the field.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Name How you will recognise this token when you come to revoke it.
+	Name string `json:"name"`
+
+	// Scopes What the token may do. Repeats are accepted and stored once; a scope
+	// this server does not define is a `400` rather than a silently
+	// narrower token.
+	Scopes []TokenScope `json:"scopes"`
+}
+
+// CreatedServiceToken A token that has just been created: the row, plus the one and only copy
+// of its secret. Nothing else in this API ever carries `token`.
+type CreatedServiceToken struct {
+	// ServiceToken One service token, as anybody but its creator ever sees it: everything
+	// about the credential except the credential.
+	ServiceToken ServiceToken `json:"serviceToken"`
+
+	// Token The credential, spelled `bl_<prefix>_<secret>`. Send it as
+	// `Authorization: Bearer <token>`.
+	//
+	// Show it to the person immediately and offer a way to copy it. There
+	// is no endpoint that reads it back, because the server keeps only a
+	// hash of it — a lost token is replaced, never recovered.
+	//
+	//
+	// Examples: bl_K7QM4TZB2A_2VHQ5XKPYD3JW8N6RTFA9CBEM4SZUG7LH2QX3KVD5RY
+	Token string `json:"token"`
 }
 
 // CurrentUser The caller, as `GET /auth/me` reports them. It carries nothing about the
@@ -532,6 +628,63 @@ type SSOProvider struct {
 // SSOProviderId Which protocol this provider speaks.
 type SSOProviderId string
 
+// ServiceToken One service token, as anybody but its creator ever sees it: everything
+// about the credential except the credential.
+type ServiceToken struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// EngagementId The one engagement this token may touch. Absent on a token that may
+	// reach every engagement its owner can. It only ever subtracts.
+	EngagementId *openapi_types.UUID `json:"engagementId,omitempty"`
+
+	// ExpiresAt When it stops working. Always set — a token with no expiry cannot be created.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Id The token's identifier, and what `DELETE /auth/tokens/{tokenId}` names. Not a credential.
+	Id openapi_types.UUID `json:"id"`
+
+	// LastUsedAt When it was last used. Absent if it never has been. Accurate to
+	// within a minute and deliberately no more: recording every request
+	// would put a database write behind every request, and this column
+	// answers "is this still in use?", which does not need the seconds.
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+
+	// Name What its owner called it, so they can tell which one to revoke.
+	//
+	// Examples: nightly coverage export
+	Name string `json:"name"`
+
+	// Prefix The public identifier in the middle of the token — the `xxx` of
+	// `bl_xxx_…`. It is how a token found in a log or a CI variable is
+	// matched to a row here without anybody handling its secret.
+	//
+	//
+	// Examples: K7QM4TZB2A
+	Prefix string `json:"prefix"`
+
+	// RevokedAt When somebody ended it early. Absent on a token nobody has revoked;
+	// expired and revoked are different facts and `status` says which.
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+
+	// Scopes What this token may do, subject to what its owner may do.
+	Scopes []TokenScope `json:"scopes"`
+
+	// Status Whether a token works right now, derived from its timestamps so that a
+	// client does not have to compare dates to render a list. `revoked` wins
+	// over `expired` where both are true: it is the fact somebody acted on.
+	Status ServiceTokenStatus `json:"status"`
+}
+
+// ServiceTokenStatus Whether a token works right now, derived from its timestamps so that a
+// client does not have to compare dates to render a list. `revoked` wins
+// over `expired` where both are true: it is the fact somebody acted on.
+type ServiceTokenStatus string
+
+// ServiceTokens The caller's own tokens, newest first.
+type ServiceTokens struct {
+	Items []ServiceToken `json:"items"`
+}
+
 // TOTPCodeRequest A six-digit code from an authenticator app. The same body confirms an
 // enrolment and completes a sign-in.
 type TOTPCodeRequest struct {
@@ -572,6 +725,18 @@ type TOTPEnrolment struct {
 	// Examples: JBSWY3DPEHPK3PXP
 	Secret string `json:"secret"`
 }
+
+// TokenScope One coarse permission a service token may carry (M1-011). Scopes are few
+// and blunt deliberately: a scope per endpoint would be a second
+// permission model to keep in step with the real one, and the real one is
+// `docs/authz.md`.
+//
+// A scope is never a grant on its own. Holding `admin:write` permits
+// nothing the token's owner could not already do — see
+// `POST /auth/tokens`. These words are the ones `internal/authz` requires
+// of each action, and `TestTheTokenScopeEnumMatchesTheOnePlaceScopesAreDefined`
+// fails the build if this list and that one disagree.
+type TokenScope string
 
 // Version Build identity of the running binary, stamped at link time. Every field is
 // populated: an unstamped build reports a placeholder rather than an empty
@@ -808,6 +973,44 @@ type StartSamlSignInParams struct {
 	ReturnTo *string `form:"return_to,omitempty" json:"return_to,omitempty"`
 }
 
+// CreateServiceTokenParams defines parameters for CreateServiceToken.
+type CreateServiceTokenParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// RevokeServiceTokenParams defines parameters for RevokeServiceToken.
+type RevokeServiceTokenParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SetMfaPolicyParams defines parameters for SetMfaPolicy.
 type SetMfaPolicyParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -850,6 +1053,9 @@ type ChangePasswordJSONRequestBody = ChangePasswordRequest
 
 // CompleteSamlSignInFormdataRequestBody defines body for CompleteSamlSignIn for application/x-www-form-urlencoded ContentType.
 type CompleteSamlSignInFormdataRequestBody CompleteSamlSignInFormdataBody
+
+// CreateServiceTokenJSONRequestBody defines body for CreateServiceToken for application/json ContentType.
+type CreateServiceTokenJSONRequestBody = CreateServiceTokenRequest
 
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
@@ -904,6 +1110,15 @@ type ServerInterface interface {
 	// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
 	// (GET /auth/saml/start)
 	StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams)
+	// ListServiceTokens List your own service tokens.
+	// (GET /auth/tokens)
+	ListServiceTokens(w http.ResponseWriter, r *http.Request)
+	// CreateServiceToken Create a service token, shown once.
+	// (POST /auth/tokens)
+	CreateServiceToken(w http.ResponseWriter, r *http.Request, params CreateServiceTokenParams)
+	// RevokeServiceToken Revoke one of your own service tokens.
+	// (DELETE /auth/tokens/{tokenId})
+	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1015,6 +1230,24 @@ func (_ Unimplemented) GetSamlMetadata(w http.ResponseWriter, r *http.Request) {
 // StartSamlSignIn Begin a single sign-on through the configured SAML provider.
 // (GET /auth/saml/start)
 func (_ Unimplemented) StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListServiceTokens List your own service tokens.
+// (GET /auth/tokens)
+func (_ Unimplemented) ListServiceTokens(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateServiceToken Create a service token, shown once.
+// (POST /auth/tokens)
+func (_ Unimplemented) CreateServiceToken(w http.ResponseWriter, r *http.Request, params CreateServiceTokenParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeServiceToken Revoke one of your own service tokens.
+// (DELETE /auth/tokens/{tokenId})
+func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1533,6 +1766,111 @@ func (siw *ServerInterfaceWrapper) StartSamlSignIn(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListServiceTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceTokens(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceTokens(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateServiceToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateServiceTokenParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceToken(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeServiceToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tokenId" -------------
+	var tokenId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tokenId", chi.URLParam(r, "tokenId"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tokenId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeServiceTokenParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeServiceToken(w, r, tokenId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -1764,6 +2102,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/auth/mfa/totp", wrapper.DisableTotp)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/tokens", wrapper.ListServiceTokens)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/tokens", wrapper.CreateServiceToken)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/auth/tokens/{tokenId}", wrapper.RevokeServiceToken)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/auth/providers", wrapper.GetAuthProviders)
@@ -3124,6 +3471,275 @@ func (response StartSamlSignIn500ApplicationProblemPlusJSONResponse) VisitStartS
 	return err
 }
 
+type ListServiceTokensRequestObject struct {
+}
+
+type ListServiceTokensResponseObject interface {
+	VisitListServiceTokensResponse(w http.ResponseWriter) error
+}
+
+type ListServiceTokens200JSONResponse ServiceTokens
+
+func (response ListServiceTokens200JSONResponse) VisitListServiceTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceTokens401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListServiceTokens401ApplicationProblemPlusJSONResponse) VisitListServiceTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceTokens403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListServiceTokens403ApplicationProblemPlusJSONResponse) VisitListServiceTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceTokens500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListServiceTokens500ApplicationProblemPlusJSONResponse) VisitListServiceTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceTokenRequestObject struct {
+	Params CreateServiceTokenParams
+	Body   *CreateServiceTokenJSONRequestBody
+}
+
+type CreateServiceTokenResponseObject interface {
+	VisitCreateServiceTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateServiceToken201JSONResponse CreatedServiceToken
+
+func (response CreateServiceToken201JSONResponse) VisitCreateServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceToken400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceToken400ApplicationProblemPlusJSONResponse) VisitCreateServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceToken401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceToken401ApplicationProblemPlusJSONResponse) VisitCreateServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceToken403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceToken403ApplicationProblemPlusJSONResponse) VisitCreateServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceToken409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceToken409ApplicationProblemPlusJSONResponse) VisitCreateServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceToken500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceToken500ApplicationProblemPlusJSONResponse) VisitCreateServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceTokenRequestObject struct {
+	TokenId openapi_types.UUID `json:"tokenId"`
+	Params  RevokeServiceTokenParams
+}
+
+type RevokeServiceTokenResponseObject interface {
+	VisitRevokeServiceTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokeServiceToken204Response struct {
+}
+
+func (response RevokeServiceToken204Response) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeServiceToken400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeServiceToken400ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceToken401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeServiceToken401ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceToken403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeServiceToken403ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceToken404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeServiceToken404ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeServiceToken500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -3418,6 +4034,15 @@ type StrictServerInterface interface {
 	// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
 	// (GET /auth/saml/start)
 	StartSamlSignIn(ctx context.Context, request StartSamlSignInRequestObject) (StartSamlSignInResponseObject, error)
+	// ListServiceTokens List your own service tokens.
+	// (GET /auth/tokens)
+	ListServiceTokens(ctx context.Context, request ListServiceTokensRequestObject) (ListServiceTokensResponseObject, error)
+	// CreateServiceToken Create a service token, shown once.
+	// (POST /auth/tokens)
+	CreateServiceToken(ctx context.Context, request CreateServiceTokenRequestObject) (CreateServiceTokenResponseObject, error)
+	// RevokeServiceToken Revoke one of your own service tokens.
+	// (DELETE /auth/tokens/{tokenId})
+	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -3926,6 +4551,90 @@ func (sh *strictHandler) StartSamlSignIn(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartSamlSignInResponseObject); ok {
 		if err := validResponse.VisitStartSamlSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListServiceTokens operation middleware
+func (sh *strictHandler) ListServiceTokens(w http.ResponseWriter, r *http.Request) {
+	var request ListServiceTokensRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListServiceTokens(ctx, request.(ListServiceTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListServiceTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListServiceTokensResponseObject); ok {
+		if err := validResponse.VisitListServiceTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateServiceToken operation middleware
+func (sh *strictHandler) CreateServiceToken(w http.ResponseWriter, r *http.Request, params CreateServiceTokenParams) {
+	var request CreateServiceTokenRequestObject
+
+	request.Params = params
+
+	var body CreateServiceTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateServiceToken(ctx, request.(CreateServiceTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateServiceToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateServiceTokenResponseObject); ok {
+		if err := validResponse.VisitCreateServiceTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeServiceToken operation middleware
+func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams) {
+	var request RevokeServiceTokenRequestObject
+
+	request.TokenId = tokenId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeServiceToken(ctx, request.(RevokeServiceTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeServiceToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeServiceTokenResponseObject); ok {
+		if err := validResponse.VisitRevokeServiceTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

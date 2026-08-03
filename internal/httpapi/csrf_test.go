@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -402,6 +403,20 @@ var csrfCoverage = map[string]struct {
 	"PUT " + BasePath + "/settings/mfa": {
 		body: `{"requiredForAll":true,"requiredForAdmins":true}`,
 	},
+
+	// The service token endpoints (M1-011). Protected, not exempt: they are
+	// reached by a browser session like everything else here, and the one thing
+	// a service token *cannot* do is call them — so there is no
+	// token-authenticated caller for an exemption to be about.
+	"POST " + BasePath + "/auth/tokens": {
+		// A year out is inside the maximum whatever year this test runs in, and
+		// the date has to be one the specification accepts rather than one the
+		// handler does: the walks below want a request that reaches the
+		// middleware under test.
+		body: `{"name":"walked","scopes":["content:read"],"expiresAt":"` +
+			time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339) + `"}`,
+	},
+	"DELETE " + BasePath + "/auth/tokens/{tokenId}": {body: ""},
 
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request

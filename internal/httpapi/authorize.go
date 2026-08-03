@@ -397,12 +397,20 @@ func facts(ctx context.Context, requirement api.Requirement, route specRoute, ca
 // between them is deliberate — memberships are loaded per request for the one
 // engagement in question, and MFA state travels so that a decision's audit line
 // records how strong the session that got it was.
+//
+// A service token's scopes and its engagement binding travel too, and they are
+// carried rather than derived: they are what M1-011's second and third fences
+// are made of, and a middleware that recomputed either from the request would be
+// a second answer to a question authentication already answered. Both are empty
+// for a session, which is what makes the fences apply to tokens alone.
 func subjectOf(caller authn.Subject, engagementID string, seat authz.EngagementRole, member bool) authz.Subject {
 	subject := authz.Subject{
-		UserID:       caller.UserID,
-		PlatformRole: caller.PlatformRole,
-		Method:       caller.Method,
-		MFASatisfied: caller.MFASatisfied,
+		UserID:            caller.UserID,
+		PlatformRole:      caller.PlatformRole,
+		Method:            caller.Method,
+		TokenScopes:       caller.TokenScopes,
+		TokenEngagementID: caller.TokenEngagementID,
+		MFASatisfied:      caller.MFASatisfied,
 	}
 	if member {
 		subject.Memberships = map[string]authz.EngagementRole{engagementID: seat}

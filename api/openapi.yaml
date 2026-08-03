@@ -667,6 +667,150 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /auth/tokens:
+    get:
+      operationId: listServiceTokens
+      summary: List your own service tokens.
+      description: |
+        Your tokens, newest first, including the expired and revoked ones — you
+        cannot decide whether to rotate something you cannot see the history of.
+
+        No secret is here, and none could be: the server stores a hash, so it
+        could not produce a token's value if asked. `prefix` is what identifies
+        a row to a human, and it is the same value that appears in the middle of
+        the token itself.
+
+        Yours and nobody else's. There is no parameter that names another
+        account, and an administrator calling this sees their own tokens like
+        everybody else; what an administrator has instead is the ability to
+        disable the account, which stops every token that account holds at its
+        next request.
+      tags:
+        - auth
+      x-authz-action: token.read
+      x-authz-resource:
+        type: service_token
+      responses:
+        "200":
+          description: Your tokens.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceTokens"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createServiceToken
+      summary: Create a service token, shown once.
+      description: |
+        Mints a token owned by you. **The response is the only time its secret
+        exists outside your client** — it is stored as a hash and cannot be
+        recovered, so a caller that does not save it has to create another one.
+
+        What the token may do is fenced twice, and the narrower fence wins on
+        every request:
+
+        1. The scopes you give it here.
+        2. Your own permissions, read live on every request the token makes.
+           Being demoted narrows every token you hold, immediately, without
+           touching them; having your account disabled stops them entirely.
+
+        `engagementId` adds a third fence, and only ever subtracts: a token
+        bound to an engagement reaches that engagement and nothing else — not
+        another engagement, not the installation — whatever its scopes say. It
+        cannot let a token into an engagement you are not a member of.
+
+        `expiresAt` is required and is capped at a year out. A credential with
+        no expiry is one nobody remembers to revoke.
+
+        A service token cannot call this. Creating credentials takes a signed-in
+        session, so that a leaked token cannot mint a longer-lived replacement
+        for itself and outlive its own revocation — `403` with `code:
+        "forbidden"` when one tries, whatever scopes it carries.
+      tags:
+        - auth
+      x-authz-action: token.manage
+      x-authz-resource:
+        type: service_token
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceTokenRequest"
+      responses:
+        "201":
+          description: |
+            The token was created. `token` is in this response and in no other,
+            ever — not in the listing, not in the log, not in the activity feed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedServiceToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/tokens/{tokenId}:
+    delete:
+      operationId: revokeServiceToken
+      summary: Revoke one of your own service tokens.
+      description: |
+        Takes effect on the token's next request: there is no cached copy of it
+        anywhere, so there is no window during which it still works.
+
+        Idempotent — revoking a token that has already been revoked answers the
+        same way, and keeps the original revocation time, because the first
+        revocation is when access actually stopped.
+
+        A token belonging to somebody else answers `404`, exactly as an
+        identifier that names nothing does. The two are indistinguishable on
+        purpose: an endpoint that answered `403` for real identifiers and `404`
+        for invented ones would be a way to find out which are real.
+
+        As with creation, a service token cannot call this.
+      tags:
+        - auth
+      x-authz-action: token.manage
+      x-authz-resource:
+        type: service_token
+        param: tokenId
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: tokenId
+          in: path
+          required: true
+          description: The token's `id`, from `GET /auth/tokens`. Never its prefix and never its secret.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The token is revoked, or already was.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /auth/providers:
     get:
       operationId: getAuthProviders
@@ -1944,6 +2088,177 @@ components:
             one question is how the two definitions would drift apart.
           examples:
             - 3K9M-2PTV-XA47-QRJH-58WY
+
+    TokenScope:
+      type: string
+      description: |
+        One coarse permission a service token may carry (M1-011). Scopes are few
+        and blunt deliberately: a scope per endpoint would be a second
+        permission model to keep in step with the real one, and the real one is
+        `docs/authz.md`.
+
+        A scope is never a grant on its own. Holding `admin:write` permits
+        nothing the token's owner could not already do — see
+        `POST /auth/tokens`. These words are the ones `internal/authz` requires
+        of each action, and `TestTheTokenScopeEnumMatchesTheOnePlaceScopesAreDefined`
+        fails the build if this list and that one disagree.
+      enum:
+        - admin:read
+        - admin:write
+        - content:read
+        - content:sync
+        - engagements:read
+        - engagements:write
+        - reports:read
+        - reports:write
+
+    ServiceToken:
+      type: object
+      description: |
+        One service token, as anybody but its creator ever sees it: everything
+        about the credential except the credential.
+      required:
+        - id
+        - name
+        - prefix
+        - scopes
+        - createdAt
+        - expiresAt
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The token's identifier, and what `DELETE /auth/tokens/{tokenId}` names. Not a credential.
+        name:
+          type: string
+          description: What its owner called it, so they can tell which one to revoke.
+          examples:
+            - nightly coverage export
+        prefix:
+          type: string
+          description: |
+            The public identifier in the middle of the token — the `xxx` of
+            `bl_xxx_…`. It is how a token found in a log or a CI variable is
+            matched to a row here without anybody handling its secret.
+          examples:
+            - K7QM4TZB2A
+        scopes:
+          type: array
+          minItems: 1
+          description: What this token may do, subject to what its owner may do.
+          items:
+            $ref: "#/components/schemas/TokenScope"
+        engagementId:
+          type: string
+          format: uuid
+          description: |
+            The one engagement this token may touch. Absent on a token that may
+            reach every engagement its owner can. It only ever subtracts.
+        status:
+          $ref: "#/components/schemas/ServiceTokenStatus"
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: When it stops working. Always set — a token with no expiry cannot be created.
+        lastUsedAt:
+          type: string
+          format: date-time
+          description: |
+            When it was last used. Absent if it never has been. Accurate to
+            within a minute and deliberately no more: recording every request
+            would put a database write behind every request, and this column
+            answers "is this still in use?", which does not need the seconds.
+        revokedAt:
+          type: string
+          format: date-time
+          description: |
+            When somebody ended it early. Absent on a token nobody has revoked;
+            expired and revoked are different facts and `status` says which.
+
+    ServiceTokenStatus:
+      type: string
+      description: |
+        Whether a token works right now, derived from its timestamps so that a
+        client does not have to compare dates to render a list. `revoked` wins
+        over `expired` where both are true: it is the fact somebody acted on.
+      enum:
+        - active
+        - expired
+        - revoked
+
+    ServiceTokens:
+      type: object
+      description: The caller's own tokens, newest first.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceToken"
+
+    CreatedServiceToken:
+      type: object
+      description: |
+        A token that has just been created: the row, plus the one and only copy
+        of its secret. Nothing else in this API ever carries `token`.
+      required:
+        - serviceToken
+        - token
+      properties:
+        serviceToken:
+          $ref: "#/components/schemas/ServiceToken"
+        token:
+          type: string
+          description: |
+            The credential, spelled `bl_<prefix>_<secret>`. Send it as
+            `Authorization: Bearer <token>`.
+
+            Show it to the person immediately and offer a way to copy it. There
+            is no endpoint that reads it back, because the server keeps only a
+            hash of it — a lost token is replaced, never recovered.
+          examples:
+            - bl_K7QM4TZB2A_2VHQ5XKPYD3JW8N6RTFA9CBEM4SZUG7LH2QX3KVD5RY
+
+    CreateServiceTokenRequest:
+      type: object
+      description: Body of `POST /auth/tokens`. The owner is the caller and is not a field.
+      required:
+        - name
+        - scopes
+        - expiresAt
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: How you will recognise this token when you come to revoke it.
+        scopes:
+          type: array
+          minItems: 1
+          description: |
+            What the token may do. Repeats are accepted and stored once; a scope
+            this server does not define is a `400` rather than a silently
+            narrower token.
+          items:
+            $ref: "#/components/schemas/TokenScope"
+        engagementId:
+          type: string
+          format: uuid
+          description: |
+            Bind the token to one engagement. Omit for a token that may reach
+            every engagement you can. It cannot widen what you may reach.
+        expiresAt:
+          type: string
+          format: date-time
+          description: |
+            When the token should stop working. Required, must be in the future,
+            and at most one year out — `400` otherwise, naming the field.
 
     RegenerateRecoveryCodesRequest:
       type: object

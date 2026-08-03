@@ -17,6 +17,13 @@ const (
 	ResourceUser    ResourceType = "user"
 	ResourceContent ResourceType = "content"
 
+	// ResourceServiceToken is one of the bearer credentials somebody holds for
+	// automating against this installation (M1-011). It is owned by the
+	// platform and not by an engagement, even for a token bound to one: a
+	// token bound to an engagement is still a credential belonging to a person,
+	// and where it may point is a separate question from who may hold it.
+	ResourceServiceToken ResourceType = "service_token"
+
 	ResourceEngagement ResourceType = "engagement"
 	ResourceMember     ResourceType = "member"
 	ResourceExecution  ResourceType = "execution"
@@ -29,15 +36,16 @@ const (
 // is owned by nothing and reaches no rule, because [Rule.Resource] is compared
 // against the resource the caller supplied — so an unrecognised type denies.
 var resourceOwners = map[ResourceType]owner{
-	ResourcePlatform:   ownedByPlatform,
-	ResourceUser:       ownedByPlatform,
-	ResourceContent:    ownedByPlatform,
-	ResourceEngagement: ownedByEngagement,
-	ResourceMember:     ownedByEngagement,
-	ResourceExecution:  ownedByEngagement,
-	ResourceComment:    ownedByEngagement,
-	ResourceFinding:    ownedByEngagement,
-	ResourceReport:     ownedByEngagement,
+	ResourcePlatform:     ownedByPlatform,
+	ResourceUser:         ownedByPlatform,
+	ResourceContent:      ownedByPlatform,
+	ResourceServiceToken: ownedByPlatform,
+	ResourceEngagement:   ownedByEngagement,
+	ResourceMember:       ownedByEngagement,
+	ResourceExecution:    ownedByEngagement,
+	ResourceComment:      ownedByEngagement,
+	ResourceFinding:      ownedByEngagement,
+	ResourceReport:       ownedByEngagement,
 }
 
 // owner is whether a resource type belongs to the installation or to one

@@ -47,6 +47,8 @@ Acts on the installation itself. Engagement membership is irrelevant to these.
 | `content.read` | ✓ | ✓ | `content:read` | Read the shared technique and test-case library. |
 | `content.sync` | ✓ | · | `content:sync` | Sync the library from its upstream sources. |
 | `engagement.create` | ✓ | ✓ | `engagements:write` | Create an engagement. Acts on the installation, because the engagement does not exist yet. |
+| `token.read` | ✓ | ✓ | `admin:read` | List your own service tokens and when they were last used. Never their secrets. |
+| `token.manage` | ✓ | ✓ | `admin:write` | Create and revoke your own service tokens. A signed-in session only, never a token itself. |
 
 ## Engagement actions
 
@@ -73,6 +75,8 @@ a role held elsewhere grants nothing here. A non-member is refused with a 404.
 A guard is an extra condition applied *after* a role grants the action, so a ✓ above can
 still be refused for one of these reasons.
 
+- **`session-only`** — Available to a signed-in session and never to a service token, whatever scopes the token carries and whatever its owner may do. It guards the actions that change which credentials exist: a token able to mint another one could outlive its own revocation, which neither the scope fence nor the owner's role would catch.
+  Applies to: `token.read`, `token.manage`.
 - **`blind-mode`** — In a blind engagement, a member in the `blue` seat cannot reach a step that has not been revealed — not even to learn it exists. The same filter is applied in the query layer, so a missing rule still cannot leak one. A platform admin who is *not* a member of the engagement is unaffected; one who has taken the blue seat is held to it.
   Applies to: `execution.read`, `execution.write_blue`.
 

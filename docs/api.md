@@ -74,6 +74,11 @@ stay separate:
 | `authenticate` (`internal/httpapi/authn.go`) | who the caller is, if anybody. It refuses nothing |
 | `x-authz-*` in this document, enforced by `internal/httpapi/authorize.go` | whether this caller may do this |
 
+Two credentials arrive at `authenticate`: the browser session cookie and an `Authorization: Bearer`
+service token. Both resolve to one `authn.Subject`, so no layer above has to know which was
+presented — see [`docs/api-tokens.md`](api-tokens.md) for the token half and
+[`docs/security.md`](security.md) for why it is one step rather than two.
+
 The `kin-openapi` request validator refuses to serve any operation carrying a security requirement
 unless it is given an `AuthenticationFunc` (`openapi3filter.ErrAuthenticationServiceMissing`).
 M1-003 supplies one that allows everything, and the comment on it in `internal/httpapi/validate.go`

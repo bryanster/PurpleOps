@@ -39,6 +39,12 @@ const (
 	ActionContentSync
 	ActionEngagementCreate
 
+	// Service tokens (M1-011). Both are held by everybody, over their own
+	// tokens and nobody else's — see the rule table, which says why that is a
+	// scoping rule rather than a permission one.
+	ActionTokenRead
+	ActionTokenManage
+
 	// Engagement-scoped: done inside one engagement, which the caller must be
 	// a member of — or a platform administrator, who holds all of these on
 	// every engagement.
@@ -122,6 +128,23 @@ const (
 	TokenScopeAdminRead        TokenScope = "admin:read"
 	TokenScopeAdminWrite       TokenScope = "admin:write"
 )
+
+// ParseTokenScope resolves a wire name to its constant, and reports false for
+// anything no rule requires.
+//
+// It is what refuses a scope at the moment a token is created (M1-011). Storing
+// an unrecognised one would not grant anything — [Can] grants on scopes it
+// holds, never on scopes it fails to recognise — but it would hand somebody a
+// credential that silently does less than the list they typed, and they would
+// find out from a 403 in a pipeline rather than from a 400 at creation.
+func ParseTokenScope(name string) (TokenScope, bool) {
+	for _, scope := range TokenScopes() {
+		if TokenScope(name) == scope {
+			return scope, true
+		}
+	}
+	return "", false
+}
 
 // TokenScopes returns every scope that some rule requires, in the order the
 // rules declare them. M1-011 renders the list into api/openapi.yaml from here.

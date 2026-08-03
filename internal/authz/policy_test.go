@@ -290,6 +290,90 @@ func TestAServiceTokenCannotExceedItsOwner(t *testing.T) {
 	}
 }
 
+// TestAnEngagementBoundTokenReachesNothingElse is the third fence: a token
+// created against one engagement holds nothing anywhere else, however broad its
+// scopes and however senior its owner. The denial for another engagement
+// conceals, because a token that answered 403 for a real engagement and 404 for
+// an imaginary one would be an engagement enumerator.
+func TestAnEngagementBoundTokenReachesNothingElse(t *testing.T) {
+	const other = "0192f1a0-0000-7000-8000-00000000000f"
+
+	// An administrator's token — so nothing below can be blamed on the role —
+	// carrying every scope the actions under test require.
+	token := admin()
+	token.Method = authz.MethodServiceToken
+	token.TokenScopes = []authz.TokenScope{authz.TokenScopeEngagementsRead, authz.TokenScopeAdminRead}
+	token.TokenEngagementID = engagement
+
+	if decision := authz.Can(t.Context(), token, authz.ActionExecutionRead,
+		executionIn(engagement)); !decision.Allowed {
+		t.Fatalf("a token bound to %s could not read its own engagement: %s", engagement, decision.Reason)
+	}
+
+	elsewhere := authz.Can(t.Context(), token, authz.ActionExecutionRead, executionIn(other))
+	switch {
+	case elsewhere.Allowed:
+		t.Errorf("a token bound to %s read a step of %s: %s", engagement, other, elsewhere.Reason)
+	case !elsewhere.Conceal:
+		t.Errorf("the refusal for another engagement admits it exists: %s", elsewhere.Reason)
+	}
+
+	// And nothing on the installation, which is not concealed: the caller
+	// already knows the platform is there.
+	platform := authz.Can(t.Context(), token, authz.ActionSettingsRead,
+		authz.Resource{Type: authz.ResourcePlatform})
+	switch {
+	case platform.Allowed:
+		t.Errorf("a token bound to an engagement read platform settings: %s", platform.Reason)
+	case platform.Conceal:
+		t.Errorf("the refusal conceals the installation, which every caller can see: %s", platform.Reason)
+	}
+}
+
+// TestAnUnboundTokenIsNotFencedByAnEmptyBinding: "" means unbound and must not
+// be compared against a resource's engagement, which would deny everything.
+func TestAnUnboundTokenIsNotFencedByAnEmptyBinding(t *testing.T) {
+	token := admin()
+	token.Method = authz.MethodServiceToken
+	token.TokenScopes = []authz.TokenScope{authz.TokenScopeEngagementsRead}
+
+	if decision := authz.Can(t.Context(), token, authz.ActionExecutionRead,
+		executionIn(engagement)); !decision.Allowed {
+		t.Fatalf("an unbound token was fenced out of an engagement: %s", decision.Reason)
+	}
+}
+
+// TestATokenCannotMintATokenHoweverItIsScoped is [authz.GuardSessionOnly]: the
+// one thing the two fences do not catch is a credential creating a credential,
+// because the sibling exceeds neither the owner nor the scope list — it merely
+// outlives the revocation of the token that made it.
+func TestATokenCannotMintATokenHoweverItIsScoped(t *testing.T) {
+	token := admin()
+	token.Method = authz.MethodServiceToken
+	token.TokenScopes = authz.TokenScopes() // every scope this build has.
+
+	for _, action := range []authz.Action{authz.ActionTokenRead, authz.ActionTokenManage} {
+		decision := authz.Can(t.Context(), token, action, authz.Resource{Type: authz.ResourceServiceToken})
+		switch {
+		case decision.Allowed:
+			t.Errorf("a fully scoped administrator's token holds %s: %s", action, decision.Reason)
+		case decision.Conceal:
+			t.Errorf("%s was refused with a concealment; the endpoint is in the published spec: %s",
+				action, decision.Reason)
+		}
+	}
+
+	// The same actions, from a session: an ordinary member manages their own
+	// tokens, which is what makes the refusals above about the credential and
+	// not about the role.
+	for _, action := range []authz.Action{authz.ActionTokenRead, authz.ActionTokenManage} {
+		if decision := authz.Can(t.Context(), member(authz.EngagementRoleObserver), action,
+			authz.Resource{Type: authz.ResourceServiceToken}); !decision.Allowed {
+			t.Errorf("a signed-in member does not hold %s over their own tokens: %s", action, decision.Reason)
+		}
+	}
+}
+
 // TestASessionIgnoresTokenScopes: the scope fence exists for tokens only, and a
 // browser session carrying none must not be fenced by their absence.
 func TestASessionIgnoresTokenScopes(t *testing.T) {

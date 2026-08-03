@@ -42,6 +42,17 @@ type Subject struct {
 	// constrains every token they hold without touching the tokens (M1-011).
 	TokenScopes []TokenScope
 
+	// TokenEngagementID is the one engagement a service token was bound to at
+	// creation, and is empty both for an unbound token and for a session. A
+	// bound token reaches that engagement and nothing else — not another
+	// engagement, and not the installation — however broad its scopes and
+	// however senior its owner.
+	//
+	// It is a third fence rather than a membership because it subtracts and
+	// never adds: it cannot let a token into an engagement its owner is not a
+	// member of. Expressing it as a membership would do exactly that.
+	TokenEngagementID string
+
 	// MFASatisfied is whether this session presented a second factor.
 	//
 	// No rule reads it, deliberately. Whether a factor is *required* of this
@@ -101,6 +112,9 @@ func (s Subject) LogValue() slog.Value {
 			scopes = append(scopes, string(scope))
 		}
 		attrs = append(attrs, slog.Any("token_scopes", scopes))
+		if s.TokenEngagementID != "" {
+			attrs = append(attrs, slog.String("token_engagement_id", s.TokenEngagementID))
+		}
 	}
 	return slog.GroupValue(attrs...)
 }

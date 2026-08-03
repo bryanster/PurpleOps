@@ -52,7 +52,7 @@ type Rule struct {
 	Summary string
 }
 
-// Guard is a condition beyond "does this role hold this action". There is one,
+// Guard is a condition beyond "does this role hold this action". There are two,
 // and adding another means adding a case to [Guard.blocks] — which is where a
 // reviewer will look, because the table names it.
 type Guard string
@@ -73,6 +73,22 @@ const (
 	// layer (M1-013), so a rule that forgot this guard still could not leak
 	// one. Both, deliberately: this is the belt, that is the braces.
 	GuardBlindMode Guard = "blind-mode"
+
+	// GuardSessionOnly withholds an action from a request that authenticated
+	// with a service token, whatever scopes that token carries and whatever
+	// its owner may do (M1-011).
+	//
+	// It is for the small set of actions whose effect is to change what
+	// credentials exist. A token that can mint tokens is a token that can
+	// outlive its own revocation, and the two fences do not catch that: the
+	// sibling it mints exceeds neither the owner's role nor the scope list, it
+	// merely exists afterwards. The fix is that the act of creating a
+	// credential requires a person at a keyboard.
+	//
+	// It refuses rather than conceals. The endpoint is not a secret — every
+	// caller can read it in api/openapi.yaml — and the honest answer is "not
+	// with this credential", which is a 403.
+	GuardSessionOnly Guard = "session-only"
 )
 
 // Role sets, named so the table below reads as a table. Treat them as
@@ -135,6 +151,26 @@ var rules = []Rule{
 	{Action: ActionEngagementCreate, Name: "engagement.create", Resource: ResourcePlatform,
 		Platform: everyone, Token: TokenScopeEngagementsWrite,
 		Summary: "Create an engagement. Acts on the installation, because the engagement does not exist yet."},
+
+	// Service tokens (M1-011). Everybody holds both, and what stops that being
+	// "anybody may read anybody's tokens" is not a rule here — it is that the
+	// endpoints and the repository behind them only ever name the caller's own
+	// rows, the way GET /auth/me does. That is scoping rather than permission,
+	// and this table decides permission.
+	//
+	// [GuardSessionOnly] is the part that is a decision. Without it a token
+	// holding admin:write could mint a sibling with a longer expiry, which
+	// would survive the revocation of the token that made it — a compromised
+	// credential turning itself into a permanent one, inside the fences,
+	// without ever exceeding its owner. The scope named below is therefore
+	// unreachable by construction; it is the honest one for the action, so
+	// that removing the guard would not silently widen anything.
+	{Action: ActionTokenRead, Name: "token.read", Resource: ResourceServiceToken,
+		Platform: everyone, Token: TokenScopeAdminRead, Guard: GuardSessionOnly,
+		Summary: "List your own service tokens and when they were last used. Never their secrets."},
+	{Action: ActionTokenManage, Name: "token.manage", Resource: ResourceServiceToken,
+		Platform: everyone, Token: TokenScopeAdminWrite, Guard: GuardSessionOnly,
+		Summary: "Create and revoke your own service tokens. A signed-in session only, never a token itself."},
 
 	// ── Engagement ──────────────────────────────────────────────────────────
 	{Action: ActionEngagementRead, Name: "engagement.read", Resource: ResourceEngagement,
@@ -221,8 +257,9 @@ func ruleFor(action Action) (Rule, bool) {
 //
 // Denial is the default at every step. An unknown action, an unauthenticated
 // caller, a resource of the wrong type, an engagement resource that does not
-// say which engagement, a role no rule lists, a guard, a missing token scope:
-// each is a deny, and each says why.
+// say which engagement, a role no rule lists, a guard, a token pointed outside
+// the engagement it is bound to, a missing token scope: each is a deny, and
+// each says why.
 func Can(ctx context.Context, subject Subject, action Action, resource Resource) Decision {
 	_ = ctx
 
@@ -250,19 +287,48 @@ func Can(ctx context.Context, subject Subject, action Action, resource Resource)
 		return decision
 	}
 
-	if reason, blocked := rule.Guard.blocks(by, resource); blocked {
-		return concealed(reason)
+	if refusal, blocked := rule.Guard.blocks(subject, by, resource); blocked {
+		return refusal
 	}
 
-	// The second fence. It runs after the first so that a demoted owner is
-	// told they were demoted rather than that their token is short a scope:
-	// the token did not change, and the reason a reader is looking for is the
-	// one that did (M1-011).
-	if subject.Method == MethodServiceToken && !subject.holdsScope(rule.Token) {
+	if subject.Method != MethodServiceToken {
+		return decision
+	}
+	return tokenFences(subject, rule, resource, decision)
+}
+
+// tokenFences applies what a service token is held to beyond its owner's role
+// (M1-011, PLAN.md §9).
+//
+// They run after the role half so that a demoted owner is told they were
+// demoted rather than that their token is short a scope: the token did not
+// change, and the reason a reader is looking for is the one that did.
+//
+// The binding is checked before the scope because it conceals and the scope
+// does not. A token bound to one engagement, asked about another, must not
+// produce an answer that differs from the answer for an engagement that does
+// not exist — and a 403 saying "wrong scope" for a real engagement beside a
+// 404 for an imaginary one is exactly that difference.
+func tokenFences(subject Subject, rule Rule, resource Resource, decision Decision) Decision {
+	if bound := subject.TokenEngagementID; bound != "" {
+		switch {
+		case !rule.Resource.EngagementScoped():
+			// Nothing outside an engagement, including the installation
+			// itself. There is no engagement to compare against here, so this
+			// is not a concealable question: the caller already knows the
+			// platform exists.
+			return deny(fmt.Sprintf("this token is bound to engagement %s and %s acts on the installation",
+				bound, rule.Name))
+		case resource.EngagementID != bound:
+			return concealed(fmt.Sprintf("this token is bound to engagement %s, and the request named %s",
+				bound, resource.EngagementID))
+		}
+	}
+
+	if !subject.holdsScope(rule.Token) {
 		return deny(fmt.Sprintf("%s needs the %s token scope, which this token does not carry",
 			rule.Name, rule.Token))
 	}
-
 	return decision
 }
 
@@ -320,23 +386,35 @@ func grant(subject Subject, rule Rule, resource Resource) (grantedBy, Decision) 
 		seat, resource.EngagementID, rule.Name))
 }
 
-// blocks applies a guard to an otherwise-granted action, and returns the reason
-// when it withholds it.
-func (g Guard) blocks(by grantedBy, resource Resource) (string, bool) {
+// blocks applies a guard to an otherwise-granted action, and returns the
+// refusal when it withholds it.
+//
+// It returns a whole [Decision] rather than a reason because the two guards
+// refuse differently: blind mode must not admit the step exists, and
+// session-only has nothing to hide. Deciding that here keeps "403 or 404" a
+// question the policy answers, which is the same reason [Decision.Conceal]
+// exists at all.
+func (g Guard) blocks(subject Subject, by grantedBy, resource Resource) (Decision, bool) {
 	switch g {
 	case GuardNone:
-		return "", false
+		return Decision{}, false
 
 	case GuardBlindMode:
 		if by.EngagementRole != EngagementRoleBlue || !resource.EngagementBlind || resource.Revealed {
-			return "", false
+			return Decision{}, false
 		}
-		return fmt.Sprintf("engagement %s runs blind and this %s has not been revealed",
-			resource.EngagementID, resource.Type), true
+		return concealed(fmt.Sprintf("engagement %s runs blind and this %s has not been revealed",
+			resource.EngagementID, resource.Type)), true
+
+	case GuardSessionOnly:
+		if subject.Method != MethodServiceToken {
+			return Decision{}, false
+		}
+		return deny("this action is not available to a service token, whatever it is scoped for"), true
 
 	default:
 		// A guard the table names and this function does not implement. Deny:
 		// a condition nobody wrote is not a condition that passes.
-		return fmt.Sprintf("the %s guard is not implemented in this build", g), true
+		return deny(fmt.Sprintf("the %s guard is not implemented in this build", g)), true
 	}
 }

@@ -344,3 +344,36 @@ process, because a restart inside that window would otherwise be a scheduled hol
 The rest — the protocols, the state and nonce, the key rotation handling, and what a group in the
 identity provider does to a role here — is [`docs/sso-oidc.md`](sso-oidc.md) and
 [`docs/sso-saml.md`](sso-saml.md).
+
+## Service tokens
+
+The REST API is the only supported integration surface, so these are the credentials for all of it.
+`PLAN.md` §4 on v1: "API keys authenticate nothing." That is the defect M1-011 closes, and closing
+it is mostly about *where* the checking happens.
+
+**One authentication step, two credentials.** `Authorization: Bearer` is resolved in the same
+middleware as the session cookie, into the same `authn.Subject`. Nothing above that line branches on
+how a request proved who it is — which is what stops a token from being a credential the session
+path never visits, the way v1's were.
+
+**Two fences, and the narrower wins.** An action is permitted only if the token's scopes allow it
+*and* the owner's live permissions allow it. Nothing about a role is stored on the token row, so a
+demotion applies at that person's next request and there is no cached copy to invalidate. A token
+bound to one engagement is held to a third fence that only ever subtracts.
+
+**A token cannot create a token.** `authz.GuardSessionOnly` refuses `token.read` and `token.manage`
+to a token-authenticated request whatever it carries. Without it, a leaked token could mint a
+longer-lived sibling and outlive its own revocation — which neither of the two fences catches,
+because the sibling exceeds neither.
+
+**The secret is a type, not a discipline.** `servicetoken.Token` renders as `[redacted]` under every
+printf verb, `log/slog` attribute and JSON encoder; reading it takes `Reveal()`, which one handler
+calls. `TestTheSecretAppearsInExactlyOneResponseEverAndInNoLog` greps a full debug-level capture for
+a live token's value.
+
+Hashes are keyed from `BLACKLIGHT_ENCRYPTION_KEY` and deliberately not from
+`BLACKLIGHT_SESSION_SECRET`: rotating the session secret is the documented way to sign every browser
+out, and it must not also break every integration in the deployment.
+
+The operator's half — creating, using, rotating, revoking, and what to do when one leaks — is
+[`docs/api-tokens.md`](api-tokens.md).

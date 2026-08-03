@@ -500,6 +500,40 @@ func sortedKeys[M ~map[string]V, V any](m M) []string {
 	return slices.Sorted(maps.Keys(m))
 }
 
+// TestTheTokenScopeEnumMatchesTheOnePlaceScopesAreDefined does for M1-011's
+// scopes what the test below does for roles, and matters more: a scope in the
+// document that no rule requires is one a caller can ask for and that grants
+// nothing, and they find out from a 403 in a pipeline rather than from a 400 at
+// creation.
+func TestTheTokenScopeEnumMatchesTheOnePlaceScopesAreDefined(t *testing.T) {
+	doc := mustLoad(t)
+
+	want := make([]string, 0, 8)
+	for _, scope := range authz.TokenScopes() {
+		want = append(want, string(scope))
+	}
+
+	ref, ok := doc.Components.Schemas["TokenScope"]
+	if !ok || ref.Value == nil {
+		t.Fatal("the document has no TokenScope schema, but internal/authz defines the scopes")
+	}
+
+	got := make([]string, 0, len(ref.Value.Enum))
+	for _, value := range ref.Value.Enum {
+		scope, isString := value.(string)
+		if !isString {
+			t.Errorf("TokenScope's enum contains %v, which is not a string", value)
+			continue
+		}
+		got = append(got, scope)
+	}
+
+	if !slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(want))) {
+		t.Errorf("TokenScope enumerates %v; internal/authz requires %v. The two must be the same words",
+			got, want)
+	}
+}
+
 // TestTheRoleEnumsMatchTheOnePlaceRolesAreDefined ties the wire vocabulary to
 // internal/authz.
 //

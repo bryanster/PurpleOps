@@ -38,7 +38,26 @@ type Subject struct {
 	// SessionID is the session this request arrived on. It is what logout
 	// revokes and what a password change rotates, and it is never the token —
 	// that value exists in the cookie and nowhere else.
+	//
+	// Empty for a request that arrived on a service token, which has no session
+	// to revoke or rotate: it is revoked as itself.
 	SessionID string
+
+	// TokenID, TokenScopes and TokenEngagementID describe the service token
+	// this request arrived on, and are all zero for a session (M1-011).
+	//
+	// The secret is not among them and could not be: what the middleware
+	// resolved is a row, and the row has never held the value somebody
+	// presented. That is what makes "the secret appears in exactly one response
+	// ever" a property of the types rather than a rule somebody follows.
+	//
+	// The scopes and the binding travel because [authz.Can] reads them — a
+	// token is fenced by what it carries as well as by what its owner may do —
+	// and TokenID travels because a refusal worth investigating should name the
+	// credential, not just the person.
+	TokenID           string
+	TokenScopes       []authz.TokenScope
+	TokenEngagementID string
 
 	// MFASatisfied is whether this session presented a second factor. It is a
 	// fact about the session and not about the person: that they are *required*

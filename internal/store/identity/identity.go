@@ -229,6 +229,66 @@ type NewMFAChallenge struct {
 	ExpiresAt time.Time
 }
 
+// ServiceToken is one bearer credential somebody automates with (M1-011). As
+// with a session, the value that was handed out is not here: only the hash of
+// its secret half, and the clear prefix that finds the row.
+type ServiceToken struct {
+	ID   string
+	Name string
+
+	// Prefix is the public identifier in the middle of the token, and is what
+	// every authenticated request looks the row up by.
+	Prefix string
+
+	// TokenHash is the hash of the secret half. Producing and comparing it
+	// belongs to internal/authn/servicetoken; this package neither computes it
+	// nor decides what it means.
+	TokenHash string
+
+	// OwnerUserID is whose authority this token spends, and CreatedBy is who
+	// issued it. The permissions read at request time are the owner's, live.
+	OwnerUserID string
+	CreatedBy   string
+
+	// Scopes is what the token carries, exactly as stored. An entry this build
+	// does not recognise is kept rather than dropped: the policy grants on
+	// scopes it knows and ignores the rest, so a scope written by a newer
+	// binary is harmless here and would be a silent loss if this package
+	// filtered it.
+	Scopes []authz.TokenScope
+
+	// EngagementID is the one engagement this token may touch, and is empty for
+	// a token that may touch every engagement its owner can.
+	EngagementID string
+
+	CreatedAt time.Time
+	ExpiresAt time.Time
+
+	// LastUsedAt is the zero time until the token is first used, and is written
+	// back at most once per interval afterwards — see servicetoken.Manager, for
+	// the reason a session's last_seen_at is.
+	LastUsedAt time.Time
+
+	// RevokedAt is the zero time unless somebody ended it early. Expired and
+	// revoked are different facts and are worth telling apart in an audit
+	// trail.
+	RevokedAt time.Time
+}
+
+// NewServiceToken is the caller's half of creating one: the identifier and
+// created_at are the store's, and the secret is the caller's to show once and
+// forget.
+type NewServiceToken struct {
+	Name         string
+	Prefix       string
+	TokenHash    string
+	OwnerUserID  string
+	CreatedBy    string
+	Scopes       []authz.TokenScope
+	EngagementID string
+	ExpiresAt    time.Time
+}
+
 // Membership places one user in one engagement with one role.
 type Membership struct {
 	EngagementID string

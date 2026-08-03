@@ -379,6 +379,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your own service tokens.
+         * @description Your tokens, newest first, including the expired and revoked ones — you
+         *     cannot decide whether to rotate something you cannot see the history of.
+         *
+         *     No secret is here, and none could be: the server stores a hash, so it
+         *     could not produce a token's value if asked. `prefix` is what identifies
+         *     a row to a human, and it is the same value that appears in the middle of
+         *     the token itself.
+         *
+         *     Yours and nobody else's. There is no parameter that names another
+         *     account, and an administrator calling this sees their own tokens like
+         *     everybody else; what an administrator has instead is the ability to
+         *     disable the account, which stops every token that account holds at its
+         *     next request.
+         */
+        get: operations["listServiceTokens"];
+        put?: never;
+        /**
+         * Create a service token, shown once.
+         * @description Mints a token owned by you. **The response is the only time its secret
+         *     exists outside your client** — it is stored as a hash and cannot be
+         *     recovered, so a caller that does not save it has to create another one.
+         *
+         *     What the token may do is fenced twice, and the narrower fence wins on
+         *     every request:
+         *
+         *     1. The scopes you give it here.
+         *     2. Your own permissions, read live on every request the token makes.
+         *        Being demoted narrows every token you hold, immediately, without
+         *        touching them; having your account disabled stops them entirely.
+         *
+         *     `engagementId` adds a third fence, and only ever subtracts: a token
+         *     bound to an engagement reaches that engagement and nothing else — not
+         *     another engagement, not the installation — whatever its scopes say. It
+         *     cannot let a token into an engagement you are not a member of.
+         *
+         *     `expiresAt` is required and is capped at a year out. A credential with
+         *     no expiry is one nobody remembers to revoke.
+         *
+         *     A service token cannot call this. Creating credentials takes a signed-in
+         *     session, so that a leaked token cannot mint a longer-lived replacement
+         *     for itself and outlive its own revocation — `403` with `code:
+         *     "forbidden"` when one tries, whatever scopes it carries.
+         */
+        post: operations["createServiceToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one of your own service tokens.
+         * @description Takes effect on the token's next request: there is no cached copy of it
+         *     anywhere, so there is no window during which it still works.
+         *
+         *     Idempotent — revoking a token that has already been revoked answers the
+         *     same way, and keeps the original revocation time, because the first
+         *     revocation is when access actually stopped.
+         *
+         *     A token belonging to somebody else answers `404`, exactly as an
+         *     identifier that names nothing does. The two are indistinguishable on
+         *     purpose: an endpoint that answered `403` for real identifiers and `404`
+         *     for invented ones would be a way to find out which are real.
+         *
+         *     As with creation, a service token cannot call this.
+         */
+        delete: operations["revokeServiceToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/providers": {
         parameters: {
             query?: never;
@@ -1083,6 +1174,124 @@ export interface components {
             code: string;
         };
         /**
+         * @description One coarse permission a service token may carry (M1-011). Scopes are few
+         *     and blunt deliberately: a scope per endpoint would be a second
+         *     permission model to keep in step with the real one, and the real one is
+         *     `docs/authz.md`.
+         *
+         *     A scope is never a grant on its own. Holding `admin:write` permits
+         *     nothing the token's owner could not already do — see
+         *     `POST /auth/tokens`. These words are the ones `internal/authz` requires
+         *     of each action, and `TestTheTokenScopeEnumMatchesTheOnePlaceScopesAreDefined`
+         *     fails the build if this list and that one disagree.
+         * @enum {string}
+         */
+        TokenScope: "admin:read" | "admin:write" | "content:read" | "content:sync" | "engagements:read" | "engagements:write" | "reports:read" | "reports:write";
+        /**
+         * @description One service token, as anybody but its creator ever sees it: everything
+         *     about the credential except the credential.
+         */
+        ServiceToken: {
+            /**
+             * Format: uuid
+             * @description The token's identifier, and what `DELETE /auth/tokens/{tokenId}` names. Not a credential.
+             */
+            id: string;
+            /**
+             * @description What its owner called it, so they can tell which one to revoke.
+             * @example nightly coverage export
+             */
+            name: string;
+            /**
+             * @description The public identifier in the middle of the token — the `xxx` of
+             *     `bl_xxx_…`. It is how a token found in a log or a CI variable is
+             *     matched to a row here without anybody handling its secret.
+             * @example K7QM4TZB2A
+             */
+            prefix: string;
+            /** @description What this token may do, subject to what its owner may do. */
+            scopes: components["schemas"]["TokenScope"][];
+            /**
+             * Format: uuid
+             * @description The one engagement this token may touch. Absent on a token that may
+             *     reach every engagement its owner can. It only ever subtracts.
+             */
+            engagementId?: string;
+            status: components["schemas"]["ServiceTokenStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When it stops working. Always set — a token with no expiry cannot be created.
+             */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description When it was last used. Absent if it never has been. Accurate to
+             *     within a minute and deliberately no more: recording every request
+             *     would put a database write behind every request, and this column
+             *     answers "is this still in use?", which does not need the seconds.
+             */
+            lastUsedAt?: string;
+            /**
+             * Format: date-time
+             * @description When somebody ended it early. Absent on a token nobody has revoked;
+             *     expired and revoked are different facts and `status` says which.
+             */
+            revokedAt?: string;
+        };
+        /**
+         * @description Whether a token works right now, derived from its timestamps so that a
+         *     client does not have to compare dates to render a list. `revoked` wins
+         *     over `expired` where both are true: it is the fact somebody acted on.
+         * @enum {string}
+         */
+        ServiceTokenStatus: "active" | "expired" | "revoked";
+        /** @description The caller's own tokens, newest first. */
+        ServiceTokens: {
+            items: components["schemas"]["ServiceToken"][];
+        };
+        /**
+         * @description A token that has just been created: the row, plus the one and only copy
+         *     of its secret. Nothing else in this API ever carries `token`.
+         */
+        CreatedServiceToken: {
+            serviceToken: components["schemas"]["ServiceToken"];
+            /**
+             * @description The credential, spelled `bl_<prefix>_<secret>`. Send it as
+             *     `Authorization: Bearer <token>`.
+             *
+             *     Show it to the person immediately and offer a way to copy it. There
+             *     is no endpoint that reads it back, because the server keeps only a
+             *     hash of it — a lost token is replaced, never recovered.
+             * @example bl_K7QM4TZB2A_2VHQ5XKPYD3JW8N6RTFA9CBEM4SZUG7LH2QX3KVD5RY
+             */
+            token: string;
+        };
+        /** @description Body of `POST /auth/tokens`. The owner is the caller and is not a field. */
+        CreateServiceTokenRequest: {
+            /** @description How you will recognise this token when you come to revoke it. */
+            name: string;
+            /**
+             * @description What the token may do. Repeats are accepted and stored once; a scope
+             *     this server does not define is a `400` rather than a silently
+             *     narrower token.
+             */
+            scopes: components["schemas"]["TokenScope"][];
+            /**
+             * Format: uuid
+             * @description Bind the token to one engagement. Omit for a token that may reach
+             *     every engagement you can. It cannot widen what you may reach.
+             */
+            engagementId?: string;
+            /**
+             * Format: date-time
+             * @description When the token should stop working. Required, must be in the future,
+             *     and at most one year out — `400` otherwise, naming the field.
+             */
+            expiresAt: string;
+        };
+        /**
          * @description Body of `POST /auth/mfa/recovery/regenerate`. The current password is
          *     required for the same reason `ChangePasswordRequest` asks for it; the
          *     second factor is not in the body, it is the requirement that this
@@ -1733,6 +1942,123 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listServiceTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your tokens. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceTokens"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createServiceToken: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceTokenRequest"];
+            };
+        };
+        responses: {
+            /**
+             * @description The token was created. `token` is in this response and in no other,
+             *     ever — not in the listing, not in the log, not in the activity feed.
+             */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedServiceToken"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeServiceToken: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The token's `id`, from `GET /auth/tokens`. Never its prefix and never its secret. */
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token is revoked, or already was. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

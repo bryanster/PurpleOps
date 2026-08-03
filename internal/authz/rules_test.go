@@ -166,6 +166,10 @@ func TestResourceOwnershipIsDeclaredForEveryRule(t *testing.T) {
 		authz.ResourcePlatform: true,
 		authz.ResourceUser:     true,
 		authz.ResourceContent:  true,
+		// A token bound to one engagement is still owned by the installation:
+		// the binding constrains where it may point (M1-011), and who may hold
+		// one is not a question about membership.
+		authz.ResourceServiceToken: true,
 	}
 
 	for _, rule := range authz.Rules() {

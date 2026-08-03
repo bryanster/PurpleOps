@@ -13,6 +13,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/servicetoken"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
@@ -33,8 +34,9 @@ type accountOf func(*http.Request) string
 // others, instead of somewhere a reader would have to know to look.
 //
 // The two entries need the account from different places, which is why the value
-// is a function rather than a field name. M1-011 adds the service-token
-// endpoint, whose credential is a header.
+// is a function rather than a field name. The third credential — a service token
+// (M1-011) — is not in this table at all, because it is not tied to a route:
+// see [credentialAttempt].
 func credentialAccounts(auth *authn.Service) map[string]accountOf {
 	return map[string]accountOf{
 		BasePath + "/auth/login": bodyField("email"),
@@ -91,16 +93,11 @@ func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountO
 	responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			account, guarded := accounts[routePath(r)]
-			if !guarded || r.Method != http.MethodPost {
+			ctx := r.Context()
+			attempt, guarded := credentialAttempt(r, accounts)
+			if !guarded {
 				next.ServeHTTP(w, r)
 				return
-			}
-
-			ctx := r.Context()
-			attempt := throttle.Attempt{
-				Account: account(r),
-				Source:  ClientIP(ctx),
 			}
 
 			if err := limiter.Check(attempt); err != nil {
@@ -126,7 +123,7 @@ func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountO
 				return
 			}
 
-			switch status := statusOf(recorder); {
+			switch status := outcome.statusOr(statusOf(recorder)); {
 			case status == http.StatusUnauthorized:
 				for _, lockout := range limiter.Failed(attempt) {
 					// Warn, not info: this is the line an operator is looking for
@@ -145,6 +142,61 @@ func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountO
 			}
 		})
 	}
+}
+
+// credentialAttempt reports what credential this request is presenting, and
+// false when it is presenting none.
+//
+// There are two shapes of answer, and the difference is why this is a function
+// rather than one map lookup:
+//
+//   - A sign-in route from [credentialAccounts], where the account being
+//     attempted is in the body or behind the pending cookie, and the method has
+//     to be POST because that is the only method those routes serve.
+//   - A service token, on *any* route and any method (M1-011). A token is
+//     checked by the authentication step for every request it accompanies, so
+//     rationing failures by route would ration nothing: an attacker guessing
+//     secrets would simply guess them against `GET /version`. The account it is
+//     counted against is the token's prefix, which is the closest thing a token
+//     has to an identity before it has been checked — and which is exactly the
+//     value an attacker would have to vary to escape the count, at which point
+//     the source limiter is what is left holding them.
+//
+// A bearer credential wins over a route entry, which matters for no route
+// today and would matter the moment a sign-in endpoint accepted one.
+func credentialAttempt(r *http.Request, accounts map[string]accountOf) (throttle.Attempt, bool) {
+	source := ClientIP(r.Context())
+
+	if presented, ok := bearerToken(r); ok {
+		return throttle.Attempt{Account: tokenAccount(presented), Source: source}, true
+	}
+
+	account, guarded := accounts[routePath(r)]
+	if !guarded || r.Method != http.MethodPost {
+		return throttle.Attempt{}, false
+	}
+	return throttle.Attempt{Account: account(r), Source: source}, true
+}
+
+// tokenAccount names the account a presented token is an attempt against: its
+// prefix, behind a marker that keeps it out of the same namespace as the email
+// addresses the sign-in routes count.
+//
+// The prefix is the public half of the credential and is safe to key a counter
+// by. The secret is never touched here — the value below is derived from a
+// string this middleware has not validated, so it must not be one that would
+// matter if it were logged.
+func tokenAccount(presented servicetoken.Token) string {
+	raw := presented.Reveal()
+	prefix, _, found := strings.Cut(strings.TrimPrefix(raw, servicetoken.Marker+"_"), "_")
+	if !found {
+		// Not a well-formed token, so there is no prefix to count against and
+		// the empty account leaves the source limiter to do the counting —
+		// which is the right shape anyway: somebody sending rubbish is not
+		// attacking one credential.
+		return ""
+	}
+	return "token:" + prefix
 }
 
 // routePath is the request path with a trailing slash removed, which is the form
@@ -204,6 +256,29 @@ func bodyField(field string) accountOf {
 // is judged on its status, as every handler was before this existed.
 type credentialOutcome struct {
 	incomplete bool
+
+	// verdict is the authentication step's own answer about the credential this
+	// request presented, and is zero when it did not give one.
+	//
+	// It exists because the status a request ends with is not always the news
+	// about its credential (M1-011). A service token that resolved and was then
+	// refused for want of a scope produces a 403, which the status rule would
+	// count as neither — leaving that token's earlier failures pending forever.
+	// A token that did *not* resolve and fell back to a good session cookie
+	// produces whatever that session's request produces, which the status rule
+	// would read as a success and use to clear the failures. Both are wrong in
+	// the direction that matters, and only the authentication step knows
+	// otherwise.
+	verdict int
+}
+
+// statusOr returns the authentication step's verdict about the credential, or
+// the status the response actually carried when it gave none.
+func (o *credentialOutcome) statusOr(status int) int {
+	if o.verdict != 0 {
+		return o.verdict
+	}
+	return status
 }
 
 type credentialOutcomeKey struct{}
@@ -219,5 +294,22 @@ func withCredentialOutcome(ctx context.Context, outcome *credentialOutcome) cont
 func markCredentialIncomplete(ctx context.Context) {
 	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
 		outcome.incomplete = true
+	}
+}
+
+// markCredentialAccepted and markCredentialRejected record what the
+// authentication step made of the service token a request presented (M1-011).
+// Both are no-ops on a request that did not come through the throttle, and
+// neither is called for a request that presented no token at all — which is what
+// leaves the sign-in routes judged by their status, as they were.
+func markCredentialAccepted(ctx context.Context) {
+	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
+		outcome.verdict = http.StatusOK
+	}
+}
+
+func markCredentialRejected(ctx context.Context) {
+	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
+		outcome.verdict = http.StatusUnauthorized
 	}
 }

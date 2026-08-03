@@ -19,6 +19,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/recovery"
 	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/secrets"
+	"github.com/bryanster/blacklight/internal/authn/servicetoken"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
 	"github.com/bryanster/blacklight/internal/config"
@@ -285,6 +286,20 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// A third derivation from the same material, for the third thing that has
+	// to be authenticated rather than stored (M1-011). It is keyed off the
+	// encryption key and not the session secret deliberately: rotating the
+	// session secret is the documented way to sign every browser out, and it
+	// must not also break every integration in the deployment.
+	tokenOptions, err := servicetoken.OptionsFrom(deps.Config)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tokenOptions.Log = log
+	tokens, err := servicetoken.New(identity.NewServiceTokens(deps.Store), tokenOptions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	auth, err := authn.NewService(authn.Deps{
 		Users:         identity.NewUsers(deps.Store),
@@ -295,6 +310,7 @@ func newAuthn(deps Deps, log *slog.Logger) (*authn.Service, *session.Manager, *c
 		Settings:      settings.New(deps.Store),
 		Sessions:      sessions,
 		Challenges:    challenges,
+		Tokens:        tokens,
 		Secrets:       cipher,
 		Recovery:      hasher,
 		Issuer:        totpIssuer(deps.Config),

@@ -30,6 +30,7 @@ type repos struct {
 	totp        *identity.TOTPs
 	challenges  *identity.MFAChallenges
 	recovery    *identity.RecoveryCodes
+	tokens      *identity.ServiceTokens
 }
 
 func newRepos(t *testing.T) repos {
@@ -45,6 +46,7 @@ func newRepos(t *testing.T) repos {
 		totp:        identity.NewTOTPs(db),
 		challenges:  identity.NewMFAChallenges(db),
 		recovery:    identity.NewRecoveryCodes(db),
+		tokens:      identity.NewServiceTokens(db),
 	}
 }
 
@@ -85,7 +87,7 @@ func TestNoRepositoryOwnsADatabaseHandle(t *testing.T) {
 		reflect.TypeFor[*sql.Conn](),
 	}
 
-	for _, repo := range []any{r.users, r.identities, r.sessions, r.memberships} {
+	for _, repo := range []any{r.users, r.identities, r.sessions, r.memberships, r.tokens} {
 		repoType := reflect.TypeOf(repo).Elem()
 		for i := range repoType.NumField() {
 			field := repoType.Field(i)
@@ -108,7 +110,7 @@ func TestEveryRepositoryMethodTakesAContext(t *testing.T) {
 	r := newRepos(t)
 	ctxType := reflect.TypeFor[context.Context]()
 
-	for _, repo := range []any{r.users, r.identities, r.sessions, r.memberships} {
+	for _, repo := range []any{r.users, r.identities, r.sessions, r.memberships, r.tokens} {
 		repoType := reflect.TypeOf(repo)
 		for i := range repoType.NumMethod() {
 			method := repoType.Method(i)
@@ -198,7 +200,7 @@ func TestTheIdentitySchemaExists(t *testing.T) {
 	db := storetest.Migrated(t)
 	ctx := t.Context()
 
-	for _, table := range []string{"user", "identity", "session", "engagement_member"} {
+	for _, table := range []string{"user", "identity", "session", "engagement_member", "service_token"} {
 		var n int
 		if err := db.Read().QueryRowContext(ctx,
 			`SELECT count(*) FROM information_schema.tables
@@ -222,6 +224,10 @@ func TestTheIdentitySchemaExists(t *testing.T) {
 		"identity_user_id_idx",
 		"session_user_id_expires_at_idx",
 		"engagement_member_user_id_idx",
+		// The prefix's UNIQUE constraint makes the third index, which is the
+		// one every token-authenticated request looks a row up through. It is
+		// not named here because the engine names it.
+		"service_token_owner_user_id_idx",
 	} {
 		var n int
 		if err := db.Read().QueryRowContext(ctx,

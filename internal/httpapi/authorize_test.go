@@ -425,6 +425,79 @@ func asMember(t *testing.T, userID string, role authz.PlatformRole, r *http.Requ
 	}))
 }
 
+// asToken returns the request as though the authentication step had resolved a
+// service token to this caller (M1-011): the owner's live role, the token's
+// scopes, and the engagement it was bound to.
+//
+// Injected for the same reason [asMember] is. What resolving a real token does
+// is servicetoken_test.go's subject; this is about what the middleware carries
+// into the policy afterwards, which is the half a real token would not make any
+// clearer.
+func asToken(t *testing.T, userID string, role authz.PlatformRole, boundTo string,
+	scopes []authz.TokenScope, r *http.Request) *http.Request {
+	t.Helper()
+
+	return r.WithContext(authn.WithSubject(r.Context(), authn.Subject{
+		UserID:            userID,
+		Email:             userID + "@example.test",
+		PlatformRole:      role,
+		Method:            authz.MethodServiceToken,
+		TokenID:           "token-" + userID,
+		TokenScopes:       scopes,
+		TokenEngagementID: boundTo,
+	}))
+}
+
+// TestAnEngagementBoundTokenIsAnsweredWithTheSame404AsANonMember is M1-011's
+// binding, through the middleware — the layer that has to carry it from the
+// resolved token into [authz.Can], and the layer where the answer becomes a
+// status code.
+//
+// The 404 is the criterion: "the response for a *different* engagement's
+// resource must not confirm its existence". The engagement below is real and the
+// token's owner is a member of it, so a 403 here would tell the holder of a
+// narrowly bound token exactly which engagements exist.
+func TestAnEngagementBoundTokenIsAnsweredWithTheSame404AsANonMember(t *testing.T) {
+	t.Parallel()
+
+	own := ownedBy("engagement-1", false)
+	own.seats["automation-1"] = authz.EngagementRoleRed
+	server, _ := authorizingServer(t, own, panicHandler(t))
+
+	scopes := []authz.TokenScope{authz.TokenScopeEngagementsRead}
+
+	// Bound to an engagement its owner is a member of, asking about the one they
+	// are also a member of: refused, and refused the way a non-member is.
+	elsewhere := do(server, asToken(t, "automation-1", authz.PlatformRoleAdmin, "engagement-9", scopes,
+		httptest.NewRequest(http.MethodGet, BasePath+"/engagements/engagement-1/steps", nil)))
+
+	if got, want := elsewhere.Code, http.StatusNotFound; got != want {
+		t.Fatalf("a token bound to engagement-9 asking about engagement-1 = %d, want %d\nbody: %s",
+			got, want, elsewhere.Body.String())
+	}
+	if got, want := decodeProblem(t, elsewhere).Code, gen.ProblemCodeNotFound; got != want {
+		t.Errorf("code = %q, want %q", got, want)
+	}
+	assertRefusalLeaksNothing(t, elsewhere.Body.String())
+
+	// And the same token, on the engagement it is bound to, is allowed — so the
+	// refusal above is the binding and not the token failing at everything. A
+	// second server, because the one above is built with a handler that panics
+	// on being reached, which is what proved the refusal.
+	reachable := ownedBy("engagement-9", false)
+	reachable.seats["automation-1"] = authz.EngagementRoleRed
+	permissive, _ := authorizingServer(t, reachable, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	allowed := do(permissive, asToken(t, "automation-1", authz.PlatformRoleAdmin, "engagement-9", scopes,
+		httptest.NewRequest(http.MethodGet, BasePath+"/engagements/engagement-9/steps", nil)))
+
+	if allowed.Code != http.StatusOK {
+		t.Errorf("the same token on the engagement it is bound to = %d, want 200\nbody: %s",
+			allowed.Code, allowed.Body.String())
+	}
+}
+
 // panicHandler is how "the handler was never entered" is proved. A flag set by
 // the handler would prove only that it did not set the flag.
 func panicHandler(t *testing.T) http.HandlerFunc {

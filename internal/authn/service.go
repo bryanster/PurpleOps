@@ -15,6 +15,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/password"
 	"github.com/bryanster/blacklight/internal/authn/recovery"
 	"github.com/bryanster/blacklight/internal/authn/secrets"
+	"github.com/bryanster/blacklight/internal/authn/servicetoken"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -78,6 +79,13 @@ type Deps struct {
 	Sessions   *session.Manager
 	Challenges *challenge.Manager
 
+	// Tokens is the service-token manager (M1-011). It is required whether or
+	// not anybody in this deployment holds a token: a Service that could not
+	// answer "whose token is this?" would leave the authentication middleware
+	// with a credential it had no way to check, and the safe thing to do with
+	// one of those is not to serve.
+	Tokens *servicetoken.Manager
+
 	// Secrets encrypts what this server holds on somebody else's behalf: today
 	// the TOTP shared secrets, which is the only thing that reads it.
 	Secrets *secrets.Cipher
@@ -119,6 +127,7 @@ type Service struct {
 
 	sessions   *session.Manager
 	challenges *challenge.Manager
+	tokens     *servicetoken.Manager
 	secrets    *secrets.Cipher
 	recovery   *recovery.Hasher
 
@@ -149,6 +158,8 @@ func NewService(deps Deps) (*Service, error) {
 		return nil, errors.New("authn: no session manager")
 	case deps.Challenges == nil:
 		return nil, errors.New("authn: no MFA challenge manager")
+	case deps.Tokens == nil:
+		return nil, errors.New("authn: no service token manager; a presented token could not be checked")
 	case deps.Secrets == nil:
 		return nil, errors.New("authn: no cipher; enrolled secrets could not be stored")
 	case deps.Recovery == nil:
@@ -174,6 +185,7 @@ func NewService(deps Deps) (*Service, error) {
 		settings:      deps.Settings,
 		sessions:      deps.Sessions,
 		challenges:    deps.Challenges,
+		tokens:        deps.Tokens,
 		secrets:       deps.Secrets,
 		recovery:      deps.Recovery,
 		issuer:        deps.Issuer,

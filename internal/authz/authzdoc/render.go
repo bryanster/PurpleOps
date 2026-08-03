@@ -195,6 +195,10 @@ var guardDescriptions = map[authz.Guard]string{
 		"been revealed — not even to learn it exists. The same filter is applied in the query layer, so a " +
 		"missing rule still cannot leak one. A platform admin who is *not* a member of the engagement is " +
 		"unaffected; one who has taken the blue seat is held to it.",
+	authz.GuardSessionOnly: "Available to a signed-in session and never to a service token, whatever scopes " +
+		"the token carries and whatever its owner may do. It guards the actions that change which credentials " +
+		"exist: a token able to mint another one could outlive its own revocation, which neither the scope " +
+		"fence nor the owner's role would catch.",
 }
 
 // describe returns a guard's prose, or a placeholder that reads as the omission
