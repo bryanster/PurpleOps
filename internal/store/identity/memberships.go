@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 )
@@ -91,7 +92,7 @@ func (r *Memberships) Get(ctx context.Context, engagementID, userID string) (Mem
 //
 // added_by and added_at are not touched: they record how this person got in,
 // which a later role change does not alter.
-func (r *Memberships) SetRole(ctx context.Context, engagementID, userID string, role EngagementRole) (Membership, error) {
+func (r *Memberships) SetRole(ctx context.Context, engagementID, userID string, role authz.EngagementRole) (Membership, error) {
 	var updated Membership
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx,

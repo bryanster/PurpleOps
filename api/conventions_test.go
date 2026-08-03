@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+
+	"github.com/bryanster/blacklight/internal/authz"
 )
 
 const (
@@ -496,4 +498,50 @@ func walkFrom(ref *openapi3.SchemaRef, where string, seen map[*openapi3.Schema]b
 
 func sortedKeys[M ~map[string]V, V any](m M) []string {
 	return slices.Sorted(maps.Keys(m))
+}
+
+// TestTheRoleEnumsMatchTheOnePlaceRolesAreDefined ties the wire vocabulary to
+// internal/authz.
+//
+// The spec owns what a client sees and authz owns what the server decides, and
+// they must be the same words. A role added to one and not the other is a
+// membership the API can express and the policy cannot read — or, in the
+// direction v1 actually failed, a second spelling of "blue".
+func TestTheRoleEnumsMatchTheOnePlaceRolesAreDefined(t *testing.T) {
+	doc := mustLoad(t)
+
+	platform := make([]string, 0, 2)
+	for _, role := range authz.PlatformRoles() {
+		platform = append(platform, string(role))
+	}
+	engagement := make([]string, 0, 4)
+	for _, role := range authz.EngagementRoles() {
+		engagement = append(engagement, string(role))
+	}
+
+	for schema, want := range map[string][]string{
+		"PlatformRole":   platform,
+		"EngagementRole": engagement,
+	} {
+		ref, ok := doc.Components.Schemas[schema]
+		if !ok || ref.Value == nil {
+			t.Errorf("the document has no %s schema, but internal/authz defines the role", schema)
+			continue
+		}
+
+		got := make([]string, 0, len(ref.Value.Enum))
+		for _, value := range ref.Value.Enum {
+			role, isString := value.(string)
+			if !isString {
+				t.Errorf("%s's enum contains %v, which is not a string", schema, value)
+				continue
+			}
+			got = append(got, role)
+		}
+
+		if !slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(want))) {
+			t.Errorf("%s enumerates %v; internal/authz defines %v. The two must be the same words",
+				schema, got, want)
+		}
+	}
 }

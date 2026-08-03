@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -19,7 +20,7 @@ func TestCreateStoresAUserAndAssignsItsIdentity(t *testing.T) {
 		Email:        "Alice@Example.com",
 		DisplayName:  "Alice",
 		PasswordHash: "argon2id$hash",
-		PlatformRole: identity.PlatformRoleAdmin,
+		PlatformRole: authz.PlatformRoleAdmin,
 		Status:       identity.StatusInvited,
 		MFAEnforced:  true,
 	})
@@ -35,8 +36,8 @@ func TestCreateStoresAUserAndAssignsItsIdentity(t *testing.T) {
 	if created.Email != "Alice@Example.com" {
 		t.Errorf("Email = %q, want the address as it was given", created.Email)
 	}
-	if created.PlatformRole != identity.PlatformRoleAdmin {
-		t.Errorf("PlatformRole = %q, want %q", created.PlatformRole, identity.PlatformRoleAdmin)
+	if created.PlatformRole != authz.PlatformRoleAdmin {
+		t.Errorf("PlatformRole = %q, want %q", created.PlatformRole, authz.PlatformRoleAdmin)
 	}
 	if created.Status != identity.StatusInvited {
 		t.Errorf("Status = %q, want %q", created.Status, identity.StatusInvited)
@@ -75,7 +76,7 @@ func TestAnSSOOnlyUserHasNoPassword(t *testing.T) {
 	created, err := r.users.Create(t.Context(), identity.NewUser{
 		Email:        "sso@example.com",
 		DisplayName:  "SSO",
-		PlatformRole: identity.PlatformRoleMember,
+		PlatformRole: authz.PlatformRoleMember,
 		Status:       identity.StatusActive,
 	})
 	if err != nil {
@@ -177,7 +178,7 @@ func TestUpdateWritesTheMutableFields(t *testing.T) {
 	edited.Email = "Alice.New@Example.com"
 	edited.DisplayName = "Alice Renamed"
 	edited.PasswordHash = "argon2id$rotated"
-	edited.PlatformRole = identity.PlatformRoleAdmin
+	edited.PlatformRole = authz.PlatformRoleAdmin
 	edited.Status = identity.StatusDisabled
 	edited.MFAEnforced = true
 
@@ -189,7 +190,7 @@ func TestUpdateWritesTheMutableFields(t *testing.T) {
 	if updated.Email != "Alice.New@Example.com" || updated.DisplayName != "Alice Renamed" {
 		t.Errorf("Update() left %q/%q", updated.Email, updated.DisplayName)
 	}
-	if updated.PlatformRole != identity.PlatformRoleAdmin || updated.Status != identity.StatusDisabled {
+	if updated.PlatformRole != authz.PlatformRoleAdmin || updated.Status != identity.StatusDisabled {
 		t.Errorf("Update() left role %q status %q", updated.PlatformRole, updated.Status)
 	}
 	if updated.PasswordHash != "argon2id$rotated" || !updated.MFAEnforced {
@@ -257,7 +258,7 @@ func TestUpdateAndSetLastLoginAtReportAMissingUser(t *testing.T) {
 	r := newRepos(t)
 	ghost := identity.User{
 		ID: "no-such-id", Email: "ghost@example.com", DisplayName: "Ghost",
-		PlatformRole: identity.PlatformRoleMember, Status: identity.StatusActive,
+		PlatformRole: authz.PlatformRoleMember, Status: identity.StatusActive,
 	}
 
 	if _, err := r.users.Update(t.Context(), ghost); !errors.Is(err, apierr.ErrNotFound) {

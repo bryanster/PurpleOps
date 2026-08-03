@@ -14,6 +14,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn/password"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
@@ -88,7 +89,7 @@ func (s *authServer) seedUser(t *testing.T, adjust ...func(*identity.NewUser)) i
 		Email:        testEmail,
 		DisplayName:  "Alice",
 		PasswordHash: testPasswordHash(),
-		PlatformRole: identity.PlatformRoleAdmin,
+		PlatformRole: authz.PlatformRoleAdmin,
 		Status:       identity.StatusActive,
 	}
 	for _, fn := range adjust {
@@ -511,7 +512,7 @@ func TestGetCurrentUserReportsMembershipsAndMFAState(t *testing.T) {
 	if _, err := identity.NewMemberships(server.db).Add(t.Context(), identity.NewMembership{
 		EngagementID: "engagement-1",
 		UserID:       user.ID,
-		Role:         identity.EngagementRoleBlue,
+		Role:         authz.EngagementRoleBlue,
 	}); err != nil {
 		t.Fatalf("adding a membership: %v", err)
 	}
@@ -544,9 +545,9 @@ func TestGetCurrentUserReportsMembershipsAndMFAState(t *testing.T) {
 func TestTheRoleVocabulariesAgree(t *testing.T) {
 	t.Parallel()
 
-	platform := map[identity.PlatformRole]gen.PlatformRole{
-		identity.PlatformRoleAdmin:  gen.PlatformRoleAdmin,
-		identity.PlatformRoleMember: gen.PlatformRoleMember,
+	platform := map[authz.PlatformRole]gen.PlatformRole{
+		authz.PlatformRoleAdmin:  gen.PlatformRoleAdmin,
+		authz.PlatformRoleMember: gen.PlatformRoleMember,
 	}
 	for stored, served := range platform {
 		if string(stored) != string(served) {
@@ -554,11 +555,11 @@ func TestTheRoleVocabulariesAgree(t *testing.T) {
 		}
 	}
 
-	engagement := map[identity.EngagementRole]gen.EngagementRole{
-		identity.EngagementRoleLead:     gen.EngagementRoleLead,
-		identity.EngagementRoleRed:      gen.EngagementRoleRed,
-		identity.EngagementRoleBlue:     gen.EngagementRoleBlue,
-		identity.EngagementRoleObserver: gen.EngagementRoleObserver,
+	engagement := map[authz.EngagementRole]gen.EngagementRole{
+		authz.EngagementRoleLead:     gen.EngagementRoleLead,
+		authz.EngagementRoleRed:      gen.EngagementRoleRed,
+		authz.EngagementRoleBlue:     gen.EngagementRoleBlue,
+		authz.EngagementRoleObserver: gen.EngagementRoleObserver,
 	}
 	for stored, served := range engagement {
 		if string(stored) != string(served) {

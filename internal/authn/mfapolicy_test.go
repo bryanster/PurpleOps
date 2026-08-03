@@ -3,6 +3,7 @@ package authn
 import (
 	"testing"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
@@ -19,10 +20,10 @@ func TestMFAPolicyRequires(t *testing.T) {
 	// attracts a policy of its own.
 	local := identity.User{
 		PasswordHash: "argon2id$whatever",
-		PlatformRole: identity.PlatformRoleMember,
+		PlatformRole: authz.PlatformRoleMember,
 	}
 	admin := local
-	admin.PlatformRole = identity.PlatformRoleAdmin
+	admin.PlatformRole = authz.PlatformRoleAdmin
 
 	tests := map[string]struct {
 		policy MFAPolicy

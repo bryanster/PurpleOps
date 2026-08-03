@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/storetest"
@@ -54,7 +55,7 @@ func member(email string) identity.NewUser {
 		Email:        email,
 		DisplayName:  email,
 		PasswordHash: "argon2id$placeholder",
-		PlatformRole: identity.PlatformRoleMember,
+		PlatformRole: authz.PlatformRoleMember,
 		Status:       identity.StatusActive,
 	}
 }
@@ -156,7 +157,7 @@ func TestTimestampsAreUTC(t *testing.T) {
 		t.Fatalf("identities.Create() = %v", err)
 	}
 	membership, err := r.memberships.Add(ctx, identity.NewMembership{
-		EngagementID: "e-utc", UserID: user.ID, Role: identity.EngagementRoleRed,
+		EngagementID: "e-utc", UserID: user.ID, Role: authz.EngagementRoleRed,
 	})
 	if err != nil {
 		t.Fatalf("memberships.Add() = %v", err)

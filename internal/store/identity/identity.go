@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 )
@@ -23,17 +24,6 @@ type DB interface {
 	Read() store.Reader
 	Write(ctx context.Context, fn func(tx *sql.Tx) error) error
 }
-
-// PlatformRole is what somebody may do to this installation: manage users,
-// content and every engagement, or take part in the ones they are a member of.
-// It is deliberately two values — anything finer belongs to the engagement
-// role, and v1's single fuzzy level is the mistake PLAN.md §4 is correcting.
-type PlatformRole string
-
-const (
-	PlatformRoleAdmin  PlatformRole = "admin"
-	PlatformRoleMember PlatformRole = "member"
-)
 
 // Status is whether an account can be used. Retirement is a status change
 // rather than a deletion: the executions, comments and findings somebody wrote
@@ -56,18 +46,6 @@ const (
 	ProviderSAML  Provider = "saml"
 )
 
-// EngagementRole is what somebody may do inside one engagement. Red and blue
-// are separate so that blind mode and the split write endpoints in PLAN.md §4
-// have something to decide on.
-type EngagementRole string
-
-const (
-	EngagementRoleLead     EngagementRole = "lead"
-	EngagementRoleRed      EngagementRole = "red"
-	EngagementRoleBlue     EngagementRole = "blue"
-	EngagementRoleObserver EngagementRole = "observer"
-)
-
 // User is a person. The zero value is not a user; obtain one from [Users].
 type User struct {
 	ID string
@@ -83,7 +61,7 @@ type User struct {
 	// is M1-002's job.
 	PasswordHash string
 
-	PlatformRole PlatformRole
+	PlatformRole authz.PlatformRole
 	Status       Status
 
 	// MFAEnforced is whether an administrator requires a second factor of this
@@ -104,7 +82,7 @@ type NewUser struct {
 	Email        string
 	DisplayName  string
 	PasswordHash string
-	PlatformRole PlatformRole
+	PlatformRole authz.PlatformRole
 	Status       Status
 	MFAEnforced  bool
 }
@@ -255,7 +233,7 @@ type NewMFAChallenge struct {
 type Membership struct {
 	EngagementID string
 	UserID       string
-	Role         EngagementRole
+	Role         authz.EngagementRole
 
 	// AddedBy is empty when nobody added them — a seeded or imported
 	// membership. Otherwise it is a user identifier, and the database holds it
@@ -269,7 +247,7 @@ type Membership struct {
 type NewMembership struct {
 	EngagementID string
 	UserID       string
-	Role         EngagementRole
+	Role         authz.EngagementRole
 	AddedBy      string
 }
 

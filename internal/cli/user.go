@@ -15,6 +15,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/password"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/identity"
@@ -323,11 +324,11 @@ func removedOrNot(removed bool) string {
 	return "none was enrolled"
 }
 
-func platformRole(admin bool) identity.PlatformRole {
+func platformRole(admin bool) authz.PlatformRole {
 	if admin {
-		return identity.PlatformRoleAdmin
+		return authz.PlatformRoleAdmin
 	}
-	return identity.PlatformRoleMember
+	return authz.PlatformRoleMember
 }
 
 // createUser writes the account and the local login method that points at it.

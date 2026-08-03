@@ -16,6 +16,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/recovery"
 	"github.com/bryanster/blacklight/internal/authn/secrets"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -425,7 +426,7 @@ func (s *Service) Authenticate(ctx context.Context, token session.Token) (Subjec
 	// Set here, where the cookie was actually resolved, rather than in
 	// subjectOf: this is the only function that knows a *cookie* is what proved
 	// it, and M1-011's equivalent will say MethodServiceToken in its own.
-	subject.Method = MethodCookie
+	subject.Method = authz.MethodCookie
 	return subject, nil
 }
 

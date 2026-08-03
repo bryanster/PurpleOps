@@ -18,6 +18,12 @@
 // vocabularies, so neither can be passed where the other is expected, and the
 // schema constrains both (see 0002_identity.sql).
 //
+// Both types are internal/authz's, not this package's (M1-012). Where a role is
+// stored is a detail; what it means is the policy's business, and there is
+// exactly one place that says so — a test fails the build if a role string
+// appears anywhere else in the Go tree. That is the direct fix for v1's two
+// contradictory definitions of "blue".
+//
 // # No repository owns a database
 //
 // Every repository is constructed with a [DB] — the store's serialized writer

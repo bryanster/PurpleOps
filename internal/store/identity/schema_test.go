@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/identity"
@@ -189,7 +190,7 @@ func TestADependentRowMustBelongToARealUser(t *testing.T) {
 		},
 		"membership": func() error {
 			_, err := r.memberships.Add(ctx, identity.NewMembership{
-				EngagementID: "e1", UserID: "no-such-user", Role: identity.EngagementRoleLead,
+				EngagementID: "e1", UserID: "no-such-user", Role: authz.EngagementRoleLead,
 			})
 			return err
 		},
@@ -224,7 +225,7 @@ func TestAUserWhoOwnsRowsCanStillBeUpdated(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := r.memberships.Add(ctx, identity.NewMembership{
-		EngagementID: "e1", UserID: user.ID, Role: identity.EngagementRoleLead, AddedBy: user.ID,
+		EngagementID: "e1", UserID: user.ID, Role: authz.EngagementRoleLead, AddedBy: user.ID,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestAddedByIsHeldToARealUser(t *testing.T) {
 	user := mustCreateUser(t, r, "alice@example.com")
 
 	_, err := r.memberships.Add(t.Context(), identity.NewMembership{
-		EngagementID: "e1", UserID: user.ID, Role: identity.EngagementRoleRed, AddedBy: "nobody",
+		EngagementID: "e1", UserID: user.ID, Role: authz.EngagementRoleRed, AddedBy: "nobody",
 	})
 	if !errors.Is(err, apierr.ErrNotFound) {
 		t.Errorf("added_by pointing at no user = %v, want a not-found", err)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
@@ -102,7 +103,7 @@ func requireCSRF(sessions *session.Manager, responder *apierr.Responder,
 			// arrive on a session cookie, which is also the value that can never
 			// match anything below.
 			var expected string
-			if subject.Method == authn.MethodCookie {
+			if subject.Method == authz.MethodCookie {
 				expected = sessions.CSRFToken(session.FromRequest(r))
 				r = r.WithContext(withCSRFToken(r.Context(), expected))
 			}
@@ -147,7 +148,7 @@ func csrfExempt(r *http.Request, subject authn.Subject) bool {
 	if slices.Contains(csrfSafeMethods, r.Method) {
 		return true
 	}
-	if subject.Method != authn.MethodCookie {
+	if subject.Method != authz.MethodCookie {
 		return true
 	}
 	_, listed := csrfExemptRoutes[r.Method+" "+routePath(r)]

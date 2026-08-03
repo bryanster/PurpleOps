@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/settings"
@@ -75,7 +76,7 @@ func (p MFAPolicy) Requires(user identity.User) bool {
 		return false
 	}
 	return p.RequiredForAll ||
-		(p.RequiredForAdmins && user.PlatformRole == identity.PlatformRoleAdmin) ||
+		(p.RequiredForAdmins && user.PlatformRole == authz.PlatformRoleAdmin) ||
 		user.MFAEnforced
 }
 
@@ -195,7 +196,7 @@ func storedBool(stored map[string]settings.Setting, key string) (bool, error) {
 // of the boundary as the rule it protects, and so that deleting it in M1-013 is
 // one edit in one file.
 func requireAdmin(subject Subject, action string) error {
-	if subject.PlatformRole != identity.PlatformRoleAdmin {
+	if subject.PlatformRole != authz.PlatformRoleAdmin {
 		return apierr.Forbidden(fmt.Sprintf("%s as %s (user %s)",
 			action, subject.PlatformRole, subject.UserID))
 	}

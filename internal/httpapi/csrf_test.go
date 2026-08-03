@@ -15,6 +15,7 @@ import (
 	"github.com/bryanster/blacklight/api"
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 )
@@ -210,7 +211,7 @@ func TestOnlyRealServiceTokenAuthenticationIsExempt(t *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, passwordPath, nil)
 		request = request.WithContext(authn.WithSubject(request.Context(), authn.Subject{
 			UserID: "019f0000-0000-7000-8000-000000000000",
-			Method: authn.MethodServiceToken,
+			Method: authz.MethodServiceToken,
 		}))
 
 		recorder := do(middleware(spy), request)

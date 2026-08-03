@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bryanster/blacklight/api"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/storetest"
@@ -65,7 +66,7 @@ func newManagerWithUser(t *testing.T, adjust ...func(*Options)) (*Manager, strin
 	user, err := identity.NewUsers(db).Create(context.Background(), identity.NewUser{
 		Email:        testUserEmail,
 		DisplayName:  "Alice",
-		PlatformRole: identity.PlatformRoleAdmin,
+		PlatformRole: authz.PlatformRoleAdmin,
 		Status:       identity.StatusActive,
 	})
 	if err != nil {

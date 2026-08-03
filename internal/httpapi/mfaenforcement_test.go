@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -75,7 +76,7 @@ func (s *authServer) enforcePolicy(t *testing.T, forAll, forAdmins bool) {
 
 	admin := s.seedUser(t, func(u *identity.NewUser) {
 		u.Email = "policy-admin@example.com"
-		u.PlatformRole = identity.PlatformRoleAdmin
+		u.PlatformRole = authz.PlatformRoleAdmin
 	})
 	s.setPolicy(t, s.signInAs(t, admin.Email), forAll, forAdmins)
 }
@@ -165,7 +166,7 @@ func TestLoginOutcomesUnderPolicy(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		role      identity.PlatformRole
+		role      authz.PlatformRole
 		enforced  bool
 		forAll    bool
 		forAdmins bool
@@ -173,46 +174,46 @@ func TestLoginOutcomesUnderPolicy(t *testing.T) {
 		want      gen.LoginStatus
 	}{
 		"nothing required, nothing enrolled": {
-			role: identity.PlatformRoleMember,
+			role: authz.PlatformRoleMember,
 			want: gen.LoginStatusAuthenticated,
 		},
 		// Stricter than the ticket's table, and deliberately so: somebody who
 		// set up an authenticator meant it to be asked for (M1-006).
 		"nothing required, enrolled anyway": {
-			role:  identity.PlatformRoleMember,
+			role:  authz.PlatformRoleMember,
 			enrol: true,
 			want:  gen.LoginStatusMfaRequired,
 		},
 		"required for all, enrolled": {
-			role:   identity.PlatformRoleMember,
+			role:   authz.PlatformRoleMember,
 			forAll: true,
 			enrol:  true,
 			want:   gen.LoginStatusMfaRequired,
 		},
 		"required for all, not enrolled": {
-			role:   identity.PlatformRoleMember,
+			role:   authz.PlatformRoleMember,
 			forAll: true,
 			want:   gen.LoginStatusMfaEnrolmentRequired,
 		},
 		"required for admins, and they are one": {
-			role:      identity.PlatformRoleAdmin,
+			role:      authz.PlatformRoleAdmin,
 			forAdmins: true,
 			want:      gen.LoginStatusMfaEnrolmentRequired,
 		},
 		// The half of requiredForAdmins that would be invisible if only the
 		// row above existed: it must not catch everybody.
 		"required for admins, and they are not": {
-			role:      identity.PlatformRoleMember,
+			role:      authz.PlatformRoleMember,
 			forAdmins: true,
 			want:      gen.LoginStatusAuthenticated,
 		},
 		"enforced individually with the policy off": {
-			role:     identity.PlatformRoleMember,
+			role:     authz.PlatformRoleMember,
 			enforced: true,
 			want:     gen.LoginStatusMfaEnrolmentRequired,
 		},
 		"enforced individually and enrolled": {
-			role:     identity.PlatformRoleMember,
+			role:     authz.PlatformRoleMember,
 			enforced: true,
 			enrol:    true,
 			want:     gen.LoginStatusMfaRequired,
@@ -596,7 +597,7 @@ func TestOnlyAnAdministratorReadsOrChangesThePolicy(t *testing.T) {
 	t.Parallel()
 
 	server := newAuthServer(t)
-	server.seedUser(t, func(u *identity.NewUser) { u.PlatformRole = identity.PlatformRoleMember })
+	server.seedUser(t, func(u *identity.NewUser) { u.PlatformRole = authz.PlatformRoleMember })
 	sess := server.signIn(t)
 
 	body := `{"requiredForAll":true,"requiredForAdmins":true}`
@@ -618,7 +619,7 @@ func TestOnlyAnAdministratorReadsOrChangesThePolicy(t *testing.T) {
 	// one that did not refuse at all.
 	admin := server.seedUser(t, func(u *identity.NewUser) {
 		u.Email = secondEmail
-		u.PlatformRole = identity.PlatformRoleAdmin
+		u.PlatformRole = authz.PlatformRoleAdmin
 	})
 	adminSession := server.signInAs(t, admin.Email)
 	policy := decodeJSON[gen.MFAPolicy](t, server.get(mfaPolicyPath, adminSession))

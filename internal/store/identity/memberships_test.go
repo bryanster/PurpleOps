@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -18,13 +19,13 @@ func TestMembershipRoundTrips(t *testing.T) {
 	created, err := r.memberships.Add(t.Context(), identity.NewMembership{
 		EngagementID: "engagement-1",
 		UserID:       alice.ID,
-		Role:         identity.EngagementRoleRed,
+		Role:         authz.EngagementRoleRed,
 		AddedBy:      lead.ID,
 	})
 	if err != nil {
 		t.Fatalf("Add() = %v, want nil", err)
 	}
-	if created.Role != identity.EngagementRoleRed || created.AddedBy != lead.ID {
+	if created.Role != authz.EngagementRoleRed || created.AddedBy != lead.ID {
 		t.Errorf("Add() returned %+v, want red, added by %q", created, lead.ID)
 	}
 	if created.AddedAt.IsZero() {
@@ -51,7 +52,7 @@ func TestAPlatformRoleIsNotAnEngagementRole(t *testing.T) {
 	admin, err := r.users.Create(t.Context(), identity.NewUser{
 		Email:        "admin@example.com",
 		DisplayName:  "Admin",
-		PlatformRole: identity.PlatformRoleAdmin,
+		PlatformRole: authz.PlatformRoleAdmin,
 		Status:       identity.StatusActive,
 	})
 	if err != nil {
@@ -65,7 +66,7 @@ func TestAPlatformRoleIsNotAnEngagementRole(t *testing.T) {
 	// And an engagement lead is still an ordinary member of the installation.
 	member := mustCreateUser(t, r, "lead@example.com")
 	if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
-		EngagementID: "engagement-1", UserID: member.ID, Role: identity.EngagementRoleLead,
+		EngagementID: "engagement-1", UserID: member.ID, Role: authz.EngagementRoleLead,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -73,9 +74,9 @@ func TestAPlatformRoleIsNotAnEngagementRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if found.PlatformRole != identity.PlatformRoleMember {
+	if found.PlatformRole != authz.PlatformRoleMember {
 		t.Errorf("PlatformRole = %q after being made an engagement lead, want %q",
-			found.PlatformRole, identity.PlatformRoleMember)
+			found.PlatformRole, authz.PlatformRoleMember)
 	}
 }
 
@@ -86,14 +87,14 @@ func TestAddRefusesSomebodyWhoIsAlreadyAMember(t *testing.T) {
 	alice := mustCreateUser(t, r, "alice@example.com")
 
 	if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
-		EngagementID: "engagement-1", UserID: alice.ID, Role: identity.EngagementRoleRed,
+		EngagementID: "engagement-1", UserID: alice.ID, Role: authz.EngagementRoleRed,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Adding them as blue must not quietly switch sides mid-engagement.
 	_, err := r.memberships.Add(t.Context(), identity.NewMembership{
-		EngagementID: "engagement-1", UserID: alice.ID, Role: identity.EngagementRoleBlue,
+		EngagementID: "engagement-1", UserID: alice.ID, Role: authz.EngagementRoleBlue,
 	})
 	if !errors.Is(err, apierr.ErrConflict) {
 		t.Fatalf("Add() = %v, want a conflict", err)
@@ -103,8 +104,8 @@ func TestAddRefusesSomebodyWhoIsAlreadyAMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if found.Role != identity.EngagementRoleRed {
-		t.Errorf("Role = %q, want the original %q", found.Role, identity.EngagementRoleRed)
+	if found.Role != authz.EngagementRoleRed {
+		t.Errorf("Role = %q, want the original %q", found.Role, authz.EngagementRoleRed)
 	}
 }
 
@@ -114,9 +115,9 @@ func TestOnePersonCanBeInSeveralEngagements(t *testing.T) {
 	r := newRepos(t)
 	alice := mustCreateUser(t, r, "alice@example.com")
 
-	for engagement, role := range map[string]identity.EngagementRole{
-		"engagement-1": identity.EngagementRoleRed,
-		"engagement-2": identity.EngagementRoleBlue,
+	for engagement, role := range map[string]authz.EngagementRole{
+		"engagement-1": authz.EngagementRoleRed,
+		"engagement-2": authz.EngagementRoleBlue,
 	} {
 		if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
 			EngagementID: engagement, UserID: alice.ID, Role: role,
@@ -142,18 +143,18 @@ func TestSetRoleChangesOnlyTheRole(t *testing.T) {
 	alice := mustCreateUser(t, r, "alice@example.com")
 	created, err := r.memberships.Add(t.Context(), identity.NewMembership{
 		EngagementID: "engagement-1", UserID: alice.ID,
-		Role: identity.EngagementRoleObserver, AddedBy: lead.ID,
+		Role: authz.EngagementRoleObserver, AddedBy: lead.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	updated, err := r.memberships.SetRole(t.Context(), "engagement-1", alice.ID, identity.EngagementRoleBlue)
+	updated, err := r.memberships.SetRole(t.Context(), "engagement-1", alice.ID, authz.EngagementRoleBlue)
 	if err != nil {
 		t.Fatalf("SetRole() = %v, want nil", err)
 	}
-	if updated.Role != identity.EngagementRoleBlue {
-		t.Errorf("Role = %q, want %q", updated.Role, identity.EngagementRoleBlue)
+	if updated.Role != authz.EngagementRoleBlue {
+		t.Errorf("Role = %q, want %q", updated.Role, authz.EngagementRoleBlue)
 	}
 	// How they got in is not rewritten by a later change to what they may do.
 	if updated.AddedBy != created.AddedBy || !updated.AddedAt.Equal(created.AddedAt) {
@@ -162,7 +163,7 @@ func TestSetRoleChangesOnlyTheRole(t *testing.T) {
 	}
 
 	if _, err := r.memberships.SetRole(t.Context(), "engagement-1", "no-such-user",
-		identity.EngagementRoleRed); !errors.Is(err, apierr.ErrNotFound) {
+		authz.EngagementRoleRed); !errors.Is(err, apierr.ErrNotFound) {
 		t.Errorf("SetRole() for a non-member = %v, want not found", err)
 	}
 }
@@ -174,7 +175,7 @@ func TestRemoveTakesSomebodyOutOfOneEngagementOnly(t *testing.T) {
 	alice := mustCreateUser(t, r, "alice@example.com")
 	for _, engagement := range []string{"engagement-1", "engagement-2"} {
 		if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
-			EngagementID: engagement, UserID: alice.ID, Role: identity.EngagementRoleRed,
+			EngagementID: engagement, UserID: alice.ID, Role: authz.EngagementRoleRed,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -199,13 +200,13 @@ func TestListByEngagementReturnsTheWholeTeam(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
-	roles := map[string]identity.EngagementRole{
-		"lead@example.com":     identity.EngagementRoleLead,
-		"red@example.com":      identity.EngagementRoleRed,
-		"blue@example.com":     identity.EngagementRoleBlue,
-		"observer@example.com": identity.EngagementRoleObserver,
+	roles := map[string]authz.EngagementRole{
+		"lead@example.com":     authz.EngagementRoleLead,
+		"red@example.com":      authz.EngagementRoleRed,
+		"blue@example.com":     authz.EngagementRoleBlue,
+		"observer@example.com": authz.EngagementRoleObserver,
 	}
-	byID := map[string]identity.EngagementRole{}
+	byID := map[string]authz.EngagementRole{}
 	for email, role := range roles {
 		user := mustCreateUser(t, r, email)
 		byID[user.ID] = role
@@ -218,7 +219,7 @@ func TestListByEngagementReturnsTheWholeTeam(t *testing.T) {
 	// Somebody in a different engagement, who must not appear.
 	outsider := mustCreateUser(t, r, "outsider@example.com")
 	if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
-		EngagementID: "engagement-2", UserID: outsider.ID, Role: identity.EngagementRoleRed,
+		EngagementID: "engagement-2", UserID: outsider.ID, Role: authz.EngagementRoleRed,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +245,7 @@ func TestAMembershipMustBelongToARealUser(t *testing.T) {
 
 	r := newRepos(t)
 	_, err := r.memberships.Add(t.Context(), identity.NewMembership{
-		EngagementID: "engagement-1", UserID: "no-such-user", Role: identity.EngagementRoleRed,
+		EngagementID: "engagement-1", UserID: "no-such-user", Role: authz.EngagementRoleRed,
 	})
 	if err == nil {
 		t.Fatal("a membership was created for a user who does not exist")
@@ -263,7 +264,7 @@ func TestAnUnknownEngagementIsAccepted(t *testing.T) {
 
 	if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
 		EngagementID: "an-engagement-that-does-not-exist", UserID: alice.ID,
-		Role: identity.EngagementRoleRed,
+		Role: authz.EngagementRoleRed,
 	}); err != nil {
 		t.Errorf("Add() = %v; until M3 there is nothing to check the engagement against", err)
 	}
