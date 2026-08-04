@@ -26,6 +26,7 @@ type Store interface {
 	SetLastSeenAt(ctx context.Context, id string, at time.Time) error
 	SetMFASatisfied(ctx context.Context, id string) error
 	Revoke(ctx context.Context, id string, at time.Time, after ...identity.After) error
+	RevokeAllForUser(ctx context.Context, userID string, at time.Time) (int64, error)
 	RevokeOthersForUser(ctx context.Context, userID, keepID string, at time.Time) (int64, error)
 }
 
@@ -323,6 +324,20 @@ func (m *Manager) logoutAfter(sessionID, actorID string) identity.After {
 			ObjectID:   sessionID,
 		})
 	}
+}
+
+// RevokeAll ends every live session a user has, and reports how many.
+//
+// It is what an administrator disabling an account and an administrator signing
+// somebody out everywhere both call (M1-016), and the difference between it and
+// [Manager.RevokeOthers] is whose browser is doing the asking: nobody keeps a
+// session here, because the person whose sessions these are is not the caller.
+//
+// No activity row per session. One administrative act should be one line in the
+// feed, not one line per browser the person happened to have open — internal/authn
+// records the act, with the count in its delta.
+func (m *Manager) RevokeAll(ctx context.Context, userID string) (int64, error) {
+	return m.store.RevokeAllForUser(ctx, userID, m.now())
 }
 
 // RevokeOthers ends every session a user has except one, and reports how many.

@@ -147,8 +147,11 @@ Hammering a locked key does not extend the lockout.
 Two consequences worth expecting:
 
 - **The right password during a lockout is refused too.** Somebody who locks themselves out waits,
-  or an administrator waits with them; there is no override yet (`M1-016`). A lockout that the
-  correct password ended would only be a delay on an attacker who had already guessed it.
+  or an administrator waits with them: there is no endpoint that clears a lockout early, and
+  `M1-016`'s user administration does not add one — it can revoke sessions and disable accounts,
+  which is the opposite direction. A lockout that the correct password ended would only be a delay
+  on an attacker who had already guessed it. Restarting the server clears every lockout, because the
+  state is in memory.
 - **Behind a reverse proxy, the source limit counts the proxy** — every user shares one address —
   unless `BLACKLIGHT_TRUSTED_PROXIES` names it. Set that (see below) or raise
   `BLACKLIGHT_LOGIN_SOURCE_FAILURES` to suit the size of the office behind it.
@@ -169,6 +172,23 @@ docker compose run --rm blacklight blctl user create \
 DuckDB gives the database file to one process at a time, so the server has to be stopped for this
 (`docker compose stop` first), or the command has to run in a container that shares nothing with it.
 The error says so if you forget.
+
+Everybody after the first is created from the running application instead, by an administrator:
+`POST /users`, with a password for a local account or without one for an account that signs in
+through the identity provider. There is no mail transport, so nothing is sent — the response carries
+`inviteUrl`, which is this deployment's sign-in page, and you pass it on yourself along with the
+password you chose. An account created without a password is `invited` until the first single
+sign-on that resolves to its address claims it; `POST /users/{userId}/enable` turns one on by hand
+if that is never going to happen.
+
+Two things no request can do, whoever makes it:
+
+- **Remove the last administrator who can sign in.** Demoting, disabling or retiring them is `409`.
+  Give somebody else the `admin` role first.
+- **Raise its own caller's platform role.** `PATCH /users/me` has one field, `displayName`, and a
+  body naming anything else is rejected as malformed. Changing a role takes `user.manage`, which
+  only an administrator holds — and it takes effect on the target's *existing* session, at their
+  next request, without them signing in again.
 
 ### The one that is gone: `PASSWORD_SALT`
 

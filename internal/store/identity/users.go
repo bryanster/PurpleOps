@@ -3,10 +3,13 @@ package identity
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store"
 )
@@ -59,7 +62,11 @@ func NewUsers(db DB) *Users { return &Users{db: db} }
 // An email that is already in use — in any casing — is [apierr.Conflict]
 // rather than a server error: it is the caller's to fix, and it is the most
 // common way this call fails.
-func (r *Users) Create(ctx context.Context, u NewUser) (User, error) {
+//
+// after runs inside the same transaction after the insert, so a side effect
+// that fails — the activity row (M1-015), today — rolls the account back with
+// it.
+func (r *Users) Create(ctx context.Context, u NewUser, after ...After) (User, error) {
 	id, err := newID()
 	if err != nil {
 		return User{}, err
@@ -77,7 +84,10 @@ func (r *Users) Create(ctx context.Context, u NewUser) (User, error) {
 		// struct that went in: the database trims and normalizes, so this is
 		// the only way the caller is handed what was actually stored.
 		created, err = scanUser(tx.QueryRowContext(ctx, selectUser+`WHERE id = ?`, id))
-		return err
+		if err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, created.ID), tx, after)
 	})
 	switch {
 	case store.IsUniqueViolation(err):
@@ -108,27 +118,142 @@ func (r *Users) ByEmail(ctx context.Context, email string) (User, error) {
 	return u, nil
 }
 
-// List returns every user, ordered by normalized email — unique, so the order
-// is total, and the order a person reading a list of accounts expects.
-func (r *Users) List(ctx context.Context) ([]User, error) {
-	rows, err := r.db.Read().QueryContext(ctx, selectUser+`ORDER BY email_normalized`)
+// PageFilter narrows and pages through accounts (M1-016).
+//
+// The zero value selects everything, one default page at a time. Each field
+// that is set is one more AND: there is no "match any of these" form, because
+// the interface this backs has one filter bar and no way to express one.
+type PageFilter struct {
+	// Status and Role restrict the page to accounts in that state or holding
+	// that role. The zero value of either means "any".
+	Status Status
+	Role   authz.PlatformRole
+
+	// Search matches the display name or the email address, without regard to
+	// case, anywhere in either — an administrator looking somebody up usually
+	// remembers a fragment rather than the beginning.
+	Search string
+
+	// Cursor is the opaque value from a previous page, and Limit is how many
+	// rows to return. Limit is clamped to [defaultPageSize, maxPageSize] rather
+	// than refused: the request validator already holds the wire parameter to
+	// the same bounds, and a caller reaching this with something outside them is
+	// not one an error message would help.
+	Cursor string
+	Limit  int
+}
+
+// The page bounds. They match components/parameters/Limit in api/openapi.yaml,
+// which is what a request is actually held to; these are the backstop for the
+// callers that do not come through it — blctl, and the tests.
+const (
+	defaultPageSize = 50
+	maxPageSize     = 200
+)
+
+// Page returns one page of accounts, oldest first, and the cursor for the next
+// one — empty when there is no next one.
+//
+// Oldest first because identifiers are UUIDv7: `ORDER BY id` is creation order
+// and a total order at the same time, so paging cannot skip or repeat a row
+// when accounts are created while somebody is reading. An alphabetical listing
+// would need a second column in the cursor and would still reshuffle under a
+// rename.
+func (r *Users) Page(ctx context.Context, f PageFilter) (users []User, nextCursor string, err error) {
+	limit := f.Limit
+	switch {
+	case limit <= 0:
+		limit = defaultPageSize
+	case limit > maxPageSize:
+		limit = maxPageSize
+	}
+
+	var (
+		conditions []string
+		args       []any
+	)
+	if f.Status != "" {
+		conditions = append(conditions, `status = ?`)
+		args = append(args, f.Status)
+	}
+	if f.Role != "" {
+		conditions = append(conditions, `platform_role = ?`)
+		args = append(args, f.Role)
+	}
+	if search := strings.TrimSpace(f.Search); search != "" {
+		// Lowered by the database on both sides, for the reason every email
+		// comparison in this package is: one definition of "the same letter",
+		// and it is not Go's. email_normalized is already lower(trim(...)), so
+		// only the pattern needs it there.
+		pattern := "%" + escapeLike(search) + "%"
+		conditions = append(conditions,
+			`(lower(display_name) LIKE lower(?) ESCAPE '\' OR email_normalized LIKE lower(?) ESCAPE '\')`)
+		args = append(args, pattern, pattern)
+	}
+	if f.Cursor != "" {
+		after, cerr := decodeUserCursor(f.Cursor)
+		if cerr != nil {
+			return nil, "", apierr.Validation(apierr.Field("cursor", "is not a cursor this server issued"))
+		}
+		conditions = append(conditions, `id > ?`)
+		args = append(args, after)
+	}
+
+	var b strings.Builder
+	b.WriteString(selectUser)
+	if len(conditions) > 0 {
+		b.WriteString(`WHERE ` + strings.Join(conditions, ` AND `) + ` `)
+	}
+	// One more than asked for: the extra row is how "there is another page" is
+	// known without a second count query, and it is dropped before returning.
+	b.WriteString(`ORDER BY id LIMIT ?`)
+	args = append(args, limit+1)
+
+	rows, err := r.db.Read().QueryContext(ctx, b.String(), args...)
 	if err != nil {
-		return nil, fmt.Errorf("identity: list users: %w", err)
+		return nil, "", fmt.Errorf("identity: list users: %w", err)
 	}
 	defer rows.Close()
 
-	var users []User
 	for rows.Next() {
 		u, err := scanUser(rows)
 		if err != nil {
-			return nil, fmt.Errorf("identity: list users: %w", err)
+			return nil, "", fmt.Errorf("identity: list users: %w", err)
 		}
 		users = append(users, u)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("identity: list users: %w", err)
+		return nil, "", fmt.Errorf("identity: list users: %w", err)
 	}
-	return users, nil
+
+	if len(users) > limit {
+		users = users[:limit]
+		nextCursor = encodeUserCursor(users[limit-1].ID)
+	}
+	if users == nil {
+		users = []User{}
+	}
+	return users, nextCursor, nil
+}
+
+// CountActiveAdmins reports how many accounts are both [authz.PlatformRoleAdmin]
+// and [StatusActive], on the caller's write transaction.
+//
+// It takes the transaction rather than reading through the pool because of what
+// it is for: an installation must never end up with no administrator, and the
+// only way to be sure of that is to make the change, count inside the same
+// transaction, and roll back if the answer is zero. A count read beforehand
+// through the pooled reader would be a check somebody could race — see the
+// guard in internal/authn.
+func CountActiveAdmins(ctx context.Context, tx *sql.Tx) (int, error) {
+	var count int
+	err := tx.QueryRowContext(ctx,
+		`SELECT count(*) FROM app."user" WHERE platform_role = ? AND status = ?`,
+		authz.PlatformRoleAdmin, StatusActive).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("identity: count the active administrators: %w", err)
+	}
+	return count, nil
 }
 
 // Update writes u's email, display name, password hash, platform role, status
@@ -137,7 +262,12 @@ func (r *Users) List(ctx context.Context) ([]User, error) {
 //
 // A user that no longer exists is [apierr.NotFound]; an email that another user
 // already holds is [apierr.Conflict].
-func (r *Users) Update(ctx context.Context, u User) (User, error) {
+//
+// after runs inside the same transaction after the update. Two callers use it:
+// the activity log (M1-015), and the last-administrator guard in internal/authn
+// — which is why a hook that returns an error must undo the write, and does,
+// because the transaction rolls back with it.
+func (r *Users) Update(ctx context.Context, u User, after ...After) (User, error) {
 	var updated User
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, updateUser,
@@ -150,7 +280,10 @@ func (r *Users) Update(ctx context.Context, u User) (User, error) {
 			return err
 		}
 		updated, err = scanUser(tx.QueryRowContext(ctx, selectUser+`WHERE id = ?`, u.ID))
-		return err
+		if err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, updated.ID), tx, after)
 	})
 	switch {
 	case store.IsUniqueViolation(err):
@@ -201,6 +334,42 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	u.UpdatedAt = u.UpdatedAt.UTC()
 	u.LastLoginAt = fromNullTime(lastLogin)
 	return u, nil
+}
+
+// likeEscape is the escape character every LIKE in this package declares. A
+// backslash is not special inside a standard SQL string literal, so `ESCAPE '\'`
+// is one backslash and not an unterminated escape.
+const likeEscape = `\`
+
+// escapeLike neutralises the two LIKE metacharacters, and the escape character
+// itself, in text a caller typed. Without it a search for "50%" matches every
+// account, and one for "_" matches every account with at least one character —
+// which is a search box that quietly ignores what was typed rather than one that
+// finds nothing.
+var escapeLike = strings.NewReplacer(
+	likeEscape, likeEscape+likeEscape,
+	"%", likeEscape+"%",
+	"_", likeEscape+"_",
+).Replace
+
+// The page cursor is the identifier of the last row handed out, base64url'd.
+//
+// Encoded rather than sent bare so that it is opaque in fact and not only by
+// convention: a client that cannot read one cannot come to depend on its
+// contents, and this one is free to become a compound key later.
+func encodeUserCursor(id string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(id))
+}
+
+func decodeUserCursor(cursor string) (string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", err
+	}
+	if len(raw) == 0 {
+		return "", errors.New("empty")
+	}
+	return string(raw), nil
 }
 
 // wrapUserErr turns the absence of a row into the API's not-found, and anything

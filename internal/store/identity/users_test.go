@@ -1,7 +1,10 @@
 package identity_test
 
 import (
+	"database/sql"
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -269,45 +272,250 @@ func TestUpdateAndSetLastLoginAtReportAMissingUser(t *testing.T) {
 	}
 }
 
-func TestListReturnsEveryUserInEmailOrder(t *testing.T) {
+func TestPageReturnsEveryUserInCreationOrder(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
-	// Created out of order, and with casing that would sort differently if the
-	// display column were the one being ordered by.
-	for _, email := range []string{"Zoe@example.com", "alice@example.com", "Bob@example.com"} {
+	// Created in an order that is not alphabetical, so a page that came back
+	// sorted by email would fail rather than accidentally agree.
+	want := []string{"Zoe@example.com", "alice@example.com", "Bob@example.com"}
+	for _, email := range want {
 		mustCreateUser(t, r, email)
 	}
 
-	users, err := r.users.List(t.Context())
+	users, next, err := r.users.Page(t.Context(), identity.PageFilter{})
 	if err != nil {
-		t.Fatalf("List() = %v, want nil", err)
+		t.Fatalf("Page() = %v, want nil", err)
+	}
+	if next != "" {
+		t.Errorf("Page() returned the cursor %q for a single page", next)
+	}
+	if got := emailsOf(users); !slices.Equal(got, want) {
+		t.Errorf("Page() returned %v, want %v", got, want)
+	}
+}
+
+func TestPageOnAnEmptyDatabaseIsEmptyAndNotAnError(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	users, next, err := r.users.Page(t.Context(), identity.PageFilter{})
+	if err != nil {
+		t.Fatalf("Page() = %v, want nil", err)
+	}
+	if len(users) != 0 || next != "" {
+		t.Errorf("Page() = %v, %q on a fresh database, want nothing", emailsOf(users), next)
+	}
+}
+
+// TestPageWalksEveryUserExactlyOnce is the pagination criterion of M1-016, at
+// the layer that decides it. A thousand rows is what the ticket names; the
+// property is that following the cursor visits every account once and stops.
+func TestPageWalksEveryUserExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	const total = 1000
+	r := newRepos(t)
+	for i := range total {
+		mustCreateUser(t, r, fmt.Sprintf("person-%04d@example.com", i))
 	}
 
-	var got []string
-	for _, u := range users {
-		got = append(got, u.Email)
+	seen := map[string]bool{}
+	pages, cursor := 0, ""
+	for {
+		users, next, err := r.users.Page(t.Context(), identity.PageFilter{Cursor: cursor})
+		if err != nil {
+			t.Fatalf("Page(cursor=%q) = %v, want nil", cursor, err)
+		}
+		pages++
+		if pages > total {
+			t.Fatal("Page() never reported the last page; the cursor is not advancing")
+		}
+		for _, u := range users {
+			if seen[u.ID] {
+				t.Fatalf("Page() returned %s twice, on page %d", u.Email, pages)
+			}
+			seen[u.ID] = true
+		}
+		if next == "" {
+			break
+		}
+		cursor = next
 	}
-	want := []string{"alice@example.com", "Bob@example.com", "Zoe@example.com"}
-	if len(got) != len(want) {
-		t.Fatalf("List() returned %v, want %v", got, want)
+
+	if len(seen) != total {
+		t.Errorf("walking the pages saw %d accounts, want %d", len(seen), total)
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("List() returned %v, want %v", got, want)
+	// Exactly 1000/50 pages and no trailing empty one: Page reads one row
+	// beyond the limit to decide whether there is a next page, so a last page
+	// that is exactly full still reports no cursor.
+	if want := total / 50; pages != want {
+		t.Errorf("the walk took %d pages, want %d", pages, want)
+	}
+}
+
+func TestPageClampsTheLimit(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	for i := range 3 {
+		mustCreateUser(t, r, fmt.Sprintf("clamp-%d@example.com", i))
+	}
+
+	for name, limit := range map[string]int{"zero": 0, "negative": -1, "above the maximum": 10_000} {
+		users, _, err := r.users.Page(t.Context(), identity.PageFilter{Limit: limit})
+		if err != nil {
+			t.Fatalf("Page(limit=%d) = %v, want nil", limit, err)
+		}
+		if len(users) != 3 {
+			t.Errorf("Page() with a %s limit returned %d accounts, want 3", name, len(users))
 		}
 	}
 }
 
-func TestListOnAnEmptyDatabaseIsEmptyAndNotAnError(t *testing.T) {
+func TestPageFiltersByStatusAndRole(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
-	users, err := r.users.List(t.Context())
-	if err != nil {
-		t.Fatalf("List() = %v, want nil", err)
+	mustCreateUser(t, r, "plain-member@example.com") // member, active
+	if _, err := r.users.Create(t.Context(), identity.NewUser{
+		Email: "boss@example.com", DisplayName: "Boss",
+		PlatformRole: authz.PlatformRoleAdmin, Status: identity.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if len(users) != 0 {
-		t.Errorf("List() = %v on a fresh database, want nothing", users)
+	if _, err := r.users.Create(t.Context(), identity.NewUser{
+		Email: "retired@example.com", DisplayName: "Retired",
+		PlatformRole: authz.PlatformRoleMember, Status: identity.StatusDisabled,
+	}); err != nil {
+		t.Fatal(err)
 	}
+
+	for name, tc := range map[string]struct {
+		filter identity.PageFilter
+		want   []string
+	}{
+		"by role": {
+			filter: identity.PageFilter{Role: authz.PlatformRoleAdmin},
+			want:   []string{"boss@example.com"},
+		},
+		"by status": {
+			filter: identity.PageFilter{Status: identity.StatusDisabled},
+			want:   []string{"retired@example.com"},
+		},
+		"both, and they are an AND": {
+			filter: identity.PageFilter{Role: authz.PlatformRoleAdmin, Status: identity.StatusDisabled},
+			want:   nil,
+		},
+		"neither": {
+			filter: identity.PageFilter{},
+			want:   []string{"plain-member@example.com", "boss@example.com", "retired@example.com"},
+		},
+	} {
+		users, _, err := r.users.Page(t.Context(), tc.filter)
+		if err != nil {
+			t.Fatalf("%s: Page() = %v, want nil", name, err)
+		}
+		if got := emailsOf(users); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: Page() returned %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+func TestPageSearchesNameAndEmailWithoutRegardToCase(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	if _, err := r.users.Create(t.Context(), identity.NewUser{
+		Email: "aisha.khan@example.com", DisplayName: "Aisha Khan",
+		PlatformRole: authz.PlatformRoleMember, Status: identity.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.users.Create(t.Context(), identity.NewUser{
+		Email: "b@contractor.example", DisplayName: "Bo Nilsson",
+		PlatformRole: authz.PlatformRoleMember, Status: identity.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		search string
+		want   []string
+	}{
+		"a fragment of the display name":   {"isha", []string{"aisha.khan@example.com"}},
+		"the display name in another case": {"AISHA KHAN", []string{"aisha.khan@example.com"}},
+		"a fragment of the email domain":   {"contractor", []string{"b@contractor.example"}},
+		"surrounding whitespace":           {"  nilsson  ", []string{"b@contractor.example"}},
+		"nothing that matches":             {"nobody", nil},
+		// The two LIKE metacharacters, typed by somebody who meant them
+		// literally. Unescaped, "%" matches every account and "_" matches every
+		// account with a character in it.
+		"a literal percent":    {"%", nil},
+		"a literal underscore": {"_", nil},
+	} {
+		users, _, err := r.users.Page(t.Context(), identity.PageFilter{Search: tc.search})
+		if err != nil {
+			t.Fatalf("%s: Page() = %v, want nil", name, err)
+		}
+		if got := emailsOf(users); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: Page(search=%q) returned %v, want %v", name, tc.search, got, tc.want)
+		}
+	}
+}
+
+func TestPageRefusesACursorItDidNotIssue(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	if _, _, err := r.users.Page(t.Context(), identity.PageFilter{Cursor: "not base64!!"}); err == nil {
+		t.Error("Page() accepted a malformed cursor, want a validation failure")
+	} else if !errors.Is(err, apierr.ErrValidation) {
+		t.Errorf("Page() = %v, want a validation failure", err)
+	}
+}
+
+// TestCountActiveAdminsCountsOnlyTheAdministratorsWhoCanSignIn is the fact the
+// last-administrator guard in internal/authn is built on. A disabled
+// administrator is not one who can put the installation back.
+func TestCountActiveAdminsCountsOnlyTheAdministratorsWhoCanSignIn(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	for _, u := range []identity.NewUser{
+		{Email: "a@example.com", DisplayName: "A", PlatformRole: authz.PlatformRoleAdmin, Status: identity.StatusActive},
+		{Email: "b@example.com", DisplayName: "B", PlatformRole: authz.PlatformRoleAdmin, Status: identity.StatusDisabled},
+		{Email: "c@example.com", DisplayName: "C", PlatformRole: authz.PlatformRoleAdmin, Status: identity.StatusInvited},
+		{Email: "d@example.com", DisplayName: "D", PlatformRole: authz.PlatformRoleMember, Status: identity.StatusActive},
+	} {
+		if _, err := r.users.Create(t.Context(), u); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var count int
+	if err := r.db.Write(t.Context(), func(tx *sql.Tx) error {
+		var err error
+		count, err = identity.CountActiveAdmins(t.Context(), tx)
+		return err
+	}); err != nil {
+		t.Fatalf("CountActiveAdmins() = %v, want nil", err)
+	}
+	if count != 1 {
+		t.Errorf("CountActiveAdmins() = %d, want 1", count)
+	}
+}
+
+// emailsOf renders a page for a failure message: the addresses, in the order
+// they came back, and nil for an empty page so that slices.Equal treats "no
+// results" and "no results" alike.
+func emailsOf(users []identity.User) []string {
+	if len(users) == 0 {
+		return nil
+	}
+	emails := make([]string, len(users))
+	for i, u := range users {
+		emails[i] = u.Email
+	}
+	return emails
 }

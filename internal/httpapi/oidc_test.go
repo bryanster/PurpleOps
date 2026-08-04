@@ -133,7 +133,7 @@ func stateCookie(t *testing.T, recorder *httptest.ResponseRecorder) *http.Cookie
 func (s *ssoServer) users(t *testing.T) []identity.User {
 	t.Helper()
 
-	found, err := identity.NewUsers(s.db).List(t.Context())
+	found, _, err := identity.NewUsers(s.db).Page(t.Context(), identity.PageFilter{Limit: 200})
 	if err != nil {
 		t.Fatalf("listing users: %v", err)
 	}
@@ -459,6 +459,62 @@ func TestAnUnmappedGroupLeavesTheRoleAlone(t *testing.T) {
 
 // TestADisabledAccountCannotSignInThroughTheProvider: disabling an account has
 // to close every door, not the one with a password behind it.
+// TestAnInvitedAccountIsClaimedByItsFirstSingleSignOn is the other half of
+// M1-016's `POST /users` without a password: an administrator creates the
+// account `invited`, and the provider vouching for its owner is what claims it.
+//
+// Without this the invited state is a dead end — no local password to sign in
+// with, and a federated sign-in refused for not being active.
+func TestAnInvitedAccountIsClaimedByItsFirstSingleSignOn(t *testing.T) {
+	t.Parallel()
+
+	server := newSSOServer(t)
+	invited := server.seedUser(t, func(in *identity.NewUser) {
+		in.Status = identity.StatusInvited
+		// Created for single sign-on, so there is no password on it at all.
+		in.PasswordHash = ""
+	})
+
+	recorder := server.signInThrough(t, "", claims("subject-1", testEmail, true))
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("the callback = %d, want 302 — an invited account is claimable\nbody: %s",
+			recorder.Code, recorder.Body)
+	}
+
+	claimed, err := identity.NewUsers(server.db).ByID(t.Context(), invited.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed.Status != identity.StatusActive {
+		t.Errorf("status = %q after the sign-in, want %q", claimed.Status, identity.StatusActive)
+	}
+	// One account, not a second one provisioned beside it.
+	if got := len(server.users(t)); got != 1 {
+		t.Errorf("the database holds %d accounts, want 1", got)
+	}
+}
+
+// TestADisabledAccountIsNotClaimedByASingleSignOn: `disabled` is somebody's
+// decision, and proving who you are at the provider is not an argument against
+// it. Only `invited` — "exists and has never been claimed" — is claimable.
+func TestADisabledAccountIsNotClaimedByASingleSignOn(t *testing.T) {
+	t.Parallel()
+
+	server := newSSOServer(t)
+	disabled := server.seedUser(t, func(in *identity.NewUser) { in.Status = identity.StatusDisabled })
+
+	if got := server.signInThrough(t, "", claims("subject-1", testEmail, true)).Code; got != http.StatusForbidden {
+		t.Fatalf("the callback = %d, want 403", got)
+	}
+	after, err := identity.NewUsers(server.db).ByID(t.Context(), disabled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status != identity.StatusDisabled {
+		t.Errorf("status = %q, want it left %q", after.Status, identity.StatusDisabled)
+	}
+}
+
 func TestADisabledAccountCannotSignInThroughTheProvider(t *testing.T) {
 	t.Parallel()
 

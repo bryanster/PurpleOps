@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -465,6 +466,21 @@ func totpIssuer(cfg config.Config) string {
 	return "Blacklight (" + host + ")"
 }
 
+// signInLandingPath is the SPA route that shows the sign-in page. It is the one
+// place in the Go tree that knows it; web/src/app/routes/app-routes.tsx is the
+// other end.
+const signInLandingPath = "/login"
+
+// signInURL is the absolute address of this deployment's sign-in page, which is
+// what `POST /users` hands back as the invite link (M1-016).
+//
+// From the configured base URL and never from a request: a link built out of a
+// Host header is a link whoever sent the request chose, and this one is about to
+// be emailed to somebody by an administrator who will not check it.
+func signInURL(cfg config.Config) string {
+	return strings.TrimSuffix(cfg.Server.BaseURL.String(), "/") + signInLandingPath
+}
+
 // strictHandler wraps the handlers in the generated strict-mode adapter, with
 // both of its error hooks pointed at the one responder. An error returned by a
 // handler, and a response that will not serialize, then produce the same shape
@@ -481,6 +497,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			oidc:       provider,
 			saml:       federation,
 			activity:   activityLog,
+			signInURL:  signInURL(deps.Config),
 			log:        log,
 		},
 		nil, // No strict middleware: the chain is chi's, so there is one of them.

@@ -289,7 +289,7 @@ func readUsers(t *testing.T, path string) []identity.User {
 	t.Helper()
 
 	db := openDB(t, path)
-	users, err := identity.NewUsers(db).List(t.Context())
+	users, _, err := identity.NewUsers(db).Page(t.Context(), identity.PageFilter{Limit: 200})
 	if err != nil {
 		t.Fatalf("listing users: %v", err)
 	}

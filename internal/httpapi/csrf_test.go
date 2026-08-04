@@ -418,6 +418,20 @@ var csrfCoverage = map[string]struct {
 	},
 	"DELETE " + BasePath + "/auth/tokens/{tokenId}": {body: ""},
 
+	// User administration (M1-016). Protected like everything else a browser
+	// reaches; the bodies are the smallest ones the specification accepts, so
+	// that whatever answers the walks below is the middleware under test rather
+	// than a 400 about the shape of the request.
+	"POST " + BasePath + "/users": {
+		body: `{"email":"walked@example.com","displayName":"Walked","platformRole":"member"}`,
+	},
+	"PATCH " + BasePath + "/users/me":                      {body: `{"displayName":"Walked"}`},
+	"PATCH " + BasePath + "/users/{userId}":                {body: `{"displayName":"Walked"}`},
+	"DELETE " + BasePath + "/users/{userId}":               {body: ""},
+	"POST " + BasePath + "/users/{userId}/disable":         {body: ""},
+	"POST " + BasePath + "/users/{userId}/enable":          {body: ""},
+	"POST " + BasePath + "/users/{userId}/sessions/revoke": {body: ""},
+
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request
 	// the *validator* accepts, so that whatever answers it is the middleware

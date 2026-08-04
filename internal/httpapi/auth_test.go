@@ -111,7 +111,14 @@ func (s *authServer) seedUser(t *testing.T, adjust ...func(*identity.NewUser)) i
 // testing a client nobody ships. The tests that are *about* CSRF build their
 // requests by hand for exactly that reason — see csrf_test.go.
 func (s *authServer) post(target, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+	return s.send(http.MethodPost, target, body, cookies...)
+}
+
+// send is post for the methods that are not POST — PATCH and DELETE arrived
+// with user administration (M1-016) — and carries the same cookies and the same
+// CSRF header for the same reason.
+func (s *authServer) send(method, target, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	for _, cookie := range cookies {
 		request.AddCookie(cookie)
@@ -173,7 +180,7 @@ func sessionCookie(t *testing.T, recorder *httptest.ResponseRecorder) *http.Cook
 func (s *authServer) userID(t *testing.T) string {
 	t.Helper()
 
-	users, err := identity.NewUsers(s.db).List(t.Context())
+	users, _, err := identity.NewUsers(s.db).Page(t.Context(), identity.PageFilter{Limit: 200})
 	if err != nil || len(users) == 0 {
 		t.Fatalf("reading the seeded user: %v", err)
 	}

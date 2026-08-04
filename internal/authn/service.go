@@ -30,8 +30,9 @@ type (
 	Users interface {
 		ByID(ctx context.Context, id string) (identity.User, error)
 		ByEmail(ctx context.Context, email string) (identity.User, error)
-		Create(ctx context.Context, u identity.NewUser) (identity.User, error)
-		Update(ctx context.Context, u identity.User) (identity.User, error)
+		Page(ctx context.Context, f identity.PageFilter) ([]identity.User, string, error)
+		Create(ctx context.Context, u identity.NewUser, after ...identity.After) (identity.User, error)
+		Update(ctx context.Context, u identity.User, after ...identity.After) (identity.User, error)
 		SetLastLoginAt(ctx context.Context, id string, at time.Time) error
 	}
 

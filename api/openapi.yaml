@@ -1206,6 +1206,393 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /users:
+    get:
+      operationId: listUsers
+      summary: List the accounts on this installation.
+      description: |
+        Administrators only. Every account, oldest first, with the standard
+        cursor pagination — `limit` is capped at 200 by the shared parameter, so
+        a caller cannot ask for the whole table in one request.
+
+        Narrow it with `status`, `role` and `q`. The search matches the display
+        name or the email address, without regard to case, anywhere in either.
+
+        No response here carries a password hash, an authenticator secret, a
+        recovery code or a session token. None of those is a field of the `User`
+        schema, which is what makes that a property of the document rather than
+        a promise about the implementation.
+      tags:
+        - users
+      x-authz-action: user.read
+      x-authz-resource:
+        type: user
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/UserStatusFilter"
+        - $ref: "#/components/parameters/UserRoleFilter"
+        - $ref: "#/components/parameters/UserSearch"
+      responses:
+        "200":
+          description: A page of accounts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createUser
+      summary: Create an account.
+      description: |
+        Administrators only. There is no email transport in this deployment, so
+        nothing is sent: the response carries `inviteUrl`, which is where this
+        installation is signed in to, and the administrator passes it on
+        themselves along with whatever credential they chose.
+
+        Two shapes of account, and `password` is what picks between them:
+
+        - **With a password.** A local account, `active` by default. Tell the
+          person the address, the password and the link, and they change the
+          password once they are in.
+        - **Without one.** An account that signs in through the identity
+          provider, `invited` by default — it exists and nobody has claimed it.
+          The first successful single sign-on that resolves to this address
+          claims it, and the account becomes `active` at that moment.
+
+        An address already in use — in any casing, with any surrounding
+        whitespace — is `409`, never a 500 and never a second account.
+      tags:
+        - users
+      x-authz-action: user.manage
+      x-authz-resource:
+        type: user
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: The account was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/me:
+    patch:
+      operationId: updateCurrentUser
+      summary: Change your own display name.
+      description: |
+        The self-service half of user administration, and deliberately the
+        smallest one that could exist: a display name and nothing else.
+
+        Your platform role and your status are **not** fields of this request.
+        Not filtered out of it — absent from it, so a body that names one is
+        rejected by the request validator with `400` before any handler runs
+        (PLAN.md §4: "field safety comes from the schema"). Raising your own
+        privilege through this endpoint is not something the server declines to
+        do; it is something there is no way to ask for.
+      tags:
+        - users
+      x-authz-self: true
+      x-authz-because: your own display name, and this request has no field that could name anybody else's account.
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSelfRequest"
+      responses:
+        "200":
+          description: Your account as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      summary: Read one account.
+      description: Administrators only. The same shape the listing returns, and carrying no more than it does.
+      tags:
+        - users
+      x-authz-action: user.read
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateUser
+      summary: Edit an account's name, platform role, status or MFA requirement.
+      description: |
+        Administrators only, and a patch rather than a replacement: a field that
+        is absent is left alone, so two administrators editing different things
+        at once do not overwrite each other's change.
+
+        The email address is not editable here. It is the identifier a federated
+        sign-in links an account by, and changing it would move somebody else's
+        single sign-on onto this account.
+
+        Changing `platformRole` takes effect on the target's **existing**
+        session, at their next request, without them signing in again — the role
+        is read from the account on every request and nothing caches it. The
+        same is true in the other direction: a promotion applies immediately too.
+
+        Setting `status` to `disabled` does what `POST /users/{userId}/disable`
+        does, including revoking the account's sessions.
+
+        The last account that is both `admin` and `active` cannot be demoted or
+        disabled: `409`, saying so. An installation with no administrator is one
+        nobody can administer, and no request should be able to produce it.
+      tags:
+        - users
+      x-authz-action: user.manage
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: The account as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteUser
+      summary: Retire an account.
+      description: |
+        Administrators only, and a **soft** delete: the account's status becomes
+        `disabled` and the row stays. It is the same operation as
+        `POST /users/{userId}/disable`, spelled the way a client that thinks in
+        resources expects, and it answers with the account so that the caller
+        can see it is still there.
+
+        Nothing here removes an account. The executions, comments and findings
+        somebody wrote keep their author, and a hard delete would either orphan
+        or rewrite that history — a database administrator's decision, not an
+        API call (`M1-001`).
+
+        The last `admin` who is still `active` cannot be retired: `409`.
+      tags:
+        - users
+      x-authz-action: user.manage
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The account, now disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{userId}/disable:
+    post:
+      operationId: disableUser
+      summary: Disable an account, ending its access at once.
+      description: |
+        Administrators only. Every session the account holds is revoked, and
+        every service token it owns stops working on its next request — a
+        token's permissions are its owner's, read live, so an owner who is not
+        `active` has none to spend.
+
+        Idempotent: disabling an account that is already disabled answers the
+        same way.
+
+        The last `admin` who is still `active` cannot be disabled: `409`.
+      tags:
+        - users
+      x-authz-action: user.manage
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The account, now disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{userId}/enable:
+    post:
+      operationId: enableUser
+      summary: Enable an account.
+      description: |
+        Administrators only. The account becomes `active`. Sessions revoked
+        while it was disabled stay revoked — enabling somebody gives them their
+        account back, not the browser tab they had open a month ago.
+
+        Idempotent, and the way an `invited` account that will never use single
+        sign-on is turned on by hand.
+      tags:
+        - users
+      x-authz-action: user.manage
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The account, now active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{userId}/sessions/revoke:
+    post:
+      operationId: revokeUserSessions
+      summary: Sign an account out everywhere.
+      description: |
+        Administrators only. Ends every live session the account holds, at once
+        and without disabling it — what an administrator reaches for when a
+        laptop goes missing and the person still needs their account tomorrow.
+
+        Service tokens are not sessions and are not touched. Use
+        `POST /users/{userId}/disable` to stop those as well.
+
+        Idempotent: an account with nothing live answers `200` and `revoked: 0`.
+      tags:
+        - users
+      x-authz-action: user.manage
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: How many sessions were ended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokedSessions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /settings/mfa:
     get:
       operationId: getMfaPolicy
@@ -1462,6 +1849,47 @@ components:
       schema:
         type: string
         format: uuid
+
+    # The account a user-administration operation acts on. Declared once because
+    # six operations name it, and because api/authz.go checks that the parameter
+    # `x-authz-resource.param` points at is one the operation actually declares —
+    # six copies would be six chances for that to be spelled differently.
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: The account being read or changed.
+      schema:
+        type: string
+        format: uuid
+
+    UserStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Restrict the listing to accounts in this state.
+      schema:
+        $ref: "#/components/schemas/UserStatus"
+    UserRoleFilter:
+      name: role
+      in: query
+      required: false
+      description: Restrict the listing to accounts holding this platform role.
+      schema:
+        $ref: "#/components/schemas/PlatformRole"
+    UserSearch:
+      name: q
+      in: query
+      required: false
+      description: |
+        Restrict the listing to accounts whose display name or email address
+        contains this text, without regard to case. Not a prefix match: an
+        administrator looking for somebody usually remembers a fragment rather
+        than the beginning.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 320
 
     ActivityActor:
       name: actor
@@ -1976,6 +2404,228 @@ components:
         addedAt:
           type: string
           format: date-time
+
+    UserStatus:
+      type: string
+      description: |
+        Whether an account can be used. Retirement is a status change and never
+        a deletion: the executions, comments and findings somebody wrote keep
+        their author (`M1-001`).
+      enum:
+        # Created and never claimed. It cannot sign in with a password — it has
+        # none — and the first single sign-on that resolves to its address
+        # claims it and makes it `active`.
+        - invited
+        - active
+        # Retired, or suspended. Every session is revoked and every service
+        # token the account owns stops working, because a token spends its
+        # owner's permissions and an account in this state has none.
+        - disabled
+
+    User:
+      type: object
+      description: |
+        One account, as user administration reports it. Compare `CurrentUser`,
+        which is the caller describing themselves and carries their memberships
+        and their MFA state; this is an administrator describing somebody else.
+
+        What is *not* here is the point of it: there is no password hash, no
+        authenticator secret, no recovery code and no session token, so no
+        response built from this schema can carry one.
+      required:
+        - id
+        - email
+        - displayName
+        - platformRole
+        - status
+        - mfaEnforced
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          description: The address as it was typed. Matched without regard to case everywhere it is looked up.
+          examples:
+            - alice@example.com
+        displayName:
+          type: string
+        platformRole:
+          $ref: "#/components/schemas/PlatformRole"
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        mfaEnforced:
+          type: boolean
+          description: |
+            Whether an administrator requires a second factor of this person
+            specifically. It is one input to the effective requirement and not
+            the whole answer — see `MFAState.required`, which is what an
+            interface acts on for the *signed-in* user.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+          description: When this account last signed in. Absent if it never has.
+
+    UserPage:
+      type: object
+      description: |
+        One page of accounts, oldest first — identifiers are UUIDv7, so that is
+        creation order and a stable total order at the same time. `nextCursor`
+        is taken verbatim from a previous response; absent (or null) means there
+        is no further page.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        nextCursor:
+          type: [string, "null"]
+          minLength: 1
+          description: Opaque cursor for the next page. Pass it back as `cursor`.
+
+    CreateUserRequest:
+      type: object
+      description: |
+        Body of `POST /users`. The identifier, the timestamps and the invite
+        link are the server's; everything a caller chooses is here.
+      required:
+        - email
+        - displayName
+        - platformRole
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 320
+          description: |
+            The address, stored as typed and compared without regard to case or
+            surrounding whitespace. An address another account already holds is
+            `409`.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        platformRole:
+          $ref: "#/components/schemas/PlatformRole"
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: |
+            A password for a local account. Omit it for an account that signs in
+            through the identity provider.
+
+            The bounds here are a backstop, not the policy: the policy lives in
+            one place (internal/authn/password) and is reported as field errors
+            on `password`, so there is one definition of an acceptable password
+            rather than one here and one in the client.
+        status:
+          description: |
+            The state to create the account in. Omitted, it is derived from
+            `password`: `active` with one, `invited` without.
+
+            `disabled` is not offered — creating an account that cannot be used
+            is a way of describing an account that should not have been created.
+            An `invited` account with a password is refused with a field error:
+            an invited account has no local sign-in, so the password would be
+            one nobody could ever use.
+          type: string
+          enum:
+            - invited
+            - active
+        mfaEnforced:
+          type: boolean
+          description: Require a second factor of this person specifically. Defaults to false.
+
+    CreatedUser:
+      type: object
+      description: |
+        A newly created account and where to send the person it belongs to.
+      required:
+        - user
+        - inviteUrl
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        inviteUrl:
+          type: string
+          description: |
+            Where this installation is signed in to. There is no mail transport
+            in this deployment, so nothing was sent: an administrator passes
+            this on themselves, with the password they chose or with a note to
+            use the single sign-on button.
+
+            It carries no credential and grants nothing — it is a link to the
+            front door, and anybody may already know it.
+          examples:
+            - https://blacklight.example.com/login
+
+    UpdateUserRequest:
+      type: object
+      description: |
+        Body of `PATCH /users/{userId}`. Every field is optional and an absent
+        one is left alone, so two administrators editing different things do not
+        overwrite each other. At least one must be present — an empty patch is a
+        client bug, and answering it `200` would hide one.
+
+        `email` is deliberately not a field: it is what a federated sign-in
+        links an account by, so editing it could move somebody else's single
+        sign-on onto this account.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        platformRole:
+          $ref: "#/components/schemas/PlatformRole"
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        mfaEnforced:
+          type: boolean
+
+    UpdateSelfRequest:
+      type: object
+      description: |
+        Body of `PATCH /users/me`. One field, and that is the design: a schema
+        with no `platformRole` in it is a request that cannot ask for one, which
+        is a stronger guarantee than a handler that declines to honour it
+        (PLAN.md §4).
+      required:
+        - displayName
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    RevokedSessions:
+      type: object
+      description: What `POST /users/{userId}/sessions/revoke` ended.
+      required:
+        - revoked
+      properties:
+        revoked:
+          type: integer
+          minimum: 0
+          description: |
+            How many live sessions were ended. Zero is a normal answer: the
+            account may have had none, or somebody may have revoked them a
+            moment ago.
 
     MFAState:
       type: object

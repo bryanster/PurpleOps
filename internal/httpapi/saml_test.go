@@ -548,7 +548,7 @@ func TestAMisconfiguredSAMLDoesNotBreakOIDC(t *testing.T) {
 func (s *samlServer) samlUsers(t *testing.T) []identity.User {
 	t.Helper()
 
-	found, err := identity.NewUsers(s.db).List(t.Context())
+	found, _, err := identity.NewUsers(s.db).Page(t.Context(), identity.PageFilter{Limit: 200})
 	if err != nil {
 		t.Fatalf("listing users: %v", err)
 	}

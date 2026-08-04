@@ -69,6 +69,12 @@ func TestTheMappingIsAnExemptionOrAPermissionAndNeverBoth(t *testing.T) {
 		// exchange, plus the metadata an identity provider administrator has to
 		// be able to fetch before anybody here has an account to fetch it with.
 		"getSamlMetadata": true, "startSamlSignIn": true, "completeSamlSignIn": true,
+		// The self-service corner of user administration (M1-016). It edits a
+		// display name on the account that asked, and its request schema has no
+		// field that could name another account or a platform role — which is
+		// why it is an exemption rather than a permission nobody could fail to
+		// hold.
+		"updateCurrentUser": true,
 	}
 
 	for id, requirement := range requirements {

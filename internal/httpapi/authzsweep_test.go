@@ -18,12 +18,13 @@ package httpapi
 // users, sync content — chosen because between them they cover both resource
 // owners, both refusal shapes, and both sides of the red/blue split.
 //
-// The endpoints do not exist yet: engagements are M3, user management is M1-016,
-// content is M2. They are declared in [sweepSpec] below and merged into the real
-// document, the way authorize_test.go does — the wiring under test is the
-// middleware, the specification extensions and the status codes, all of which are
-// here today. When the real endpoints arrive, delete the matching entry from the
-// fixture and point the sweep at the real path.
+// Most of the endpoints do not exist yet: engagements are M3 and content is M2.
+// Those are declared in [sweepSpec] below and merged into the real document, the
+// way authorize_test.go does — the wiring under test is the middleware, the
+// specification extensions and the status codes, all of which are here today.
+// When a real endpoint arrives, delete the matching entry from the fixture and
+// point its row at the real path, as user management did when M1-016 landed:
+// [sweepOp.Real] marks a row that drives the shipped endpoint rather than a stub.
 
 import (
 	"fmt"
@@ -46,21 +47,23 @@ import (
 // The identifiers the sweep acts on. The engagement is the one [stubOwnership]
 // knows about; anything else is a 404 from the loader rather than from the
 // policy, which is a different test.
+//
+// There is no constant for the account: user management is a real endpoint now,
+// so the row that drives it is pointed at an account that really exists — an
+// invented identifier would answer 404 for a reason this file is not about.
 const (
 	sweepEngagement = "0192f1a0-0000-7000-8000-00000000e001"
 	sweepExecution  = "0192f1a0-0000-7000-8000-00000000e002"
-	sweepUser       = "0192f1a0-0000-7000-8000-00000000e003"
 )
 
-// sweepSpec declares the six endpoints, mapped the way M2, M3 and M1-016 will
-// map their own. The mappings are the thing under test as much as the handlers
-// are: `x-authz-resource` is what tells the middleware which path segment is the
-// engagement, and getting it wrong is an endpoint that asks the policy about the
-// wrong thing.
+// sweepSpec declares the five endpoints that do not exist yet, mapped the way M2
+// and M3 will map their own. The mappings are the thing under test as much as the
+// handlers are: `x-authz-resource` is what tells the middleware which path
+// segment is the engagement, and getting it wrong is an endpoint that asks the
+// policy about the wrong thing.
 //
-// The path for user management is v1's, deliberately. `/manage/access` is the
-// endpoint PLAN.md §4 names — the one anybody signed in could reach — and a sweep
-// that proves a platform member gets 403 from it should say so in the URL.
+// The sixth — user management — is not here. It is `PATCH /users/{userId}` in
+// api/openapi.yaml since M1-016, and the sweep drives that.
 const sweepSpec = `
 openapi: 3.1.0
 info: {title: authorization sweep fixture, version: 1.0.0}
@@ -117,17 +120,6 @@ paths:
       parameters:
         - $ref: "#/components/parameters/CSRF"
       responses: {"200": {description: ok}}
-  /manage/access/{userId}:
-    parameters:
-      - {name: userId, in: path, required: true, schema: {type: string}}
-    patch:
-      operationId: sweepManageUsers
-      summary: Edit an account, including its platform role.
-      x-authz-action: user.manage
-      x-authz-resource: {type: user, param: userId}
-      parameters:
-        - $ref: "#/components/parameters/CSRF"
-      responses: {"200": {description: ok}}
   /content/sync:
     post:
       operationId: sweepSyncContent
@@ -168,6 +160,16 @@ type sweepOp struct {
 	// concrete URL is derived from it, so there is no second copy to disagree.
 	Route string
 
+	// Real marks a row that drives an endpoint this server actually serves,
+	// rather than one of the stubs in [sweepSpec]. A real row registers no
+	// fixture handler — chi would refuse the duplicate route — so "the request
+	// reached the handler" is read off the status rather than off a header the
+	// stub sets.
+	Real bool
+
+	// Body is what a real row sends. Empty for the stubs, which take none.
+	Body string
+
 	Want statuses
 }
 
@@ -202,12 +204,14 @@ var sweepOperations = []sweepOp{
 		Want:  statuses{200, 200, 403, 403, 403, 404},
 	},
 	{
-		// v1's ungated page. Every platform member is refused, and refused with
-		// a 403 rather than a 404 — the installation is not a secret, and a
-		// caller who cannot administer it already knows it is there.
+		// v1's ungated page, rebuilt: this is the real endpoint M1-016 ships,
+		// not a stub. Every platform member is refused, and refused with a 403
+		// rather than a 404 — the installation is not a secret, and a caller who
+		// cannot administer it already knows it is there.
 		Name: "manage the users", Method: http.MethodPatch,
-		Route: "/manage/access/{userId}",
-		Want:  statuses{200, 403, 403, 403, 403, 403},
+		Route: "/users/{userId}",
+		Real:  true, Body: `{"displayName":"Swept"}`,
+		Want: statuses{200, 403, 403, 403, 403, 403},
 	},
 	{
 		Name: "sync the content library", Method: http.MethodPost,
@@ -260,7 +264,7 @@ func TestTheAuthorizationSweep(t *testing.T) {
 	server := newSweepServer(t)
 
 	for _, op := range sweepOperations {
-		target := sweepTarget(op.Route)
+		target := server.target(op.Route)
 
 		for _, caller := range server.callers {
 			want := caller.Want(op.Want)
@@ -275,8 +279,8 @@ func TestTheAuthorizationSweep(t *testing.T) {
 				how      string
 				recorder *httptest.ResponseRecorder
 			}{
-				{"signed in", server.asSession(caller, op.Method, target)},
-				{"with a service token", server.asToken(caller, op.Method, target)},
+				{"signed in", server.asSession(caller, op, target)},
+				{"with a service token", server.asToken(caller, op, target)},
 			} {
 				if got := arrival.recorder.Code; got != want {
 					t.Errorf("%s, %s, tried to %s: %d, want %d\nbody: %s",
@@ -296,11 +300,17 @@ func (s *sweepServer) assertRefusalShape(t *testing.T, recorder *httptest.Respon
 	caller *sweepCaller, op sweepOp, want int) {
 	t.Helper()
 
-	reached := recorder.Header().Get(sweepHandlerHeader) != ""
-	if allowed := want == http.StatusOK; reached != allowed {
-		t.Errorf("%s tried to %s: the handler %s, and the status was %d. A refused request must not enter "+
-			"the handler at all — a handler that runs and then changes nothing is a handler somebody will "+
-			"later make change something", caller.Name, op.Name, ranOrNot(reached), want)
+	// The stub sets a header when it runs. A real endpoint cannot — it is the
+	// shipped handler — so for those rows the status is the observation, which
+	// is enough: an allowed 200 came out of the handler and a 403 never got
+	// there.
+	if !op.Real {
+		reached := recorder.Header().Get(sweepHandlerHeader) != ""
+		if allowed := want == http.StatusOK; reached != allowed {
+			t.Errorf("%s tried to %s: the handler %s, and the status was %d. A refused request must not enter "+
+				"the handler at all — a handler that runs and then changes nothing is a handler somebody will "+
+				"later make change something", caller.Name, op.Name, ranOrNot(reached), want)
+		}
 	}
 	if want == http.StatusOK {
 		return
@@ -395,6 +405,11 @@ const sweepHandlerHeader = "X-Sweep-Handler"
 type sweepServer struct {
 	*authServer
 	callers []*sweepCaller
+
+	// targetUser is the account the user-administration row acts on. It is a
+	// seventh account rather than one of the callers: patching a caller's own
+	// row mid-sweep would change what the rows after it are testing.
+	targetUser identity.User
 }
 
 // newSweepServer builds it: one database, six accounts, six sign-ins, six tokens.
@@ -416,6 +431,13 @@ func newSweepServer(t *testing.T) *sweepServer {
 		sweepDoc(t),
 		func(r chi.Router) {
 			for _, op := range sweepOperations {
+				if op.Real {
+					// The server already serves this one. Registering a second
+					// handler on the same pattern is a chi panic, and a stub in
+					// front of the real handler would be a sweep that proves the
+					// stub is protected.
+					continue
+				}
 				r.MethodFunc(op.Method, op.Route, func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set(sweepHandlerHeader, "ran")
 					w.WriteHeader(http.StatusOK)
@@ -457,6 +479,12 @@ func newSweepServer(t *testing.T) *sweepServer {
 		// sweep is not the test for — servicetoken_test.go is.
 		caller.token = server.createToken(t, caller.session, authz.TokenScopes()...).Token
 	}
+
+	server.targetUser = server.seedUser(t, func(in *identity.NewUser) {
+		in.Email = "sweep-target@example.test"
+		in.DisplayName = "the account the sweep edits"
+		in.PlatformRole = authz.PlatformRoleMember
+	})
 	return server
 }
 
@@ -482,20 +510,20 @@ func sweepDoc(t *testing.T) *openapi3.T {
 	return doc
 }
 
-// sweepTarget turns a route into the URL a request is sent to.
-var sweepTarget = func() func(string) string {
-	replacer := strings.NewReplacer(
+// target turns a route into the URL a request is sent to.
+func (s *sweepServer) target(route string) string {
+	return BasePath + strings.NewReplacer(
 		"{engagementId}", sweepEngagement,
 		"{executionId}", sweepExecution,
-		"{userId}", sweepUser,
-	)
-	return func(route string) string { return BasePath + replacer.Replace(route) }
-}()
+		"{userId}", s.targetUser.ID,
+	).Replace(route)
+}
 
 // asSession performs one request as a signed-in browser: the session cookie, and
 // the CSRF cookie and header that go with it on a state-changing method.
-func (s *sweepServer) asSession(caller *sweepCaller, method, target string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, target, nil)
+func (s *sweepServer) asSession(caller *sweepCaller, op sweepOp, target string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(op.Method, target, strings.NewReader(op.Body))
+	request.Header.Set("Content-Type", jsonMediaType)
 	request.AddCookie(caller.session)
 	s.attachCSRF(request, caller.session)
 	return do(s.handler, request)
@@ -504,8 +532,9 @@ func (s *sweepServer) asSession(caller *sweepCaller, method, target string) *htt
 // asToken performs the same request as automation: the bearer token, no cookie,
 // and no CSRF header — a token-authenticated request is not subject to that
 // check, because nothing attaches one on a caller's behalf.
-func (s *sweepServer) asToken(caller *sweepCaller, method, target string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, target, nil)
+func (s *sweepServer) asToken(caller *sweepCaller, op sweepOp, target string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(op.Method, target, strings.NewReader(op.Body))
+	request.Header.Set("Content-Type", jsonMediaType)
 	request.Header.Set("Authorization", "Bearer "+caller.token)
 	return do(s.handler, request)
 }

@@ -94,6 +94,10 @@ func (s *Service) SignInWithFederatedIdentity(ctx context.Context, in FederatedL
 	if err != nil {
 		return LoginResult{}, err
 	}
+	user, err = s.claimInvitation(ctx, user)
+	if err != nil {
+		return LoginResult{}, err
+	}
 	if user.Status != identity.StatusActive {
 		// Said plainly rather than hidden behind the generic refusal. They have
 		// just proved who they are at the provider, so there is nothing here they
@@ -195,6 +199,43 @@ func (s *Service) federatedUser(ctx context.Context, in FederatedLogin) (identit
 				in.Provider, in.Subject))
 	}
 	return s.provision(ctx, in)
+}
+
+// claimInvitation activates an account an administrator created for somebody
+// who had not signed in yet (M1-016), and leaves every other account alone.
+//
+// [identity.StatusInvited] means "exists but has never been claimed", and this
+// is the moment it is claimed: an administrator created the account without a
+// password precisely so that the identity provider would be the thing that let
+// its owner in, and the provider has just vouched for them. Without this the
+// invited state would be a dead end — no local password to sign in with, and a
+// federated sign-in refused for not being active.
+//
+// A `disabled` account is not touched. Somebody turned it off deliberately, and
+// proving who you are at the provider is not an argument against that.
+func (s *Service) claimInvitation(ctx context.Context, user identity.User) (identity.User, error) {
+	if user.Status != identity.StatusInvited {
+		return user, nil
+	}
+
+	claimed := user
+	claimed.Status = identity.StatusActive
+	// The actor is the person themselves: nobody administered this, they turned
+	// up. The row is a user.enabled, the same verb an administrator's enable
+	// writes, because the fact recorded is the same one.
+	claimed, err := s.users.Update(ctx, claimed,
+		s.recordInTx(user.ID, events.VerbUserEnabled, map[string]any{
+			"status": change(string(user.Status), string(identity.StatusActive)),
+			"reason": "claimed by a federated sign-in",
+		}))
+	if err != nil {
+		return identity.User{}, err
+	}
+
+	s.log.InfoContext(ctx, "an invited account was claimed by a federated sign-in",
+		slog.String("user_id", claimed.ID),
+		slog.String("email", claimed.Email))
+	return claimed, nil
 }
 
 // provision creates the account for somebody arriving for the first time.

@@ -345,6 +345,40 @@ The rest — the protocols, the state and nonce, the key rotation handling, and 
 identity provider does to a role here — is [`docs/sso-oidc.md`](sso-oidc.md) and
 [`docs/sso-saml.md`](sso-saml.md).
 
+## Accounts
+
+`PLAN.md` §4 on v1: `/manage/access` was reachable by any logged-in user, who could grant themselves
+Admin. The rebuild (M1-016) is protected by construction rather than by a check somebody remembered
+to write, and four properties are worth stating on their own.
+
+**One schema per audience, not one schema with fields nobody honours.** `PATCH /users/me` takes
+`UpdateSelfRequest`, which has exactly one property: `displayName`. There is no `platformRole` in it
+and no `status`, so a body naming either is rejected by the request validator with `400` before any
+handler runs. That is a stronger guarantee than a handler that reads the field and declines to act
+on it — the field does not exist, so there is nothing to forget to ignore.
+
+**A role change needs no session change.** The platform role is read off the account on every single
+request, by both `authn.Authenticate` and `authn.AuthenticateToken`, so a demotion narrows what
+somebody may do at their very next request and a promotion widens it just as fast. Nothing revokes a
+session to make that happen, and nothing caches a role anywhere — which is what "rotation on
+privilege change" is actually protecting against, and it means a demoted person is not signed out of
+a page they were halfway through.
+
+**Disabling is immediate and total.** The status is checked on the same live read, so every session
+and every service token the account owns stops at its next request; the sessions are additionally
+revoked, so the rows record when access stopped and re-enabling does not hand back a browser tab
+somebody left open a month ago. `POST /users/{userId}/sessions/revoke` is the milder version for a
+lost laptop: sessions end, the account and its tokens keep working.
+
+**The installation cannot be left with nobody to administer it.** Demoting, disabling or retiring
+the last `admin` who is still `active` is a `409`. The count is taken *inside* the same transaction
+as the change and rolls it back — asked beforehand it would be a check two administrators demoting
+each other at the same moment could both pass.
+
+Retirement is a status and never a deletion: an account that wrote executions, comments and findings
+keeps its authorship, so `DELETE /users/{userId}` sets the status to `disabled` and the row stays.
+There is no hard delete in the API.
+
 ## Service tokens
 
 The REST API is the only supported integration surface, so these are the credentials for all of it.

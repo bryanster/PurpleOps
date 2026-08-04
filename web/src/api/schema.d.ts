@@ -695,6 +695,221 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the accounts on this installation.
+         * @description Administrators only. Every account, oldest first, with the standard
+         *     cursor pagination — `limit` is capped at 200 by the shared parameter, so
+         *     a caller cannot ask for the whole table in one request.
+         *
+         *     Narrow it with `status`, `role` and `q`. The search matches the display
+         *     name or the email address, without regard to case, anywhere in either.
+         *
+         *     No response here carries a password hash, an authenticator secret, a
+         *     recovery code or a session token. None of those is a field of the `User`
+         *     schema, which is what makes that a property of the document rather than
+         *     a promise about the implementation.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        /**
+         * Create an account.
+         * @description Administrators only. There is no email transport in this deployment, so
+         *     nothing is sent: the response carries `inviteUrl`, which is where this
+         *     installation is signed in to, and the administrator passes it on
+         *     themselves along with whatever credential they chose.
+         *
+         *     Two shapes of account, and `password` is what picks between them:
+         *
+         *     - **With a password.** A local account, `active` by default. Tell the
+         *       person the address, the password and the link, and they change the
+         *       password once they are in.
+         *     - **Without one.** An account that signs in through the identity
+         *       provider, `invited` by default — it exists and nobody has claimed it.
+         *       The first successful single sign-on that resolves to this address
+         *       claims it, and the account becomes `active` at that moment.
+         *
+         *     An address already in use — in any casing, with any surrounding
+         *     whitespace — is `409`, never a 500 and never a second account.
+         */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change your own display name.
+         * @description The self-service half of user administration, and deliberately the
+         *     smallest one that could exist: a display name and nothing else.
+         *
+         *     Your platform role and your status are **not** fields of this request.
+         *     Not filtered out of it — absent from it, so a body that names one is
+         *     rejected by the request validator with `400` before any handler runs
+         *     (PLAN.md §4: "field safety comes from the schema"). Raising your own
+         *     privilege through this endpoint is not something the server declines to
+         *     do; it is something there is no way to ask for.
+         */
+        patch: operations["updateCurrentUser"];
+        trace?: never;
+    };
+    "/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one account.
+         * @description Administrators only. The same shape the listing returns, and carrying no more than it does.
+         */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        /**
+         * Retire an account.
+         * @description Administrators only, and a **soft** delete: the account's status becomes
+         *     `disabled` and the row stays. It is the same operation as
+         *     `POST /users/{userId}/disable`, spelled the way a client that thinks in
+         *     resources expects, and it answers with the account so that the caller
+         *     can see it is still there.
+         *
+         *     Nothing here removes an account. The executions, comments and findings
+         *     somebody wrote keep their author, and a hard delete would either orphan
+         *     or rewrite that history — a database administrator's decision, not an
+         *     API call (`M1-001`).
+         *
+         *     The last `admin` who is still `active` cannot be retired: `409`.
+         */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit an account's name, platform role, status or MFA requirement.
+         * @description Administrators only, and a patch rather than a replacement: a field that
+         *     is absent is left alone, so two administrators editing different things
+         *     at once do not overwrite each other's change.
+         *
+         *     The email address is not editable here. It is the identifier a federated
+         *     sign-in links an account by, and changing it would move somebody else's
+         *     single sign-on onto this account.
+         *
+         *     Changing `platformRole` takes effect on the target's **existing**
+         *     session, at their next request, without them signing in again — the role
+         *     is read from the account on every request and nothing caches it. The
+         *     same is true in the other direction: a promotion applies immediately too.
+         *
+         *     Setting `status` to `disabled` does what `POST /users/{userId}/disable`
+         *     does, including revoking the account's sessions.
+         *
+         *     The last account that is both `admin` and `active` cannot be demoted or
+         *     disabled: `409`, saying so. An installation with no administrator is one
+         *     nobody can administer, and no request should be able to produce it.
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/users/{userId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable an account, ending its access at once.
+         * @description Administrators only. Every session the account holds is revoked, and
+         *     every service token it owns stops working on its next request — a
+         *     token's permissions are its owner's, read live, so an owner who is not
+         *     `active` has none to spend.
+         *
+         *     Idempotent: disabling an account that is already disabled answers the
+         *     same way.
+         *
+         *     The last `admin` who is still `active` cannot be disabled: `409`.
+         */
+        post: operations["disableUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable an account.
+         * @description Administrators only. The account becomes `active`. Sessions revoked
+         *     while it was disabled stay revoked — enabling somebody gives them their
+         *     account back, not the browser tab they had open a month ago.
+         *
+         *     Idempotent, and the way an `invited` account that will never use single
+         *     sign-on is turned on by hand.
+         */
+        post: operations["enableUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/sessions/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign an account out everywhere.
+         * @description Administrators only. Ends every live session the account holds, at once
+         *     and without disabling it — what an administrator reaches for when a
+         *     laptop goes missing and the person still needs their account tomorrow.
+         *
+         *     Service tokens are not sessions and are not touched. Use
+         *     `POST /users/{userId}/disable` to stop those as well.
+         *
+         *     Idempotent: an account with nothing live answers `200` and `revoked: 0`.
+         */
+        post: operations["revokeUserSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/mfa": {
         parameters: {
             query?: never;
@@ -1039,6 +1254,149 @@ export interface components {
             role: components["schemas"]["EngagementRole"];
             /** Format: date-time */
             addedAt: string;
+        };
+        /**
+         * @description Whether an account can be used. Retirement is a status change and never
+         *     a deletion: the executions, comments and findings somebody wrote keep
+         *     their author (`M1-001`).
+         * @enum {string}
+         */
+        UserStatus: "invited" | "active" | "disabled";
+        /**
+         * @description One account, as user administration reports it. Compare `CurrentUser`,
+         *     which is the caller describing themselves and carries their memberships
+         *     and their MFA state; this is an administrator describing somebody else.
+         *
+         *     What is *not* here is the point of it: there is no password hash, no
+         *     authenticator secret, no recovery code and no session token, so no
+         *     response built from this schema can carry one.
+         */
+        User: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description The address as it was typed. Matched without regard to case everywhere it is looked up.
+             * @example alice@example.com
+             */
+            email: string;
+            displayName: string;
+            platformRole: components["schemas"]["PlatformRole"];
+            status: components["schemas"]["UserStatus"];
+            /**
+             * @description Whether an administrator requires a second factor of this person
+             *     specifically. It is one input to the effective requirement and not
+             *     the whole answer — see `MFAState.required`, which is what an
+             *     interface acts on for the *signed-in* user.
+             */
+            mfaEnforced: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * Format: date-time
+             * @description When this account last signed in. Absent if it never has.
+             */
+            lastLoginAt?: string;
+        };
+        /**
+         * @description One page of accounts, oldest first — identifiers are UUIDv7, so that is
+         *     creation order and a stable total order at the same time. `nextCursor`
+         *     is taken verbatim from a previous response; absent (or null) means there
+         *     is no further page.
+         */
+        UserPage: {
+            items: components["schemas"]["User"][];
+            /** @description Opaque cursor for the next page. Pass it back as `cursor`. */
+            nextCursor?: string | null;
+        };
+        /**
+         * @description Body of `POST /users`. The identifier, the timestamps and the invite
+         *     link are the server's; everything a caller chooses is here.
+         */
+        CreateUserRequest: {
+            /**
+             * Format: email
+             * @description The address, stored as typed and compared without regard to case or
+             *     surrounding whitespace. An address another account already holds is
+             *     `409`.
+             */
+            email: string;
+            displayName: string;
+            platformRole: components["schemas"]["PlatformRole"];
+            /**
+             * @description A password for a local account. Omit it for an account that signs in
+             *     through the identity provider.
+             *
+             *     The bounds here are a backstop, not the policy: the policy lives in
+             *     one place (internal/authn/password) and is reported as field errors
+             *     on `password`, so there is one definition of an acceptable password
+             *     rather than one here and one in the client.
+             */
+            password?: string;
+            /**
+             * @description The state to create the account in. Omitted, it is derived from
+             *     `password`: `active` with one, `invited` without.
+             *
+             *     `disabled` is not offered — creating an account that cannot be used
+             *     is a way of describing an account that should not have been created.
+             *     An `invited` account with a password is refused with a field error:
+             *     an invited account has no local sign-in, so the password would be
+             *     one nobody could ever use.
+             * @enum {string}
+             */
+            status?: "invited" | "active";
+            /** @description Require a second factor of this person specifically. Defaults to false. */
+            mfaEnforced?: boolean;
+        };
+        /** @description A newly created account and where to send the person it belongs to. */
+        CreatedUser: {
+            user: components["schemas"]["User"];
+            /**
+             * @description Where this installation is signed in to. There is no mail transport
+             *     in this deployment, so nothing was sent: an administrator passes
+             *     this on themselves, with the password they chose or with a note to
+             *     use the single sign-on button.
+             *
+             *     It carries no credential and grants nothing — it is a link to the
+             *     front door, and anybody may already know it.
+             * @example https://blacklight.example.com/login
+             */
+            inviteUrl: string;
+        };
+        /**
+         * @description Body of `PATCH /users/{userId}`. Every field is optional and an absent
+         *     one is left alone, so two administrators editing different things do not
+         *     overwrite each other. At least one must be present — an empty patch is a
+         *     client bug, and answering it `200` would hide one.
+         *
+         *     `email` is deliberately not a field: it is what a federated sign-in
+         *     links an account by, so editing it could move somebody else's single
+         *     sign-on onto this account.
+         */
+        UpdateUserRequest: {
+            displayName?: string;
+            platformRole?: components["schemas"]["PlatformRole"];
+            status?: components["schemas"]["UserStatus"];
+            mfaEnforced?: boolean;
+        };
+        /**
+         * @description Body of `PATCH /users/me`. One field, and that is the design: a schema
+         *     with no `platformRole` in it is a request that cannot ask for one, which
+         *     is a stronger guarantee than a handler that declines to honour it
+         *     (PLAN.md §4).
+         */
+        UpdateSelfRequest: {
+            displayName: string;
+        };
+        /** @description What `POST /users/{userId}/sessions/revoke` ended. */
+        RevokedSessions: {
+            /**
+             * @description How many live sessions were ended. Zero is a normal answer: the
+             *     account may have had none, or somebody may have revoked them a
+             *     moment ago.
+             */
+            revoked: number;
         };
         /**
          * @description Where this person and this session stand on multi-factor authentication.
@@ -1570,6 +1928,19 @@ export interface components {
         Cursor: string;
         /** @description The engagement whose activity is being listed. */
         EngagementId: string;
+        /** @description The account being read or changed. */
+        UserId: string;
+        /** @description Restrict the listing to accounts in this state. */
+        UserStatusFilter: components["schemas"]["UserStatus"];
+        /** @description Restrict the listing to accounts holding this platform role. */
+        UserRoleFilter: components["schemas"]["PlatformRole"];
+        /**
+         * @description Restrict the listing to accounts whose display name or email address
+         *     contains this text, without regard to case. Not a prefix match: an
+         *     administrator looking for somebody usually remembers a fragment rather
+         *     than the beginning.
+         */
+        UserSearch: string;
         /** @description Restrict to entries whose actor is this user id. */
         ActivityActor: string;
         /**
@@ -2407,6 +2778,407 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of items to return. */
+                limit?: components["parameters"]["Limit"];
+                /**
+                 * @description Opaque cursor taken verbatim from the `nextCursor` of a previous
+                 *     response. Absent means "from the beginning". Its contents are an
+                 *     implementation detail — clients must not parse or construct one.
+                 */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Restrict the listing to accounts in this state. */
+                status?: components["parameters"]["UserStatusFilter"];
+                /** @description Restrict the listing to accounts holding this platform role. */
+                role?: components["parameters"]["UserRoleFilter"];
+                /**
+                 * @description Restrict the listing to accounts whose display name or email address
+                 *     contains this text, without regard to case. Not a prefix match: an
+                 *     administrator looking for somebody usually remembers a fragment rather
+                 *     than the beginning.
+                 */
+                q?: components["parameters"]["UserSearch"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description The account was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSelfRequest"];
+            };
+        };
+        responses: {
+            /** @description Your account as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, now disabled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description The account as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    disableUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, now disabled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    enableUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, now active. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeUserSessions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many sessions were ended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokedSessions"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];

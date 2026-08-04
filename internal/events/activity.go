@@ -19,9 +19,17 @@ type Verb string
 // the platform feed is filterable by.
 const (
 	VerbUserCreated         Verb = "user.created"
+	VerbUserUpdated         Verb = "user.updated"
 	VerbUserRoleChanged     Verb = "user.role_changed"
 	VerbUserDisabled        Verb = "user.disabled"
+	VerbUserEnabled         Verb = "user.enabled"
 	VerbUserPasswordChanged Verb = "user.password_changed"
+
+	// VerbUserSessionsRevoked is an administrator signing somebody out
+	// everywhere (M1-016). It is deliberately not session.logout: that verb is
+	// somebody ending their own session, and an incident review wants to be
+	// able to tell the two apart by filtering rather than by reading deltas.
+	VerbUserSessionsRevoked Verb = "user.sessions_revoked"
 
 	VerbSessionLogin       Verb = "session.login"
 	VerbSessionLoginFailed Verb = "session.login_failed"

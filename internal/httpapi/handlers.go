@@ -40,6 +40,16 @@ type handlers struct {
 	// hit the list endpoints.
 	activity *events.Log
 
+	// signInURL is where this deployment is signed in to, absolute, for the one
+	// response that has to tell somebody who is not looking at the application:
+	// the invite link on `POST /users` (M1-016). There is no mail transport, so
+	// an administrator passes it on themselves.
+	//
+	// It is built once from the configured base URL rather than from a request's
+	// Host header — a link derived from a header is a link an attacker can
+	// choose.
+	signInURL string
+
 	log *slog.Logger
 }
 
