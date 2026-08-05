@@ -279,3 +279,19 @@ milestone at a time. Each exits 1 and names the milestone that will implement it
 The command tree lives in [`internal/cli`](../internal/cli); `cmd/blctl` is a `main` over it and
 nothing else, so every command is reachable from a test without spawning a process. A new command is
 a file in that package and one line in `newRoot`.
+
+
+### `blctl content import`
+
+Import v1 `testcases.json` / `testcases/*.yaml` / `knowledgebase/*.yaml` (or a
+zip / directory of them) into the custom source. See `docs/content-v1-import.md`.
+
+```sh
+blctl content import --format auto --path ./custom
+blctl content import --format testcases_json --path ./testcases.json
+blctl content import --dry-run --path ./custom/knowledgebase
+```
+
+`--fail-fast` stops at the first per-file error (default continues and
+summarizes). Re-import upserts by deterministic external ids.
+

@@ -122,6 +122,21 @@ func (r *Notes) ByID(ctx context.Context, id string) (Note, error) {
 	return n, nil
 }
 
+// ByExternalID returns the note for (source, version, external_id) or
+// [apierr.NotFound].
+func (r *Notes) ByExternalID(ctx context.Context, sourceID, version, externalID string) (Note, error) {
+	row := r.db.Read().QueryRowContext(ctx, `
+		SELECT `+noteColumns+`
+		FROM content.content_note
+		WHERE source_id = ? AND version = ? AND external_id = ?`,
+		sourceID, version, externalID)
+	n, err := scanNote(row)
+	if err != nil {
+		return Note{}, wrapObjErr(err, "content_note", externalID)
+	}
+	return n, nil
+}
+
 // NoteListFilter narrows note listings.
 //
 // EnabledOnly joins content_source.enabled. Version empty means every

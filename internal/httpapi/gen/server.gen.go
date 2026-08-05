@@ -224,6 +224,30 @@ func (e HealthState) Valid() bool {
 	}
 }
 
+// Defines values for ImportCustomContentRequestFormat.
+const (
+	ImportCustomContentRequestFormatAuto              ImportCustomContentRequestFormat = "auto"
+	ImportCustomContentRequestFormatKnowledgebaseYaml ImportCustomContentRequestFormat = "knowledgebase_yaml"
+	ImportCustomContentRequestFormatTestcasesJson     ImportCustomContentRequestFormat = "testcases_json"
+	ImportCustomContentRequestFormatTestcasesYaml     ImportCustomContentRequestFormat = "testcases_yaml"
+)
+
+// Valid indicates whether the value is a known member of the ImportCustomContentRequestFormat enum.
+func (e ImportCustomContentRequestFormat) Valid() bool {
+	switch e {
+	case ImportCustomContentRequestFormatAuto:
+		return true
+	case ImportCustomContentRequestFormatKnowledgebaseYaml:
+		return true
+	case ImportCustomContentRequestFormatTestcasesJson:
+		return true
+	case ImportCustomContentRequestFormatTestcasesYaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoginStatus.
 const (
 	LoginStatusAuthenticated        LoginStatus = "authenticated"
@@ -782,6 +806,31 @@ type ContentGroup struct {
 // ContentGroupList defines model for ContentGroupList.
 type ContentGroupList struct {
 	Items []ContentGroup `json:"items"`
+}
+
+// ContentImportIssue One per-file or per-item warning or error from an import.
+type ContentImportIssue struct {
+	Message string `json:"message"`
+
+	// Path Source path inside the upload (or `-` for the root file).
+	Path string `json:"path"`
+}
+
+// ContentImportReport Result of a synchronous custom/v1 import or dry-run. Async jobs surface
+// the same counts in the job message and activity delta.
+type ContentImportReport struct {
+	DetectionsCreated int                  `json:"detectionsCreated"`
+	DetectionsUpdated int                  `json:"detectionsUpdated"`
+	DryRun            bool                 `json:"dryRun"`
+	Errors            []ContentImportIssue `json:"errors"`
+
+	// Format Resolved format after auto-detection.
+	Format            string               `json:"format"`
+	NotesCreated      int                  `json:"notesCreated"`
+	NotesUpdated      int                  `json:"notesUpdated"`
+	ProceduresCreated int                  `json:"proceduresCreated"`
+	ProceduresUpdated int                  `json:"proceduresUpdated"`
+	Warnings          []ContentImportIssue `json:"warnings"`
 }
 
 // ContentMitigation defines model for ContentMitigation.
@@ -1453,6 +1502,20 @@ type HealthChecks struct {
 
 // HealthState Outcome of a single health check, or of the report as a whole.
 type HealthState string
+
+// ImportCustomContentRequest Multipart v1 custom import. `file` is a single JSON/YAML document or a
+// zip of files; `format` selects the parser (or `auto` to sniff).
+type ImportCustomContentRequest struct {
+	// File Upload bytes. Size is capped by `BLACKLIGHT_CONTENT_MAX_BYTES`
+	// (default 512 MiB).
+	File openapi_types.File `json:"file"`
+
+	// Format Parser selection. Defaults to `auto`.
+	Format *ImportCustomContentRequestFormat `json:"format,omitempty"`
+}
+
+// ImportCustomContentRequestFormat Parser selection. Defaults to `auto`.
+type ImportCustomContentRequestFormat string
 
 // LoginRequest Credentials for `POST /auth/login`.
 type LoginRequest struct {
@@ -2614,6 +2677,31 @@ type ExportCustomContentParamsType string
 // ExportCustomContentParamsFormat defines parameters for ExportCustomContent.
 type ExportCustomContentParamsFormat string
 
+// ImportCustomContentParams defines parameters for ImportCustomContent.
+type ImportCustomContentParams struct {
+	// DryRun Parse and report counts/warnings without writing. Always synchronous.
+	DryRun *bool `form:"dryRun,omitempty" json:"dryRun,omitempty"`
+
+	// FailFast Stop at the first per-file error. Default continues and summarizes.
+	FailFast *bool `form:"failFast,omitempty" json:"failFast,omitempty"`
+
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // ListCustomNotesParams defines parameters for ListCustomNotes.
 type ListCustomNotesParams struct {
 	// Q Case-insensitive substring match against `externalId`, `name`, and
@@ -3338,6 +3426,9 @@ type CreateCustomDetectionRuleJSONRequestBody = CreateCustomDetectionRuleRequest
 // UpdateCustomDetectionRuleJSONRequestBody defines body for UpdateCustomDetectionRule for application/json ContentType.
 type UpdateCustomDetectionRuleJSONRequestBody = UpdateCustomDetectionRuleRequest
 
+// ImportCustomContentMultipartRequestBody defines body for ImportCustomContent for multipart/form-data ContentType.
+type ImportCustomContentMultipartRequestBody = ImportCustomContentRequest
+
 // CreateCustomNoteJSONRequestBody defines body for CreateCustomNote for application/json ContentType.
 type CreateCustomNoteJSONRequestBody = CreateCustomNoteRequest
 
@@ -3475,6 +3566,9 @@ type ServerInterface interface {
 	// ExportCustomContent Export custom content as YAML or JSON.
 	// (GET /content/custom/export)
 	ExportCustomContent(w http.ResponseWriter, r *http.Request, params ExportCustomContentParams)
+	// ImportCustomContent Import v1 custom testcases or knowledgebase files.
+	// (POST /content/custom/import)
+	ImportCustomContent(w http.ResponseWriter, r *http.Request, params ImportCustomContentParams)
 	// ListCustomNotes List custom knowledge-base notes.
 	// (GET /content/custom/notes)
 	ListCustomNotes(w http.ResponseWriter, r *http.Request, params ListCustomNotesParams)
@@ -3844,6 +3938,12 @@ func (_ Unimplemented) UpdateCustomDetectionRule(w http.ResponseWriter, r *http.
 // ExportCustomContent Export custom content as YAML or JSON.
 // (GET /content/custom/export)
 func (_ Unimplemented) ExportCustomContent(w http.ResponseWriter, r *http.Request, params ExportCustomContentParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ImportCustomContent Import v1 custom testcases or knowledgebase files.
+// (POST /content/custom/import)
+func (_ Unimplemented) ImportCustomContent(w http.ResponseWriter, r *http.Request, params ImportCustomContentParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5383,6 +5483,73 @@ func (siw *ServerInterfaceWrapper) ExportCustomContent(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ExportCustomContent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportCustomContent operation middleware
+func (siw *ServerInterfaceWrapper) ImportCustomContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ImportCustomContentParams
+
+	// ------------- Optional query parameter "dryRun" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "dryRun", r.URL.Query(), &params.DryRun, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "dryRun"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dryRun", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "failFast" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "failFast", r.URL.Query(), &params.FailFast, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "failFast"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "failFast", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportCustomContent(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8349,6 +8516,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/content/custom/export", wrapper.ExportCustomContent)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/custom/import", wrapper.ImportCustomContent)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
 	})
 	r.Group(func(r chi.Router) {
@@ -11247,6 +11417,123 @@ type ExportCustomContent500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ExportCustomContent500ApplicationProblemPlusJSONResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContentRequestObject struct {
+	Params ImportCustomContentParams
+	Body   *multipart.Reader
+}
+
+type ImportCustomContentResponseObject interface {
+	VisitImportCustomContentResponse(w http.ResponseWriter) error
+}
+
+type ImportCustomContent200JSONResponse ContentImportReport
+
+func (response ImportCustomContent200JSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContent202JSONResponse ContentSyncJob
+
+func (response ImportCustomContent202JSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContent400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ImportCustomContent400ApplicationProblemPlusJSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ImportCustomContent401ApplicationProblemPlusJSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ImportCustomContent403ApplicationProblemPlusJSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContent409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ImportCustomContent409ApplicationProblemPlusJSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportCustomContent500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ImportCustomContent500ApplicationProblemPlusJSONResponse) VisitImportCustomContentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -16539,6 +16826,9 @@ type StrictServerInterface interface {
 	// ExportCustomContent Export custom content as YAML or JSON.
 	// (GET /content/custom/export)
 	ExportCustomContent(ctx context.Context, request ExportCustomContentRequestObject) (ExportCustomContentResponseObject, error)
+	// ImportCustomContent Import v1 custom testcases or knowledgebase files.
+	// (POST /content/custom/import)
+	ImportCustomContent(ctx context.Context, request ImportCustomContentRequestObject) (ImportCustomContentResponseObject, error)
 	// ListCustomNotes List custom knowledge-base notes.
 	// (GET /content/custom/notes)
 	ListCustomNotes(ctx context.Context, request ListCustomNotesRequestObject) (ListCustomNotesResponseObject, error)
@@ -17666,6 +17956,39 @@ func (sh *strictHandler) ExportCustomContent(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ExportCustomContentResponseObject); ok {
 		if err := validResponse.VisitExportCustomContentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportCustomContent operation middleware
+func (sh *strictHandler) ImportCustomContent(w http.ResponseWriter, r *http.Request, params ImportCustomContentParams) {
+	var request ImportCustomContentRequestObject
+
+	request.Params = params
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportCustomContent(ctx, request.(ImportCustomContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportCustomContent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportCustomContentResponseObject); ok {
+		if err := validResponse.VisitImportCustomContentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -491,6 +491,10 @@ var csrfCoverage = map[string]struct {
 		body: `{"title":"Walked"}`,
 	},
 	"DELETE " + BasePath + "/content/custom/notes/{noteId}": {body: ""},
+	"POST " + BasePath + "/content/custom/import": {
+		body:      "------blwalk\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.json\"\r\nContent-Type: application/json\r\n\r\n[]\r\n------blwalk--\r\n",
+		mediaType: "multipart/form-data; boundary=----blwalk",
+	},
 
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request

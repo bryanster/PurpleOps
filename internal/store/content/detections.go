@@ -134,6 +134,21 @@ func (r *Detections) ByID(ctx context.Context, id string) (DetectionRuleRef, err
 	return d, nil
 }
 
+// ByExternalID returns the detection rule ref for (source, version, external_id)
+// or [apierr.NotFound].
+func (r *Detections) ByExternalID(ctx context.Context, sourceID, version, externalID string) (DetectionRuleRef, error) {
+	row := r.db.Read().QueryRowContext(ctx, `
+		SELECT `+detectionColumns+`
+		FROM content.content_detection_rule_ref
+		WHERE source_id = ? AND version = ? AND external_id = ?`,
+		sourceID, version, externalID)
+	d, err := scanDetection(row)
+	if err != nil {
+		return DetectionRuleRef{}, wrapObjErr(err, "content_detection_rule_ref", externalID)
+	}
+	return d, nil
+}
+
 func scanDetection(row interface{ Scan(...any) error }) (DetectionRuleRef, error) {
 	var (
 		d          DetectionRuleRef

@@ -3520,6 +3520,83 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/custom/import:
+    post:
+      operationId: importCustomContent
+      summary: Import v1 custom testcases or knowledgebase files.
+      description: |
+        Administrators only (`content.manage`). Accepts a multipart upload of
+        v1-shaped content and upserts rows under the singleton `custom` source:
+
+        - `testcases_json` — v1 `custom/testcases.json` (array or `{testcases:[…]}`)
+        - `testcases_yaml` — one YAML file or a zip of `*.yaml` testcase files
+          (the layout the v1 seeder globbed as `custom/testcases/*.yaml`)
+        - `knowledgebase_yaml` — one YAML file or a zip of KB notes
+        - `auto` — sniff JSON testcases, KB yaml, testcase yaml, custom export,
+          or a zip of the above
+
+        Small uploads run synchronously and answer `200` with counts/warnings.
+        Uploads over the sync threshold (1 MiB) enqueue a `v1_import` job and
+        answer `202` (same global job slot as content sync). `dryRun=true`
+        always runs synchronously and never writes.
+
+        Partial file failures are reported per path and do not abort the rest
+        unless `failFast=true`. Re-import is idempotent: external ids are
+        derived deterministically from v1 ids/names (see `docs/content-v1-import.md`).
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: dryRun
+          in: query
+          required: false
+          description: |
+            Parse and report counts/warnings without writing. Always synchronous.
+          schema:
+            type: boolean
+            default: false
+        - name: failFast
+          in: query
+          required: false
+          description: |
+            Stop at the first per-file error. Default continues and summarizes.
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImportCustomContentRequest"
+      responses:
+        "200":
+          description: Synchronous import (or dry-run) finished.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentImportReport"
+        "202":
+          description: Large import enqueued as a v1_import job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSyncJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
 
 
 
@@ -6686,6 +6763,96 @@ components:
           items:
             $ref: "#/components/schemas/ContentNote"
 
+
+    ImportCustomContentRequest:
+      type: object
+      description: |
+        Multipart v1 custom import. `file` is a single JSON/YAML document or a
+        zip of files; `format` selects the parser (or `auto` to sniff).
+      required:
+        - file
+      additionalProperties: false
+      properties:
+        file:
+          type: string
+          format: binary
+          description: |
+            Upload bytes. Size is capped by `BLACKLIGHT_CONTENT_MAX_BYTES`
+            (default 512 MiB).
+        format:
+          type: string
+          description: |
+            Parser selection. Defaults to `auto`.
+          enum:
+            - auto
+            - testcases_json
+            - testcases_yaml
+            - knowledgebase_yaml
+          default: auto
+
+    ContentImportReport:
+      type: object
+      description: |
+        Result of a synchronous custom/v1 import or dry-run. Async jobs surface
+        the same counts in the job message and activity delta.
+      required:
+        - dryRun
+        - format
+        - proceduresCreated
+        - proceduresUpdated
+        - notesCreated
+        - notesUpdated
+        - detectionsCreated
+        - detectionsUpdated
+        - warnings
+        - errors
+      additionalProperties: false
+      properties:
+        dryRun:
+          type: boolean
+        format:
+          type: string
+          description: Resolved format after auto-detection.
+        proceduresCreated:
+          type: integer
+          minimum: 0
+        proceduresUpdated:
+          type: integer
+          minimum: 0
+        notesCreated:
+          type: integer
+          minimum: 0
+        notesUpdated:
+          type: integer
+          minimum: 0
+        detectionsCreated:
+          type: integer
+          minimum: 0
+        detectionsUpdated:
+          type: integer
+          minimum: 0
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentImportIssue"
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentImportIssue"
+
+    ContentImportIssue:
+      type: object
+      description: One per-file or per-item warning or error from an import.
+      required:
+        - path
+        - message
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Source path inside the upload (or `-` for the root file).
+        message:
+          type: string
 
     ContentEmulationPlanStep:
       type: object

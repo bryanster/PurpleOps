@@ -1994,6 +1994,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/custom/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import v1 custom testcases or knowledgebase files.
+         * @description Administrators only (`content.manage`). Accepts a multipart upload of
+         *     v1-shaped content and upserts rows under the singleton `custom` source:
+         *
+         *     - `testcases_json` — v1 `custom/testcases.json` (array or `{testcases:[…]}`)
+         *     - `testcases_yaml` — one YAML file or a zip of `*.yaml` testcase files
+         *       (the layout the v1 seeder globbed as `custom/testcases/*.yaml`)
+         *     - `knowledgebase_yaml` — one YAML file or a zip of KB notes
+         *     - `auto` — sniff JSON testcases, KB yaml, testcase yaml, custom export,
+         *       or a zip of the above
+         *
+         *     Small uploads run synchronously and answer `200` with counts/warnings.
+         *     Uploads over the sync threshold (1 MiB) enqueue a `v1_import` job and
+         *     answer `202` (same global job slot as content sync). `dryRun=true`
+         *     always runs synchronously and never writes.
+         *
+         *     Partial file failures are reported per path and do not abort the rest
+         *     unless `failFast=true`. Re-import is idempotent: external ids are
+         *     derived deterministically from v1 ids/names (see `docs/content-v1-import.md`).
+         */
+        post: operations["importCustomContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/attack/versions": {
         parameters: {
             query?: never;
@@ -3547,6 +3584,47 @@ export interface components {
             procedureTemplates: components["schemas"]["ContentProcedureTemplate"][];
             detectionRules: components["schemas"]["ContentDetectionRule"][];
             notes: components["schemas"]["ContentNote"][];
+        };
+        /**
+         * @description Multipart v1 custom import. `file` is a single JSON/YAML document or a
+         *     zip of files; `format` selects the parser (or `auto` to sniff).
+         */
+        ImportCustomContentRequest: {
+            /**
+             * Format: binary
+             * @description Upload bytes. Size is capped by `BLACKLIGHT_CONTENT_MAX_BYTES`
+             *     (default 512 MiB).
+             */
+            file: string;
+            /**
+             * @description Parser selection. Defaults to `auto`.
+             * @default auto
+             * @enum {string}
+             */
+            format: "auto" | "testcases_json" | "testcases_yaml" | "knowledgebase_yaml";
+        };
+        /**
+         * @description Result of a synchronous custom/v1 import or dry-run. Async jobs surface
+         *     the same counts in the job message and activity delta.
+         */
+        ContentImportReport: {
+            dryRun: boolean;
+            /** @description Resolved format after auto-detection. */
+            format: string;
+            proceduresCreated: number;
+            proceduresUpdated: number;
+            notesCreated: number;
+            notesUpdated: number;
+            detectionsCreated: number;
+            detectionsUpdated: number;
+            warnings: components["schemas"]["ContentImportIssue"][];
+            errors: components["schemas"]["ContentImportIssue"][];
+        };
+        /** @description One per-file or per-item warning or error from an import. */
+        ContentImportIssue: {
+            /** @description Source path inside the upload (or `-` for the root file). */
+            path: string;
+            message: string;
         };
         /**
          * @description One ordered step under a CTID emulation plan. `ordinal` is 1-based
@@ -7224,6 +7302,67 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    importCustomContent: {
+        parameters: {
+            query?: {
+                /** @description Parse and report counts/warnings without writing. Always synchronous. */
+                dryRun?: boolean;
+                /** @description Stop at the first per-file error. Default continues and summarizes. */
+                failFast?: boolean;
+            };
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ImportCustomContentRequest"];
+            };
+        };
+        responses: {
+            /** @description Synchronous import (or dry-run) finished. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentImportReport"];
+                };
+            };
+            /** @description Large import enqueued as a v1_import job. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

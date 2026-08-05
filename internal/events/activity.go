@@ -97,6 +97,11 @@ const (
 	VerbContentCustomCreated Verb = "content.custom.created"
 	VerbContentCustomUpdated Verb = "content.custom.updated"
 	VerbContentCustomDeleted Verb = "content.custom.deleted"
+
+	// Content v1/custom import lifecycle (M2-012). Object is the custom source
+	// (sync path) or the job id (async path); counts live in the delta.
+	VerbContentImportFinished Verb = "content.import.finished"
+	VerbContentImportFailed   Verb = "content.import.failed"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a

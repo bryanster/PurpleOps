@@ -149,6 +149,21 @@ func (r *Procedures) ByID(ctx context.Context, id string) (ProcedureTemplate, er
 	return p, nil
 }
 
+// ByExternalID returns the procedure template for (source, version, external_id)
+// or [apierr.NotFound].
+func (r *Procedures) ByExternalID(ctx context.Context, sourceID, version, externalID string) (ProcedureTemplate, error) {
+	row := r.db.Read().QueryRowContext(ctx, `
+		SELECT `+procedureColumns+`
+		FROM content.content_procedure_template
+		WHERE source_id = ? AND version = ? AND external_id = ?`,
+		sourceID, version, externalID)
+	p, err := scanProcedure(row)
+	if err != nil {
+		return ProcedureTemplate{}, wrapObjErr(err, "content_procedure_template", externalID)
+	}
+	return p, nil
+}
+
 func scanProcedure(row interface{ Scan(...any) error }) (ProcedureTemplate, error) {
 	var (
 		p          ProcedureTemplate

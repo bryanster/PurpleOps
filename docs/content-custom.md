@@ -22,6 +22,7 @@ are optional; when present they must match `T####` or `T####.###`.
 | Detection rules | `GET/POST /api/v1/content/custom/detection-rules`, `GET/PATCH/DELETE …/{id}` |
 | Notes | `GET/POST /api/v1/content/custom/notes`, `GET/PATCH/DELETE …/{id}` |
 | Export | `GET /api/v1/content/custom/export?type=&format=yaml\|json` |
+| Import | `POST /api/v1/content/custom/import` (multipart; see [`content-v1-import.md`](content-v1-import.md)) |
 
 Library browse endpoints (`GET /content/procedure-templates?sourceId=…`, etc.)
 also return custom rows when the custom source is enabled (it is, by seed).
@@ -87,3 +88,15 @@ M2-012's importer accepts this shape (or documents any thin adapter delta).
 | Variable | Default | Meaning |
 |---|---|---|
 | `BLACKLIGHT_CONTENT_NOTE_MAX_BYTES` | `256KiB` | Max UTF-8 byte length of a note body |
+
+## Import (v1 files)
+
+Operators migrating from PurpleOps/Blacklight v1 can upload `testcases.json`,
+a `testcases/*.yaml` tree, or `knowledgebase/*.yaml` via
+
+```sh
+POST /api/v1/content/custom/import
+blctl content import --path ./custom
+```
+
+Details, field mapping, and idempotency rules: [`content-v1-import.md`](content-v1-import.md).

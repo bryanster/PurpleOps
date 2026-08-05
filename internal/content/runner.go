@@ -48,8 +48,10 @@ type Runner struct {
 	db       storecontent.DB
 	paths    storecontent.Paths
 	adapters map[storecontent.Kind]Adapter
-	http     HTTPDoer
-	log      *slog.Logger
+	// custom applies v1_import jobs (M2-012). Optional until that path is used.
+	custom *Custom
+	http   HTTPDoer
+	log    *slog.Logger
 
 	maxBytes   int64
 	jobTimeout time.Duration
@@ -74,6 +76,9 @@ type RunnerDeps struct {
 	Jobs     *storecontent.Jobs
 	Paths    storecontent.Paths
 	Activity *events.Log // optional
+	// Custom applies v1_import jobs (M2-012). Optional for runners that never
+	// enqueue that kind.
+	Custom *Custom
 	// Adapters maps kind → implementation. Unknown kind at sync start is an error.
 	Adapters map[storecontent.Kind]Adapter
 	// MaxBytes, JobTimeout, WriteBatch come from config.Content. Zeros get defaults.
@@ -125,6 +130,7 @@ func NewRunner(deps RunnerDeps) (*Runner, error) {
 		db:         deps.DB,
 		paths:      deps.Paths,
 		adapters:   adapters,
+		custom:     deps.Custom,
 		http:       deps.HTTP,
 		log:        log,
 		maxBytes:   maxBytes,
@@ -543,6 +549,10 @@ func (r *Runner) execute(parent context.Context, job storecontent.Job) error {
 	// Drop spooled uploads once the job can no longer need them — success,
 	// failure, or cancel. Reprocess paths (cleanup_upload=false) are left alone.
 	defer r.cleanupJobUpload(job)
+
+	if job.Kind == storecontent.JobKindV1Import {
+		return r.executeV1Import(parent, job)
+	}
 
 	src, err := r.sources.ByID(parent, job.SourceID)
 	if err != nil {

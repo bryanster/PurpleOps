@@ -1,0 +1,8 @@
+mitreid: T1003.001
+overview: |
+  LSASS memory contains credentials for interactive logons.
+advice: |
+  Restrict debug privileges. Alert on procdump/comsvcs minidump of lsass.
+provider: Purple team
+tags:
+  - credential-access

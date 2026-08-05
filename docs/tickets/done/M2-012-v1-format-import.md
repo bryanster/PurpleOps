@@ -43,12 +43,12 @@ people actually have (`PLAN.md` §3).
 
 ## Acceptance criteria
 
-- [ ] Importing the JSON fixture creates N templates with names and commands from the file.
-- [ ] Importing a directory of YAML testcases matches file count (minus invalids reported).
-- [ ] KB YAML becomes `content_note` rows with markdown bodies.
-- [ ] Dry-run writes zero rows and returns the same counts/warnings shape.
-- [ ] Auto format detection distinguishes JSON testcases vs KB yaml vs zip-of-yaml.
-- [ ] Partial file failures produce per-file errors without aborting the whole import unless
+- [x] Importing the JSON fixture creates N templates with names and commands from the file.
+- [x] Importing a directory of YAML testcases matches file count (minus invalids reported).
+- [x] KB YAML becomes `content_note` rows with markdown bodies.
+- [x] Dry-run writes zero rows and returns the same counts/warnings shape.
+- [x] Auto format detection distinguishes JSON testcases vs KB yaml vs zip-of-yaml.
+- [x] Partial file failures produce per-file errors without aborting the whole import unless
       `--fail-fast` (default continue; summarize).
 
 ## Tests
@@ -60,3 +60,25 @@ people actually have (`PLAN.md` §3).
 - Fix the v1 bug by supporting **both** layouts explicitly in code paths and tests named after them.
 - Idempotency: re-import same file should upsert by a deterministic external_id derived from v1 ids
   or names — document so operators can re-run safely.
+
+## Implementation notes
+
+- OpenAPI: `POST /content/custom/import` multipart (`file` + `format`) with query
+  `dryRun` / `failFast`. Sync → `200 ContentImportReport`; uploads over 1 MiB
+  enqueue `v1_import` → `202 ContentSyncJob`. Authz: `content.manage`.
+- Parser: `internal/content/v1import` — JSON array/object, YAML testcases
+  (incl. `phase` alias), KB yaml, hybrid zip, and M2-011 custom export shape
+  under `auto`.
+- Domain: `content.Custom.Import` upserts by deterministic external ids
+  (`v1:testcase:…`, `v1:kb:…`). Flat v1 `actions` → `command` with warnings;
+  cleanup/inputArgs are never invented. KB overview+advice → markdown body.
+- Store: `Procedures`/`Notes`/`Detections.ByExternalID` for upsert probes.
+- Runner: `JobKindV1Import` branch (`executeV1Import`); `RunnerDeps.Custom`
+  required for that path. Global job slot enforced on async only.
+- Activity: `content.import.finished` / `.failed`; per-row
+  `content.custom.created|updated` still fire on write.
+- blctl: `content import --format --path --dry-run --fail-fast`.
+- Fixtures under `internal/content/testdata/v1import/` (from pre-clean v1 samples
+  + hybrid zip + deliberate broken yaml).
+- Docs: `docs/content-v1-import.md`; links from `docs/cli.md` and
+  `docs/content-custom.md`.

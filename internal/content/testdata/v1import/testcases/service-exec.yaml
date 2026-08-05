@@ -1,0 +1,10 @@
+mitreid: T1569.002
+name: Service Execution via sc.exe
+tactic: Execution
+objective: Execute malware via a Windows service.
+actions: |
+  sc.exe create DiskClean binPath= sample.exe
+  sc.exe start DiskClean
+provider: Indy
+tags:
+  - Conti

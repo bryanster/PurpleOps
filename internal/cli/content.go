@@ -38,6 +38,7 @@ func newContentCommand(a *app) *cobra.Command {
 		newContentImportBundleCommand(a),
 		newContentReprocessCommand(a),
 		newContentExportCustomCommand(a),
+		newContentImportCommand(a),
 	)
 }
 
@@ -206,6 +207,10 @@ func (a *app) withContentRunner(
 		if _, ok := adapters[storecontent.KindCTID]; !ok {
 			adapters[storecontent.KindCTID] = ctid.New()
 		}
+		customSvc, err := contentCustom(db)
+		if err != nil {
+			return err
+		}
 		runner, err := content.NewRunner(content.RunnerDeps{
 			DB:         db,
 			Sources:    sources,
@@ -213,6 +218,7 @@ func (a *app) withContentRunner(
 			Jobs:       jobs,
 			Paths:      paths,
 			Activity:   events.New(activity.New(db)),
+			Custom:     customSvc,
 			Adapters:   adapters,
 			MaxBytes:   cfg.Content.MaxBytes.Int64(),
 			JobTimeout: cfg.Content.JobTimeout,
@@ -487,6 +493,72 @@ func newContentExportCustomCommand(a *app) *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "yaml", "output format (yaml|json)")
 	cmd.Flags().StringVarP(&out, "output", "o", "", "write to file instead of stdout")
 	cmd.Flags().StringVar(&typ, "type", "", "restrict to procedure_templates|detection_rules|notes")
+	return cmd
+}
+
+func newContentImportCommand(a *app) *cobra.Command {
+	var (
+		format   string
+		path     string
+		dryRun   bool
+		failFast bool
+	)
+	cmd := &cobra.Command{
+		Use:   "import",
+		Short: "Import v1 testcases.json / knowledgebase YAML into custom content",
+		Long: "Parses PurpleOps/Blacklight v1 custom content files and upserts them\n" +
+			"under the singleton custom source. Accepts a file, a directory (the\n" +
+			"layouts the v1 seeder expected), or a zip. Formats: auto (default),\n" +
+			"testcases_json, testcases_yaml, knowledgebase_yaml.\n\n" +
+			"Re-import is idempotent: external ids are derived from v1 ids/names\n" +
+			"(see docs/content-v1-import.md). Pass --dry-run to parse without writing.",
+		Args: noArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if path == "" {
+				return fmt.Errorf("--path is required (file, directory, or zip)")
+			}
+			format = strings.TrimSpace(format)
+			if format == "" {
+				format = "auto"
+			}
+			return a.withStore(cmd.Context(), func(ctx context.Context, db *store.DB) error {
+				if err := a.requireMigrated(ctx, db); err != nil {
+					return err
+				}
+				svc, err := contentCustom(db)
+				if err != nil {
+					return err
+				}
+				report, err := svc.Import(ctx, authn.Subject{}, content.ImportRequest{
+					Format:   format,
+					DryRun:   dryRun,
+					FailFast: failFast,
+					Path:     path,
+				})
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), report.Summary())
+				if err != nil {
+					return err
+				}
+				for _, w := range report.Warnings {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %s\n", w.Path, w.Message)
+				}
+				for _, e := range report.Errors {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "error: %s: %s\n", e.Path, e.Message)
+				}
+				if len(report.Errors) > 0 && failFast {
+					return fmt.Errorf("import stopped with %d error(s)", len(report.Errors))
+				}
+				return nil
+			})
+		},
+	}
+	cmd.Flags().StringVar(&format, "format", "auto", "auto|testcases_json|testcases_yaml|knowledgebase_yaml")
+	cmd.Flags().StringVar(&path, "path", "", "file, directory, or zip to import")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "parse and count without writing")
+	cmd.Flags().BoolVar(&failFast, "fail-fast", false, "stop at the first per-file error")
 	return cmd
 }
 
