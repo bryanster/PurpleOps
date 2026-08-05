@@ -57,7 +57,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
 | M1 — Identity & access | ✅ done — 18/18 | [18 tickets](#m1--identity--access) |
-| M2 — Content | epic, needs refinement | [`M2-EPIC.md`](M2-EPIC.md) |
+| M2 — Content | refined — 1/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
 | M5 — Analytics | epic, needs refinement | [`M5-EPIC.md`](M5-EPIC.md) |
@@ -120,3 +120,30 @@ here traces to a named defect in `PLAN.md` §4 — the regression cases are the 
 | [M1-016](done/M1-016-user-management-api.md) ✅ | Admin user management API | M |
 | [M1-017](done/M1-017-auth-ui.md) ✅ | Login, MFA, account and admin UI | L |
 | [M1-018](done/M1-018-admin-token-management.md) ✅ | Administrative service token management | S |
+
+## M2 — Content
+
+Goal: reference content is installable from the UI, not seeded as a 1 GB git clone. Sources are
+enabled, synced, versioned and disabled; ATT&CK versions coexist; Atomic structure is preserved.
+Decisions are locked in [`M2-EPIC.md`](M2-EPIC.md).
+
+Build roughly in this order — the dependency chain is real.
+
+| ID | Title | Size |
+|---|---|---|
+| [M2-001](done/M2-001-content-schema.md) ✅ | `content` schema: sources, versions, jobs, raw snapshots, seed rows | L |
+| [M2-002](M2-002-source-registry-api.md) | Source registry API, enable/disable/delete, authz actions | M |
+| [M2-003](M2-003-adapter-and-job-runner.md) | Adapter interface + global DB-backed job runner | L |
+| [M2-004](M2-004-sse-hub.md) | Minimal shared SSE hub + sync progress | L |
+| [M2-005](M2-005-bundle-upload-and-reprocess.md) | Offline bundle upload + reprocess-from-raw | M |
+| [M2-006](M2-006-attack-adapter.md) | ATT&CK Enterprise adapter (multi-version) | L |
+| [M2-007](M2-007-attack-version-pin-surface.md) | ATT&CK version catalog & pin surface | M |
+| [M2-008](M2-008-atomic-adapter.md) | Atomic Red Team adapter | M |
+| [M2-009](M2-009-sigma-adapter.md) | Sigma adapter (technique-mapped rules) | M |
+| [M2-010](M2-010-ctid-adapter.md) | CTID emulation-plan catalog adapter | M |
+| [M2-011](M2-011-custom-content-api.md) | Custom content API: templates, rules, notes | M |
+| [M2-012](M2-012-v1-format-import.md) | Import v1 `testcases.json` + knowledgebase YAML | M |
+| [M2-013](M2-013-library-browser-ui.md) | Content library browser UI | L |
+| [M2-014](M2-014-sources-admin-ui.md) | Sources admin UI: sync, bundle, status, reprocess | L |
+| [M2-015](M2-015-custom-and-import-ui.md) | Custom editor + v1 import UI | M |
+| [M2-016](M2-016-sync-write-load-test.md) | Sync write load test (serialized writer fairness) | M |

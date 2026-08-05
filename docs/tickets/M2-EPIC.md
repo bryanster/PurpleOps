@@ -1,6 +1,6 @@
 # M2 — Content system (epic)
 
-**State:** needs refinement before implementation · **Depends on:** M1 complete
+**State:** refined · **Depends on:** M1 complete
 
 ## Goal
 
@@ -8,39 +8,77 @@ Reference content becomes **installable from the UI** (`PLAN.md` §3), not baked
 source is a row users enable, sync, version and disable. First boot stays instant and offline —
 directly replacing v1's ~1 GB git-clone-on-first-boot.
 
-## Candidate tickets
+## Decisions (locked)
 
-| ID | Title | Notes |
-|---|---|---|
-| M2-001 | `content_source` registry: schema, CRUD API, status model | `id, kind, name, url, ref, enabled, status, last_synced_at, item_count, error` |
-| M2-002 | Adapter interface + background job runner | `Fetch → Parse → Normalize → Upsert`; resumable, cancellable, progress reported |
-| M2-003 | Sync progress over SSE | Overlaps M4's hub — decide whether M4's hub lands early or M2 ships a narrow version |
-| M2-004 | ATT&CK adapter, **multi-version** | `mitre-attack/attack-stix-data`; tactics, techniques, sub-techniques, data sources, mitigations, groups, software. Multiple versions coexist |
-| M2-005 | ATT&CK version pinning surface | Engagements pin a version (`PLAN.md` §2); syncs add versions, never mutate a pinned one |
-| M2-006 | Atomic Red Team adapter | `procedure_template` **preserving structure** — platform, executor, command, cleanup, input args. Do not flatten to one string as v1 did |
-| M2-007 | Sigma adapter | `detection_rule_ref` indexed by technique. Reference only — never executed or deployed |
-| M2-008 | CTID emulation-plan adapter | `emulation_plan` + ordered `emulation_plan_step`; consumed as a ready-made Scenario in M3 |
-| M2-009 | Custom content CRUD | `source='custom'`, editable in UI, exportable as YAML/JSON |
-| M2-010 | Import of existing v1 formats | `custom/testcases.json` and `custom/knowledgebase/*.yaml`. Note: v1's seeder globbed `custom/testcases/*.yaml` while the repo shipped `custom/testcases.json` — the import must handle what actually exists |
-| M2-011 | Content browser UI | Install / sync / disable, per-source status, error surfacing, search across techniques |
+| Topic | Decision |
+|---|---|
+| Air-gap | Offline **bundle upload in M2** (UI + same parse path as fetch). Archive shape matches online HTTPS releases. |
+| Raw upstream | Keep the **last successful raw snapshot per source/version** on disk. Enables reprocess without network. |
+| Disable | **Hide + block new refs.** Rows stay; browse/search/pickers omit them; APIs refuse new references. Delete is separate and ref-checked. |
+| Schedule | **Manual only** (UI Sync / `blctl content sync`). No periodic refresher in M2. |
+| Progress transport | Land a **minimal shared SSE hub** in M2; M4 extends it. No throwaway progress channel. |
+| Authz | **Platform admin** for every content mutation. `content.read` for everyone (members see empty CTA until an admin installs). |
+| ATT&CK domain | **Enterprise only.** |
+| Version model | **One `content_source`, many version snapshots** for ATT&CK. Atomic / Sigma / CTID are **single rolling head** (re-sync replaces catalog). |
+| Pin surface | **M2** ships version catalog + resolve helpers + invariants; **M3** wires `engagement.attack_version`. |
+| Fetch | **HTTPS release archives / known bundle URLs** — no git binary. Offline bundle is the same bytes. |
+| Custom entities | `procedure_template` + `detection_rule_ref` + `content_note` (KB). Not custom tactics/techniques. |
+| Concurrency | **One sync job globally.** Fetch may be slow; writes stay on the serialized writer. |
+| Jobs | **DB-backed** job rows. Restart marks in-flight jobs interrupted (not silent). |
+| Delete | Allowed only when **nothing references**; else **409** with counts. |
+| Sigma | Ingest rules that carry **ATT&CK technique mappings only**. |
+| CTID | **Catalog ingest only** in M2. Scenario import is M3-013. |
+| v1 import | **UI upload + `blctl content import`**, shared parser. |
+| UI | Full: sources admin + library browser + custom editor + import. |
+| Licensing | Store SPDX + attribution per source; show in UI detail; include in export headers. |
+| Object IDs | Surrogate **UUIDv7** PK + unique `(source_id, version, external_id)`. |
+| Builtin rows | Migration seeds ATT&CK / Atomic / Sigma / CTID **disabled** with default URLs. |
+| Copy-on-use | M3 steps **snapshot** procedure/plan fields; `template_id` is lineage only. M2 documents the contract. |
+| Reprocess | Admin **Reprocess** from last raw snapshot (no re-fetch). |
+| Search | Structured filters + substring on name / external ID / description. No FTS engine in M2. |
+| Limits | Configurable; defaults **512 MiB** bundle/download, **30 m** job timeout. |
+| Activity | Platform activity verbs for source/sync/custom/import lifecycle. |
 
-## Open questions to resolve before writing tickets
+## Tickets
 
-1. **Sync without internet.** Air-gapped installs are plausible for this audience. Do we support an
-   offline bundle upload per source? If yes it changes the adapter interface, so decide first.
-2. **Storage of raw upstream data.** Keep the fetched STIX/YAML for reproducibility, or only the
-   normalized rows? Affects disk footprint and the ability to re-normalize after an adapter bugfix.
-3. **Disable semantics.** Does disabling a source hide its content or delete it? Engagements
-   referencing it must not break — probably hide, with deletion a separate explicit action.
-4. **Sync scheduling.** Manual only in v1, or a periodic background refresh? `PLAN.md` says
-   "live-synced from upstream" but pins per engagement, so manual is defensible and simpler.
-5. **Content licensing.** ATT&CK, Atomic and Sigma have distinct licences and attribution
-   requirements. Confirm what must be displayed in-app and in exported reports.
+Build roughly in this order — the dependency chain is real.
+
+| ID | Title | Size | Depends on |
+|---|---|---|---|
+| [M2-001](M2-001-content-schema.md) | `content` schema: sources, versions, jobs, raw snapshots, seed rows | L | M1 |
+| [M2-002](M2-002-source-registry-api.md) | Source registry API, enable/disable/delete, authz actions | M | M2-001 |
+| [M2-003](M2-003-adapter-and-job-runner.md) | Adapter interface + global DB-backed job runner | L | M2-001, M2-002 |
+| [M2-004](M2-004-sse-hub.md) | Minimal shared SSE hub + sync progress | L | M2-003, M1-013 |
+| [M2-005](M2-005-bundle-upload-and-reprocess.md) | Offline bundle upload + reprocess-from-raw | M | M2-003, M2-004 |
+| [M2-006](M2-006-attack-adapter.md) | ATT&CK Enterprise adapter (multi-version) | L | M2-003, M2-005 |
+| [M2-007](M2-007-attack-version-pin-surface.md) | ATT&CK version catalog & pin surface | M | M2-006 |
+| [M2-008](M2-008-atomic-adapter.md) | Atomic Red Team adapter | M | M2-003, M2-005 |
+| [M2-009](M2-009-sigma-adapter.md) | Sigma adapter (technique-mapped rules) | M | M2-003, M2-005 |
+| [M2-010](M2-010-ctid-adapter.md) | CTID emulation-plan catalog adapter | M | M2-003, M2-005 |
+| [M2-011](M2-011-custom-content-api.md) | Custom content API: templates, rules, notes | M | M2-001, M2-002 |
+| [M2-012](M2-012-v1-format-import.md) | Import v1 `testcases.json` + knowledgebase YAML | M | M2-011 |
+| [M2-013](M2-013-library-browser-ui.md) | Content library browser UI | L | M2-006…M2-011, M0B-009 |
+| [M2-014](M2-014-sources-admin-ui.md) | Sources admin UI: sync, bundle, status, reprocess | L | M2-002…M2-005, M0B-009 |
+| [M2-015](M2-015-custom-and-import-ui.md) | Custom editor + v1 import UI | M | M2-011, M2-012, M2-013 |
+| [M2-016](M2-016-sync-write-load-test.md) | Sync write load test (serialized writer fairness) | M | M2-006, M2-008 |
 
 ## Risks
 
 - **Upstream schema drift** — adapters must fail loudly with a useful error rather than importing
   garbage. Test against checked-in fixtures so CI needs no network (`PLAN.md` §9).
 - **Sync writes are the largest write volume in the system.** They must go through the serialized
-  writer (`M0B-003`) in batches without starving interactive users. Load-test this.
-- Version-pinning correctness is subtle; get `M2-005` reviewed with the same care as `M1-012`.
+  writer (`M0B-003`) in batches without starving interactive users. **M2-016** is the gate.
+- Version-pinning correctness is subtle; get **M2-007** reviewed with the same care as `M1-012`.
+- The M2 SSE hub must stay minimal — topic fan-out, authz, backpressure — so M4 can own presence
+  and engagement streams without a rewrite.
+- Offline bundle and online fetch **must share one parse path**; two parsers will drift.
+
+## Out of milestone (do not pull in)
+
+- Periodic / scheduled sync.
+- ATT&CK Mobile / ICS.
+- Multi-version storage for Atomic / Sigma / CTID.
+- CTID → Scenario import (M3).
+- Engagement `attack_version` column and UI (M3); M2 only prepares the pin API.
+- Full M4 collaboration features (presence, engagement event topics) beyond what the thin hub needs.
+- Custom ATT&CK objects (tactics/techniques/groups).
