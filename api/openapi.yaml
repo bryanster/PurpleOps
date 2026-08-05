@@ -2227,6 +2227,153 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/sources/{sourceId}/sync:
+    post:
+      operationId: startContentSourceSync
+      summary: Enqueue a content sync job for a source.
+      description: |
+        Administrators only (`content.sync`). Enqueues one installation-wide
+        content job. A second start while any job is `queued`, `running`, or
+        `cancelling` answers `409` and names the active `jobId` in `detail`.
+
+        The optional body pin `{ "version": "15.1" }` selects a known ATT&CK
+        release. Omit it to mean "latest discoverable" per the adapter. Rolling
+        sources (Atomic, Sigma, CTID) always write the `current` version token
+        and ignore a pin.
+
+        The custom seed source cannot be synced from upstream (`409`).
+      tags:
+        - content
+      x-authz-action: content.sync
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartContentSyncRequest"
+      responses:
+        "202":
+          description: The job was enqueued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSyncJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/jobs:
+    get:
+      operationId: listContentJobs
+      summary: List content sync jobs.
+      description: |
+        Administrators only (`content.sync`). Returns jobs newest first. Filter
+        by `status` and/or `sourceId`. Job list is admin-only in M2 — members
+        read progress via source detail's `lastJob` summary (`content.read`).
+      tags:
+        - content
+      x-authz-action: content.sync
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentJobStatusFilter"
+        - $ref: "#/components/parameters/ContentJobSourceIdFilter"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Matching jobs, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSyncJobList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/jobs/{jobId}:
+    get:
+      operationId: getContentJob
+      summary: Read one content sync job.
+      description: |
+        Any authenticated subject (`content.read`). Job progress is not secret
+        relative to the shared library the job is writing.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentJobId"
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSyncJob"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/jobs/{jobId}/cancel:
+    post:
+      operationId: cancelContentJob
+      summary: Cancel a content sync job.
+      description: |
+        Administrators only (`content.sync`). A `queued` job becomes
+        `cancelled` immediately. A `running` job enters `cancelling`; adapter
+        steps observe context cancel and the job ends `cancelled`. Terminal
+        jobs answer `409`.
+      tags:
+        - content
+      x-authz-action: content.sync
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentJobId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The job after the cancel request was recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSyncJob"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 
 components:
   securitySchemes:
@@ -2435,6 +2582,32 @@ components:
       description: Restrict to enabled or disabled sources.
       schema:
         type: boolean
+
+    ContentJobId:
+      name: jobId
+      in: path
+      required: true
+      description: Content sync job identifier (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
+    ContentJobStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Restrict to jobs in this lifecycle state.
+      schema:
+        $ref: "#/components/schemas/ContentSyncJobStatus"
+
+    ContentJobSourceIdFilter:
+      name: sourceId
+      in: query
+      required: false
+      description: Restrict to jobs for this content source.
+      schema:
+        type: string
+        format: uuid
 
 
   responses:
@@ -3879,8 +4052,8 @@ components:
     ContentSyncJobSummary:
       type: object
       description: |
-        The most recent job for a source, as detail surfaces it. Full job APIs
-        land with the runner (M2-003).
+        The most recent job for a source, as detail surfaces it. Prefer
+        `ContentSyncJob` when reading a job by id.
       required:
         - id
         - kind
@@ -3912,6 +4085,92 @@ components:
         finishedAt:
           type: string
           format: date-time
+
+    ContentSyncJob:
+      type: object
+      description: One content sync / reprocess / bundle / v1-import job.
+      required:
+        - id
+        - sourceId
+        - kind
+        - status
+        - phase
+        - progressCurrent
+        - progressTotal
+        - message
+        - error
+        - createdBy
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: Version token the job targeted or resolved, when known.
+        kind:
+          $ref: "#/components/schemas/ContentSyncJobKind"
+        status:
+          $ref: "#/components/schemas/ContentSyncJobStatus"
+        phase:
+          type: string
+          description: |
+            Current pipeline phase: `fetch`, `parse`, `normalize`, `apply`,
+            `finalize`, or empty before the worker picks the job up.
+        progressCurrent:
+          type: integer
+          format: int64
+          minimum: 0
+        progressTotal:
+          type: integer
+          format: int64
+          minimum: 0
+        message:
+          type: string
+        error:
+          type: string
+          description: Failure detail when status is `failed`. Empty otherwise.
+        createdBy:
+          type: string
+          description: User id that enqueued the job. Empty for system/blctl.
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+
+    ContentSyncJobList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentSyncJob"
+
+    StartContentSyncRequest:
+      type: object
+      description: |
+        Optional pin for multi-version sources. Additional properties are
+        rejected so a mistyped field cannot silently no-op.
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: |
+            ATT&CK release label (e.g. `15.1`). Omit for latest discoverable.
+            Ignored by rolling sources.
+
 
     ContentSourceDetail:
       allOf:

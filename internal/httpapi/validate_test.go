@@ -158,7 +158,7 @@ func validatingServer(t *testing.T, handler http.HandlerFunc) http.Handler {
 	}
 
 	logs := &logBuffer{}
-	deps := Deps{Config: testConfig(t), Store: stubStore{}, Logger: logs.logger()}
+	deps := Deps{Config: testConfig(t), Store: stubStore{}, DisableContentRunner: true, Logger: logs.logger()}
 	// The path is relative to the mount point: the API router is mounted at
 	// BasePath, which is also the server the fixture declares.
 	server, err := newServer(deps, doc, func(r chi.Router) {

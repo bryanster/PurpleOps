@@ -44,6 +44,10 @@ type handlers struct {
 	// content is the source registry (M2-002).
 	content *content.Registry
 
+	// runner is the global content job worker (M2-003). Nil only in tests that
+	// never hit sync/job endpoints.
+	runner *content.Runner
+
 	// signInURL is where this deployment is signed in to, absolute, for the one
 	// response that has to tell somebody who is not looking at the application:
 	// the invite link on `POST /users` (M1-016). There is no mail transport, so

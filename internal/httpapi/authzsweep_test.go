@@ -40,6 +40,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/storetest"
 )
@@ -120,15 +121,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/CSRF"
       responses: {"200": {description: ok}}
-  /content/sync:
-    post:
-      operationId: sweepSyncContent
-      summary: Sync the shared library from upstream.
-      x-authz-action: content.sync
-      x-authz-resource: {type: content}
-      parameters:
-        - $ref: "#/components/parameters/CSRF"
-      responses: {"200": {description: ok}}
+
 `
 
 // statuses is one operation's answer to each caller, in the order [sweepCallers]
@@ -214,9 +207,13 @@ var sweepOperations = []sweepOp{
 		Want: statuses{200, 403, 403, 403, 403, 403},
 	},
 	{
+		// Real endpoint M2-003 ships. Admin is allowed by authz; with no
+		// concrete adapter registered yet the handler answers 409 (unknown
+		// kind adapter). Members are refused with 403.
 		Name: "sync the content library", Method: http.MethodPost,
-		Route: "/content/sync",
-		Want:  statuses{200, 403, 403, 403, 403, 403},
+		Route: "/content/sources/{sourceId}/sync",
+		Real:  true, Body: `{}`,
+		Want: statuses{409, 403, 403, 403, 403, 403},
 	},
 }
 
@@ -312,13 +309,18 @@ func (s *sweepServer) assertRefusalShape(t *testing.T, recorder *httptest.Respon
 				"later make change something", caller.Name, op.Name, ranOrNot(reached), want)
 		}
 	}
-	if want == http.StatusOK {
+	if want == http.StatusOK || want == http.StatusAccepted {
 		return
 	}
 
+	// A 409 from a real endpoint is a product conflict after authorization
+	// succeeded (e.g. no adapter registered yet). It is not a refusal.
 	wantCode := gen.ProblemCodeForbidden
-	if want == http.StatusNotFound {
+	switch want {
+	case http.StatusNotFound:
 		wantCode = gen.ProblemCodeNotFound
+	case http.StatusConflict:
+		wantCode = gen.ProblemCodeConflict
 	}
 	if got := decodeProblem(t, recorder).Code; got != wantCode {
 		t.Errorf("%s tried to %s: problem code %q, want %q", caller.Name, op.Name, got, wantCode)
@@ -516,6 +518,7 @@ func (s *sweepServer) target(route string) string {
 		"{engagementId}", sweepEngagement,
 		"{executionId}", sweepExecution,
 		"{userId}", s.targetUser.ID,
+		"{sourceId}", storecontent.SourceIDAttack,
 	).Replace(route)
 }
 

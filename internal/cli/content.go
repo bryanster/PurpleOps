@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,28 +19,137 @@ import (
 
 // blctl content sources | enable | disable | sync
 //
-// sources/enable/disable are M2-002. sync stays a stub until M2-003's job
-// runner lands. The host is the access control: these open the database file
-// directly, the same way `user create` does.
+// The host is the access control: these open the database file directly, the
+// same way `user create` does.
 
 func newContentCommand(a *app) *cobra.Command {
 	return group("content", "Manage content sources (M2)",
 		newContentSourcesCommand(a),
 		newContentEnableCommand(a),
 		newContentDisableCommand(a),
-		newContentSyncCommand(),
+		newContentSyncCommand(a),
 	)
 }
 
-func newContentSyncCommand() *cobra.Command {
-	return &cobra.Command{
+func newContentSyncCommand(a *app) *cobra.Command {
+	var (
+		source  string
+		version string
+		wait    bool
+	)
+	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Install or refresh a content source (M2)",
-		Long: "Installs or refreshes a content source — ATT&CK, Atomic Red Team, Sigma, CTID —\n" +
-			"from the command line, for a deployment that cannot reach them from the\n" +
-			"browser, or for seeding one before anybody signs in.",
+		Short: "Install or refresh a content source",
+		Long: "Enqueues a content sync job for a source identified by id or kind.\n" +
+			"At most one content job runs installation-wide; a second start fails.\n" +
+			"Pass --wait to block until the job reaches a terminal status.",
 		Args: noArgs,
-		RunE: notImplemented("M2-003", "which builds the adapter interface and job runner"),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if source == "" {
+				return fmt.Errorf("--source is required (source id or kind)")
+			}
+			return a.withStore(cmd.Context(), func(ctx context.Context, db *store.DB) error {
+				cfg, err := a.settings()
+				if err != nil {
+					return err
+				}
+				paths := storecontent.NewPaths(cfg.Content.Dir)
+				sources := storecontent.NewSources(db)
+				versions := storecontent.NewVersions(db, paths)
+				jobs := storecontent.NewJobs(db)
+
+				src, err := resolveContentSource(ctx, sources, source)
+				if err != nil {
+					return err
+				}
+
+				runner, err := content.NewRunner(content.RunnerDeps{
+					DB:         db,
+					Sources:    sources,
+					Versions:   versions,
+					Jobs:       jobs,
+					Paths:      paths,
+					Activity:   events.New(activity.New(db)),
+					MaxBytes:   cfg.Content.MaxBytes.Int64(),
+					JobTimeout: cfg.Content.JobTimeout,
+					WriteBatch: cfg.Content.WriteBatch,
+					Log:        a.logger(cfg),
+				})
+				if err != nil {
+					return err
+				}
+				// Boot reconciles leftover running rows from a previous process;
+				// do not Start a long-lived worker — we run one job and exit.
+				if err := runner.Boot(ctx); err != nil {
+					return err
+				}
+				// Start the worker so the enqueued job is picked up.
+				runner.Start(ctx)
+				defer runner.Stop()
+
+				job, err := runner.StartSync(ctx, authn.Subject{}, content.StartSyncRequest{
+					SourceID: src.ID,
+					Version:  version,
+				})
+				if err != nil {
+					return err
+				}
+				if !wait {
+					return a.printContentJob(job)
+				}
+				// Bound wait by job timeout + slack so a hung adapter cannot
+				// pin the CLI forever when --wait is set without a parent deadline.
+				wctx := ctx
+				cancel := func() {}
+				if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+					timeout := cfg.Content.JobTimeout
+					if timeout <= 0 {
+						timeout = 30 * time.Minute
+					}
+					wctx, cancel = context.WithTimeout(ctx, timeout+time.Minute)
+				}
+				defer cancel()
+				job, err = runner.Wait(wctx, job.ID)
+				if err != nil {
+					return err
+				}
+				if err := a.printContentJob(job); err != nil {
+					return err
+				}
+				switch job.Status {
+				case storecontent.JobStatusSucceeded:
+					return nil
+				case storecontent.JobStatusCancelled:
+					return fmt.Errorf("job %s cancelled", job.ID)
+				default:
+					if job.Error != "" {
+						return fmt.Errorf("job %s %s: %s", job.ID, job.Status, job.Error)
+					}
+					return fmt.Errorf("job %s ended %s", job.ID, job.Status)
+				}
+			})
+		},
+	}
+	cmd.Flags().StringVar(&source, "source", "", "source id or kind (attack|atomic|sigma|ctid)")
+	cmd.Flags().StringVar(&version, "version", "", "version pin (ATT&CK release label); omit for latest")
+	cmd.Flags().BoolVar(&wait, "wait", false, "block until the job finishes")
+	return cmd
+}
+
+func resolveContentSource(ctx context.Context, sources *storecontent.Sources, idOrKind string) (storecontent.Source, error) {
+	// Prefer id lookup when it looks like a UUID; otherwise treat as kind.
+	if strings.Contains(idOrKind, "-") && len(idOrKind) >= 32 {
+		return sources.ByID(ctx, idOrKind)
+	}
+	switch strings.ToLower(idOrKind) {
+	case "attack", "atomic", "sigma", "ctid", "custom":
+		return sources.ByKind(ctx, storecontent.Kind(strings.ToLower(idOrKind)))
+	default:
+		// Fall back to id — user may have passed a compact id form.
+		if src, err := sources.ByID(ctx, idOrKind); err == nil {
+			return src, nil
+		}
+		return storecontent.Source{}, fmt.Errorf("unknown source %q (want id or kind attack|atomic|sigma|ctid)", idOrKind)
 	}
 }
 
@@ -269,6 +379,47 @@ func (a *app) printContentSourceDetail(d content.SourceDetail) error {
 		if out.LastJob != nil {
 			fmt.Fprintf(w, "Last job\t%s (%s, %s)\n",
 				out.LastJob.ID, out.LastJob.Kind, out.LastJob.Status)
+		}
+	})
+}
+
+func (a *app) printContentJob(j storecontent.Job) error {
+	type jobResult struct {
+		ID       string `json:"id"`
+		SourceID string `json:"sourceId"`
+		Kind     string `json:"kind"`
+		Status   string `json:"status"`
+		Version  string `json:"version,omitempty"`
+		Phase    string `json:"phase,omitempty"`
+		Message  string `json:"message,omitempty"`
+		Error    string `json:"error,omitempty"`
+	}
+	out := jobResult{
+		ID:       j.ID,
+		SourceID: j.SourceID,
+		Kind:     string(j.Kind),
+		Status:   string(j.Status),
+		Version:  j.Version,
+		Phase:    j.Phase,
+		Message:  j.Message,
+		Error:    j.Error,
+	}
+	return a.print(out, func(w *tabwriter.Writer) {
+		fmt.Fprintf(w, "ID\t%s\n", out.ID)
+		fmt.Fprintf(w, "Source\t%s\n", out.SourceID)
+		fmt.Fprintf(w, "Kind\t%s\n", out.Kind)
+		fmt.Fprintf(w, "Status\t%s\n", out.Status)
+		if out.Version != "" {
+			fmt.Fprintf(w, "Version\t%s\n", out.Version)
+		}
+		if out.Phase != "" {
+			fmt.Fprintf(w, "Phase\t%s\n", out.Phase)
+		}
+		if out.Message != "" {
+			fmt.Fprintf(w, "Message\t%s\n", out.Message)
+		}
+		if out.Error != "" {
+			fmt.Fprintf(w, "Error\t%s\n", out.Error)
 		}
 	})
 }

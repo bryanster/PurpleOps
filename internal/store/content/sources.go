@@ -271,6 +271,40 @@ func (r *Sources) SetSyncState(ctx context.Context, id string, status SourceStat
 	})
 }
 
+// ResetSyncing moves every source left in status=syncing back to idle. Call
+// once at process boot together with [Jobs.InterruptInFlight] so a crash
+// cannot leave the registry looking permanently busy (M2-003).
+//
+// errMsg is written into the error column when it is currently empty, so an
+// operator sees why the source stopped mid-flight. last_synced_at and
+// item_count are left alone — the prior successful catalog still stands.
+func (r *Sources) ResetSyncing(ctx context.Context, errMsg string) (int64, error) {
+	if errMsg == "" {
+		errMsg = "process restarted while a sync was in flight"
+	}
+	ts := now()
+	var n int64
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `
+			UPDATE content.content_source SET
+				status = ?,
+				error = CASE WHEN error = '' THEN ? ELSE error END,
+				updated_at = ?
+			WHERE status = ?`,
+			string(SourceStatusIdle),
+			errMsg,
+			ts,
+			string(SourceStatusSyncing),
+		)
+		if err != nil {
+			return fmt.Errorf("content: reset syncing sources: %w", err)
+		}
+		n, err = res.RowsAffected()
+		return err
+	})
+	return n, err
+}
+
 // Delete removes a source row. Callers must have already cleared versions and
 // objects, or use [Sources.DeleteCascade] which does that in one transaction.
 //

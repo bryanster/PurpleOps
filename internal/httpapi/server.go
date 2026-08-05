@@ -73,6 +73,17 @@ type Deps struct {
 	// the activity feed (M1-015); M3 replaces it with one that also knows
 	// whether an engagement exists and whether it runs blind.
 	Ownership Ownership
+
+	// ContentAdapters registers kind→adapter implementations on the content
+	// job runner (M2-003). Production leaves this nil until concrete adapters
+	// land (M2-006+); tests inject a fixture adapter to exercise the pipeline
+	// end to end over HTTP.
+	ContentAdapters map[storecontent.Kind]content.Adapter
+
+	// DisableContentRunner skips boot/start of the content job worker. Tests
+	// that substitute a non-functional store (panickyStore) set this so
+	// construction does not touch the database.
+	DisableContentRunner bool
 }
 
 // NewServer builds the HTTP handler: the middleware chain, the routes
@@ -487,14 +498,19 @@ func signInURL(cfg config.Config) string {
 // both of its error hooks pointed at the one responder. An error returned by a
 // handler, and a response that will not serialize, then produce the same shape
 // as everything else (M0B-007).
+//
+//nolint:contextcheck // boots the process-scoped content runner with Background
 func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	challenges *challenge.Manager, provider *oidc.Provider, federation *saml.Provider,
 	activityLog *events.Log, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
 	paths := storecontent.NewPaths(deps.Config.Content.Dir)
+	sources := storecontent.NewSources(deps.Store)
+	versions := storecontent.NewVersions(deps.Store, paths)
+	jobs := storecontent.NewJobs(deps.Store)
 	registry, err := content.New(content.Deps{
-		Sources:  storecontent.NewSources(deps.Store),
-		Versions: storecontent.NewVersions(deps.Store, paths),
-		Jobs:     storecontent.NewJobs(deps.Store),
+		Sources:  sources,
+		Versions: versions,
+		Jobs:     jobs,
 		Activity: activityLog,
 	})
 	if err != nil {
@@ -502,6 +518,38 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		// programming error at this call site rather than a runtime condition.
 		// Panicking keeps NewServer's signature and forces the bug loud.
 		panic("httpapi: content registry: " + err.Error())
+	}
+
+	runner, err := content.NewRunner(content.RunnerDeps{
+		DB:         deps.Store,
+		Sources:    sources,
+		Versions:   versions,
+		Jobs:       jobs,
+		Paths:      paths,
+		Activity:   activityLog,
+		Adapters:   deps.ContentAdapters,
+		MaxBytes:   deps.Config.Content.MaxBytes.Int64(),
+		JobTimeout: deps.Config.Content.JobTimeout,
+		WriteBatch: deps.Config.Content.WriteBatch,
+		Log:        log,
+	})
+	if err != nil {
+		panic("httpapi: content runner: " + err.Error())
+	}
+	// Concrete adapters register here as they land (M2-006+). Until then the
+	// map is empty and StartSync refuses unknown kinds with 409 — correct:
+	// there is nothing to fetch yet. Tests inject fixture adapters via
+	// Deps.ContentAdapters when they need a full pipeline.
+	if !deps.DisableContentRunner {
+		// Boot/Start are process-lifetime, not request-scoped. There is no
+		// request context at server construction.
+		//
+		//nolint:contextcheck // process boot, not a request
+		if err := runner.Boot(context.Background()); err != nil {
+			panic("httpapi: content runner boot: " + err.Error())
+		}
+		//nolint:contextcheck // process worker, cancelled via Runner.Stop
+		runner.Start(context.Background())
 	}
 
 	return gen.NewStrictHandlerWithOptions(
@@ -514,6 +562,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			saml:       federation,
 			activity:   activityLog,
 			content:    registry,
+			runner:     runner,
 			signInURL:  signInURL(deps.Config),
 			log:        log,
 		},

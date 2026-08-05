@@ -75,16 +75,16 @@ interface and runner wrong and every adapter ticket reinvents concurrency and er
 
 ## Acceptance criteria
 
-- [ ] Starting a second sync while one runs returns 409 with the active `jobId`.
-- [ ] Cancel during a slow test adapter stops before further Apply batches; job ends `cancelled`.
-- [ ] Process restart: jobs left `running` become `interrupted` (helper from `M2-001`); source not
+- [x] Starting a second sync while one runs returns 409 with the active `jobId`.
+- [x] Cancel during a slow test adapter stops before further Apply batches; job ends `cancelled`.
+- [x] Process restart: jobs left `running` become `interrupted` (helper from `M2-001`); source not
       stuck forever in `syncing`.
-- [ ] Fetch failure does not delete existing catalog rows.
-- [ ] Successful apply with the test adapter writes objects and a raw snapshot file whose sha256
+- [x] Fetch failure does not delete existing catalog rows.
+- [x] Successful apply with the test adapter writes objects and a raw snapshot file whose sha256
       matches the DB.
-- [ ] No network I/O inside `store.Write`.
-- [ ] Context cancel while waiting for the write lock aborts the batch (`M0B-003` contract).
-- [ ] Oversized download fails with a problem detail naming the limit.
+- [x] No network I/O inside `store.Write`.
+- [x] Context cancel while waiting for the write lock aborts the batch (`M0B-003` contract).
+- [x] Oversized download fails with a problem detail naming the limit.
 
 ## Tests
 
@@ -100,3 +100,29 @@ interface and runner wrong and every adapter ticket reinvents concurrency and er
   maps these to SSE event types.
 - Adapters register in a kind→adapter map at server wiring; unknown kind on a source is a hard
   error at sync start.
+
+## Implementation notes
+
+- Package layout: `internal/content` holds `Adapter` / `ByteSource` / `Writer` /
+  `Progress`, the fixture adapter (tests + stand-in until M2-006+), and the
+  single-slot `Runner`. Storage helpers: `Jobs.FindActive`, `Jobs.NextQueued`,
+  `Sources.ResetSyncing`.
+- Global slot: `StartSync` refuses with 409 when any job is queued/running/
+  cancelling; detail names the active `jobId`. Worker is one goroutine + wake
+  channel + 2s poll backup.
+- Fetch size limit and job timeout/write batch come from config:
+  `BLACKLIGHT_CONTENT_MAX_BYTES` (ByteSize, default 512MiB),
+  `BLACKLIGHT_CONTENT_JOB_TIMEOUT` (30m), `BLACKLIGHT_CONTENT_WRITE_BATCH` (250).
+  Also exposed on `config.Tool` for blctl.
+- Apply never holds `store.Write` across network I/O; fixture adapter batches
+  note inserts and observes `ctx` between batches. Progress ticks do not
+  clobber `cancelling`.
+- Raw snapshot: write temp + rename under `content/raw/{source}/{version}/{sha}`;
+  prior raw for that version deleted on success. Failure leaves catalog intact.
+- Progress subscribe hook (`Runner.Subscribe`) is ready for M2-004 SSE. Bundle
+  path in job checkpoint is ready for M2-005.
+- HTTP: `POST .../sync` (202), `GET/POST .../jobs`, authz content.sync /
+  content.read. Job list is admin-only (`content.sync`) in M2.
+- Boot: `InterruptInFlight` + `ResetSyncing`; unmigrated DBs no-op. Production
+  adapters map empty until M2-006 — sync of seeded kinds 409s with "no adapter".
+- blctl: `content sync --source <id|kind> [--version] [--wait]`.

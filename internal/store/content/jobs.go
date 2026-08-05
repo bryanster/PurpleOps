@@ -148,6 +148,47 @@ func (r *Jobs) List(ctx context.Context, f ListFilter) ([]Job, error) {
 	return out, nil
 }
 
+// FindActive returns one job that is queued, running, or cancelling — the
+// installation-wide single slot (M2-003). ok is false when the slot is free.
+// When several exist (should not, after the enqueue gate), the oldest wins.
+func (r *Jobs) FindActive(ctx context.Context) (Job, bool, error) {
+	row := r.db.Read().QueryRowContext(ctx, selectJob+`
+		WHERE status IN (?, ?, ?)
+		ORDER BY created_at ASC, id ASC
+		LIMIT 1`,
+		string(JobStatusQueued),
+		string(JobStatusRunning),
+		string(JobStatusCancelling),
+	)
+	j, err := scanJob(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Job{}, false, nil
+		}
+		return Job{}, false, fmt.Errorf("content: find active job: %w", err)
+	}
+	return j, true, nil
+}
+
+// NextQueued returns the oldest queued job, if any. The runner claims it by
+// flipping status to running under the serialized writer.
+func (r *Jobs) NextQueued(ctx context.Context) (Job, bool, error) {
+	row := r.db.Read().QueryRowContext(ctx, selectJob+`
+		WHERE status = ?
+		ORDER BY created_at ASC, id ASC
+		LIMIT 1`,
+		string(JobStatusQueued),
+	)
+	j, err := scanJob(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Job{}, false, nil
+		}
+		return Job{}, false, fmt.Errorf("content: next queued job: %w", err)
+	}
+	return j, true, nil
+}
+
 // SetStatus writes a new status and optional timestamps/message/error.
 type JobUpdate struct {
 	Status          JobStatus

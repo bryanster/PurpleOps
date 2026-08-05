@@ -18,6 +18,96 @@ import (
 	"github.com/bryanster/blacklight/internal/authz"
 )
 
+// ByteSize is a count of bytes, written as a plain integer or with a unit
+// suffix. IEC units (KiB, MiB, GiB) are powers of 1024; SI units (KB, MB, GB)
+// are powers of 1000. The bare form is bytes.
+//
+// Used by [Content.MaxBytes] so an operator can write `512MiB` rather than
+// counting zeroes.
+type ByteSize int64
+
+// Int64 returns the size in bytes.
+func (b ByteSize) Int64() int64 { return int64(b) }
+
+// String renders a compact form for diagnostics.
+func (b ByteSize) String() string {
+	const (
+		kib = 1024
+		mib = 1024 * kib
+		gib = 1024 * mib
+	)
+	v := int64(b)
+	switch {
+	case v <= 0:
+		return "0"
+	case v%gib == 0:
+		return fmt.Sprintf("%dGiB", v/gib)
+	case v%mib == 0:
+		return fmt.Sprintf("%dMiB", v/mib)
+	case v%kib == 0:
+		return fmt.Sprintf("%dKiB", v/kib)
+	default:
+		return fmt.Sprintf("%d", v)
+	}
+}
+
+// MarshalText is the inverse of UnmarshalText.
+func (b ByteSize) MarshalText() ([]byte, error) {
+	return []byte(b.String()), nil
+}
+
+func (b *ByteSize) UnmarshalText(text []byte) error {
+	raw := strings.TrimSpace(string(text))
+	if raw == "" {
+		return errors.New("must be a byte size, such as \"512MiB\" or \"1048576\"")
+	}
+	// Split trailing unit letters from the number. "512MiB" → "512" + "MiB".
+	i := len(raw)
+	for i > 0 {
+		c := raw[i-1]
+		if c >= '0' && c <= '9' {
+			break
+		}
+		i--
+	}
+	if i == 0 {
+		return fmt.Errorf("must start with a number, got %q", raw)
+	}
+	numPart, unitPart := raw[:i], strings.ToLower(raw[i:])
+	n, err := strconv.ParseInt(numPart, 10, 64)
+	if err != nil {
+		return errors.New("must be a whole number of bytes, optionally with a unit")
+	}
+	if n <= 0 {
+		return errors.New("must be a positive byte size")
+	}
+	var mul int64
+	switch unitPart {
+	case "":
+		mul = 1
+	case "k", "kb":
+		mul = 1000
+	case "ki", "kib":
+		mul = 1024
+	case "m", "mb":
+		mul = 1000 * 1000
+	case "mi", "mib":
+		mul = 1024 * 1024
+	case "g", "gb":
+		mul = 1000 * 1000 * 1000
+	case "gi", "gib":
+		mul = 1024 * 1024 * 1024
+	default:
+		return fmt.Errorf("unknown size unit %q (want KiB/MiB/GiB or KB/MB/GB)", raw[i:])
+	}
+	// Overflow guard: n * mul must fit in int64.
+	if n > (1<<63-1)/mul {
+		return errors.New("byte size overflows")
+	}
+	*b = ByteSize(n * mul)
+	return nil
+}
+
 // The types in this file own the validation that can be done from the value
 // alone, via encoding.TextUnmarshaler. Checks that need the filesystem or a
 // second variable live in validate() and ensurePaths() instead, so that parsing

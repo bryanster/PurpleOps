@@ -17,15 +17,18 @@ const prefix = "BLACKLIGHT_"
 // The variables this package reads. Each one appears exactly three times: here,
 // in Config.bindings, and in .env.example — tests tie the three together.
 const (
-	envEnv             = prefix + "ENV"
-	envAddr            = prefix + "ADDR"
-	envBaseURL         = prefix + "BASE_URL"
-	envRequestTimeout  = prefix + "REQUEST_TIMEOUT"
-	envShutdownTimeout = prefix + "SHUTDOWN_TIMEOUT"
-	envTrustedProxies  = prefix + "TRUSTED_PROXIES"
-	envDBPath          = prefix + "DB_PATH"
-	envEvidenceDir     = prefix + "EVIDENCE_DIR"
-	envContentDir      = prefix + "CONTENT_DIR"
+	envEnv               = prefix + "ENV"
+	envAddr              = prefix + "ADDR"
+	envBaseURL           = prefix + "BASE_URL"
+	envRequestTimeout    = prefix + "REQUEST_TIMEOUT"
+	envShutdownTimeout   = prefix + "SHUTDOWN_TIMEOUT"
+	envTrustedProxies    = prefix + "TRUSTED_PROXIES"
+	envDBPath            = prefix + "DB_PATH"
+	envEvidenceDir       = prefix + "EVIDENCE_DIR"
+	envContentDir        = prefix + "CONTENT_DIR"
+	envContentMaxBytes   = prefix + "CONTENT_MAX_BYTES"
+	envContentJobTimeout = prefix + "CONTENT_JOB_TIMEOUT"
+	envContentWriteBatch = prefix + "CONTENT_WRITE_BATCH"
 
 	envSessionSecret   = prefix + "SESSION_SECRET"
 	envEncryptionKey   = prefix + "ENCRYPTION_KEY"
@@ -124,13 +127,26 @@ type Evidence struct {
 	Dir string
 }
 
-// Content locates on-disk raw upstream snapshots and (later) uploaded bundles
-// (M2-001). The directory is created at startup if absent.
+// Content locates on-disk raw upstream snapshots and offline bundles (M2),
+// and holds the knobs the content job runner (M2-003) reads.
 type Content struct {
 	// Dir is the root for content artifacts. Raw snapshots are stored under
 	// Dir/raw/{source_id}/{version}/{sha256}. Repositories reject any stored
 	// path that would escape this root.
 	Dir string
+
+	// MaxBytes is the largest upstream download Fetch may accept. Oversized
+	// payloads fail the job with an error that names this limit.
+	MaxBytes ByteSize
+
+	// JobTimeout is the wall-clock budget for one content job. On expiry the
+	// job is marked failed and the adapter context is cancelled.
+	JobTimeout time.Duration
+
+	// WriteBatch is how many normalized objects Apply writes per store.Write
+	// transaction. Large enough to be fast; small enough not to hold the
+	// serialized writer for seconds.
+	WriteBatch int
 }
 
 // Session holds the secrets and the timings behind cookie sessions.
@@ -374,6 +390,9 @@ type Report struct {
 type Tool struct {
 	Database Database
 	Log      Log
+	// Content is the on-disk content root and runner knobs. blctl content sync
+	// writes raw snapshots here the same way the server does.
+	Content Content
 }
 
 // binding is one environment variable and the field it fills.
@@ -407,7 +426,10 @@ func (c *Config) bindings() []binding {
 		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
 		{name: envDBPath, target: &c.Database.Path, def: "./blacklight.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
-		{name: envContentDir, target: &c.Content.Dir, def: "./content"},
+		{name: envContentDir, target: &c.Content.Dir, def: "./content", tool: true},
+		{name: envContentMaxBytes, target: &c.Content.MaxBytes, def: "512MiB", tool: true},
+		{name: envContentJobTimeout, target: &c.Content.JobTimeout, def: "30m", tool: true},
+		{name: envContentWriteBatch, target: &c.Content.WriteBatch, def: "250", tool: true},
 
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
 		{name: envEncryptionKey, target: &c.Encryption.Key, required: true, sensitive: true},

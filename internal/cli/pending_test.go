@@ -14,7 +14,6 @@ func TestPendingCommandsSayWhenTheyArrive(t *testing.T) {
 		args      []string
 		milestone string
 	}{
-		{[]string{"content", "sync"}, "M2"},
 		{[]string{"backup"}, "M7"},
 		{[]string{"report", "render"}, "M6"},
 	}

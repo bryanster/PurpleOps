@@ -1323,6 +1323,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/sources/{sourceId}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue a content sync job for a source.
+         * @description Administrators only (`content.sync`). Enqueues one installation-wide
+         *     content job. A second start while any job is `queued`, `running`, or
+         *     `cancelling` answers `409` and names the active `jobId` in `detail`.
+         *
+         *     The optional body pin `{ "version": "15.1" }` selects a known ATT&CK
+         *     release. Omit it to mean "latest discoverable" per the adapter. Rolling
+         *     sources (Atomic, Sigma, CTID) always write the `current` version token
+         *     and ignore a pin.
+         *
+         *     The custom seed source cannot be synced from upstream (`409`).
+         */
+        post: operations["startContentSourceSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List content sync jobs.
+         * @description Administrators only (`content.sync`). Returns jobs newest first. Filter
+         *     by `status` and/or `sourceId`. Job list is admin-only in M2 — members
+         *     read progress via source detail's `lastJob` summary (`content.read`).
+         */
+        get: operations["listContentJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one content sync job.
+         * @description Any authenticated subject (`content.read`). Job progress is not secret
+         *     relative to the shared library the job is writing.
+         */
+        get: operations["getContentJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/jobs/{jobId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a content sync job.
+         * @description Administrators only (`content.sync`). A `queued` job becomes
+         *     `cancelled` immediately. A `running` job enters `cancelling`; adapter
+         *     steps observe context cancel and the job ends `cancelled`. Terminal
+         *     jobs answer `409`.
+         */
+        post: operations["cancelContentJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2258,8 +2353,8 @@ export interface components {
             items: components["schemas"]["ContentSource"][];
         };
         /**
-         * @description The most recent job for a source, as detail surfaces it. Full job APIs
-         *     land with the runner (M2-003).
+         * @description The most recent job for a source, as detail surfaces it. Prefer
+         *     `ContentSyncJob` when reading a job by id.
          */
         ContentSyncJobSummary: {
             /** Format: uuid */
@@ -2277,6 +2372,51 @@ export interface components {
             startedAt?: string;
             /** Format: date-time */
             finishedAt?: string;
+        };
+        /** @description One content sync / reprocess / bundle / v1-import job. */
+        ContentSyncJob: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description Version token the job targeted or resolved, when known. */
+            version?: string;
+            kind: components["schemas"]["ContentSyncJobKind"];
+            status: components["schemas"]["ContentSyncJobStatus"];
+            /**
+             * @description Current pipeline phase: `fetch`, `parse`, `normalize`, `apply`,
+             *     `finalize`, or empty before the worker picks the job up.
+             */
+            phase: string;
+            /** Format: int64 */
+            progressCurrent: number;
+            /** Format: int64 */
+            progressTotal: number;
+            message: string;
+            /** @description Failure detail when status is `failed`. Empty otherwise. */
+            error: string;
+            /** @description User id that enqueued the job. Empty for system/blctl. */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+        };
+        ContentSyncJobList: {
+            items: components["schemas"]["ContentSyncJob"][];
+        };
+        /**
+         * @description Optional pin for multi-version sources. Additional properties are
+         *     rejected so a mistyped field cannot silently no-op.
+         */
+        StartContentSyncRequest: {
+            /**
+             * @description ATT&CK release label (e.g. `15.1`). Omit for latest discoverable.
+             *     Ignored by rolling sources.
+             */
+            version?: string;
         };
         ContentSourceDetail: components["schemas"]["ContentSource"] & {
             /** @description Most recent job for this source, when any exists. */
@@ -2514,6 +2654,12 @@ export interface components {
         ContentSourceKindFilter: components["schemas"]["ContentSourceKind"];
         /** @description Restrict to enabled or disabled sources. */
         ContentSourceEnabledFilter: boolean;
+        /** @description Content sync job identifier (UUIDv7). */
+        ContentJobId: string;
+        /** @description Restrict to jobs in this lifecycle state. */
+        ContentJobStatusFilter: components["schemas"]["ContentSyncJobStatus"];
+        /** @description Restrict to jobs for this content source. */
+        ContentJobSourceIdFilter: string;
     };
     requestBodies: never;
     headers: never;
@@ -4355,6 +4501,161 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    startContentSourceSync: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartContentSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description The job was enqueued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentJobs: {
+        parameters: {
+            query?: {
+                /** @description Restrict to jobs in this lifecycle state. */
+                status?: components["parameters"]["ContentJobStatusFilter"];
+                /** @description Restrict to jobs for this content source. */
+                sourceId?: components["parameters"]["ContentJobSourceIdFilter"];
+                /** @description Maximum number of items to return. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching jobs, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJobList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Content sync job identifier (UUIDv7). */
+                jobId: components["parameters"]["ContentJobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJob"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    cancelContentJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Content sync job identifier (UUIDv7). */
+                jobId: components["parameters"]["ContentJobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job after the cancel request was recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJob"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

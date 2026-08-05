@@ -71,6 +71,12 @@ func testConfig(t *testing.T) config.Config {
 			SourceFailures:  50,
 			SourceLockout:   15 * time.Minute,
 		},
+		Content: config.Content{
+			Dir:        t.TempDir(),
+			MaxBytes:   config.ByteSize(512 << 20),
+			JobTimeout: 30 * time.Minute,
+			WriteBatch: 250,
+		},
 	}
 }
 
@@ -84,7 +90,13 @@ func newTestServerWith(t *testing.T, cfg config.Config, db store.Store) (http.Ha
 	t.Helper()
 
 	logs := &logBuffer{}
-	server, err := NewServer(Deps{Config: cfg, Store: db, Logger: logs.logger()})
+	deps := Deps{Config: cfg, Store: db, Logger: logs.logger()}
+	// Incomplete test doubles (panickyStore, stubStore, deadlineStore, …)
+	// cannot answer content boot writes. Only a real *store.DB runs the worker.
+	if _, ok := db.(*store.DB); !ok {
+		deps.DisableContentRunner = true
+	}
+	server, err := NewServer(deps)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}

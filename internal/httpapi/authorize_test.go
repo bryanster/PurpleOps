@@ -257,7 +257,7 @@ func TestTheServerRefusesToStartWithAnUnmappedOperation(t *testing.T) {
 		},
 	})
 
-	if _, err := newServer(Deps{Config: testConfig(t), Store: stubStore{}}, doc, nil); err != nil {
+	if _, err := newServer(Deps{Config: testConfig(t), Store: stubStore{}, DisableContentRunner: true}, doc, nil); err != nil {
 		assertStartupFailure(t, err, "listAccess", "Absence is not permission")
 	} else {
 		t.Fatal("the server was built over a specification with an unmapped operation. " +
@@ -301,7 +301,7 @@ func TestAuthorizeRefusesEngagementOpsWithoutALoader(t *testing.T) {
 func TestNewServerDefaultsOwnershipForEngagementOps(t *testing.T) {
 	t.Parallel()
 
-	deps := Deps{Config: testConfig(t), Store: stubStore{}} // no Ownership
+	deps := Deps{Config: testConfig(t), Store: stubStore{}, DisableContentRunner: true} // no Ownership
 	server, err := newServer(deps, fixtureSpec(t, engagementSpec), nil)
 	if err != nil {
 		t.Fatalf("newServer with default Ownership: %v", err)
@@ -410,7 +410,7 @@ func authorizingServer(t *testing.T, own Ownership, handler http.HandlerFunc) (h
 	t.Helper()
 
 	logs := &logBuffer{}
-	deps := Deps{Config: testConfig(t), Store: stubStore{}, Logger: logs.logger(), Ownership: own}
+	deps := Deps{Config: testConfig(t), Store: stubStore{}, DisableContentRunner: true, Logger: logs.logger(), Ownership: own}
 	server, err := newServer(deps, fixtureSpec(t, engagementSpec), func(r chi.Router) {
 		r.Get("/engagements/{engagementId}/steps", handler)
 	})

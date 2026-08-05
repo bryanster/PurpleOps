@@ -606,14 +606,50 @@ type ContentSourceVersionList struct {
 // ContentSourceVersionStatus State of one version snapshot under a source.
 type ContentSourceVersionStatus string
 
+// ContentSyncJob One content sync / reprocess / bundle / v1-import job.
+type ContentSyncJob struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy User id that enqueued the job. Empty for system/blctl.
+	CreatedBy string `json:"createdBy"`
+
+	// Error Failure detail when status is `failed`. Empty otherwise.
+	Error      string             `json:"error"`
+	FinishedAt *time.Time         `json:"finishedAt,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Kind What a content sync job is doing.
+	Kind    ContentSyncJobKind `json:"kind"`
+	Message string             `json:"message"`
+
+	// Phase Current pipeline phase: `fetch`, `parse`, `normalize`, `apply`,
+	// `finalize`, or empty before the worker picks the job up.
+	Phase           string             `json:"phase"`
+	ProgressCurrent int64              `json:"progressCurrent"`
+	ProgressTotal   int64              `json:"progressTotal"`
+	SourceId        openapi_types.UUID `json:"sourceId"`
+	StartedAt       *time.Time         `json:"startedAt,omitempty"`
+
+	// Status Lifecycle state of a content sync job.
+	Status ContentSyncJobStatus `json:"status"`
+
+	// Version Version token the job targeted or resolved, when known.
+	Version *string `json:"version,omitempty"`
+}
+
 // ContentSyncJobKind What a content sync job is doing.
 type ContentSyncJobKind string
+
+// ContentSyncJobList defines model for ContentSyncJobList.
+type ContentSyncJobList struct {
+	Items []ContentSyncJob `json:"items"`
+}
 
 // ContentSyncJobStatus Lifecycle state of a content sync job.
 type ContentSyncJobStatus string
 
-// ContentSyncJobSummary The most recent job for a source, as detail surfaces it. Full job APIs
-// land with the runner (M2-003).
+// ContentSyncJobSummary The most recent job for a source, as detail surfaces it. Prefer
+// `ContentSyncJob` when reading a job by id.
 type ContentSyncJobSummary struct {
 	CreatedAt  time.Time          `json:"createdAt"`
 	Error      *string            `json:"error,omitempty"`
@@ -1225,6 +1261,14 @@ type Sessions struct {
 	Items []Session `json:"items"`
 }
 
+// StartContentSyncRequest Optional pin for multi-version sources. Additional properties are
+// rejected so a mistyped field cannot silently no-op.
+type StartContentSyncRequest struct {
+	// Version ATT&CK release label (e.g. `15.1`). Omit for latest discoverable.
+	// Ignored by rolling sources.
+	Version *string `json:"version,omitempty"`
+}
+
 // TOTPCodeRequest A six-digit code from an authenticator app. The same body confirms an
 // enrolment and completes a sign-in.
 type TOTPCodeRequest struct {
@@ -1411,6 +1455,15 @@ type ActivityVerb = string
 
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
+
+// ContentJobId defines model for ContentJobId.
+type ContentJobId = openapi_types.UUID
+
+// ContentJobSourceIdFilter defines model for ContentJobSourceIdFilter.
+type ContentJobSourceIdFilter = openapi_types.UUID
+
+// ContentJobStatusFilter Lifecycle state of a content sync job.
+type ContentJobStatusFilter = ContentSyncJobStatus
 
 // ContentSourceEnabledFilter defines model for ContentSourceEnabledFilter.
 type ContentSourceEnabledFilter = bool
@@ -1757,6 +1810,37 @@ type RevokeServiceTokenParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// ListContentJobsParams defines parameters for ListContentJobs.
+type ListContentJobsParams struct {
+	// Status Restrict to jobs in this lifecycle state.
+	Status *ContentJobStatusFilter `form:"status,omitempty" json:"status,omitempty"`
+
+	// SourceId Restrict to jobs for this content source.
+	SourceId *ContentJobSourceIdFilter `form:"sourceId,omitempty" json:"sourceId,omitempty"`
+
+	// Limit Maximum number of items to return.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CancelContentJobParams defines parameters for CancelContentJob.
+type CancelContentJobParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // ListContentSourcesParams defines parameters for ListContentSources.
 type ListContentSourcesParams struct {
 	// Kind Restrict to one source kind.
@@ -1825,6 +1909,25 @@ type DisableContentSourceParams struct {
 
 // EnableContentSourceParams defines parameters for EnableContentSource.
 type EnableContentSourceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// StartContentSourceSyncParams defines parameters for StartContentSourceSync.
+type StartContentSourceSyncParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
 	// `bl_csrf` cookie, echoed back in this header.
 	//
@@ -2090,6 +2193,9 @@ type CreateServiceTokenJSONRequestBody = CreateServiceTokenRequest
 // UpdateContentSourceJSONRequestBody defines body for UpdateContentSource for application/json ContentType.
 type UpdateContentSourceJSONRequestBody = UpdateContentSourceRequest
 
+// StartContentSourceSyncJSONRequestBody defines body for StartContentSourceSync for application/json ContentType.
+type StartContentSourceSyncJSONRequestBody = StartContentSyncRequest
+
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
 
@@ -2173,6 +2279,15 @@ type ServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
+	// ListContentJobs List content sync jobs.
+	// (GET /content/jobs)
+	ListContentJobs(w http.ResponseWriter, r *http.Request, params ListContentJobsParams)
+	// GetContentJob Read one content sync job.
+	// (GET /content/jobs/{jobId})
+	GetContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId)
+	// CancelContentJob Cancel a content sync job.
+	// (POST /content/jobs/{jobId}/cancel)
+	CancelContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId, params CancelContentJobParams)
 	// ListContentSources List content sources.
 	// (GET /content/sources)
 	ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams)
@@ -2191,6 +2306,9 @@ type ServerInterface interface {
 	// EnableContentSource Enable a content source.
 	// (POST /content/sources/{sourceId}/enable)
 	EnableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params EnableContentSourceParams)
+	// StartContentSourceSync Enqueue a content sync job for a source.
+	// (POST /content/sources/{sourceId}/sync)
+	StartContentSourceSync(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params StartContentSourceSyncParams)
 	// ListContentSourceVersions List version snapshots under a content source.
 	// (GET /content/sources/{sourceId}/versions)
 	ListContentSourceVersions(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId)
@@ -2386,6 +2504,24 @@ func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListContentJobs List content sync jobs.
+// (GET /content/jobs)
+func (_ Unimplemented) ListContentJobs(w http.ResponseWriter, r *http.Request, params ListContentJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentJob Read one content sync job.
+// (GET /content/jobs/{jobId})
+func (_ Unimplemented) GetContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CancelContentJob Cancel a content sync job.
+// (POST /content/jobs/{jobId}/cancel)
+func (_ Unimplemented) CancelContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId, params CancelContentJobParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListContentSources List content sources.
 // (GET /content/sources)
 func (_ Unimplemented) ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams) {
@@ -2419,6 +2555,12 @@ func (_ Unimplemented) DisableContentSource(w http.ResponseWriter, r *http.Reque
 // EnableContentSource Enable a content source.
 // (POST /content/sources/{sourceId}/enable)
 func (_ Unimplemented) EnableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params EnableContentSourceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// StartContentSourceSync Enqueue a content sync job for a source.
+// (POST /content/sources/{sourceId}/sync)
+func (_ Unimplemented) StartContentSourceSync(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params StartContentSourceSyncParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3323,6 +3465,141 @@ func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListContentJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListContentJobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentJobsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sourceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sourceId", r.URL.Query(), &params.SourceId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sourceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentJob operation middleware
+func (siw *ServerInterfaceWrapper) GetContentJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId ContentJobId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", chi.URLParam(r, "jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentJob(w, r, jobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelContentJob operation middleware
+func (siw *ServerInterfaceWrapper) CancelContentJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId ContentJobId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", chi.URLParam(r, "jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelContentJobParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelContentJob(w, r, jobId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListContentSources operation middleware
 func (siw *ServerInterfaceWrapper) ListContentSources(w http.ResponseWriter, r *http.Request) {
 
@@ -3586,6 +3863,56 @@ func (siw *ServerInterfaceWrapper) EnableContentSource(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EnableContentSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartContentSourceSync operation middleware
+func (siw *ServerInterfaceWrapper) StartContentSourceSync(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StartContentSourceSyncParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartContentSourceSync(w, r, sourceId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4589,6 +4916,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/sources/{sourceId}/versions", wrapper.ListContentSourceVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/sources/{sourceId}/sync", wrapper.StartContentSourceSync)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/jobs", wrapper.ListContentJobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/jobs/{jobId}", wrapper.GetContentJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/jobs/{jobId}/cancel", wrapper.CancelContentJob)
 	})
 
 	return r
@@ -6516,6 +6855,281 @@ func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRev
 	return err
 }
 
+type ListContentJobsRequestObject struct {
+	Params ListContentJobsParams
+}
+
+type ListContentJobsResponseObject interface {
+	VisitListContentJobsResponse(w http.ResponseWriter) error
+}
+
+type ListContentJobs200JSONResponse ContentSyncJobList
+
+func (response ListContentJobs200JSONResponse) VisitListContentJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentJobs400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentJobs400ApplicationProblemPlusJSONResponse) VisitListContentJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentJobs401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentJobs401ApplicationProblemPlusJSONResponse) VisitListContentJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentJobs403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentJobs403ApplicationProblemPlusJSONResponse) VisitListContentJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentJobs500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentJobs500ApplicationProblemPlusJSONResponse) VisitListContentJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentJobRequestObject struct {
+	JobId ContentJobId `json:"jobId"`
+}
+
+type GetContentJobResponseObject interface {
+	VisitGetContentJobResponse(w http.ResponseWriter) error
+}
+
+type GetContentJob200JSONResponse ContentSyncJob
+
+func (response GetContentJob200JSONResponse) VisitGetContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentJob401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentJob401ApplicationProblemPlusJSONResponse) VisitGetContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentJob403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentJob403ApplicationProblemPlusJSONResponse) VisitGetContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentJob404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentJob404ApplicationProblemPlusJSONResponse) VisitGetContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentJob500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentJob500ApplicationProblemPlusJSONResponse) VisitGetContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelContentJobRequestObject struct {
+	JobId  ContentJobId `json:"jobId"`
+	Params CancelContentJobParams
+}
+
+type CancelContentJobResponseObject interface {
+	VisitCancelContentJobResponse(w http.ResponseWriter) error
+}
+
+type CancelContentJob200JSONResponse ContentSyncJob
+
+func (response CancelContentJob200JSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelContentJob401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CancelContentJob401ApplicationProblemPlusJSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelContentJob403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CancelContentJob403ApplicationProblemPlusJSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelContentJob404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CancelContentJob404ApplicationProblemPlusJSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelContentJob409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CancelContentJob409ApplicationProblemPlusJSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelContentJob500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CancelContentJob500ApplicationProblemPlusJSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListContentSourcesRequestObject struct {
 	Params ListContentSourcesParams
 }
@@ -7052,6 +7666,126 @@ type EnableContentSource500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response EnableContentSource500ApplicationProblemPlusJSONResponse) VisitEnableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSyncRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+	Params   StartContentSourceSyncParams
+	Body     *StartContentSourceSyncJSONRequestBody
+}
+
+type StartContentSourceSyncResponseObject interface {
+	VisitStartContentSourceSyncResponse(w http.ResponseWriter) error
+}
+
+type StartContentSourceSync202JSONResponse ContentSyncJob
+
+func (response StartContentSourceSync202JSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSync400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response StartContentSourceSync400ApplicationProblemPlusJSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSync401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response StartContentSourceSync401ApplicationProblemPlusJSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSync403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response StartContentSourceSync403ApplicationProblemPlusJSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSync404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response StartContentSourceSync404ApplicationProblemPlusJSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSync409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response StartContentSourceSync409ApplicationProblemPlusJSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartContentSourceSync500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response StartContentSourceSync500ApplicationProblemPlusJSONResponse) VisitStartContentSourceSyncResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8677,6 +9411,15 @@ type StrictServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
+	// ListContentJobs List content sync jobs.
+	// (GET /content/jobs)
+	ListContentJobs(ctx context.Context, request ListContentJobsRequestObject) (ListContentJobsResponseObject, error)
+	// GetContentJob Read one content sync job.
+	// (GET /content/jobs/{jobId})
+	GetContentJob(ctx context.Context, request GetContentJobRequestObject) (GetContentJobResponseObject, error)
+	// CancelContentJob Cancel a content sync job.
+	// (POST /content/jobs/{jobId}/cancel)
+	CancelContentJob(ctx context.Context, request CancelContentJobRequestObject) (CancelContentJobResponseObject, error)
 	// ListContentSources List content sources.
 	// (GET /content/sources)
 	ListContentSources(ctx context.Context, request ListContentSourcesRequestObject) (ListContentSourcesResponseObject, error)
@@ -8695,6 +9438,9 @@ type StrictServerInterface interface {
 	// EnableContentSource Enable a content source.
 	// (POST /content/sources/{sourceId}/enable)
 	EnableContentSource(ctx context.Context, request EnableContentSourceRequestObject) (EnableContentSourceResponseObject, error)
+	// StartContentSourceSync Enqueue a content sync job for a source.
+	// (POST /content/sources/{sourceId}/sync)
+	StartContentSourceSync(ctx context.Context, request StartContentSourceSyncRequestObject) (StartContentSourceSyncResponseObject, error)
 	// ListContentSourceVersions List version snapshots under a content source.
 	// (GET /content/sources/{sourceId}/versions)
 	ListContentSourceVersions(ctx context.Context, request ListContentSourceVersionsRequestObject) (ListContentSourceVersionsResponseObject, error)
@@ -9436,6 +10182,85 @@ func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListContentJobs operation middleware
+func (sh *strictHandler) ListContentJobs(w http.ResponseWriter, r *http.Request, params ListContentJobsParams) {
+	var request ListContentJobsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentJobs(ctx, request.(ListContentJobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentJobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentJobsResponseObject); ok {
+		if err := validResponse.VisitListContentJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentJob operation middleware
+func (sh *strictHandler) GetContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId) {
+	var request GetContentJobRequestObject
+
+	request.JobId = jobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentJob(ctx, request.(GetContentJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentJobResponseObject); ok {
+		if err := validResponse.VisitGetContentJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelContentJob operation middleware
+func (sh *strictHandler) CancelContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId, params CancelContentJobParams) {
+	var request CancelContentJobRequestObject
+
+	request.JobId = jobId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelContentJob(ctx, request.(CancelContentJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelContentJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelContentJobResponseObject); ok {
+		if err := validResponse.VisitCancelContentJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListContentSources operation middleware
 func (sh *strictHandler) ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams) {
 	var request ListContentSourcesRequestObject
@@ -9596,6 +10421,43 @@ func (sh *strictHandler) EnableContentSource(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EnableContentSourceResponseObject); ok {
 		if err := validResponse.VisitEnableContentSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartContentSourceSync operation middleware
+func (sh *strictHandler) StartContentSourceSync(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params StartContentSourceSyncParams) {
+	var request StartContentSourceSyncRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	var body StartContentSourceSyncJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartContentSourceSync(ctx, request.(StartContentSourceSyncRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartContentSourceSync")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartContentSourceSyncResponseObject); ok {
+		if err := validResponse.VisitStartContentSourceSyncResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

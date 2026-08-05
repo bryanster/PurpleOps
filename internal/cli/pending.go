@@ -31,8 +31,7 @@ func notImplemented(milestone, summary string) func(*cobra.Command, []string) er
 	}
 }
 
-// content commands live in content.go (M2-002). sync remains a stub there
-// until M2-003.
+// content commands live in content.go (M2-002 / M2-003).
 
 func newBackupCommand() *cobra.Command {
 	return &cobra.Command{

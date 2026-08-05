@@ -65,6 +65,15 @@ func TestParseAppliesDocumentedDefaults(t *testing.T) {
 	if got, want := cfg.Content.Dir, "./content"; got != want {
 		t.Errorf("Content.Dir = %q, want %q", got, want)
 	}
+	if got, want := cfg.Content.MaxBytes.Int64(), int64(512<<20); got != want {
+		t.Errorf("Content.MaxBytes = %d, want %d", got, want)
+	}
+	if got, want := cfg.Content.JobTimeout, 30*time.Minute; got != want {
+		t.Errorf("Content.JobTimeout = %v, want %v", got, want)
+	}
+	if got, want := cfg.Content.WriteBatch, 250; got != want {
+		t.Errorf("Content.WriteBatch = %d, want %d", got, want)
+	}
 
 	if got, want := cfg.Log.Level, LevelInfo; got != want {
 		t.Errorf("Log.Level = %q, want %q", got, want)
