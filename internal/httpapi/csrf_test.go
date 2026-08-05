@@ -467,6 +467,31 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/content/jobs/{jobId}/cancel":          {body: ""},
 	"DELETE " + BasePath + "/content/attack/versions/{version}":  {body: ""},
 
+	// Custom content CRUD (M2-011). Protected browser mutations; bodies are the
+	// smallest the specification accepts so the walks reach CSRF rather than a
+	// 400 about the request shape.
+	"POST " + BasePath + "/content/custom/procedure-templates": {
+		body: `{"name":"Walked"}`,
+	},
+	"PATCH " + BasePath + "/content/custom/procedure-templates/{templateId}": {
+		body: `{"name":"Walked"}`,
+	},
+	"DELETE " + BasePath + "/content/custom/procedure-templates/{templateId}": {body: ""},
+	"POST " + BasePath + "/content/custom/detection-rules": {
+		body: `{"name":"Walked","ruleYaml":"title: walked\n"}`,
+	},
+	"PATCH " + BasePath + "/content/custom/detection-rules/{ruleId}": {
+		body: `{"name":"Walked"}`,
+	},
+	"DELETE " + BasePath + "/content/custom/detection-rules/{ruleId}": {body: ""},
+	"POST " + BasePath + "/content/custom/notes": {
+		body: `{"title":"Walked","bodyMarkdown":"note"}`,
+	},
+	"PATCH " + BasePath + "/content/custom/notes/{noteId}": {
+		body: `{"title":"Walked"}`,
+	},
+	"DELETE " + BasePath + "/content/custom/notes/{noteId}": {body: ""},
+
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request
 	// the *validator* accepts, so that whatever answers it is the middleware

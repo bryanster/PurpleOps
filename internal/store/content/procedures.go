@@ -50,7 +50,10 @@ const procedureColumns = `id, source_id, version, external_id, name, description
 	created_at, updated_at`
 
 // Create inserts one procedure template.
-func (r *Procedures) Create(ctx context.Context, in ProcedureTemplate) (ProcedureTemplate, error) {
+//
+// after runs inside the same write transaction after the insert so activity
+// (M2-011) shares the commit.
+func (r *Procedures) Create(ctx context.Context, in ProcedureTemplate, after ...After) (ProcedureTemplate, error) {
 	id, err := assignID(in.ID)
 	if err != nil {
 		return ProcedureTemplate{}, err
@@ -73,12 +76,66 @@ func (r *Procedures) Create(ctx context.Context, in ProcedureTemplate) (Procedur
 			in.DependencyExecutorName, in.Dependencies,
 			ts, ts,
 		)
-		return uniqueOr(err, "procedure_template", in.SourceID, in.Version, in.ExternalID)
+		if err := uniqueOr(err, "procedure_template", in.SourceID, in.Version, in.ExternalID); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, id), tx, after)
 	})
 	if err != nil {
 		return ProcedureTemplate{}, err
 	}
 	return r.ByID(ctx, id)
+}
+
+// Update rewrites mutable fields of an existing procedure template.
+//
+// after runs inside the same write transaction after the update.
+func (r *Procedures) Update(ctx context.Context, in ProcedureTemplate, after ...After) (ProcedureTemplate, error) {
+	ts := now()
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `
+			UPDATE content.content_procedure_template SET
+				name = ?, description = ?,
+				platforms = ?, executor = ?, elevation_required = ?,
+				command = ?, cleanup = ?, input_args = ?,
+				technique_external_ids = ?, dependency_executor_name = ?, dependencies = ?,
+				updated_at = ?
+			WHERE id = ?`,
+			in.Name, in.Description,
+			bindJSON(in.Platforms), in.Executor, in.ElevationRequired,
+			in.Command, in.Cleanup, bindJSONObject(in.InputArgs),
+			bindJSON(in.TechniqueExternalIDs), in.DependencyExecutorName, in.Dependencies,
+			ts, in.ID,
+		)
+		if err != nil {
+			return fmt.Errorf("content: update procedure_template %s: %w", in.ID, err)
+		}
+		if err := requireOneRow(res, "content_procedure_template", in.ID); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, in.ID), tx, after)
+	})
+	if err != nil {
+		return ProcedureTemplate{}, err
+	}
+	return r.ByID(ctx, in.ID)
+}
+
+// Delete removes one procedure template by id.
+//
+// after runs inside the same write transaction after the delete.
+func (r *Procedures) Delete(ctx context.Context, id string, after ...After) error {
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx,
+			`DELETE FROM content.content_procedure_template WHERE id = ?`, id)
+		if err != nil {
+			return fmt.Errorf("content: delete procedure_template %s: %w", id, err)
+		}
+		if err := requireOneRow(res, "content_procedure_template", id); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, id), tx, after)
+	})
 }
 
 // ByID returns one procedure template or [apierr.NotFound].

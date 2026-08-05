@@ -17,18 +17,20 @@ const prefix = "BLACKLIGHT_"
 // The variables this package reads. Each one appears exactly three times: here,
 // in Config.bindings, and in .env.example — tests tie the three together.
 const (
-	envEnv                  = prefix + "ENV"
-	envAddr                 = prefix + "ADDR"
-	envBaseURL              = prefix + "BASE_URL"
-	envRequestTimeout       = prefix + "REQUEST_TIMEOUT"
-	envShutdownTimeout      = prefix + "SHUTDOWN_TIMEOUT"
-	envTrustedProxies       = prefix + "TRUSTED_PROXIES"
-	envDBPath               = prefix + "DB_PATH"
-	envEvidenceDir          = prefix + "EVIDENCE_DIR"
-	envContentDir           = prefix + "CONTENT_DIR"
-	envContentMaxBytes      = prefix + "CONTENT_MAX_BYTES"
-	envContentJobTimeout    = prefix + "CONTENT_JOB_TIMEOUT"
-	envContentWriteBatch    = prefix + "CONTENT_WRITE_BATCH"
+	envEnv                 = prefix + "ENV"
+	envAddr                = prefix + "ADDR"
+	envBaseURL             = prefix + "BASE_URL"
+	envRequestTimeout      = prefix + "REQUEST_TIMEOUT"
+	envShutdownTimeout     = prefix + "SHUTDOWN_TIMEOUT"
+	envTrustedProxies      = prefix + "TRUSTED_PROXIES"
+	envDBPath              = prefix + "DB_PATH"
+	envEvidenceDir         = prefix + "EVIDENCE_DIR"
+	envContentDir          = prefix + "CONTENT_DIR"
+	envContentMaxBytes     = prefix + "CONTENT_MAX_BYTES"
+	envContentJobTimeout   = prefix + "CONTENT_JOB_TIMEOUT"
+	envContentWriteBatch   = prefix + "CONTENT_WRITE_BATCH"
+	envContentNoteMaxBytes = prefix + "CONTENT_NOTE_MAX_BYTES"
+
 	envEventsMaxSubscribers = prefix + "EVENTS_MAX_SUBSCRIBERS"
 	envEventsBuffer         = prefix + "EVENTS_BUFFER"
 	envEventsHeartbeat      = prefix + "EVENTS_HEARTBEAT"
@@ -151,6 +153,10 @@ type Content struct {
 	// transaction. Large enough to be fast; small enough not to hold the
 	// serialized writer for seconds.
 	WriteBatch int
+
+	// NoteMaxBytes is the largest markdown body a custom knowledge-base note
+	// may carry (M2-011). Oversized bodies are refused with a field error.
+	NoteMaxBytes ByteSize
 }
 
 // Events bounds the shared SSE hub (M2-004). The hub is pure fan-out; these
@@ -450,6 +456,8 @@ func (c *Config) bindings() []binding {
 		{name: envContentMaxBytes, target: &c.Content.MaxBytes, def: "512MiB", tool: true},
 		{name: envContentJobTimeout, target: &c.Content.JobTimeout, def: "30m", tool: true},
 		{name: envContentWriteBatch, target: &c.Content.WriteBatch, def: "250", tool: true},
+		{name: envContentNoteMaxBytes, target: &c.Content.NoteMaxBytes, def: "256KiB", tool: true},
+
 		{name: envEventsMaxSubscribers, target: &c.Events.MaxSubscribers, def: "256"},
 		{name: envEventsBuffer, target: &c.Events.Buffer, def: "16"},
 		{name: envEventsHeartbeat, target: &c.Events.Heartbeat, def: "15s"},

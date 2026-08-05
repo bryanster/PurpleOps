@@ -63,6 +63,9 @@ type handlers struct {
 	// emulationPlans is the CTID emulation plan catalog (M2-010).
 	emulationPlans *storecontent.EmulationPlans
 
+	// custom is the user-authored content surface (M2-011).
+	custom *content.Custom
+
 	// attackpin is the ATT&CK version catalog and pin surface (M2-007).
 	attackpin *attackpin.Service
 

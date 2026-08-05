@@ -516,6 +516,8 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	procedures := storecontent.NewProcedures(deps.Store)
 	detections := storecontent.NewDetections(deps.Store)
 	emulationPlans := storecontent.NewEmulationPlans(deps.Store)
+	notes := storecontent.NewNotes(deps.Store)
+
 	registry, err := content.New(content.Deps{
 		Sources:  sources,
 		Versions: versions,
@@ -538,6 +540,17 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	})
 	if err != nil {
 		panic("httpapi: attackpin: " + err.Error())
+	}
+	customSvc, err := content.NewCustom(content.CustomDeps{
+		Sources:      sources,
+		Procedures:   procedures,
+		Detections:   detections,
+		Notes:        notes,
+		Activity:     activityLog,
+		NoteMaxBytes: int(deps.Config.Content.NoteMaxBytes.Int64()),
+	})
+	if err != nil {
+		panic("httpapi: content custom: " + err.Error())
 	}
 
 	adapters := deps.ContentAdapters
@@ -599,19 +612,21 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 	return gen.NewStrictHandlerWithOptions(
 		&handlers{
-			store:           deps.Store,
-			auth:            auth,
-			sessions:        sessions,
-			challenges:      challenges,
-			oidc:            provider,
-			saml:            federation,
-			activity:        activityLog,
-			content:         registry,
-			runner:          runner,
-			objects:         objects,
-			procedures:      procedures,
-			detections:      detections,
-			emulationPlans:  emulationPlans,
+			store:          deps.Store,
+			auth:           auth,
+			sessions:       sessions,
+			challenges:     challenges,
+			oidc:           provider,
+			saml:           federation,
+			activity:       activityLog,
+			content:        registry,
+			runner:         runner,
+			objects:        objects,
+			procedures:     procedures,
+			detections:     detections,
+			emulationPlans: emulationPlans,
+			custom:         customSvc,
+
 			attackpin:       pin,
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,

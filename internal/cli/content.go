@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/content"
@@ -35,6 +37,7 @@ func newContentCommand(a *app) *cobra.Command {
 		newContentSyncCommand(a),
 		newContentImportBundleCommand(a),
 		newContentReprocessCommand(a),
+		newContentExportCustomCommand(a),
 	)
 }
 
@@ -412,6 +415,248 @@ func contentRegistry(db *store.DB) (*content.Registry, error) {
 		Jobs:     storecontent.NewJobs(db),
 		Activity: events.New(activity.New(db)),
 	})
+}
+
+func contentCustom(db *store.DB) (*content.Custom, error) {
+	return content.NewCustom(content.CustomDeps{
+		Sources:    storecontent.NewSources(db),
+		Procedures: storecontent.NewProcedures(db),
+		Detections: storecontent.NewDetections(db),
+		Notes:      storecontent.NewNotes(db),
+		Activity:   events.New(activity.New(db)),
+	})
+}
+
+func newContentExportCustomCommand(a *app) *cobra.Command {
+	var (
+		format string
+		out    string
+		typ    string
+	)
+	cmd := &cobra.Command{
+		Use:   "export-custom",
+		Short: "Export custom content as YAML or JSON",
+		Long: "Writes every custom procedure template, detection rule, and note\n" +
+			"to stdout or --output. Format is yaml (default) or json. Pass\n" +
+			"--type procedure_templates|detection_rules|notes to narrow the export.\n" +
+			"The document is the same shape GET /content/custom/export returns.",
+		Args: noArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			format = strings.ToLower(strings.TrimSpace(format))
+			if format == "" {
+				format = "yaml"
+			}
+			switch format {
+			case "yaml", "json":
+			default:
+				return usagef(cmd, "--format must be yaml or json")
+			}
+			exportType := content.ExportAll
+			if t := strings.TrimSpace(typ); t != "" {
+				switch t {
+				case "procedure_templates", "detection_rules", "notes":
+					exportType = content.ExportType(t)
+				default:
+					return usagef(cmd, "--type must be procedure_templates, detection_rules, or notes")
+				}
+			}
+			return a.withStore(cmd.Context(), func(ctx context.Context, db *store.DB) error {
+				if err := a.requireMigrated(ctx, db); err != nil {
+					return err
+				}
+				svc, err := contentCustom(db)
+				if err != nil {
+					return err
+				}
+				doc, err := svc.Export(ctx, exportType)
+				if err != nil {
+					return err
+				}
+				payload, err := encodeCustomExport(doc, format)
+				if err != nil {
+					return err
+				}
+				if out == "" {
+					_, err = cmd.OutOrStdout().Write(payload)
+					return err
+				}
+				return os.WriteFile(out, payload, 0o600)
+			})
+		},
+	}
+	cmd.Flags().StringVar(&format, "format", "yaml", "output format (yaml|json)")
+	cmd.Flags().StringVarP(&out, "output", "o", "", "write to file instead of stdout")
+	cmd.Flags().StringVar(&typ, "type", "", "restrict to procedure_templates|detection_rules|notes")
+	return cmd
+}
+
+func encodeCustomExport(doc content.ExportDoc, format string) ([]byte, error) {
+	// Build a JSON-shaped document without dragging gen types into blctl.
+	// Intermediate JSON keeps nested arrays/objects simple.
+	type exportArg struct {
+		Name        string `json:"name" yaml:"name"`
+		Description string `json:"description" yaml:"description"`
+		Type        string `json:"type" yaml:"type"`
+		Default     string `json:"default" yaml:"default"`
+	}
+	type exportProc struct {
+		ID                     string      `json:"id" yaml:"id"`
+		SourceID               string      `json:"sourceId" yaml:"sourceId"`
+		Version                string      `json:"version" yaml:"version"`
+		ExternalID             string      `json:"externalId" yaml:"externalId"`
+		Name                   string      `json:"name" yaml:"name"`
+		Description            string      `json:"description" yaml:"description"`
+		Platforms              []string    `json:"platforms" yaml:"platforms"`
+		Executor               string      `json:"executor" yaml:"executor"`
+		ElevationRequired      bool        `json:"elevationRequired" yaml:"elevationRequired"`
+		Command                string      `json:"command" yaml:"command"`
+		Cleanup                string      `json:"cleanup" yaml:"cleanup"`
+		InputArgs              []exportArg `json:"inputArgs" yaml:"inputArgs"`
+		TechniqueExternalIDs   []string    `json:"techniqueExternalIds" yaml:"techniqueExternalIds"`
+		DependencyExecutorName string      `json:"dependencyExecutorName" yaml:"dependencyExecutorName"`
+		Dependencies           string      `json:"dependencies" yaml:"dependencies"`
+		CreatedAt              string      `json:"createdAt" yaml:"createdAt"`
+		UpdatedAt              string      `json:"updatedAt" yaml:"updatedAt"`
+	}
+	type exportDet struct {
+		ID                   string         `json:"id" yaml:"id"`
+		SourceID             string         `json:"sourceId" yaml:"sourceId"`
+		Version              string         `json:"version" yaml:"version"`
+		ExternalID           string         `json:"externalId" yaml:"externalId"`
+		Name                 string         `json:"name" yaml:"name"`
+		Description          string         `json:"description" yaml:"description"`
+		TechniqueExternalIDs []string       `json:"techniqueExternalIds" yaml:"techniqueExternalIds"`
+		Level                string         `json:"level" yaml:"level"`
+		Status               string         `json:"status" yaml:"status"`
+		Logsource            map[string]any `json:"logsource" yaml:"logsource"`
+		RuleYAML             string         `json:"ruleYaml" yaml:"ruleYaml"`
+		CreatedAt            string         `json:"createdAt" yaml:"createdAt"`
+		UpdatedAt            string         `json:"updatedAt" yaml:"updatedAt"`
+	}
+	type exportNote struct {
+		ID                  string   `json:"id" yaml:"id"`
+		SourceID            string   `json:"sourceId" yaml:"sourceId"`
+		Version             string   `json:"version" yaml:"version"`
+		ExternalID          string   `json:"externalId" yaml:"externalId"`
+		Title               string   `json:"title" yaml:"title"`
+		BodyMarkdown        string   `json:"bodyMarkdown" yaml:"bodyMarkdown"`
+		Tags                []string `json:"tags" yaml:"tags"`
+		TechniqueExternalID string   `json:"techniqueExternalId" yaml:"techniqueExternalId"`
+		CreatedAt           string   `json:"createdAt" yaml:"createdAt"`
+		UpdatedAt           string   `json:"updatedAt" yaml:"updatedAt"`
+	}
+	type exportMeta struct {
+		SourceName  string `json:"sourceName" yaml:"sourceName"`
+		LicenseSPDX string `json:"licenseSpdx,omitempty" yaml:"licenseSpdx,omitempty"`
+		LicenseName string `json:"licenseName,omitempty" yaml:"licenseName,omitempty"`
+		LicenseURL  string `json:"licenseUrl,omitempty" yaml:"licenseUrl,omitempty"`
+		Attribution string `json:"attribution" yaml:"attribution"`
+		ExportedAt  string `json:"exportedAt" yaml:"exportedAt"`
+	}
+	type exportEnvelope struct {
+		Meta               exportMeta   `json:"meta" yaml:"meta"`
+		ProcedureTemplates []exportProc `json:"procedureTemplates" yaml:"procedureTemplates"`
+		DetectionRules     []exportDet  `json:"detectionRules" yaml:"detectionRules"`
+		Notes              []exportNote `json:"notes" yaml:"notes"`
+	}
+
+	exportedAt := doc.Meta.ExportedAt.UTC().Format(time.RFC3339)
+	out := exportEnvelope{
+		Meta: exportMeta{
+			SourceName:  doc.Meta.SourceName,
+			LicenseSPDX: doc.Meta.LicenseSPDX,
+			LicenseName: doc.Meta.LicenseName,
+			LicenseURL:  doc.Meta.LicenseURL,
+			Attribution: doc.Meta.Attribution,
+			ExportedAt:  exportedAt,
+		},
+		ProcedureTemplates: make([]exportProc, 0, len(doc.ProcedureTemplates)),
+		DetectionRules:     make([]exportDet, 0, len(doc.DetectionRules)),
+		Notes:              make([]exportNote, 0, len(doc.Notes)),
+	}
+	for _, p := range doc.ProcedureTemplates {
+		var args []exportArg
+		if len(p.InputArgs) > 0 {
+			if err := json.Unmarshal(p.InputArgs, &args); err != nil {
+				// Non-array upstream shapes become empty args in export.
+				args = nil
+			}
+		}
+		if args == nil {
+			args = []exportArg{}
+		}
+		out.ProcedureTemplates = append(out.ProcedureTemplates, exportProc{
+			ID: p.ID, SourceID: p.SourceID, Version: p.Version, ExternalID: p.ExternalID,
+			Name: p.Name, Description: p.Description, Platforms: decodeStringSlice(p.Platforms),
+			Executor: p.Executor, ElevationRequired: p.ElevationRequired,
+			Command: p.Command, Cleanup: p.Cleanup, InputArgs: args,
+			TechniqueExternalIDs:   decodeStringSlice(p.TechniqueExternalIDs),
+			DependencyExecutorName: p.DependencyExecutorName, Dependencies: p.Dependencies,
+			CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339Nano),
+			UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	for _, d := range doc.DetectionRules {
+		out.DetectionRules = append(out.DetectionRules, exportDet{
+			ID: d.ID, SourceID: d.SourceID, Version: d.Version, ExternalID: d.ExternalID,
+			Name: d.Name, Description: d.Description,
+			TechniqueExternalIDs: decodeStringSlice(d.TechniqueExternalIDs),
+			Level:                d.Level, Status: d.RuleStatus, Logsource: decodeObjectMap(d.Logsource),
+			RuleYAML:  d.RuleYAML,
+			CreatedAt: d.CreatedAt.UTC().Format(time.RFC3339Nano),
+			UpdatedAt: d.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	for _, n := range doc.Notes {
+		out.Notes = append(out.Notes, exportNote{
+			ID: n.ID, SourceID: n.SourceID, Version: n.Version, ExternalID: n.ExternalID,
+			Title: n.Title, BodyMarkdown: n.BodyMarkdown, Tags: decodeStringSlice(n.Tags),
+			TechniqueExternalID: n.TechniqueExternalID,
+			CreatedAt:           n.CreatedAt.UTC().Format(time.RFC3339Nano),
+			UpdatedAt:           n.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+
+	switch format {
+	case "json":
+		return json.MarshalIndent(out, "", "  ")
+	default:
+		var buf strings.Builder
+		buf.WriteString("# Blacklight custom content export\n")
+		buf.WriteString("# Source: " + doc.Meta.SourceName + "\n")
+		if doc.Meta.Attribution != "" {
+			buf.WriteString("# Attribution: " + doc.Meta.Attribution + "\n")
+		}
+		buf.WriteString("# Exported-At: " + exportedAt + "\n\n")
+		body, err := yaml.Marshal(out)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(body)
+		return []byte(buf.String()), nil
+	}
+}
+
+func decodeStringSlice(raw []byte) []string {
+	if len(raw) == 0 {
+		return []string{}
+	}
+	var out []string
+	if err := json.Unmarshal(raw, &out); err != nil || out == nil {
+		return []string{}
+	}
+	return out
+}
+
+func decodeObjectMap(raw []byte) map[string]any {
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil || out == nil {
+		return map[string]any{}
+	}
+	return out
 }
 
 type contentSourceResult struct {

@@ -2982,6 +2982,545 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/custom/procedure-templates:
+    get:
+      operationId: listCustomProcedureTemplates
+      summary: List custom procedure templates.
+      description: |
+        Any authenticated subject (`content.read`). Returns procedure templates
+        under the singleton `custom` source only. Structure is preserved
+        (platforms, executor, command, cleanup, input args). Does not require
+        an ATT&CK install.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentTechniqueExternalIdFilter"
+        - $ref: "#/components/parameters/ContentPlatformFilter"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Custom procedure templates, external id then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentProcedureTemplateList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createCustomProcedureTemplate
+      summary: Create a custom procedure template.
+      description: |
+        Administrators only (`content.manage`). Attaches to the singleton
+        `custom` source with version `current`. Technique external ids are
+        optional; when present they must look like MITRE ids (`T1059`,
+        `T1059.001`).
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomProcedureTemplateRequest"
+      responses:
+        "201":
+          description: The template was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentProcedureTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/custom/procedure-templates/{templateId}:
+    get:
+      operationId: getCustomProcedureTemplate
+      summary: Read one custom procedure template.
+      description: |
+        Any authenticated subject. Answers `404` when the id is missing or not
+        under the custom source.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentProcedureTemplateId"
+      responses:
+        "200":
+          description: The procedure template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentProcedureTemplate"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateCustomProcedureTemplate
+      summary: Update a custom procedure template.
+      description: |
+        Administrators only (`content.manage`). Partial patch: omitted fields
+        are left unchanged. `externalId`, `sourceId`, and `version` are not
+        writable.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentProcedureTemplateId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomProcedureTemplateRequest"
+      responses:
+        "200":
+          description: The template as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentProcedureTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteCustomProcedureTemplate
+      summary: Delete a custom procedure template.
+      description: |
+        Administrators only (`content.manage`). Hard-deletes when nothing
+        references the row. Answers `409` with counts when referenced
+        (engagement refs arrive in M3; M2 always reports zero).
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentProcedureTemplateId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/custom/detection-rules:
+    get:
+      operationId: listCustomDetectionRules
+      summary: List custom detection rule references.
+      description: |
+        Any authenticated subject (`content.read`). Returns detection rule
+        refs under the singleton `custom` source only. Reference only —
+        never executed or deployed.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentTechniqueExternalIdFilter"
+        - $ref: "#/components/parameters/ContentDetectionLevelFilter"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Custom detection rules, external id then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentDetectionRuleList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createCustomDetectionRule
+      summary: Create a custom detection rule reference.
+      description: |
+        Administrators only (`content.manage`). Attaches to the singleton
+        `custom` source. Technique external ids optional; when present must
+        look like MITRE ids.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomDetectionRuleRequest"
+      responses:
+        "201":
+          description: The rule was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentDetectionRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/custom/detection-rules/{ruleId}:
+    get:
+      operationId: getCustomDetectionRule
+      summary: Read one custom detection rule reference.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentDetectionRuleId"
+      responses:
+        "200":
+          description: The detection rule reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentDetectionRule"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateCustomDetectionRule
+      summary: Update a custom detection rule reference.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentDetectionRuleId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomDetectionRuleRequest"
+      responses:
+        "200":
+          description: The rule as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentDetectionRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteCustomDetectionRule
+      summary: Delete a custom detection rule reference.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentDetectionRuleId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/custom/notes:
+    get:
+      operationId: listCustomNotes
+      summary: List custom knowledge-base notes.
+      description: |
+        Any authenticated subject (`content.read`). Returns notes under the
+        singleton `custom` source only.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentTechniqueExternalIdFilter"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Custom notes, external id then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentNoteList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createCustomNote
+      summary: Create a custom knowledge-base note.
+      description: |
+        Administrators only (`content.manage`). Markdown body size is capped
+        by `BLACKLIGHT_CONTENT_NOTE_MAX_BYTES` (default 256KiB). Technique
+        external id is optional; when present must look like a MITRE id.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomNoteRequest"
+      responses:
+        "201":
+          description: The note was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentNote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/custom/notes/{noteId}:
+    get:
+      operationId: getCustomNote
+      summary: Read one custom knowledge-base note.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentNoteId"
+      responses:
+        "200":
+          description: The note.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentNote"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateCustomNote
+      summary: Update a custom knowledge-base note.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentNoteId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomNoteRequest"
+      responses:
+        "200":
+          description: The note as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentNote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteCustomNote
+      summary: Delete a custom knowledge-base note.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentNoteId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/custom/export:
+    get:
+      operationId: exportCustomContent
+      summary: Export custom content as YAML or JSON.
+      description: |
+        Any authenticated subject (`content.read`). Returns a document
+        suitable for re-import (M2-012) containing procedure templates,
+        detection rules, and/or notes under the `custom` source. Header
+        comments (YAML) or a `meta` block (JSON) carry license/attribution
+        for the installation's custom library.
+
+        `type` narrows to one object family; omit it for all three.
+        `format` selects serialization (`yaml` default, or `json`).
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: |
+            Restrict the export to one object family. Omit for all three.
+          schema:
+            type: string
+            enum:
+              - procedure_templates
+              - detection_rules
+              - notes
+        - name: format
+          in: query
+          required: false
+          description: Serialization format. Defaults to `yaml`.
+          schema:
+            type: string
+            enum:
+              - yaml
+              - json
+            default: yaml
+      responses:
+        "200":
+          description: The export document.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentCustomExport"
+            application/yaml:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
 
 
   /content/attack/versions:
@@ -3575,6 +4114,16 @@ components:
       schema:
         type: string
         format: uuid
+
+    ContentNoteId:
+      name: noteId
+      in: path
+      required: true
+      description: Knowledge-base note surrogate id (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
 
     ContentDetectionLevelFilter:
       name: level
@@ -5808,6 +6357,335 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentDetectionRule"
+
+    ContentNote:
+      type: object
+      description: |
+        One freeform knowledge-base note under the custom source (or imported
+        into it). Markdown body; optional technique link and tags.
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - title
+        - bodyMarkdown
+        - tags
+        - techniqueExternalId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: Version token. Custom is rolling-head and always `current`.
+        externalId:
+          type: string
+          description: Stable id within the custom source (defaults to the row id).
+        title:
+          type: string
+        bodyMarkdown:
+          type: string
+          description: Markdown body. Size-capped by server config.
+        tags:
+          type: array
+          items:
+            type: string
+        techniqueExternalId:
+          type: string
+          description: |
+            Optional ATT&CK technique external id (`T1059`, `T1059.001`).
+            Empty string when unset.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentNoteList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentNote"
+
+    CreateCustomProcedureTemplateRequest:
+      type: object
+      description: Body for creating a custom procedure template.
+      required:
+        - name
+      properties:
+        externalId:
+          type: string
+          description: Optional stable id; defaults to the new row id.
+          maxLength: 256
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        description:
+          type: string
+          maxLength: 16384
+        platforms:
+          type: array
+          items:
+            type: string
+        executor:
+          type: string
+          maxLength: 128
+        elevationRequired:
+          type: boolean
+        command:
+          type: string
+          maxLength: 1048576
+        cleanup:
+          type: string
+          maxLength: 1048576
+        inputArgs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentProcedureInputArg"
+        techniqueExternalIds:
+          type: array
+          items:
+            type: string
+        dependencyExecutorName:
+          type: string
+          maxLength: 128
+        dependencies:
+          type: string
+          maxLength: 1048576
+
+    UpdateCustomProcedureTemplateRequest:
+      type: object
+      description: Partial patch for a custom procedure template. Omitted fields stay.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        description:
+          type: string
+          maxLength: 16384
+        platforms:
+          type: array
+          items:
+            type: string
+        executor:
+          type: string
+          maxLength: 128
+        elevationRequired:
+          type: boolean
+        command:
+          type: string
+          maxLength: 1048576
+        cleanup:
+          type: string
+          maxLength: 1048576
+        inputArgs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentProcedureInputArg"
+        techniqueExternalIds:
+          type: array
+          items:
+            type: string
+        dependencyExecutorName:
+          type: string
+          maxLength: 128
+        dependencies:
+          type: string
+          maxLength: 1048576
+
+    ContentDetectionLogsource:
+      type: object
+      description: |
+        Structured logsource fields for a custom detection rule. Known keys
+        only — request bodies must not accept free-form properties
+        (PLAN.md §4). Upstream Sigma rules still store arbitrary logsource
+        JSON on the read model.
+      additionalProperties: false
+      properties:
+        category:
+          type: string
+          maxLength: 256
+        product:
+          type: string
+          maxLength: 256
+        service:
+          type: string
+          maxLength: 256
+        definition:
+          type: string
+          maxLength: 1024
+
+
+    CreateCustomDetectionRuleRequest:
+      type: object
+      description: Body for creating a custom detection rule reference.
+      required:
+        - name
+        - ruleYaml
+      properties:
+        externalId:
+          type: string
+          maxLength: 256
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        description:
+          type: string
+          maxLength: 16384
+        techniqueExternalIds:
+          type: array
+          items:
+            type: string
+        level:
+          type: string
+          maxLength: 64
+        status:
+          type: string
+          maxLength: 64
+        logsource:
+          $ref: "#/components/schemas/ContentDetectionLogsource"
+
+        ruleYaml:
+          type: string
+          minLength: 1
+          maxLength: 1048576
+
+    UpdateCustomDetectionRuleRequest:
+      type: object
+      description: Partial patch for a custom detection rule reference.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        description:
+          type: string
+          maxLength: 16384
+        techniqueExternalIds:
+          type: array
+          items:
+            type: string
+        level:
+          type: string
+          maxLength: 64
+        status:
+          type: string
+          maxLength: 64
+        logsource:
+          $ref: "#/components/schemas/ContentDetectionLogsource"
+
+        ruleYaml:
+          type: string
+          minLength: 1
+          maxLength: 1048576
+
+    CreateCustomNoteRequest:
+      type: object
+      description: Body for creating a custom knowledge-base note.
+      required:
+        - title
+        - bodyMarkdown
+      properties:
+        externalId:
+          type: string
+          maxLength: 256
+        title:
+          type: string
+          minLength: 1
+          maxLength: 512
+        bodyMarkdown:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          items:
+            type: string
+        techniqueExternalId:
+          type: string
+          maxLength: 64
+
+    UpdateCustomNoteRequest:
+      type: object
+      description: Partial patch for a custom knowledge-base note.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 512
+        bodyMarkdown:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          items:
+            type: string
+        techniqueExternalId:
+          type: string
+          maxLength: 64
+
+    ContentCustomExportMeta:
+      type: object
+      description: License/attribution header for a custom content export.
+      required:
+        - sourceName
+        - attribution
+        - exportedAt
+      properties:
+        sourceName:
+          type: string
+        licenseSpdx:
+          type: string
+        licenseName:
+          type: string
+        licenseUrl:
+          type: string
+        attribution:
+          type: string
+        exportedAt:
+          type: string
+          format: date-time
+
+    ContentCustomExport:
+      type: object
+      description: |
+        Export document for custom content. Shape is accepted by the v1/custom
+        import path (M2-012) or documented as the delta if the importer needs
+        a thin adapter. Empty arrays mean that family was omitted or empty.
+      required:
+        - meta
+        - procedureTemplates
+        - detectionRules
+        - notes
+      properties:
+        meta:
+          $ref: "#/components/schemas/ContentCustomExportMeta"
+        procedureTemplates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentProcedureTemplate"
+        detectionRules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentDetectionRule"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentNote"
+
 
     ContentEmulationPlanStep:
       type: object

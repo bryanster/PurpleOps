@@ -148,6 +148,11 @@ func newID() (string, error) {
 	return id.String(), nil
 }
 
+// NewID mints a UUIDv7 for content rows (custom CRUD, tests). Prefer leaving
+// id empty on Create and letting the repository assign one when the caller
+// has no natural key of its own.
+func NewID() (string, error) { return newID() }
+
 // now is the timestamp written to a row: UTC, truncated to the microsecond
 // DuckDB's TIMESTAMP stores.
 func now() time.Time { return toStorage(time.Now()) }

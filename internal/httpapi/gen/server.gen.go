@@ -401,6 +401,45 @@ func (e UserStatus) Valid() bool {
 	}
 }
 
+// Defines values for ExportCustomContentParamsType.
+const (
+	ExportCustomContentParamsTypeDetectionRules     ExportCustomContentParamsType = "detection_rules"
+	ExportCustomContentParamsTypeNotes              ExportCustomContentParamsType = "notes"
+	ExportCustomContentParamsTypeProcedureTemplates ExportCustomContentParamsType = "procedure_templates"
+)
+
+// Valid indicates whether the value is a known member of the ExportCustomContentParamsType enum.
+func (e ExportCustomContentParamsType) Valid() bool {
+	switch e {
+	case ExportCustomContentParamsTypeDetectionRules:
+		return true
+	case ExportCustomContentParamsTypeNotes:
+		return true
+	case ExportCustomContentParamsTypeProcedureTemplates:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportCustomContentParamsFormat.
+const (
+	ExportCustomContentParamsFormatJson ExportCustomContentParamsFormat = "json"
+	ExportCustomContentParamsFormatYaml ExportCustomContentParamsFormat = "yaml"
+)
+
+// Valid indicates whether the value is a known member of the ExportCustomContentParamsFormat enum.
+func (e ExportCustomContentParamsFormat) Valid() bool {
+	switch e {
+	case ExportCustomContentParamsFormatJson:
+		return true
+	case ExportCustomContentParamsFormatYaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActivityEntry One row of the append-only activity log (M1-015). Drives the SSE feed
 // (M4) and the report timeline (M6). There is no update or delete.
 type ActivityEntry struct {
@@ -536,6 +575,39 @@ type ContentAttackVersionDetail struct {
 // ContentAttackVersionList defines model for ContentAttackVersionList.
 type ContentAttackVersionList struct {
 	Items []ContentAttackVersion `json:"items"`
+}
+
+// ContentCustomExport Export document for custom content. Shape is accepted by the v1/custom
+// import path (M2-012) or documented as the delta if the importer needs
+// a thin adapter. Empty arrays mean that family was omitted or empty.
+type ContentCustomExport struct {
+	DetectionRules []ContentDetectionRule `json:"detectionRules"`
+
+	// Meta License/attribution header for a custom content export.
+	Meta               ContentCustomExportMeta    `json:"meta"`
+	Notes              []ContentNote              `json:"notes"`
+	ProcedureTemplates []ContentProcedureTemplate `json:"procedureTemplates"`
+}
+
+// ContentCustomExportMeta License/attribution header for a custom content export.
+type ContentCustomExportMeta struct {
+	Attribution string    `json:"attribution"`
+	ExportedAt  time.Time `json:"exportedAt"`
+	LicenseName *string   `json:"licenseName,omitempty"`
+	LicenseSpdx *string   `json:"licenseSpdx,omitempty"`
+	LicenseUrl  *string   `json:"licenseUrl,omitempty"`
+	SourceName  string    `json:"sourceName"`
+}
+
+// ContentDetectionLogsource Structured logsource fields for a custom detection rule. Known keys
+// only — request bodies must not accept free-form properties
+// (PLAN.md §4). Upstream Sigma rules still store arbitrary logsource
+// JSON on the read model.
+type ContentDetectionLogsource struct {
+	Category   *string `json:"category,omitempty"`
+	Definition *string `json:"definition,omitempty"`
+	Product    *string `json:"product,omitempty"`
+	Service    *string `json:"service,omitempty"`
 }
 
 // ContentDetectionRule One detection rule reference (Sigma or custom). Reference only —
@@ -729,6 +801,34 @@ type ContentMitigation struct {
 // ContentMitigationList defines model for ContentMitigationList.
 type ContentMitigationList struct {
 	Items []ContentMitigation `json:"items"`
+}
+
+// ContentNote One freeform knowledge-base note under the custom source (or imported
+// into it). Markdown body; optional technique link and tags.
+type ContentNote struct {
+	// BodyMarkdown Markdown body. Size-capped by server config.
+	BodyMarkdown string    `json:"bodyMarkdown"`
+	CreatedAt    time.Time `json:"createdAt"`
+
+	// ExternalId Stable id within the custom source (defaults to the row id).
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+	SourceId   openapi_types.UUID `json:"sourceId"`
+	Tags       []string           `json:"tags"`
+
+	// TechniqueExternalId Optional ATT&CK technique external id (`T1059`, `T1059.001`).
+	// Empty string when unset.
+	TechniqueExternalId string    `json:"techniqueExternalId"`
+	Title               string    `json:"title"`
+	UpdatedAt           time.Time `json:"updatedAt"`
+
+	// Version Version token. Custom is rolling-head and always `current`.
+	Version string `json:"version"`
+}
+
+// ContentNoteList defines model for ContentNoteList.
+type ContentNoteList struct {
+	Items []ContentNote `json:"items"`
 }
 
 // ContentProcedureInputArg One parameterized input on a procedure template.
@@ -1097,6 +1197,50 @@ type ContentTechniqueDetail struct {
 // ContentTechniqueList defines model for ContentTechniqueList.
 type ContentTechniqueList struct {
 	Items []ContentTechnique `json:"items"`
+}
+
+// CreateCustomDetectionRuleRequest Body for creating a custom detection rule reference.
+type CreateCustomDetectionRuleRequest struct {
+	Description *string `json:"description,omitempty"`
+	ExternalId  *string `json:"externalId,omitempty"`
+	Level       *string `json:"level,omitempty"`
+
+	// Logsource Structured logsource fields for a custom detection rule. Known keys
+	// only — request bodies must not accept free-form properties
+	// (PLAN.md §4). Upstream Sigma rules still store arbitrary logsource
+	// JSON on the read model.
+	Logsource            *ContentDetectionLogsource `json:"logsource,omitempty"`
+	Name                 string                     `json:"name"`
+	RuleYaml             string                     `json:"ruleYaml"`
+	Status               *string                    `json:"status,omitempty"`
+	TechniqueExternalIds *[]string                  `json:"techniqueExternalIds,omitempty"`
+}
+
+// CreateCustomNoteRequest Body for creating a custom knowledge-base note.
+type CreateCustomNoteRequest struct {
+	BodyMarkdown        string    `json:"bodyMarkdown"`
+	ExternalId          *string   `json:"externalId,omitempty"`
+	Tags                *[]string `json:"tags,omitempty"`
+	TechniqueExternalId *string   `json:"techniqueExternalId,omitempty"`
+	Title               string    `json:"title"`
+}
+
+// CreateCustomProcedureTemplateRequest Body for creating a custom procedure template.
+type CreateCustomProcedureTemplateRequest struct {
+	Cleanup                *string `json:"cleanup,omitempty"`
+	Command                *string `json:"command,omitempty"`
+	Dependencies           *string `json:"dependencies,omitempty"`
+	DependencyExecutorName *string `json:"dependencyExecutorName,omitempty"`
+	Description            *string `json:"description,omitempty"`
+	ElevationRequired      *bool   `json:"elevationRequired,omitempty"`
+	Executor               *string `json:"executor,omitempty"`
+
+	// ExternalId Optional stable id; defaults to the new row id.
+	ExternalId           *string                     `json:"externalId,omitempty"`
+	InputArgs            *[]ContentProcedureInputArg `json:"inputArgs,omitempty"`
+	Name                 string                      `json:"name"`
+	Platforms            *[]string                   `json:"platforms,omitempty"`
+	TechniqueExternalIds *[]string                   `json:"techniqueExternalIds,omitempty"`
 }
 
 // CreateServiceTokenRequest Body of `POST /auth/tokens`. The owner is the caller and is not a field.
@@ -1768,6 +1912,45 @@ type UpdateContentSourceRequest struct {
 	Url  *string `json:"url,omitempty"`
 }
 
+// UpdateCustomDetectionRuleRequest Partial patch for a custom detection rule reference.
+type UpdateCustomDetectionRuleRequest struct {
+	Description *string `json:"description,omitempty"`
+	Level       *string `json:"level,omitempty"`
+
+	// Logsource Structured logsource fields for a custom detection rule. Known keys
+	// only — request bodies must not accept free-form properties
+	// (PLAN.md §4). Upstream Sigma rules still store arbitrary logsource
+	// JSON on the read model.
+	Logsource            *ContentDetectionLogsource `json:"logsource,omitempty"`
+	Name                 *string                    `json:"name,omitempty"`
+	RuleYaml             *string                    `json:"ruleYaml,omitempty"`
+	Status               *string                    `json:"status,omitempty"`
+	TechniqueExternalIds *[]string                  `json:"techniqueExternalIds,omitempty"`
+}
+
+// UpdateCustomNoteRequest Partial patch for a custom knowledge-base note.
+type UpdateCustomNoteRequest struct {
+	BodyMarkdown        *string   `json:"bodyMarkdown,omitempty"`
+	Tags                *[]string `json:"tags,omitempty"`
+	TechniqueExternalId *string   `json:"techniqueExternalId,omitempty"`
+	Title               *string   `json:"title,omitempty"`
+}
+
+// UpdateCustomProcedureTemplateRequest Partial patch for a custom procedure template. Omitted fields stay.
+type UpdateCustomProcedureTemplateRequest struct {
+	Cleanup                *string                     `json:"cleanup,omitempty"`
+	Command                *string                     `json:"command,omitempty"`
+	Dependencies           *string                     `json:"dependencies,omitempty"`
+	DependencyExecutorName *string                     `json:"dependencyExecutorName,omitempty"`
+	Description            *string                     `json:"description,omitempty"`
+	ElevationRequired      *bool                       `json:"elevationRequired,omitempty"`
+	Executor               *string                     `json:"executor,omitempty"`
+	InputArgs              *[]ContentProcedureInputArg `json:"inputArgs,omitempty"`
+	Name                   *string                     `json:"name,omitempty"`
+	Platforms              *[]string                   `json:"platforms,omitempty"`
+	TechniqueExternalIds   *[]string                   `json:"techniqueExternalIds,omitempty"`
+}
+
 // UpdateSelfRequest Body of `PATCH /users/me`. One field, and that is the design: a schema
 // with no `platformRole` in it is a request that cannot ask for one, which
 // is a stronger guarantee than a handler that declines to honour it
@@ -1945,6 +2128,9 @@ type ContentLibrarySourceIdFilter = openapi_types.UUID
 
 // ContentMitigationId defines model for ContentMitigationId.
 type ContentMitigationId = openapi_types.UUID
+
+// ContentNoteId defines model for ContentNoteId.
+type ContentNoteId = openapi_types.UUID
 
 // ContentPlatformFilter defines model for ContentPlatformFilter.
 type ContentPlatformFilter = string
@@ -2320,6 +2506,245 @@ type RevokeServiceTokenParams struct {
 
 // DeleteContentAttackVersionParams defines parameters for DeleteContentAttackVersion.
 type DeleteContentAttackVersionParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ListCustomDetectionRulesParams defines parameters for ListCustomDetectionRules.
+type ListCustomDetectionRulesParams struct {
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Technique Restrict to templates that list this ATT&CK technique external id
+	// (for example `T1059.001`). Exact membership match against the stored
+	// technique id list.
+	Technique *ContentTechniqueExternalIdFilter `form:"technique,omitempty" json:"technique,omitempty"`
+
+	// Level Restrict to rules with this Sigma level label (for example `low`,
+	// `medium`, `high`, `critical`). Case-insensitive exact match.
+	Level *ContentDetectionLevelFilter `form:"level,omitempty" json:"level,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateCustomDetectionRuleParams defines parameters for CreateCustomDetectionRule.
+type CreateCustomDetectionRuleParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DeleteCustomDetectionRuleParams defines parameters for DeleteCustomDetectionRule.
+type DeleteCustomDetectionRuleParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// UpdateCustomDetectionRuleParams defines parameters for UpdateCustomDetectionRule.
+type UpdateCustomDetectionRuleParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ExportCustomContentParams defines parameters for ExportCustomContent.
+type ExportCustomContentParams struct {
+	// Type Restrict the export to one object family. Omit for all three.
+	Type *ExportCustomContentParamsType `form:"type,omitempty" json:"type,omitempty"`
+
+	// Format Serialization format. Defaults to `yaml`.
+	Format *ExportCustomContentParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// ExportCustomContentParamsType defines parameters for ExportCustomContent.
+type ExportCustomContentParamsType string
+
+// ExportCustomContentParamsFormat defines parameters for ExportCustomContent.
+type ExportCustomContentParamsFormat string
+
+// ListCustomNotesParams defines parameters for ListCustomNotes.
+type ListCustomNotesParams struct {
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Technique Restrict to templates that list this ATT&CK technique external id
+	// (for example `T1059.001`). Exact membership match against the stored
+	// technique id list.
+	Technique *ContentTechniqueExternalIdFilter `form:"technique,omitempty" json:"technique,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateCustomNoteParams defines parameters for CreateCustomNote.
+type CreateCustomNoteParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DeleteCustomNoteParams defines parameters for DeleteCustomNote.
+type DeleteCustomNoteParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// UpdateCustomNoteParams defines parameters for UpdateCustomNote.
+type UpdateCustomNoteParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ListCustomProcedureTemplatesParams defines parameters for ListCustomProcedureTemplates.
+type ListCustomProcedureTemplatesParams struct {
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Technique Restrict to templates that list this ATT&CK technique external id
+	// (for example `T1059.001`). Exact membership match against the stored
+	// technique id list.
+	Technique *ContentTechniqueExternalIdFilter `form:"technique,omitempty" json:"technique,omitempty"`
+
+	// Platform Restrict to templates that list this platform (for example `windows`,
+	// `linux`, `macos`). Case-insensitive exact membership match.
+	Platform *ContentPlatformFilter `form:"platform,omitempty" json:"platform,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateCustomProcedureTemplateParams defines parameters for CreateCustomProcedureTemplate.
+type CreateCustomProcedureTemplateParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DeleteCustomProcedureTemplateParams defines parameters for DeleteCustomProcedureTemplate.
+type DeleteCustomProcedureTemplateParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// UpdateCustomProcedureTemplateParams defines parameters for UpdateCustomProcedureTemplate.
+type UpdateCustomProcedureTemplateParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
 	// `bl_csrf` cookie, echoed back in this header.
 	//
@@ -2907,6 +3332,24 @@ type CompleteSamlSignInFormdataRequestBody CompleteSamlSignInFormdataBody
 // CreateServiceTokenJSONRequestBody defines body for CreateServiceToken for application/json ContentType.
 type CreateServiceTokenJSONRequestBody = CreateServiceTokenRequest
 
+// CreateCustomDetectionRuleJSONRequestBody defines body for CreateCustomDetectionRule for application/json ContentType.
+type CreateCustomDetectionRuleJSONRequestBody = CreateCustomDetectionRuleRequest
+
+// UpdateCustomDetectionRuleJSONRequestBody defines body for UpdateCustomDetectionRule for application/json ContentType.
+type UpdateCustomDetectionRuleJSONRequestBody = UpdateCustomDetectionRuleRequest
+
+// CreateCustomNoteJSONRequestBody defines body for CreateCustomNote for application/json ContentType.
+type CreateCustomNoteJSONRequestBody = CreateCustomNoteRequest
+
+// UpdateCustomNoteJSONRequestBody defines body for UpdateCustomNote for application/json ContentType.
+type UpdateCustomNoteJSONRequestBody = UpdateCustomNoteRequest
+
+// CreateCustomProcedureTemplateJSONRequestBody defines body for CreateCustomProcedureTemplate for application/json ContentType.
+type CreateCustomProcedureTemplateJSONRequestBody = CreateCustomProcedureTemplateRequest
+
+// UpdateCustomProcedureTemplateJSONRequestBody defines body for UpdateCustomProcedureTemplate for application/json ContentType.
+type UpdateCustomProcedureTemplateJSONRequestBody = UpdateCustomProcedureTemplateRequest
+
 // UpdateContentSourceJSONRequestBody defines body for UpdateContentSource for application/json ContentType.
 type UpdateContentSourceJSONRequestBody = UpdateContentSourceRequest
 
@@ -3014,6 +3457,54 @@ type ServerInterface interface {
 	// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
 	// (GET /content/attack/versions/{version}/techniques/{externalId})
 	GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId)
+	// ListCustomDetectionRules List custom detection rule references.
+	// (GET /content/custom/detection-rules)
+	ListCustomDetectionRules(w http.ResponseWriter, r *http.Request, params ListCustomDetectionRulesParams)
+	// CreateCustomDetectionRule Create a custom detection rule reference.
+	// (POST /content/custom/detection-rules)
+	CreateCustomDetectionRule(w http.ResponseWriter, r *http.Request, params CreateCustomDetectionRuleParams)
+	// DeleteCustomDetectionRule Delete a custom detection rule reference.
+	// (DELETE /content/custom/detection-rules/{ruleId})
+	DeleteCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId, params DeleteCustomDetectionRuleParams)
+	// GetCustomDetectionRule Read one custom detection rule reference.
+	// (GET /content/custom/detection-rules/{ruleId})
+	GetCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId)
+	// UpdateCustomDetectionRule Update a custom detection rule reference.
+	// (PATCH /content/custom/detection-rules/{ruleId})
+	UpdateCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId, params UpdateCustomDetectionRuleParams)
+	// ExportCustomContent Export custom content as YAML or JSON.
+	// (GET /content/custom/export)
+	ExportCustomContent(w http.ResponseWriter, r *http.Request, params ExportCustomContentParams)
+	// ListCustomNotes List custom knowledge-base notes.
+	// (GET /content/custom/notes)
+	ListCustomNotes(w http.ResponseWriter, r *http.Request, params ListCustomNotesParams)
+	// CreateCustomNote Create a custom knowledge-base note.
+	// (POST /content/custom/notes)
+	CreateCustomNote(w http.ResponseWriter, r *http.Request, params CreateCustomNoteParams)
+	// DeleteCustomNote Delete a custom knowledge-base note.
+	// (DELETE /content/custom/notes/{noteId})
+	DeleteCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId, params DeleteCustomNoteParams)
+	// GetCustomNote Read one custom knowledge-base note.
+	// (GET /content/custom/notes/{noteId})
+	GetCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId)
+	// UpdateCustomNote Update a custom knowledge-base note.
+	// (PATCH /content/custom/notes/{noteId})
+	UpdateCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId, params UpdateCustomNoteParams)
+	// ListCustomProcedureTemplates List custom procedure templates.
+	// (GET /content/custom/procedure-templates)
+	ListCustomProcedureTemplates(w http.ResponseWriter, r *http.Request, params ListCustomProcedureTemplatesParams)
+	// CreateCustomProcedureTemplate Create a custom procedure template.
+	// (POST /content/custom/procedure-templates)
+	CreateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, params CreateCustomProcedureTemplateParams)
+	// DeleteCustomProcedureTemplate Delete a custom procedure template.
+	// (DELETE /content/custom/procedure-templates/{templateId})
+	DeleteCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId, params DeleteCustomProcedureTemplateParams)
+	// GetCustomProcedureTemplate Read one custom procedure template.
+	// (GET /content/custom/procedure-templates/{templateId})
+	GetCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId)
+	// UpdateCustomProcedureTemplate Update a custom procedure template.
+	// (PATCH /content/custom/procedure-templates/{templateId})
+	UpdateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId, params UpdateCustomProcedureTemplateParams)
 	// ListContentDetectionRules List detection rule references (Sigma and custom).
 	// (GET /content/detection-rules)
 	ListContentDetectionRules(w http.ResponseWriter, r *http.Request, params ListContentDetectionRulesParams)
@@ -3317,6 +3808,102 @@ func (_ Unimplemented) GetContentAttackVersion(w http.ResponseWriter, r *http.Re
 // GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
 // (GET /content/attack/versions/{version}/techniques/{externalId})
 func (_ Unimplemented) GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListCustomDetectionRules List custom detection rule references.
+// (GET /content/custom/detection-rules)
+func (_ Unimplemented) ListCustomDetectionRules(w http.ResponseWriter, r *http.Request, params ListCustomDetectionRulesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateCustomDetectionRule Create a custom detection rule reference.
+// (POST /content/custom/detection-rules)
+func (_ Unimplemented) CreateCustomDetectionRule(w http.ResponseWriter, r *http.Request, params CreateCustomDetectionRuleParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteCustomDetectionRule Delete a custom detection rule reference.
+// (DELETE /content/custom/detection-rules/{ruleId})
+func (_ Unimplemented) DeleteCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId, params DeleteCustomDetectionRuleParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCustomDetectionRule Read one custom detection rule reference.
+// (GET /content/custom/detection-rules/{ruleId})
+func (_ Unimplemented) GetCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateCustomDetectionRule Update a custom detection rule reference.
+// (PATCH /content/custom/detection-rules/{ruleId})
+func (_ Unimplemented) UpdateCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId, params UpdateCustomDetectionRuleParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportCustomContent Export custom content as YAML or JSON.
+// (GET /content/custom/export)
+func (_ Unimplemented) ExportCustomContent(w http.ResponseWriter, r *http.Request, params ExportCustomContentParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListCustomNotes List custom knowledge-base notes.
+// (GET /content/custom/notes)
+func (_ Unimplemented) ListCustomNotes(w http.ResponseWriter, r *http.Request, params ListCustomNotesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateCustomNote Create a custom knowledge-base note.
+// (POST /content/custom/notes)
+func (_ Unimplemented) CreateCustomNote(w http.ResponseWriter, r *http.Request, params CreateCustomNoteParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteCustomNote Delete a custom knowledge-base note.
+// (DELETE /content/custom/notes/{noteId})
+func (_ Unimplemented) DeleteCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId, params DeleteCustomNoteParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCustomNote Read one custom knowledge-base note.
+// (GET /content/custom/notes/{noteId})
+func (_ Unimplemented) GetCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateCustomNote Update a custom knowledge-base note.
+// (PATCH /content/custom/notes/{noteId})
+func (_ Unimplemented) UpdateCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId, params UpdateCustomNoteParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListCustomProcedureTemplates List custom procedure templates.
+// (GET /content/custom/procedure-templates)
+func (_ Unimplemented) ListCustomProcedureTemplates(w http.ResponseWriter, r *http.Request, params ListCustomProcedureTemplatesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateCustomProcedureTemplate Create a custom procedure template.
+// (POST /content/custom/procedure-templates)
+func (_ Unimplemented) CreateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, params CreateCustomProcedureTemplateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteCustomProcedureTemplate Delete a custom procedure template.
+// (DELETE /content/custom/procedure-templates/{templateId})
+func (_ Unimplemented) DeleteCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId, params DeleteCustomProcedureTemplateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCustomProcedureTemplate Read one custom procedure template.
+// (GET /content/custom/procedure-templates/{templateId})
+func (_ Unimplemented) GetCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateCustomProcedureTemplate Update a custom procedure template.
+// (PATCH /content/custom/procedure-templates/{templateId})
+func (_ Unimplemented) UpdateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId, params UpdateCustomProcedureTemplateParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4511,6 +5098,756 @@ func (siw *ServerInterfaceWrapper) GetContentAttackTechniqueByExternalId(w http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetContentAttackTechniqueByExternalId(w, r, version, externalId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCustomDetectionRules operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomDetectionRules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCustomDetectionRulesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "technique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "technique", r.URL.Query(), &params.Technique, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "technique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "technique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "level", r.URL.Query(), &params.Level, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "level"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomDetectionRules(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCustomDetectionRule operation middleware
+func (siw *ServerInterfaceWrapper) CreateCustomDetectionRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCustomDetectionRuleParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCustomDetectionRule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCustomDetectionRule operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCustomDetectionRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId ContentDetectionRuleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", chi.URLParam(r, "ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteCustomDetectionRuleParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCustomDetectionRule(w, r, ruleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCustomDetectionRule operation middleware
+func (siw *ServerInterfaceWrapper) GetCustomDetectionRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId ContentDetectionRuleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", chi.URLParam(r, "ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCustomDetectionRule(w, r, ruleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCustomDetectionRule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCustomDetectionRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId ContentDetectionRuleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", chi.URLParam(r, "ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateCustomDetectionRuleParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCustomDetectionRule(w, r, ruleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportCustomContent operation middleware
+func (siw *ServerInterfaceWrapper) ExportCustomContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExportCustomContentParams
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportCustomContent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCustomNotes operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomNotes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCustomNotesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "technique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "technique", r.URL.Query(), &params.Technique, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "technique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "technique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomNotes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCustomNote operation middleware
+func (siw *ServerInterfaceWrapper) CreateCustomNote(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCustomNoteParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCustomNote(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCustomNote operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCustomNote(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "noteId" -------------
+	var noteId ContentNoteId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "noteId", chi.URLParam(r, "noteId"), &noteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "noteId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteCustomNoteParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCustomNote(w, r, noteId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCustomNote operation middleware
+func (siw *ServerInterfaceWrapper) GetCustomNote(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "noteId" -------------
+	var noteId ContentNoteId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "noteId", chi.URLParam(r, "noteId"), &noteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "noteId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCustomNote(w, r, noteId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCustomNote operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCustomNote(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "noteId" -------------
+	var noteId ContentNoteId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "noteId", chi.URLParam(r, "noteId"), &noteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "noteId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateCustomNoteParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCustomNote(w, r, noteId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCustomProcedureTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomProcedureTemplates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCustomProcedureTemplatesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "technique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "technique", r.URL.Query(), &params.Technique, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "technique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "technique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "platform" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "platform", r.URL.Query(), &params.Platform, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "platform"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomProcedureTemplates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCustomProcedureTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCustomProcedureTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCustomProcedureTemplate(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCustomProcedureTemplate operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCustomProcedureTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId ContentProcedureTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteCustomProcedureTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCustomProcedureTemplate(w, r, templateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCustomProcedureTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetCustomProcedureTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId ContentProcedureTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCustomProcedureTemplate(w, r, templateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCustomProcedureTemplate operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId ContentProcedureTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateCustomProcedureTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCustomProcedureTemplate(w, r, templateId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6964,6 +8301,54 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/content/emulation-plans/{planId}", wrapper.GetContentEmulationPlan)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/procedure-templates", wrapper.ListCustomProcedureTemplates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/custom/procedure-templates", wrapper.CreateCustomProcedureTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/content/custom/procedure-templates/{templateId}", wrapper.DeleteCustomProcedureTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/procedure-templates/{templateId}", wrapper.GetCustomProcedureTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/content/custom/procedure-templates/{templateId}", wrapper.UpdateCustomProcedureTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/detection-rules", wrapper.ListCustomDetectionRules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/custom/detection-rules", wrapper.CreateCustomDetectionRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/content/custom/detection-rules/{ruleId}", wrapper.DeleteCustomDetectionRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/detection-rules/{ruleId}", wrapper.GetCustomDetectionRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/content/custom/detection-rules/{ruleId}", wrapper.UpdateCustomDetectionRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/notes", wrapper.ListCustomNotes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/custom/notes", wrapper.CreateCustomNote)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/content/custom/notes/{noteId}", wrapper.DeleteCustomNote)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/notes/{noteId}", wrapper.GetCustomNote)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/content/custom/notes/{noteId}", wrapper.UpdateCustomNote)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/custom/export", wrapper.ExportCustomContent)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
 	})
 	r.Group(func(r chi.Router) {
@@ -9280,6 +10665,1540 @@ type GetContentAttackTechniqueByExternalId500ApplicationProblemPlusJSONResponse 
 }
 
 func (response GetContentAttackTechniqueByExternalId500ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomDetectionRulesRequestObject struct {
+	Params ListCustomDetectionRulesParams
+}
+
+type ListCustomDetectionRulesResponseObject interface {
+	VisitListCustomDetectionRulesResponse(w http.ResponseWriter) error
+}
+
+type ListCustomDetectionRules200JSONResponse ContentDetectionRuleList
+
+func (response ListCustomDetectionRules200JSONResponse) VisitListCustomDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomDetectionRules400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomDetectionRules400ApplicationProblemPlusJSONResponse) VisitListCustomDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomDetectionRules401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomDetectionRules401ApplicationProblemPlusJSONResponse) VisitListCustomDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomDetectionRules403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomDetectionRules403ApplicationProblemPlusJSONResponse) VisitListCustomDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomDetectionRules500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomDetectionRules500ApplicationProblemPlusJSONResponse) VisitListCustomDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomDetectionRuleRequestObject struct {
+	Params CreateCustomDetectionRuleParams
+	Body   *CreateCustomDetectionRuleJSONRequestBody
+}
+
+type CreateCustomDetectionRuleResponseObject interface {
+	VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error
+}
+
+type CreateCustomDetectionRule201JSONResponse ContentDetectionRule
+
+func (response CreateCustomDetectionRule201JSONResponse) VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomDetectionRule400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomDetectionRule400ApplicationProblemPlusJSONResponse) VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomDetectionRule401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomDetectionRule401ApplicationProblemPlusJSONResponse) VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomDetectionRule403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomDetectionRule403ApplicationProblemPlusJSONResponse) VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomDetectionRule409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomDetectionRule409ApplicationProblemPlusJSONResponse) VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomDetectionRule500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomDetectionRule500ApplicationProblemPlusJSONResponse) VisitCreateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomDetectionRuleRequestObject struct {
+	RuleId ContentDetectionRuleId `json:"ruleId"`
+	Params DeleteCustomDetectionRuleParams
+}
+
+type DeleteCustomDetectionRuleResponseObject interface {
+	VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error
+}
+
+type DeleteCustomDetectionRule204Response struct {
+}
+
+func (response DeleteCustomDetectionRule204Response) VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCustomDetectionRule401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomDetectionRule401ApplicationProblemPlusJSONResponse) VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomDetectionRule403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomDetectionRule403ApplicationProblemPlusJSONResponse) VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomDetectionRule404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomDetectionRule404ApplicationProblemPlusJSONResponse) VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomDetectionRule409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomDetectionRule409ApplicationProblemPlusJSONResponse) VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomDetectionRule500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomDetectionRule500ApplicationProblemPlusJSONResponse) VisitDeleteCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomDetectionRuleRequestObject struct {
+	RuleId ContentDetectionRuleId `json:"ruleId"`
+}
+
+type GetCustomDetectionRuleResponseObject interface {
+	VisitGetCustomDetectionRuleResponse(w http.ResponseWriter) error
+}
+
+type GetCustomDetectionRule200JSONResponse ContentDetectionRule
+
+func (response GetCustomDetectionRule200JSONResponse) VisitGetCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomDetectionRule401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomDetectionRule401ApplicationProblemPlusJSONResponse) VisitGetCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomDetectionRule403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomDetectionRule403ApplicationProblemPlusJSONResponse) VisitGetCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomDetectionRule404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomDetectionRule404ApplicationProblemPlusJSONResponse) VisitGetCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomDetectionRule500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomDetectionRule500ApplicationProblemPlusJSONResponse) VisitGetCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomDetectionRuleRequestObject struct {
+	RuleId ContentDetectionRuleId `json:"ruleId"`
+	Params UpdateCustomDetectionRuleParams
+	Body   *UpdateCustomDetectionRuleJSONRequestBody
+}
+
+type UpdateCustomDetectionRuleResponseObject interface {
+	VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error
+}
+
+type UpdateCustomDetectionRule200JSONResponse ContentDetectionRule
+
+func (response UpdateCustomDetectionRule200JSONResponse) VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomDetectionRule400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomDetectionRule400ApplicationProblemPlusJSONResponse) VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomDetectionRule401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomDetectionRule401ApplicationProblemPlusJSONResponse) VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomDetectionRule403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomDetectionRule403ApplicationProblemPlusJSONResponse) VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomDetectionRule404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomDetectionRule404ApplicationProblemPlusJSONResponse) VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomDetectionRule500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomDetectionRule500ApplicationProblemPlusJSONResponse) VisitUpdateCustomDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportCustomContentRequestObject struct {
+	Params ExportCustomContentParams
+}
+
+type ExportCustomContentResponseObject interface {
+	VisitExportCustomContentResponse(w http.ResponseWriter) error
+}
+
+type ExportCustomContent200JSONResponse ContentCustomExport
+
+func (response ExportCustomContent200JSONResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportCustomContent200ApplicationyamlResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportCustomContent200ApplicationyamlResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/yaml")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportCustomContent400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ExportCustomContent400ApplicationProblemPlusJSONResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportCustomContent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportCustomContent401ApplicationProblemPlusJSONResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportCustomContent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ExportCustomContent403ApplicationProblemPlusJSONResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportCustomContent500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ExportCustomContent500ApplicationProblemPlusJSONResponse) VisitExportCustomContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomNotesRequestObject struct {
+	Params ListCustomNotesParams
+}
+
+type ListCustomNotesResponseObject interface {
+	VisitListCustomNotesResponse(w http.ResponseWriter) error
+}
+
+type ListCustomNotes200JSONResponse ContentNoteList
+
+func (response ListCustomNotes200JSONResponse) VisitListCustomNotesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomNotes400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomNotes400ApplicationProblemPlusJSONResponse) VisitListCustomNotesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomNotes401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomNotes401ApplicationProblemPlusJSONResponse) VisitListCustomNotesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomNotes403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomNotes403ApplicationProblemPlusJSONResponse) VisitListCustomNotesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomNotes500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomNotes500ApplicationProblemPlusJSONResponse) VisitListCustomNotesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomNoteRequestObject struct {
+	Params CreateCustomNoteParams
+	Body   *CreateCustomNoteJSONRequestBody
+}
+
+type CreateCustomNoteResponseObject interface {
+	VisitCreateCustomNoteResponse(w http.ResponseWriter) error
+}
+
+type CreateCustomNote201JSONResponse ContentNote
+
+func (response CreateCustomNote201JSONResponse) VisitCreateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomNote400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomNote400ApplicationProblemPlusJSONResponse) VisitCreateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomNote401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomNote401ApplicationProblemPlusJSONResponse) VisitCreateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomNote403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomNote403ApplicationProblemPlusJSONResponse) VisitCreateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomNote409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomNote409ApplicationProblemPlusJSONResponse) VisitCreateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomNote500ApplicationProblemPlusJSONResponse) VisitCreateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomNoteRequestObject struct {
+	NoteId ContentNoteId `json:"noteId"`
+	Params DeleteCustomNoteParams
+}
+
+type DeleteCustomNoteResponseObject interface {
+	VisitDeleteCustomNoteResponse(w http.ResponseWriter) error
+}
+
+type DeleteCustomNote204Response struct {
+}
+
+func (response DeleteCustomNote204Response) VisitDeleteCustomNoteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCustomNote401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomNote401ApplicationProblemPlusJSONResponse) VisitDeleteCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomNote403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomNote403ApplicationProblemPlusJSONResponse) VisitDeleteCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomNote404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomNote404ApplicationProblemPlusJSONResponse) VisitDeleteCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomNote409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomNote409ApplicationProblemPlusJSONResponse) VisitDeleteCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomNote500ApplicationProblemPlusJSONResponse) VisitDeleteCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomNoteRequestObject struct {
+	NoteId ContentNoteId `json:"noteId"`
+}
+
+type GetCustomNoteResponseObject interface {
+	VisitGetCustomNoteResponse(w http.ResponseWriter) error
+}
+
+type GetCustomNote200JSONResponse ContentNote
+
+func (response GetCustomNote200JSONResponse) VisitGetCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomNote401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomNote401ApplicationProblemPlusJSONResponse) VisitGetCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomNote403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomNote403ApplicationProblemPlusJSONResponse) VisitGetCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomNote404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomNote404ApplicationProblemPlusJSONResponse) VisitGetCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomNote500ApplicationProblemPlusJSONResponse) VisitGetCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomNoteRequestObject struct {
+	NoteId ContentNoteId `json:"noteId"`
+	Params UpdateCustomNoteParams
+	Body   *UpdateCustomNoteJSONRequestBody
+}
+
+type UpdateCustomNoteResponseObject interface {
+	VisitUpdateCustomNoteResponse(w http.ResponseWriter) error
+}
+
+type UpdateCustomNote200JSONResponse ContentNote
+
+func (response UpdateCustomNote200JSONResponse) VisitUpdateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomNote400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomNote400ApplicationProblemPlusJSONResponse) VisitUpdateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomNote401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomNote401ApplicationProblemPlusJSONResponse) VisitUpdateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomNote403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomNote403ApplicationProblemPlusJSONResponse) VisitUpdateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomNote404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomNote404ApplicationProblemPlusJSONResponse) VisitUpdateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomNote500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomNote500ApplicationProblemPlusJSONResponse) VisitUpdateCustomNoteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomProcedureTemplatesRequestObject struct {
+	Params ListCustomProcedureTemplatesParams
+}
+
+type ListCustomProcedureTemplatesResponseObject interface {
+	VisitListCustomProcedureTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListCustomProcedureTemplates200JSONResponse ContentProcedureTemplateList
+
+func (response ListCustomProcedureTemplates200JSONResponse) VisitListCustomProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomProcedureTemplates400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomProcedureTemplates400ApplicationProblemPlusJSONResponse) VisitListCustomProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomProcedureTemplates401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomProcedureTemplates401ApplicationProblemPlusJSONResponse) VisitListCustomProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomProcedureTemplates403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomProcedureTemplates403ApplicationProblemPlusJSONResponse) VisitListCustomProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomProcedureTemplates500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomProcedureTemplates500ApplicationProblemPlusJSONResponse) VisitListCustomProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomProcedureTemplateRequestObject struct {
+	Params CreateCustomProcedureTemplateParams
+	Body   *CreateCustomProcedureTemplateJSONRequestBody
+}
+
+type CreateCustomProcedureTemplateResponseObject interface {
+	VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateCustomProcedureTemplate201JSONResponse ContentProcedureTemplate
+
+func (response CreateCustomProcedureTemplate201JSONResponse) VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomProcedureTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomProcedureTemplate400ApplicationProblemPlusJSONResponse) VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomProcedureTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomProcedureTemplate401ApplicationProblemPlusJSONResponse) VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomProcedureTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomProcedureTemplate403ApplicationProblemPlusJSONResponse) VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomProcedureTemplate409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomProcedureTemplate409ApplicationProblemPlusJSONResponse) VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCustomProcedureTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCustomProcedureTemplate500ApplicationProblemPlusJSONResponse) VisitCreateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomProcedureTemplateRequestObject struct {
+	TemplateId ContentProcedureTemplateId `json:"templateId"`
+	Params     DeleteCustomProcedureTemplateParams
+}
+
+type DeleteCustomProcedureTemplateResponseObject interface {
+	VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error
+}
+
+type DeleteCustomProcedureTemplate204Response struct {
+}
+
+func (response DeleteCustomProcedureTemplate204Response) VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCustomProcedureTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomProcedureTemplate401ApplicationProblemPlusJSONResponse) VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomProcedureTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomProcedureTemplate403ApplicationProblemPlusJSONResponse) VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomProcedureTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomProcedureTemplate404ApplicationProblemPlusJSONResponse) VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomProcedureTemplate409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomProcedureTemplate409ApplicationProblemPlusJSONResponse) VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCustomProcedureTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCustomProcedureTemplate500ApplicationProblemPlusJSONResponse) VisitDeleteCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomProcedureTemplateRequestObject struct {
+	TemplateId ContentProcedureTemplateId `json:"templateId"`
+}
+
+type GetCustomProcedureTemplateResponseObject interface {
+	VisitGetCustomProcedureTemplateResponse(w http.ResponseWriter) error
+}
+
+type GetCustomProcedureTemplate200JSONResponse ContentProcedureTemplate
+
+func (response GetCustomProcedureTemplate200JSONResponse) VisitGetCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomProcedureTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomProcedureTemplate401ApplicationProblemPlusJSONResponse) VisitGetCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomProcedureTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomProcedureTemplate403ApplicationProblemPlusJSONResponse) VisitGetCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomProcedureTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomProcedureTemplate404ApplicationProblemPlusJSONResponse) VisitGetCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomProcedureTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomProcedureTemplate500ApplicationProblemPlusJSONResponse) VisitGetCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomProcedureTemplateRequestObject struct {
+	TemplateId ContentProcedureTemplateId `json:"templateId"`
+	Params     UpdateCustomProcedureTemplateParams
+	Body       *UpdateCustomProcedureTemplateJSONRequestBody
+}
+
+type UpdateCustomProcedureTemplateResponseObject interface {
+	VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error
+}
+
+type UpdateCustomProcedureTemplate200JSONResponse ContentProcedureTemplate
+
+func (response UpdateCustomProcedureTemplate200JSONResponse) VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomProcedureTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomProcedureTemplate400ApplicationProblemPlusJSONResponse) VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomProcedureTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomProcedureTemplate401ApplicationProblemPlusJSONResponse) VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomProcedureTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomProcedureTemplate403ApplicationProblemPlusJSONResponse) VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomProcedureTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomProcedureTemplate404ApplicationProblemPlusJSONResponse) VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCustomProcedureTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCustomProcedureTemplate500ApplicationProblemPlusJSONResponse) VisitUpdateCustomProcedureTemplateResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -13602,6 +16521,54 @@ type StrictServerInterface interface {
 	// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
 	// (GET /content/attack/versions/{version}/techniques/{externalId})
 	GetContentAttackTechniqueByExternalId(ctx context.Context, request GetContentAttackTechniqueByExternalIdRequestObject) (GetContentAttackTechniqueByExternalIdResponseObject, error)
+	// ListCustomDetectionRules List custom detection rule references.
+	// (GET /content/custom/detection-rules)
+	ListCustomDetectionRules(ctx context.Context, request ListCustomDetectionRulesRequestObject) (ListCustomDetectionRulesResponseObject, error)
+	// CreateCustomDetectionRule Create a custom detection rule reference.
+	// (POST /content/custom/detection-rules)
+	CreateCustomDetectionRule(ctx context.Context, request CreateCustomDetectionRuleRequestObject) (CreateCustomDetectionRuleResponseObject, error)
+	// DeleteCustomDetectionRule Delete a custom detection rule reference.
+	// (DELETE /content/custom/detection-rules/{ruleId})
+	DeleteCustomDetectionRule(ctx context.Context, request DeleteCustomDetectionRuleRequestObject) (DeleteCustomDetectionRuleResponseObject, error)
+	// GetCustomDetectionRule Read one custom detection rule reference.
+	// (GET /content/custom/detection-rules/{ruleId})
+	GetCustomDetectionRule(ctx context.Context, request GetCustomDetectionRuleRequestObject) (GetCustomDetectionRuleResponseObject, error)
+	// UpdateCustomDetectionRule Update a custom detection rule reference.
+	// (PATCH /content/custom/detection-rules/{ruleId})
+	UpdateCustomDetectionRule(ctx context.Context, request UpdateCustomDetectionRuleRequestObject) (UpdateCustomDetectionRuleResponseObject, error)
+	// ExportCustomContent Export custom content as YAML or JSON.
+	// (GET /content/custom/export)
+	ExportCustomContent(ctx context.Context, request ExportCustomContentRequestObject) (ExportCustomContentResponseObject, error)
+	// ListCustomNotes List custom knowledge-base notes.
+	// (GET /content/custom/notes)
+	ListCustomNotes(ctx context.Context, request ListCustomNotesRequestObject) (ListCustomNotesResponseObject, error)
+	// CreateCustomNote Create a custom knowledge-base note.
+	// (POST /content/custom/notes)
+	CreateCustomNote(ctx context.Context, request CreateCustomNoteRequestObject) (CreateCustomNoteResponseObject, error)
+	// DeleteCustomNote Delete a custom knowledge-base note.
+	// (DELETE /content/custom/notes/{noteId})
+	DeleteCustomNote(ctx context.Context, request DeleteCustomNoteRequestObject) (DeleteCustomNoteResponseObject, error)
+	// GetCustomNote Read one custom knowledge-base note.
+	// (GET /content/custom/notes/{noteId})
+	GetCustomNote(ctx context.Context, request GetCustomNoteRequestObject) (GetCustomNoteResponseObject, error)
+	// UpdateCustomNote Update a custom knowledge-base note.
+	// (PATCH /content/custom/notes/{noteId})
+	UpdateCustomNote(ctx context.Context, request UpdateCustomNoteRequestObject) (UpdateCustomNoteResponseObject, error)
+	// ListCustomProcedureTemplates List custom procedure templates.
+	// (GET /content/custom/procedure-templates)
+	ListCustomProcedureTemplates(ctx context.Context, request ListCustomProcedureTemplatesRequestObject) (ListCustomProcedureTemplatesResponseObject, error)
+	// CreateCustomProcedureTemplate Create a custom procedure template.
+	// (POST /content/custom/procedure-templates)
+	CreateCustomProcedureTemplate(ctx context.Context, request CreateCustomProcedureTemplateRequestObject) (CreateCustomProcedureTemplateResponseObject, error)
+	// DeleteCustomProcedureTemplate Delete a custom procedure template.
+	// (DELETE /content/custom/procedure-templates/{templateId})
+	DeleteCustomProcedureTemplate(ctx context.Context, request DeleteCustomProcedureTemplateRequestObject) (DeleteCustomProcedureTemplateResponseObject, error)
+	// GetCustomProcedureTemplate Read one custom procedure template.
+	// (GET /content/custom/procedure-templates/{templateId})
+	GetCustomProcedureTemplate(ctx context.Context, request GetCustomProcedureTemplateRequestObject) (GetCustomProcedureTemplateResponseObject, error)
+	// UpdateCustomProcedureTemplate Update a custom procedure template.
+	// (PATCH /content/custom/procedure-templates/{templateId})
+	UpdateCustomProcedureTemplate(ctx context.Context, request UpdateCustomProcedureTemplateRequestObject) (UpdateCustomProcedureTemplateResponseObject, error)
 	// ListContentDetectionRules List detection rule references (Sigma and custom).
 	// (GET /content/detection-rules)
 	ListContentDetectionRules(ctx context.Context, request ListContentDetectionRulesRequestObject) (ListContentDetectionRulesResponseObject, error)
@@ -14527,6 +17494,470 @@ func (sh *strictHandler) GetContentAttackTechniqueByExternalId(w http.ResponseWr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetContentAttackTechniqueByExternalIdResponseObject); ok {
 		if err := validResponse.VisitGetContentAttackTechniqueByExternalIdResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCustomDetectionRules operation middleware
+func (sh *strictHandler) ListCustomDetectionRules(w http.ResponseWriter, r *http.Request, params ListCustomDetectionRulesParams) {
+	var request ListCustomDetectionRulesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomDetectionRules(ctx, request.(ListCustomDetectionRulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomDetectionRules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomDetectionRulesResponseObject); ok {
+		if err := validResponse.VisitListCustomDetectionRulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCustomDetectionRule operation middleware
+func (sh *strictHandler) CreateCustomDetectionRule(w http.ResponseWriter, r *http.Request, params CreateCustomDetectionRuleParams) {
+	var request CreateCustomDetectionRuleRequestObject
+
+	request.Params = params
+
+	var body CreateCustomDetectionRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCustomDetectionRule(ctx, request.(CreateCustomDetectionRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCustomDetectionRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCustomDetectionRuleResponseObject); ok {
+		if err := validResponse.VisitCreateCustomDetectionRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCustomDetectionRule operation middleware
+func (sh *strictHandler) DeleteCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId, params DeleteCustomDetectionRuleParams) {
+	var request DeleteCustomDetectionRuleRequestObject
+
+	request.RuleId = ruleId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCustomDetectionRule(ctx, request.(DeleteCustomDetectionRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCustomDetectionRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCustomDetectionRuleResponseObject); ok {
+		if err := validResponse.VisitDeleteCustomDetectionRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCustomDetectionRule operation middleware
+func (sh *strictHandler) GetCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId) {
+	var request GetCustomDetectionRuleRequestObject
+
+	request.RuleId = ruleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCustomDetectionRule(ctx, request.(GetCustomDetectionRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCustomDetectionRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCustomDetectionRuleResponseObject); ok {
+		if err := validResponse.VisitGetCustomDetectionRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCustomDetectionRule operation middleware
+func (sh *strictHandler) UpdateCustomDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId, params UpdateCustomDetectionRuleParams) {
+	var request UpdateCustomDetectionRuleRequestObject
+
+	request.RuleId = ruleId
+	request.Params = params
+
+	var body UpdateCustomDetectionRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCustomDetectionRule(ctx, request.(UpdateCustomDetectionRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCustomDetectionRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCustomDetectionRuleResponseObject); ok {
+		if err := validResponse.VisitUpdateCustomDetectionRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportCustomContent operation middleware
+func (sh *strictHandler) ExportCustomContent(w http.ResponseWriter, r *http.Request, params ExportCustomContentParams) {
+	var request ExportCustomContentRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportCustomContent(ctx, request.(ExportCustomContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportCustomContent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportCustomContentResponseObject); ok {
+		if err := validResponse.VisitExportCustomContentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCustomNotes operation middleware
+func (sh *strictHandler) ListCustomNotes(w http.ResponseWriter, r *http.Request, params ListCustomNotesParams) {
+	var request ListCustomNotesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomNotes(ctx, request.(ListCustomNotesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomNotes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomNotesResponseObject); ok {
+		if err := validResponse.VisitListCustomNotesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCustomNote operation middleware
+func (sh *strictHandler) CreateCustomNote(w http.ResponseWriter, r *http.Request, params CreateCustomNoteParams) {
+	var request CreateCustomNoteRequestObject
+
+	request.Params = params
+
+	var body CreateCustomNoteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCustomNote(ctx, request.(CreateCustomNoteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCustomNote")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCustomNoteResponseObject); ok {
+		if err := validResponse.VisitCreateCustomNoteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCustomNote operation middleware
+func (sh *strictHandler) DeleteCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId, params DeleteCustomNoteParams) {
+	var request DeleteCustomNoteRequestObject
+
+	request.NoteId = noteId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCustomNote(ctx, request.(DeleteCustomNoteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCustomNote")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCustomNoteResponseObject); ok {
+		if err := validResponse.VisitDeleteCustomNoteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCustomNote operation middleware
+func (sh *strictHandler) GetCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId) {
+	var request GetCustomNoteRequestObject
+
+	request.NoteId = noteId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCustomNote(ctx, request.(GetCustomNoteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCustomNote")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCustomNoteResponseObject); ok {
+		if err := validResponse.VisitGetCustomNoteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCustomNote operation middleware
+func (sh *strictHandler) UpdateCustomNote(w http.ResponseWriter, r *http.Request, noteId ContentNoteId, params UpdateCustomNoteParams) {
+	var request UpdateCustomNoteRequestObject
+
+	request.NoteId = noteId
+	request.Params = params
+
+	var body UpdateCustomNoteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCustomNote(ctx, request.(UpdateCustomNoteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCustomNote")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCustomNoteResponseObject); ok {
+		if err := validResponse.VisitUpdateCustomNoteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCustomProcedureTemplates operation middleware
+func (sh *strictHandler) ListCustomProcedureTemplates(w http.ResponseWriter, r *http.Request, params ListCustomProcedureTemplatesParams) {
+	var request ListCustomProcedureTemplatesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomProcedureTemplates(ctx, request.(ListCustomProcedureTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomProcedureTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomProcedureTemplatesResponseObject); ok {
+		if err := validResponse.VisitListCustomProcedureTemplatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCustomProcedureTemplate operation middleware
+func (sh *strictHandler) CreateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, params CreateCustomProcedureTemplateParams) {
+	var request CreateCustomProcedureTemplateRequestObject
+
+	request.Params = params
+
+	var body CreateCustomProcedureTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCustomProcedureTemplate(ctx, request.(CreateCustomProcedureTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCustomProcedureTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCustomProcedureTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateCustomProcedureTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCustomProcedureTemplate operation middleware
+func (sh *strictHandler) DeleteCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId, params DeleteCustomProcedureTemplateParams) {
+	var request DeleteCustomProcedureTemplateRequestObject
+
+	request.TemplateId = templateId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCustomProcedureTemplate(ctx, request.(DeleteCustomProcedureTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCustomProcedureTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCustomProcedureTemplateResponseObject); ok {
+		if err := validResponse.VisitDeleteCustomProcedureTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCustomProcedureTemplate operation middleware
+func (sh *strictHandler) GetCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId) {
+	var request GetCustomProcedureTemplateRequestObject
+
+	request.TemplateId = templateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCustomProcedureTemplate(ctx, request.(GetCustomProcedureTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCustomProcedureTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCustomProcedureTemplateResponseObject); ok {
+		if err := validResponse.VisitGetCustomProcedureTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCustomProcedureTemplate operation middleware
+func (sh *strictHandler) UpdateCustomProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId, params UpdateCustomProcedureTemplateParams) {
+	var request UpdateCustomProcedureTemplateRequestObject
+
+	request.TemplateId = templateId
+	request.Params = params
+
+	var body UpdateCustomProcedureTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCustomProcedureTemplate(ctx, request.(UpdateCustomProcedureTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCustomProcedureTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCustomProcedureTemplateResponseObject); ok {
+		if err := validResponse.VisitUpdateCustomProcedureTemplateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1811,6 +1811,189 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/custom/procedure-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List custom procedure templates.
+         * @description Any authenticated subject (`content.read`). Returns procedure templates
+         *     under the singleton `custom` source only. Structure is preserved
+         *     (platforms, executor, command, cleanup, input args). Does not require
+         *     an ATT&CK install.
+         */
+        get: operations["listCustomProcedureTemplates"];
+        put?: never;
+        /**
+         * Create a custom procedure template.
+         * @description Administrators only (`content.manage`). Attaches to the singleton
+         *     `custom` source with version `current`. Technique external ids are
+         *     optional; when present they must look like MITRE ids (`T1059`,
+         *     `T1059.001`).
+         */
+        post: operations["createCustomProcedureTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/custom/procedure-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one custom procedure template.
+         * @description Any authenticated subject. Answers `404` when the id is missing or not
+         *     under the custom source.
+         */
+        get: operations["getCustomProcedureTemplate"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a custom procedure template.
+         * @description Administrators only (`content.manage`). Hard-deletes when nothing
+         *     references the row. Answers `409` with counts when referenced
+         *     (engagement refs arrive in M3; M2 always reports zero).
+         */
+        delete: operations["deleteCustomProcedureTemplate"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a custom procedure template.
+         * @description Administrators only (`content.manage`). Partial patch: omitted fields
+         *     are left unchanged. `externalId`, `sourceId`, and `version` are not
+         *     writable.
+         */
+        patch: operations["updateCustomProcedureTemplate"];
+        trace?: never;
+    };
+    "/content/custom/detection-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List custom detection rule references.
+         * @description Any authenticated subject (`content.read`). Returns detection rule
+         *     refs under the singleton `custom` source only. Reference only —
+         *     never executed or deployed.
+         */
+        get: operations["listCustomDetectionRules"];
+        put?: never;
+        /**
+         * Create a custom detection rule reference.
+         * @description Administrators only (`content.manage`). Attaches to the singleton
+         *     `custom` source. Technique external ids optional; when present must
+         *     look like MITRE ids.
+         */
+        post: operations["createCustomDetectionRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/custom/detection-rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one custom detection rule reference. */
+        get: operations["getCustomDetectionRule"];
+        put?: never;
+        post?: never;
+        /** Delete a custom detection rule reference. */
+        delete: operations["deleteCustomDetectionRule"];
+        options?: never;
+        head?: never;
+        /** Update a custom detection rule reference. */
+        patch: operations["updateCustomDetectionRule"];
+        trace?: never;
+    };
+    "/content/custom/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List custom knowledge-base notes.
+         * @description Any authenticated subject (`content.read`). Returns notes under the
+         *     singleton `custom` source only.
+         */
+        get: operations["listCustomNotes"];
+        put?: never;
+        /**
+         * Create a custom knowledge-base note.
+         * @description Administrators only (`content.manage`). Markdown body size is capped
+         *     by `BLACKLIGHT_CONTENT_NOTE_MAX_BYTES` (default 256KiB). Technique
+         *     external id is optional; when present must look like a MITRE id.
+         */
+        post: operations["createCustomNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/custom/notes/{noteId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one custom knowledge-base note. */
+        get: operations["getCustomNote"];
+        put?: never;
+        post?: never;
+        /** Delete a custom knowledge-base note. */
+        delete: operations["deleteCustomNote"];
+        options?: never;
+        head?: never;
+        /** Update a custom knowledge-base note. */
+        patch: operations["updateCustomNote"];
+        trace?: never;
+    };
+    "/content/custom/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export custom content as YAML or JSON.
+         * @description Any authenticated subject (`content.read`). Returns a document
+         *     suitable for re-import (M2-012) containing procedure templates,
+         *     detection rules, and/or notes under the `custom` source. Header
+         *     comments (YAML) or a `meta` block (JSON) carry license/attribution
+         *     for the installation's custom library.
+         *
+         *     `type` narrows to one object family; omit it for all three.
+         *     `format` selects serialization (`yaml` default, or `json`).
+         */
+        get: operations["exportCustomContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/attack/versions": {
         parameters: {
             query?: never;
@@ -3237,6 +3420,135 @@ export interface components {
             items: components["schemas"]["ContentDetectionRule"][];
         };
         /**
+         * @description One freeform knowledge-base note under the custom source (or imported
+         *     into it). Markdown body; optional technique link and tags.
+         */
+        ContentNote: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description Version token. Custom is rolling-head and always `current`. */
+            version: string;
+            /** @description Stable id within the custom source (defaults to the row id). */
+            externalId: string;
+            title: string;
+            /** @description Markdown body. Size-capped by server config. */
+            bodyMarkdown: string;
+            tags: string[];
+            /**
+             * @description Optional ATT&CK technique external id (`T1059`, `T1059.001`).
+             *     Empty string when unset.
+             */
+            techniqueExternalId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentNoteList: {
+            items: components["schemas"]["ContentNote"][];
+        };
+        /** @description Body for creating a custom procedure template. */
+        CreateCustomProcedureTemplateRequest: {
+            /** @description Optional stable id; defaults to the new row id. */
+            externalId?: string;
+            name: string;
+            description?: string;
+            platforms?: string[];
+            executor?: string;
+            elevationRequired?: boolean;
+            command?: string;
+            cleanup?: string;
+            inputArgs?: components["schemas"]["ContentProcedureInputArg"][];
+            techniqueExternalIds?: string[];
+            dependencyExecutorName?: string;
+            dependencies?: string;
+        };
+        /** @description Partial patch for a custom procedure template. Omitted fields stay. */
+        UpdateCustomProcedureTemplateRequest: {
+            name?: string;
+            description?: string;
+            platforms?: string[];
+            executor?: string;
+            elevationRequired?: boolean;
+            command?: string;
+            cleanup?: string;
+            inputArgs?: components["schemas"]["ContentProcedureInputArg"][];
+            techniqueExternalIds?: string[];
+            dependencyExecutorName?: string;
+            dependencies?: string;
+        };
+        /**
+         * @description Structured logsource fields for a custom detection rule. Known keys
+         *     only — request bodies must not accept free-form properties
+         *     (PLAN.md §4). Upstream Sigma rules still store arbitrary logsource
+         *     JSON on the read model.
+         */
+        ContentDetectionLogsource: {
+            category?: string;
+            product?: string;
+            service?: string;
+            definition?: string;
+        };
+        /** @description Body for creating a custom detection rule reference. */
+        CreateCustomDetectionRuleRequest: {
+            externalId?: string;
+            name: string;
+            description?: string;
+            techniqueExternalIds?: string[];
+            level?: string;
+            status?: string;
+            logsource?: components["schemas"]["ContentDetectionLogsource"];
+            ruleYaml: string;
+        };
+        /** @description Partial patch for a custom detection rule reference. */
+        UpdateCustomDetectionRuleRequest: {
+            name?: string;
+            description?: string;
+            techniqueExternalIds?: string[];
+            level?: string;
+            status?: string;
+            logsource?: components["schemas"]["ContentDetectionLogsource"];
+            ruleYaml?: string;
+        };
+        /** @description Body for creating a custom knowledge-base note. */
+        CreateCustomNoteRequest: {
+            externalId?: string;
+            title: string;
+            bodyMarkdown: string;
+            tags?: string[];
+            techniqueExternalId?: string;
+        };
+        /** @description Partial patch for a custom knowledge-base note. */
+        UpdateCustomNoteRequest: {
+            title?: string;
+            bodyMarkdown?: string;
+            tags?: string[];
+            techniqueExternalId?: string;
+        };
+        /** @description License/attribution header for a custom content export. */
+        ContentCustomExportMeta: {
+            sourceName: string;
+            licenseSpdx?: string;
+            licenseName?: string;
+            licenseUrl?: string;
+            attribution: string;
+            /** Format: date-time */
+            exportedAt: string;
+        };
+        /**
+         * @description Export document for custom content. Shape is accepted by the v1/custom
+         *     import path (M2-012) or documented as the delta if the importer needs
+         *     a thin adapter. Empty arrays mean that family was omitted or empty.
+         */
+        ContentCustomExport: {
+            meta: components["schemas"]["ContentCustomExportMeta"];
+            procedureTemplates: components["schemas"]["ContentProcedureTemplate"][];
+            detectionRules: components["schemas"]["ContentDetectionRule"][];
+            notes: components["schemas"]["ContentNote"][];
+        };
+        /**
          * @description One ordered step under a CTID emulation plan. `ordinal` is 1-based
          *     document order from the upstream plan YAML (dense, unique per plan).
          *     Upstream `procedure_step` labels (for example `2.1`) live inside
@@ -3597,6 +3909,8 @@ export interface components {
         ContentDetectionRuleId: string;
         /** @description Emulation plan surrogate id (UUIDv7). */
         ContentEmulationPlanId: string;
+        /** @description Knowledge-base note surrogate id (UUIDv7). */
+        ContentNoteId: string;
         /**
          * @description Restrict to rules with this Sigma level label (for example `low`,
          *     `medium`, `high`, `critical`). Case-insensitive exact match.
@@ -6252,6 +6566,664 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listCustomProcedureTemplates: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /**
+                 * @description Restrict to templates that list this ATT&CK technique external id
+                 *     (for example `T1059.001`). Exact membership match against the stored
+                 *     technique id list.
+                 */
+                technique?: components["parameters"]["ContentTechniqueExternalIdFilter"];
+                /**
+                 * @description Restrict to templates that list this platform (for example `windows`,
+                 *     `linux`, `macos`). Case-insensitive exact membership match.
+                 */
+                platform?: components["parameters"]["ContentPlatformFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom procedure templates, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentProcedureTemplateList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createCustomProcedureTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomProcedureTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description The template was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentProcedureTemplate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getCustomProcedureTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Procedure template surrogate id (UUIDv7). */
+                templateId: components["parameters"]["ContentProcedureTemplateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The procedure template. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentProcedureTemplate"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteCustomProcedureTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Procedure template surrogate id (UUIDv7). */
+                templateId: components["parameters"]["ContentProcedureTemplateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateCustomProcedureTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Procedure template surrogate id (UUIDv7). */
+                templateId: components["parameters"]["ContentProcedureTemplateId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomProcedureTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description The template as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentProcedureTemplate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listCustomDetectionRules: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /**
+                 * @description Restrict to templates that list this ATT&CK technique external id
+                 *     (for example `T1059.001`). Exact membership match against the stored
+                 *     technique id list.
+                 */
+                technique?: components["parameters"]["ContentTechniqueExternalIdFilter"];
+                /**
+                 * @description Restrict to rules with this Sigma level label (for example `low`,
+                 *     `medium`, `high`, `critical`). Case-insensitive exact match.
+                 */
+                level?: components["parameters"]["ContentDetectionLevelFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom detection rules, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentDetectionRuleList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createCustomDetectionRule: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomDetectionRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The rule was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentDetectionRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getCustomDetectionRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Detection rule surrogate id (UUIDv7). */
+                ruleId: components["parameters"]["ContentDetectionRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The detection rule reference. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentDetectionRule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteCustomDetectionRule: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Detection rule surrogate id (UUIDv7). */
+                ruleId: components["parameters"]["ContentDetectionRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateCustomDetectionRule: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Detection rule surrogate id (UUIDv7). */
+                ruleId: components["parameters"]["ContentDetectionRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomDetectionRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description The rule as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentDetectionRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listCustomNotes: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /**
+                 * @description Restrict to templates that list this ATT&CK technique external id
+                 *     (for example `T1059.001`). Exact membership match against the stored
+                 *     technique id list.
+                 */
+                technique?: components["parameters"]["ContentTechniqueExternalIdFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom notes, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentNoteList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createCustomNote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The note was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentNote"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getCustomNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Knowledge-base note surrogate id (UUIDv7). */
+                noteId: components["parameters"]["ContentNoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The note. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentNote"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteCustomNote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Knowledge-base note surrogate id (UUIDv7). */
+                noteId: components["parameters"]["ContentNoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateCustomNote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Knowledge-base note surrogate id (UUIDv7). */
+                noteId: components["parameters"]["ContentNoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The note as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentNote"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    exportCustomContent: {
+        parameters: {
+            query?: {
+                /** @description Restrict the export to one object family. Omit for all three. */
+                type?: "procedure_templates" | "detection_rules" | "notes";
+                /** @description Serialization format. Defaults to `yaml`. */
+                format?: "yaml" | "json";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentCustomExport"];
+                    "application/yaml": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
         };
     };

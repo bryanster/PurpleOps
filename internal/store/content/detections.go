@@ -39,7 +39,10 @@ const detectionColumns = `id, source_id, version, external_id, name, description
 	created_at, updated_at`
 
 // Create inserts one detection rule ref.
-func (r *Detections) Create(ctx context.Context, in DetectionRuleRef) (DetectionRuleRef, error) {
+//
+// after runs inside the same write transaction after the insert so activity
+// (M2-011) shares the commit.
+func (r *Detections) Create(ctx context.Context, in DetectionRuleRef, after ...After) (DetectionRuleRef, error) {
 	id, err := assignID(in.ID)
 	if err != nil {
 		return DetectionRuleRef{}, err
@@ -60,12 +63,64 @@ func (r *Detections) Create(ctx context.Context, in DetectionRuleRef) (Detection
 			bindJSONObject(in.Logsource), in.RuleYAML,
 			ts, ts,
 		)
-		return uniqueOr(err, "detection_rule_ref", in.SourceID, in.Version, in.ExternalID)
+		if err := uniqueOr(err, "detection_rule_ref", in.SourceID, in.Version, in.ExternalID); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, id), tx, after)
 	})
 	if err != nil {
 		return DetectionRuleRef{}, err
 	}
 	return r.ByID(ctx, id)
+}
+
+// Update rewrites mutable fields of an existing detection rule ref.
+//
+// after runs inside the same write transaction after the update.
+func (r *Detections) Update(ctx context.Context, in DetectionRuleRef, after ...After) (DetectionRuleRef, error) {
+	ts := now()
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `
+			UPDATE content.content_detection_rule_ref SET
+				name = ?, description = ?,
+				technique_external_ids = ?, level = ?, rule_status = ?,
+				logsource = ?, rule_yaml = ?,
+				updated_at = ?
+			WHERE id = ?`,
+			in.Name, in.Description,
+			bindJSON(in.TechniqueExternalIDs), in.Level, in.RuleStatus,
+			bindJSONObject(in.Logsource), in.RuleYAML,
+			ts, in.ID,
+		)
+		if err != nil {
+			return fmt.Errorf("content: update detection_rule_ref %s: %w", in.ID, err)
+		}
+		if err := requireOneRow(res, "content_detection_rule_ref", in.ID); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, in.ID), tx, after)
+	})
+	if err != nil {
+		return DetectionRuleRef{}, err
+	}
+	return r.ByID(ctx, in.ID)
+}
+
+// Delete removes one detection rule ref by id.
+//
+// after runs inside the same write transaction after the delete.
+func (r *Detections) Delete(ctx context.Context, id string, after ...After) error {
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx,
+			`DELETE FROM content.content_detection_rule_ref WHERE id = ?`, id)
+		if err != nil {
+			return fmt.Errorf("content: delete detection_rule_ref %s: %w", id, err)
+		}
+		if err := requireOneRow(res, "content_detection_rule_ref", id); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, id), tx, after)
+	})
 }
 
 // ByID returns one detection rule ref or [apierr.NotFound].

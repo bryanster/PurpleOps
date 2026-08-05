@@ -74,6 +74,9 @@ func TestParseAppliesDocumentedDefaults(t *testing.T) {
 	if got, want := cfg.Content.WriteBatch, 250; got != want {
 		t.Errorf("Content.WriteBatch = %d, want %d", got, want)
 	}
+	if got, want := cfg.Content.NoteMaxBytes.Int64(), int64(256<<10); got != want {
+		t.Errorf("Content.NoteMaxBytes = %d, want %d", got, want)
+	}
 
 	if got, want := cfg.Log.Level, LevelInfo; got != want {
 		t.Errorf("Log.Level = %q, want %q", got, want)

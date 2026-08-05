@@ -250,6 +250,17 @@ blctl content reprocess --source atomic --wait
 blctl content reprocess --source attack --version 15.1 --wait
 ```
 
+### `blctl content export-custom`
+
+Export every custom procedure template, detection rule, and note as YAML
+(default) or JSON. Same document shape as `GET /content/custom/export`.
+
+```sh
+blctl content export-custom --format yaml -o custom-export.yaml
+blctl content export-custom --format json --type notes
+```
+
+
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one

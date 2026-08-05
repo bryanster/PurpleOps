@@ -90,21 +90,31 @@ const (
 	// release label lives in the delta so a feed filtered by pin string does
 	// not need a join.
 	VerbContentVersionDeleted Verb = "content.version.deleted"
+
+	// Custom content lifecycle (M2-011). Object is the custom row; object_type
+	// in the entry distinguishes procedure_template / detection_rule_ref /
+	// content_note, and the delta carries a short type label too.
+	VerbContentCustomCreated Verb = "content.custom.created"
+	VerbContentCustomUpdated Verb = "content.custom.updated"
+	VerbContentCustomDeleted Verb = "content.custom.deleted"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
 const (
-	ObjectUser                 = "user"
-	ObjectSession              = "session"
-	ObjectToken                = "service_token"
-	ObjectTOTP                 = "totp"
-	ObjectRecoveryCode         = "recovery_code"
-	ObjectIdentity             = "identity"
-	ObjectLogin                = "login"
-	ObjectContentSource        = "content_source"
-	ObjectContentSyncJob       = "content_sync_job"
-	ObjectContentSourceVersion = "content_source_version"
+	ObjectUser                     = "user"
+	ObjectSession                  = "session"
+	ObjectToken                    = "service_token"
+	ObjectTOTP                     = "totp"
+	ObjectRecoveryCode             = "recovery_code"
+	ObjectIdentity                 = "identity"
+	ObjectLogin                    = "login"
+	ObjectContentSource            = "content_source"
+	ObjectContentSyncJob           = "content_sync_job"
+	ObjectContentSourceVersion     = "content_source_version"
+	ObjectContentProcedureTemplate = "content_procedure_template"
+	ObjectContentDetectionRuleRef  = "content_detection_rule_ref"
+	ObjectContentNote              = "content_note"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

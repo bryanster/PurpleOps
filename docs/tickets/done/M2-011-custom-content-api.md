@@ -41,11 +41,11 @@ exportable as YAML/JSON.
 
 ## Acceptance criteria
 
-- [ ] Member can read custom content; only admin can mutate.
-- [ ] Creating a procedure template with command + cleanup + input_args persists structure.
-- [ ] Invalid technique id format → 400 field error.
-- [ ] Export then re-open as JSON/YAML contains all three types when present.
-- [ ] Deletes are activity-logged; response never includes other users' secrets (n/a but keep delta
+- [x] Member can read custom content; only admin can mutate.
+- [x] Creating a procedure template with command + cleanup + input_args persists structure.
+- [x] Invalid technique id format → 400 field error.
+- [x] Export then re-open as JSON/YAML contains all three types when present.
+- [x] Deletes are activity-logged; response never includes other users' secrets (n/a but keep delta
       clean).
 
 ## Tests
@@ -58,3 +58,24 @@ exportable as YAML/JSON.
 - Reuse list/get handlers with library endpoints where possible (`sourceId=custom` filter) to avoid
   two list shapes — custom write paths can still be under `/content/custom/...`.
 - Do not require ATT&CK install to author custom templates.
+
+## Implementation notes
+
+- OpenAPI: `/content/custom/procedure-templates|detection-rules|notes` CRUD +
+  `/content/custom/export?type=&format=yaml|json`. Request `logsource` is a
+  closed object (`ContentDetectionLogsource`) — free-form `additionalProperties`
+  is forbidden on request bodies (PLAN.md §4 / conventions test). Response
+  detection rules still carry free-form logsource maps for upstream Sigma.
+- Domain: `internal/content.Custom` over store procedures/detections/notes.
+  Always writes `source_id=SourceIDCustom`, `version=current`. Technique ids
+  validated with `T\d{4}(\.\d{3})?`. Note body cap:
+  `BLACKLIGHT_CONTENT_NOTE_MAX_BYTES` (default 256KiB).
+- Store: `Create`/`Update`/`Delete` with `After` hooks on procedures, detections,
+  notes; `Notes.List` added.
+- Activity: `content.custom.created|updated|deleted` with object type constants
+  `content_procedure_template` / `content_detection_rule_ref` / `content_note`.
+- Delete 409 stub: `customRefCount()` always 0 until M3.
+- blctl: `content export-custom --format yaml|json -o file [--type …]`.
+- Docs: `docs/content-custom.md`, `docs/cli.md` export-custom section.
+- Authz matrix already covers `content.manage` for custom CRUD (M2-002); no new
+  matrix rows. CSRF/service-token/MFA walks extended with valid minimal bodies.
