@@ -4,6 +4,7 @@ import {
   ADMIN_USERS_PATH,
   TOKENS_PATH,
 } from '@/features/auth/paths'
+import { CONTENT_PATH } from '@/features/content/paths'
 
 /**
  * The left nav, as data.
@@ -38,7 +39,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     items: [
       { label: 'Engagements', pending: 'M3' },
       { label: 'Scenarios', pending: 'M3' },
-      { label: 'Content', pending: 'M2' },
+      { label: 'Content', to: CONTENT_PATH },
       { label: 'Analytics', pending: 'M5' },
       { label: 'Reports', pending: 'M6' },
     ],

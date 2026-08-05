@@ -5,6 +5,8 @@ import { AppShell } from '@/app/shell/app-shell'
 import { AccountPage } from '@/features/account/account-page'
 import { ActivityPage } from '@/features/admin/activity-page'
 import { UsersPage } from '@/features/admin/users-page'
+import { LibraryPage } from '@/features/content/library-page'
+import { CONTENT_PATH } from '@/features/content/paths'
 import { EnrolmentPage } from '@/features/auth/enrolment-page'
 import { RequireAdmin, RequireAuth } from '@/features/auth/guards'
 import { LoginPage } from '@/features/auth/login-page'
@@ -59,6 +61,7 @@ export function AppRoutes(): ReactNode {
 
           <Route path={ACCOUNT_PATH} element={<AccountPage />} />
           <Route path={TOKENS_PATH} element={<TokensPage />} />
+          <Route path={CONTENT_PATH} element={<LibraryPage />} />
 
           <Route element={<RequireAdmin />}>
             <Route path={ADMIN_USERS_PATH} element={<UsersPage />} />

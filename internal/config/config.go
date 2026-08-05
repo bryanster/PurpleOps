@@ -570,7 +570,7 @@ func parse(env map[string]string) (Config, []error) {
 // render PDFs with. Adding a tool-visible check means calling it from here too.
 func parseTool(env map[string]string) (Tool, []error) {
 	cfg, errs := bind(env, func(b binding) bool { return b.tool })
-	return Tool{Database: cfg.Database, Log: cfg.Log}, errs
+	return Tool{Database: cfg.Database, Log: cfg.Log, Content: cfg.Content}, errs
 }
 
 // bind fills the fields whose bindings want accepts, and reports every problem

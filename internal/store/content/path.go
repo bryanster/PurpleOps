@@ -20,8 +20,14 @@ type Paths struct {
 
 // NewPaths returns a path helper rooted at root. root should already be the
 // configured content data directory (created and validated by config.Load).
+// Relative roots are resolved against the process working directory so spool
+// paths are absolute — requirePathUnderRoot and os operations need that.
 func NewPaths(root string) Paths {
-	return Paths{root: filepath.Clean(root)}
+	clean := filepath.Clean(root)
+	if abs, err := filepath.Abs(clean); err == nil {
+		clean = abs
+	}
+	return Paths{root: clean}
 }
 
 // Root returns the configured content data directory.

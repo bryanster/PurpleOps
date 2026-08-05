@@ -127,9 +127,11 @@ export async function startServer(options: StartOptions): Promise<Server> {
   const paths = {
     dbPath: path.join(dir, 'blacklight.duckdb'),
     evidenceDir: path.join(dir, 'evidence'),
+    contentDir: path.join(dir, 'content'),
     logPath: path.join(dir, 'server.log'),
   }
   await fs.mkdir(paths.evidenceDir, { recursive: true })
+  await fs.mkdir(paths.contentDir, { recursive: true })
 
   const port = await reservePort()
   const baseURL = `http://127.0.0.1:${String(port)}`
@@ -189,7 +191,7 @@ export async function startServer(options: StartOptions): Promise<Server> {
  * to, and the first thing anyone would notice is their own data changing.
  */
 function serverEnvironment(
-  paths: { dbPath: string; evidenceDir: string },
+  paths: { dbPath: string; evidenceDir: string; contentDir: string },
   baseURL: string,
   port: number,
 ): NodeJS.ProcessEnv {
@@ -208,6 +210,7 @@ function serverEnvironment(
   env.BLACKLIGHT_BASE_URL = baseURL
   env.BLACKLIGHT_DB_PATH = paths.dbPath
   env.BLACKLIGHT_EVIDENCE_DIR = paths.evidenceDir
+  env.BLACKLIGHT_CONTENT_DIR = paths.contentDir
   // Real entropy per server: config rejects placeholders and low-variety values.
   // Two distinct values, because config refuses a deployment that uses one for
   // both — see .env.example on why the blast radii differ.
