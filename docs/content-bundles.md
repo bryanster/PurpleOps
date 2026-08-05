@@ -28,7 +28,7 @@ detail names the limit.
 
    | Kind | What to download |
    |---|---|
-   | `attack` | MITRE ATT&CK Enterprise STIX bundle for one release (e.g. `enterprise-attack-15.1.json` inside a zip, or the release tarball the adapter documents). |
+   | `attack` | MITRE ATT&CK Enterprise STIX bundle for one release — see [`content-attack.md`](content-attack.md) for the exact URL template (`enterprise-attack-{version}.json`, optionally inside zip/tar). |
    | `atomic` | Atomic Red Team atomics release archive (yaml tree). |
    | `sigma` | SigmaHQ rules release that includes ATT&CK-mapped detections. |
    | `ctid` | CTID adversary-emulation plan catalog archive. |

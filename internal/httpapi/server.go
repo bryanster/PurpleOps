@@ -25,6 +25,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/throttle"
 	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/content"
+	"github.com/bryanster/blacklight/internal/content/attack"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -520,6 +521,16 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		panic("httpapi: content registry: " + err.Error())
 	}
 
+	adapters := deps.ContentAdapters
+	if adapters == nil {
+		adapters = map[storecontent.Kind]content.Adapter{}
+	}
+	// Production adapters. Tests may pre-populate ContentAdapters (including
+	// replacing attack with a fixture); only fill kinds that are still empty.
+	if _, ok := adapters[storecontent.KindAttack]; !ok {
+		adapters[storecontent.KindAttack] = attack.New()
+	}
+
 	runner, err := content.NewRunner(content.RunnerDeps{
 		DB:         deps.Store,
 		Sources:    sources,
@@ -527,7 +538,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		Jobs:       jobs,
 		Paths:      paths,
 		Activity:   activityLog,
-		Adapters:   deps.ContentAdapters,
+		Adapters:   adapters,
 		MaxBytes:   deps.Config.Content.MaxBytes.Int64(),
 		JobTimeout: deps.Config.Content.JobTimeout,
 		WriteBatch: deps.Config.Content.WriteBatch,
@@ -536,10 +547,6 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: content runner: " + err.Error())
 	}
-	// Concrete adapters register here as they land (M2-006+). Until then the
-	// map is empty and StartSync refuses unknown kinds with 409 — correct:
-	// there is nothing to fetch yet. Tests inject fixture adapters via
-	// Deps.ContentAdapters when they need a full pipeline.
 	hub := events.NewHub(events.Options{
 		MaxSubscribers: deps.Config.Events.MaxSubscribers,
 		Buffer:         deps.Config.Events.Buffer,
@@ -573,6 +580,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			activity:        activityLog,
 			content:         registry,
 			runner:          runner,
+			objects:         storecontent.NewObjects(deps.Store),
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,
 			signInURL:       signInURL(deps.Config),

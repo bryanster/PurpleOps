@@ -1479,6 +1479,189 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/techniques": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List ATT&CK techniques.
+         * @description Any authenticated subject (`content.read`). Returns techniques from
+         *     **enabled** sources only. Filter by ATT&CK `version`, substring `q`
+         *     (external id / name / description, case-insensitive), parent `tactic`
+         *     external id, and `isSubtechnique`.
+         */
+        get: operations["listContentTechniques"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/techniques/{techniqueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one ATT&CK technique.
+         * @description Any authenticated subject. Includes tactic and mitigation external ids.
+         *     Techniques from disabled sources answer `404`.
+         */
+        get: operations["getContentTechnique"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/tactics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List ATT&CK tactics.
+         * @description Any authenticated subject (`content.read`). Enabled sources only.
+         */
+        get: operations["listContentTactics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/tactics/{tacticId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one ATT&CK tactic. */
+        get: operations["getContentTactic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/mitigations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List ATT&CK mitigations. */
+        get: operations["listContentMitigations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/mitigations/{mitigationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one ATT&CK mitigation. */
+        get: operations["getContentMitigation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List ATT&CK groups. */
+        get: operations["listContentGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/groups/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one ATT&CK group. */
+        get: operations["getContentGroup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/software": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List ATT&CK software (malware and tools). */
+        get: operations["listContentSoftware"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/software/{softwareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one ATT&CK software row. */
+        get: operations["getContentSoftware"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -2606,6 +2789,113 @@ export interface components {
         ContentSourceVersionList: {
             items: components["schemas"]["ContentSourceVersion"][];
         };
+        /** @description One ATT&CK technique or sub-technique. */
+        ContentTechnique: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description ATT&CK release label (for example `15.1`). */
+            version: string;
+            /**
+             * @description MITRE id (`T1059`, `T1059.001`).
+             * @example T1059.001
+             */
+            externalId: string;
+            name: string;
+            description: string;
+            isSubtechnique: boolean;
+            /** @description Parent technique MITRE id when `isSubtechnique` is true; empty otherwise. */
+            parentExternalId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentTechniqueDetail: components["schemas"]["ContentTechnique"] & {
+            /** @description Tactic external ids this technique maps to. */
+            tactics: string[];
+            /** @description Mitigation external ids that mitigate this technique. */
+            mitigations: string[];
+        };
+        ContentTechniqueList: {
+            items: components["schemas"]["ContentTechnique"][];
+        };
+        ContentTactic: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            version: string;
+            /** @example TA0002 */
+            externalId: string;
+            name: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentTacticList: {
+            items: components["schemas"]["ContentTactic"][];
+        };
+        ContentMitigation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            version: string;
+            /** @example M1049 */
+            externalId: string;
+            name: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentMitigationList: {
+            items: components["schemas"]["ContentMitigation"][];
+        };
+        ContentGroup: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            version: string;
+            /** @example G0016 */
+            externalId: string;
+            name: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentGroupList: {
+            items: components["schemas"]["ContentGroup"][];
+        };
+        /** @enum {string} */
+        ContentSoftwareType: "malware" | "tool";
+        ContentSoftware: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            version: string;
+            /** @example S0154 */
+            externalId: string;
+            name: string;
+            description: string;
+            softwareType: components["schemas"]["ContentSoftwareType"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentSoftwareList: {
+            items: components["schemas"]["ContentSoftware"][];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -2799,6 +3089,28 @@ export interface components {
         ContentJobStatusFilter: components["schemas"]["ContentSyncJobStatus"];
         /** @description Restrict to jobs for this content source. */
         ContentJobSourceIdFilter: string;
+        /**
+         * @description Restrict to one ATT&CK release label (for example `15.1`). Omit to
+         *     return rows across every installed version of enabled sources.
+         */
+        ContentVersionFilter: string;
+        /**
+         * @description Case-insensitive substring match against `externalId`, `name`, and
+         *     `description`.
+         */
+        ContentSearchQ: string;
+        /** @description Restrict techniques to those linked to this tactic external id (for example `TA0002`). */
+        ContentTacticFilter: string;
+        /** @description When set, restrict to sub-techniques (`true`) or top-level techniques (`false`). */
+        ContentIsSubtechniqueFilter: boolean;
+        /** @description Maximum number of items to return (default 500, max 2000). */
+        ContentLibraryLimit: number;
+        /** @description Technique surrogate id (UUIDv7). */
+        ContentTechniqueId: string;
+        ContentTacticId: string;
+        ContentMitigationId: string;
+        ContentGroupId: string;
+        ContentSoftwareId: string;
     };
     requestBodies: never;
     headers: never;
@@ -4897,6 +5209,326 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentTechniques: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to one ATT&CK release label (for example `15.1`). Omit to
+                 *     return rows across every installed version of enabled sources.
+                 */
+                version?: components["parameters"]["ContentVersionFilter"];
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /** @description Restrict techniques to those linked to this tactic external id (for example `TA0002`). */
+                tactic?: components["parameters"]["ContentTacticFilter"];
+                /** @description When set, restrict to sub-techniques (`true`) or top-level techniques (`false`). */
+                isSubtechnique?: components["parameters"]["ContentIsSubtechniqueFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching techniques, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentTechniqueList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentTechnique: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Technique surrogate id (UUIDv7). */
+                techniqueId: components["parameters"]["ContentTechniqueId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The technique. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentTechniqueDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentTactics: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to one ATT&CK release label (for example `15.1`). Omit to
+                 *     return rows across every installed version of enabled sources.
+                 */
+                version?: components["parameters"]["ContentVersionFilter"];
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching tactics. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentTacticList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentTactic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tacticId: components["parameters"]["ContentTacticId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tactic. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentTactic"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentMitigations: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to one ATT&CK release label (for example `15.1`). Omit to
+                 *     return rows across every installed version of enabled sources.
+                 */
+                version?: components["parameters"]["ContentVersionFilter"];
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching mitigations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentMitigationList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentMitigation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mitigationId: components["parameters"]["ContentMitigationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The mitigation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentMitigation"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentGroups: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to one ATT&CK release label (for example `15.1`). Omit to
+                 *     return rows across every installed version of enabled sources.
+                 */
+                version?: components["parameters"]["ContentVersionFilter"];
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentGroupList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["ContentGroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentGroup"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentSoftware: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to one ATT&CK release label (for example `15.1`). Omit to
+                 *     return rows across every installed version of enabled sources.
+                 */
+                version?: components["parameters"]["ContentVersionFilter"];
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching software. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSoftwareList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentSoftware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                softwareId: components["parameters"]["ContentSoftwareId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The software row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSoftware"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

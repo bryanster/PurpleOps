@@ -20,6 +20,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ContentSoftwareType.
+const (
+	ContentSoftwareTypeMalware ContentSoftwareType = "malware"
+	ContentSoftwareTypeTool    ContentSoftwareType = "tool"
+)
+
+// Valid indicates whether the value is a known member of the ContentSoftwareType enum.
+func (e ContentSoftwareType) Valid() bool {
+	switch e {
+	case ContentSoftwareTypeMalware:
+		return true
+	case ContentSoftwareTypeTool:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContentSourceKind.
 const (
 	ContentSourceKindAtomic ContentSourceKind = "atomic"
@@ -461,6 +479,67 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"newPassword"`
 }
 
+// ContentGroup defines model for ContentGroup.
+type ContentGroup struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId Examples: G0016
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	SourceId   openapi_types.UUID `json:"sourceId"`
+	UpdatedAt  time.Time          `json:"updatedAt"`
+	Version    string             `json:"version"`
+}
+
+// ContentGroupList defines model for ContentGroupList.
+type ContentGroupList struct {
+	Items []ContentGroup `json:"items"`
+}
+
+// ContentMitigation defines model for ContentMitigation.
+type ContentMitigation struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId Examples: M1049
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	SourceId   openapi_types.UUID `json:"sourceId"`
+	UpdatedAt  time.Time          `json:"updatedAt"`
+	Version    string             `json:"version"`
+}
+
+// ContentMitigationList defines model for ContentMitigationList.
+type ContentMitigationList struct {
+	Items []ContentMitigation `json:"items"`
+}
+
+// ContentSoftware defines model for ContentSoftware.
+type ContentSoftware struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId Examples: S0154
+	ExternalId   string              `json:"externalId"`
+	Id           openapi_types.UUID  `json:"id"`
+	Name         string              `json:"name"`
+	SoftwareType ContentSoftwareType `json:"softwareType"`
+	SourceId     openapi_types.UUID  `json:"sourceId"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
+	Version      string              `json:"version"`
+}
+
+// ContentSoftwareList defines model for ContentSoftwareList.
+type ContentSoftwareList struct {
+	Items []ContentSoftware `json:"items"`
+}
+
+// ContentSoftwareType defines model for ContentSoftwareType.
+type ContentSoftwareType string
+
 // ContentSource One content library registry row — an upstream source or the custom
 // home for user-authored rows.
 type ContentSource struct {
@@ -668,6 +747,80 @@ type ContentSyncJobSummary struct {
 
 	// Version Version token the job targeted, when one was named.
 	Version *string `json:"version,omitempty"`
+}
+
+// ContentTactic defines model for ContentTactic.
+type ContentTactic struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId Examples: TA0002
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	SourceId   openapi_types.UUID `json:"sourceId"`
+	UpdatedAt  time.Time          `json:"updatedAt"`
+	Version    string             `json:"version"`
+}
+
+// ContentTacticList defines model for ContentTacticList.
+type ContentTacticList struct {
+	Items []ContentTactic `json:"items"`
+}
+
+// ContentTechnique One ATT&CK technique or sub-technique.
+type ContentTechnique struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId MITRE id (`T1059`, `T1059.001`).
+	//
+	// Examples: T1059.001
+	ExternalId     string             `json:"externalId"`
+	Id             openapi_types.UUID `json:"id"`
+	IsSubtechnique bool               `json:"isSubtechnique"`
+	Name           string             `json:"name"`
+
+	// ParentExternalId Parent technique MITRE id when `isSubtechnique` is true; empty otherwise.
+	ParentExternalId string             `json:"parentExternalId"`
+	SourceId         openapi_types.UUID `json:"sourceId"`
+	UpdatedAt        time.Time          `json:"updatedAt"`
+
+	// Version ATT&CK release label (for example `15.1`).
+	Version string `json:"version"`
+}
+
+// ContentTechniqueDetail defines model for ContentTechniqueDetail.
+type ContentTechniqueDetail struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId MITRE id (`T1059`, `T1059.001`).
+	//
+	// Examples: T1059.001
+	ExternalId     string             `json:"externalId"`
+	Id             openapi_types.UUID `json:"id"`
+	IsSubtechnique bool               `json:"isSubtechnique"`
+
+	// Mitigations Mitigation external ids that mitigate this technique.
+	Mitigations []string `json:"mitigations"`
+	Name        string   `json:"name"`
+
+	// ParentExternalId Parent technique MITRE id when `isSubtechnique` is true; empty otherwise.
+	ParentExternalId string             `json:"parentExternalId"`
+	SourceId         openapi_types.UUID `json:"sourceId"`
+
+	// Tactics Tactic external ids this technique maps to.
+	Tactics   []string  `json:"tactics"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// Version ATT&CK release label (for example `15.1`).
+	Version string `json:"version"`
+}
+
+// ContentTechniqueList defines model for ContentTechniqueList.
+type ContentTechniqueList struct {
+	Items []ContentTechnique `json:"items"`
 }
 
 // CreateServiceTokenRequest Body of `POST /auth/tokens`. The owner is the caller and is not a field.
@@ -1478,6 +1631,12 @@ type ActivityVerb = string
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
 
+// ContentGroupId defines model for ContentGroupId.
+type ContentGroupId = openapi_types.UUID
+
+// ContentIsSubtechniqueFilter defines model for ContentIsSubtechniqueFilter.
+type ContentIsSubtechniqueFilter = bool
+
 // ContentJobId defines model for ContentJobId.
 type ContentJobId = openapi_types.UUID
 
@@ -1486,6 +1645,18 @@ type ContentJobSourceIdFilter = openapi_types.UUID
 
 // ContentJobStatusFilter Lifecycle state of a content sync job.
 type ContentJobStatusFilter = ContentSyncJobStatus
+
+// ContentLibraryLimit defines model for ContentLibraryLimit.
+type ContentLibraryLimit = int
+
+// ContentMitigationId defines model for ContentMitigationId.
+type ContentMitigationId = openapi_types.UUID
+
+// ContentSearchQ defines model for ContentSearchQ.
+type ContentSearchQ = string
+
+// ContentSoftwareId defines model for ContentSoftwareId.
+type ContentSoftwareId = openapi_types.UUID
 
 // ContentSourceEnabledFilter defines model for ContentSourceEnabledFilter.
 type ContentSourceEnabledFilter = bool
@@ -1497,6 +1668,18 @@ type ContentSourceId = openapi_types.UUID
 // a string somebody passed to an API. There is no create-source endpoint
 // in M2 — only the seeded rows.
 type ContentSourceKindFilter = ContentSourceKind
+
+// ContentTacticFilter defines model for ContentTacticFilter.
+type ContentTacticFilter = string
+
+// ContentTacticId defines model for ContentTacticId.
+type ContentTacticId = openapi_types.UUID
+
+// ContentTechniqueId defines model for ContentTechniqueId.
+type ContentTechniqueId = openapi_types.UUID
+
+// ContentVersionFilter defines model for ContentVersionFilter.
+type ContentVersionFilter = string
 
 // Cursor defines model for Cursor.
 type Cursor = string
@@ -1832,6 +2015,20 @@ type RevokeServiceTokenParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// ListContentGroupsParams defines parameters for ListContentGroups.
+type ListContentGroupsParams struct {
+	// Version Restrict to one ATT&CK release label (for example `15.1`). Omit to
+	// return rows across every installed version of enabled sources.
+	Version *ContentVersionFilter `form:"version,omitempty" json:"version,omitempty"`
+
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListContentJobsParams defines parameters for ListContentJobs.
 type ListContentJobsParams struct {
 	// Status Restrict to jobs in this lifecycle state.
@@ -1861,6 +2058,34 @@ type CancelContentJobParams struct {
 	// subject to the check — CSRF is a property of cookies, which browsers
 	// attach on their own.
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ListContentMitigationsParams defines parameters for ListContentMitigations.
+type ListContentMitigationsParams struct {
+	// Version Restrict to one ATT&CK release label (for example `15.1`). Omit to
+	// return rows across every installed version of enabled sources.
+	Version *ContentVersionFilter `form:"version,omitempty" json:"version,omitempty"`
+
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListContentSoftwareParams defines parameters for ListContentSoftware.
+type ListContentSoftwareParams struct {
+	// Version Restrict to one ATT&CK release label (for example `15.1`). Omit to
+	// return rows across every installed version of enabled sources.
+	Version *ContentVersionFilter `form:"version,omitempty" json:"version,omitempty"`
+
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListContentSourcesParams defines parameters for ListContentSources.
@@ -2003,6 +2228,40 @@ type StartContentSourceSyncParams struct {
 	// subject to the check — CSRF is a property of cookies, which browsers
 	// attach on their own.
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ListContentTacticsParams defines parameters for ListContentTactics.
+type ListContentTacticsParams struct {
+	// Version Restrict to one ATT&CK release label (for example `15.1`). Omit to
+	// return rows across every installed version of enabled sources.
+	Version *ContentVersionFilter `form:"version,omitempty" json:"version,omitempty"`
+
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListContentTechniquesParams defines parameters for ListContentTechniques.
+type ListContentTechniquesParams struct {
+	// Version Restrict to one ATT&CK release label (for example `15.1`). Omit to
+	// return rows across every installed version of enabled sources.
+	Version *ContentVersionFilter `form:"version,omitempty" json:"version,omitempty"`
+
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Tactic Restrict techniques to those linked to this tactic external id (for example `TA0002`).
+	Tactic *ContentTacticFilter `form:"tactic,omitempty" json:"tactic,omitempty"`
+
+	// IsSubtechnique When set, restrict to sub-techniques (`true`) or top-level techniques (`false`).
+	IsSubtechnique *ContentIsSubtechniqueFilter `form:"isSubtechnique,omitempty" json:"isSubtechnique,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListEngagementActivityParams defines parameters for ListEngagementActivity.
@@ -2359,6 +2618,12 @@ type ServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
+	// ListContentGroups List ATT&CK groups.
+	// (GET /content/groups)
+	ListContentGroups(w http.ResponseWriter, r *http.Request, params ListContentGroupsParams)
+	// GetContentGroup Read one ATT&CK group.
+	// (GET /content/groups/{groupId})
+	GetContentGroup(w http.ResponseWriter, r *http.Request, groupId ContentGroupId)
 	// ListContentJobs List content sync jobs.
 	// (GET /content/jobs)
 	ListContentJobs(w http.ResponseWriter, r *http.Request, params ListContentJobsParams)
@@ -2368,6 +2633,18 @@ type ServerInterface interface {
 	// CancelContentJob Cancel a content sync job.
 	// (POST /content/jobs/{jobId}/cancel)
 	CancelContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId, params CancelContentJobParams)
+	// ListContentMitigations List ATT&CK mitigations.
+	// (GET /content/mitigations)
+	ListContentMitigations(w http.ResponseWriter, r *http.Request, params ListContentMitigationsParams)
+	// GetContentMitigation Read one ATT&CK mitigation.
+	// (GET /content/mitigations/{mitigationId})
+	GetContentMitigation(w http.ResponseWriter, r *http.Request, mitigationId ContentMitigationId)
+	// ListContentSoftware List ATT&CK software (malware and tools).
+	// (GET /content/software)
+	ListContentSoftware(w http.ResponseWriter, r *http.Request, params ListContentSoftwareParams)
+	// GetContentSoftware Read one ATT&CK software row.
+	// (GET /content/software/{softwareId})
+	GetContentSoftware(w http.ResponseWriter, r *http.Request, softwareId ContentSoftwareId)
 	// ListContentSources List content sources.
 	// (GET /content/sources)
 	ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams)
@@ -2398,6 +2675,18 @@ type ServerInterface interface {
 	// ListContentSourceVersions List version snapshots under a content source.
 	// (GET /content/sources/{sourceId}/versions)
 	ListContentSourceVersions(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId)
+	// ListContentTactics List ATT&CK tactics.
+	// (GET /content/tactics)
+	ListContentTactics(w http.ResponseWriter, r *http.Request, params ListContentTacticsParams)
+	// GetContentTactic Read one ATT&CK tactic.
+	// (GET /content/tactics/{tacticId})
+	GetContentTactic(w http.ResponseWriter, r *http.Request, tacticId ContentTacticId)
+	// ListContentTechniques List ATT&CK techniques.
+	// (GET /content/techniques)
+	ListContentTechniques(w http.ResponseWriter, r *http.Request, params ListContentTechniquesParams)
+	// GetContentTechnique Read one ATT&CK technique.
+	// (GET /content/techniques/{techniqueId})
+	GetContentTechnique(w http.ResponseWriter, r *http.Request, techniqueId ContentTechniqueId)
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
@@ -2593,6 +2882,18 @@ func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListContentGroups List ATT&CK groups.
+// (GET /content/groups)
+func (_ Unimplemented) ListContentGroups(w http.ResponseWriter, r *http.Request, params ListContentGroupsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentGroup Read one ATT&CK group.
+// (GET /content/groups/{groupId})
+func (_ Unimplemented) GetContentGroup(w http.ResponseWriter, r *http.Request, groupId ContentGroupId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListContentJobs List content sync jobs.
 // (GET /content/jobs)
 func (_ Unimplemented) ListContentJobs(w http.ResponseWriter, r *http.Request, params ListContentJobsParams) {
@@ -2608,6 +2909,30 @@ func (_ Unimplemented) GetContentJob(w http.ResponseWriter, r *http.Request, job
 // CancelContentJob Cancel a content sync job.
 // (POST /content/jobs/{jobId}/cancel)
 func (_ Unimplemented) CancelContentJob(w http.ResponseWriter, r *http.Request, jobId ContentJobId, params CancelContentJobParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentMitigations List ATT&CK mitigations.
+// (GET /content/mitigations)
+func (_ Unimplemented) ListContentMitigations(w http.ResponseWriter, r *http.Request, params ListContentMitigationsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentMitigation Read one ATT&CK mitigation.
+// (GET /content/mitigations/{mitigationId})
+func (_ Unimplemented) GetContentMitigation(w http.ResponseWriter, r *http.Request, mitigationId ContentMitigationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentSoftware List ATT&CK software (malware and tools).
+// (GET /content/software)
+func (_ Unimplemented) ListContentSoftware(w http.ResponseWriter, r *http.Request, params ListContentSoftwareParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentSoftware Read one ATT&CK software row.
+// (GET /content/software/{softwareId})
+func (_ Unimplemented) GetContentSoftware(w http.ResponseWriter, r *http.Request, softwareId ContentSoftwareId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2668,6 +2993,30 @@ func (_ Unimplemented) StartContentSourceSync(w http.ResponseWriter, r *http.Req
 // ListContentSourceVersions List version snapshots under a content source.
 // (GET /content/sources/{sourceId}/versions)
 func (_ Unimplemented) ListContentSourceVersions(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentTactics List ATT&CK tactics.
+// (GET /content/tactics)
+func (_ Unimplemented) ListContentTactics(w http.ResponseWriter, r *http.Request, params ListContentTacticsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentTactic Read one ATT&CK tactic.
+// (GET /content/tactics/{tacticId})
+func (_ Unimplemented) GetContentTactic(w http.ResponseWriter, r *http.Request, tacticId ContentTacticId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentTechniques List ATT&CK techniques.
+// (GET /content/techniques)
+func (_ Unimplemented) ListContentTechniques(w http.ResponseWriter, r *http.Request, params ListContentTechniquesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentTechnique Read one ATT&CK technique.
+// (GET /content/techniques/{techniqueId})
+func (_ Unimplemented) GetContentTechnique(w http.ResponseWriter, r *http.Request, techniqueId ContentTechniqueId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3572,6 +3921,91 @@ func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListContentGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListContentGroups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentGroupsParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentGroups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentGroup operation middleware
+func (siw *ServerInterfaceWrapper) GetContentGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId ContentGroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentGroup(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListContentJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListContentJobs(w http.ResponseWriter, r *http.Request) {
 
@@ -3698,6 +4132,176 @@ func (siw *ServerInterfaceWrapper) CancelContentJob(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelContentJob(w, r, jobId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentMitigations operation middleware
+func (siw *ServerInterfaceWrapper) ListContentMitigations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentMitigationsParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentMitigations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentMitigation operation middleware
+func (siw *ServerInterfaceWrapper) GetContentMitigation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "mitigationId" -------------
+	var mitigationId ContentMitigationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mitigationId", chi.URLParam(r, "mitigationId"), &mitigationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mitigationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentMitigation(w, r, mitigationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentSoftware operation middleware
+func (siw *ServerInterfaceWrapper) ListContentSoftware(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentSoftwareParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentSoftware(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentSoftware operation middleware
+func (siw *ServerInterfaceWrapper) GetContentSoftware(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "softwareId" -------------
+	var softwareId ContentSoftwareId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "softwareId", chi.URLParam(r, "softwareId"), &softwareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "softwareId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentSoftware(w, r, softwareId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4146,6 +4750,202 @@ func (siw *ServerInterfaceWrapper) ListContentSourceVersions(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListContentSourceVersions(w, r, sourceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentTactics operation middleware
+func (siw *ServerInterfaceWrapper) ListContentTactics(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentTacticsParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentTactics(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentTactic operation middleware
+func (siw *ServerInterfaceWrapper) GetContentTactic(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tacticId" -------------
+	var tacticId ContentTacticId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tacticId", chi.URLParam(r, "tacticId"), &tacticId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tacticId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentTactic(w, r, tacticId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentTechniques operation middleware
+func (siw *ServerInterfaceWrapper) ListContentTechniques(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentTechniquesParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tactic" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tactic", r.URL.Query(), &params.Tactic, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tactic"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tactic", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "isSubtechnique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "isSubtechnique", r.URL.Query(), &params.IsSubtechnique, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "isSubtechnique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "isSubtechnique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentTechniques(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentTechnique operation middleware
+func (siw *ServerInterfaceWrapper) GetContentTechnique(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "techniqueId" -------------
+	var techniqueId ContentTechniqueId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "techniqueId", chi.URLParam(r, "techniqueId"), &techniqueId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "techniqueId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentTechnique(w, r, techniqueId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5195,6 +5995,36 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/content/jobs/{jobId}/cancel", wrapper.CancelContentJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/techniques", wrapper.ListContentTechniques)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/techniques/{techniqueId}", wrapper.GetContentTechnique)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/tactics", wrapper.ListContentTactics)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/tactics/{tacticId}", wrapper.GetContentTactic)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/mitigations", wrapper.ListContentMitigations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/mitigations/{mitigationId}", wrapper.GetContentMitigation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/groups", wrapper.ListContentGroups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/groups/{groupId}", wrapper.GetContentGroup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/software", wrapper.ListContentSoftware)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/software/{softwareId}", wrapper.GetContentSoftware)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.SubscribeEvents)
@@ -7125,6 +7955,178 @@ func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRev
 	return err
 }
 
+type ListContentGroupsRequestObject struct {
+	Params ListContentGroupsParams
+}
+
+type ListContentGroupsResponseObject interface {
+	VisitListContentGroupsResponse(w http.ResponseWriter) error
+}
+
+type ListContentGroups200JSONResponse ContentGroupList
+
+func (response ListContentGroups200JSONResponse) VisitListContentGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentGroups400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentGroups400ApplicationProblemPlusJSONResponse) VisitListContentGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentGroups401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentGroups401ApplicationProblemPlusJSONResponse) VisitListContentGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentGroups403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentGroups403ApplicationProblemPlusJSONResponse) VisitListContentGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentGroups500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentGroups500ApplicationProblemPlusJSONResponse) VisitListContentGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentGroupRequestObject struct {
+	GroupId ContentGroupId `json:"groupId"`
+}
+
+type GetContentGroupResponseObject interface {
+	VisitGetContentGroupResponse(w http.ResponseWriter) error
+}
+
+type GetContentGroup200JSONResponse ContentGroup
+
+func (response GetContentGroup200JSONResponse) VisitGetContentGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentGroup401ApplicationProblemPlusJSONResponse) VisitGetContentGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentGroup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentGroup403ApplicationProblemPlusJSONResponse) VisitGetContentGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentGroup404ApplicationProblemPlusJSONResponse) VisitGetContentGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentGroup500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentGroup500ApplicationProblemPlusJSONResponse) VisitGetContentGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListContentJobsRequestObject struct {
 	Params ListContentJobsParams
 }
@@ -7389,6 +8391,350 @@ type CancelContentJob500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CancelContentJob500ApplicationProblemPlusJSONResponse) VisitCancelContentJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentMitigationsRequestObject struct {
+	Params ListContentMitigationsParams
+}
+
+type ListContentMitigationsResponseObject interface {
+	VisitListContentMitigationsResponse(w http.ResponseWriter) error
+}
+
+type ListContentMitigations200JSONResponse ContentMitigationList
+
+func (response ListContentMitigations200JSONResponse) VisitListContentMitigationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentMitigations400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentMitigations400ApplicationProblemPlusJSONResponse) VisitListContentMitigationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentMitigations401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentMitigations401ApplicationProblemPlusJSONResponse) VisitListContentMitigationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentMitigations403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentMitigations403ApplicationProblemPlusJSONResponse) VisitListContentMitigationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentMitigations500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentMitigations500ApplicationProblemPlusJSONResponse) VisitListContentMitigationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentMitigationRequestObject struct {
+	MitigationId ContentMitigationId `json:"mitigationId"`
+}
+
+type GetContentMitigationResponseObject interface {
+	VisitGetContentMitigationResponse(w http.ResponseWriter) error
+}
+
+type GetContentMitigation200JSONResponse ContentMitigation
+
+func (response GetContentMitigation200JSONResponse) VisitGetContentMitigationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentMitigation401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentMitigation401ApplicationProblemPlusJSONResponse) VisitGetContentMitigationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentMitigation403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentMitigation403ApplicationProblemPlusJSONResponse) VisitGetContentMitigationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentMitigation404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentMitigation404ApplicationProblemPlusJSONResponse) VisitGetContentMitigationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentMitigation500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentMitigation500ApplicationProblemPlusJSONResponse) VisitGetContentMitigationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSoftwareRequestObject struct {
+	Params ListContentSoftwareParams
+}
+
+type ListContentSoftwareResponseObject interface {
+	VisitListContentSoftwareResponse(w http.ResponseWriter) error
+}
+
+type ListContentSoftware200JSONResponse ContentSoftwareList
+
+func (response ListContentSoftware200JSONResponse) VisitListContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSoftware400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSoftware400ApplicationProblemPlusJSONResponse) VisitListContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSoftware401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSoftware401ApplicationProblemPlusJSONResponse) VisitListContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSoftware403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSoftware403ApplicationProblemPlusJSONResponse) VisitListContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSoftware500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSoftware500ApplicationProblemPlusJSONResponse) VisitListContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSoftwareRequestObject struct {
+	SoftwareId ContentSoftwareId `json:"softwareId"`
+}
+
+type GetContentSoftwareResponseObject interface {
+	VisitGetContentSoftwareResponse(w http.ResponseWriter) error
+}
+
+type GetContentSoftware200JSONResponse ContentSoftware
+
+func (response GetContentSoftware200JSONResponse) VisitGetContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSoftware401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSoftware401ApplicationProblemPlusJSONResponse) VisitGetContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSoftware403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSoftware403ApplicationProblemPlusJSONResponse) VisitGetContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSoftware404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSoftware404ApplicationProblemPlusJSONResponse) VisitGetContentSoftwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSoftware500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSoftware500ApplicationProblemPlusJSONResponse) VisitGetContentSoftwareResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8382,6 +9728,350 @@ type ListContentSourceVersions500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListContentSourceVersions500ApplicationProblemPlusJSONResponse) VisitListContentSourceVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTacticsRequestObject struct {
+	Params ListContentTacticsParams
+}
+
+type ListContentTacticsResponseObject interface {
+	VisitListContentTacticsResponse(w http.ResponseWriter) error
+}
+
+type ListContentTactics200JSONResponse ContentTacticList
+
+func (response ListContentTactics200JSONResponse) VisitListContentTacticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTactics400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTactics400ApplicationProblemPlusJSONResponse) VisitListContentTacticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTactics401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTactics401ApplicationProblemPlusJSONResponse) VisitListContentTacticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTactics403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTactics403ApplicationProblemPlusJSONResponse) VisitListContentTacticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTactics500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTactics500ApplicationProblemPlusJSONResponse) VisitListContentTacticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTacticRequestObject struct {
+	TacticId ContentTacticId `json:"tacticId"`
+}
+
+type GetContentTacticResponseObject interface {
+	VisitGetContentTacticResponse(w http.ResponseWriter) error
+}
+
+type GetContentTactic200JSONResponse ContentTactic
+
+func (response GetContentTactic200JSONResponse) VisitGetContentTacticResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTactic401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTactic401ApplicationProblemPlusJSONResponse) VisitGetContentTacticResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTactic403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTactic403ApplicationProblemPlusJSONResponse) VisitGetContentTacticResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTactic404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTactic404ApplicationProblemPlusJSONResponse) VisitGetContentTacticResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTactic500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTactic500ApplicationProblemPlusJSONResponse) VisitGetContentTacticResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTechniquesRequestObject struct {
+	Params ListContentTechniquesParams
+}
+
+type ListContentTechniquesResponseObject interface {
+	VisitListContentTechniquesResponse(w http.ResponseWriter) error
+}
+
+type ListContentTechniques200JSONResponse ContentTechniqueList
+
+func (response ListContentTechniques200JSONResponse) VisitListContentTechniquesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTechniques400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTechniques400ApplicationProblemPlusJSONResponse) VisitListContentTechniquesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTechniques401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTechniques401ApplicationProblemPlusJSONResponse) VisitListContentTechniquesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTechniques403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTechniques403ApplicationProblemPlusJSONResponse) VisitListContentTechniquesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentTechniques500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentTechniques500ApplicationProblemPlusJSONResponse) VisitListContentTechniquesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTechniqueRequestObject struct {
+	TechniqueId ContentTechniqueId `json:"techniqueId"`
+}
+
+type GetContentTechniqueResponseObject interface {
+	VisitGetContentTechniqueResponse(w http.ResponseWriter) error
+}
+
+type GetContentTechnique200JSONResponse ContentTechniqueDetail
+
+func (response GetContentTechnique200JSONResponse) VisitGetContentTechniqueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTechnique401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTechnique401ApplicationProblemPlusJSONResponse) VisitGetContentTechniqueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTechnique403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTechnique403ApplicationProblemPlusJSONResponse) VisitGetContentTechniqueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTechnique404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTechnique404ApplicationProblemPlusJSONResponse) VisitGetContentTechniqueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentTechnique500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentTechnique500ApplicationProblemPlusJSONResponse) VisitGetContentTechniqueResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -10048,6 +11738,12 @@ type StrictServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
+	// ListContentGroups List ATT&CK groups.
+	// (GET /content/groups)
+	ListContentGroups(ctx context.Context, request ListContentGroupsRequestObject) (ListContentGroupsResponseObject, error)
+	// GetContentGroup Read one ATT&CK group.
+	// (GET /content/groups/{groupId})
+	GetContentGroup(ctx context.Context, request GetContentGroupRequestObject) (GetContentGroupResponseObject, error)
 	// ListContentJobs List content sync jobs.
 	// (GET /content/jobs)
 	ListContentJobs(ctx context.Context, request ListContentJobsRequestObject) (ListContentJobsResponseObject, error)
@@ -10057,6 +11753,18 @@ type StrictServerInterface interface {
 	// CancelContentJob Cancel a content sync job.
 	// (POST /content/jobs/{jobId}/cancel)
 	CancelContentJob(ctx context.Context, request CancelContentJobRequestObject) (CancelContentJobResponseObject, error)
+	// ListContentMitigations List ATT&CK mitigations.
+	// (GET /content/mitigations)
+	ListContentMitigations(ctx context.Context, request ListContentMitigationsRequestObject) (ListContentMitigationsResponseObject, error)
+	// GetContentMitigation Read one ATT&CK mitigation.
+	// (GET /content/mitigations/{mitigationId})
+	GetContentMitigation(ctx context.Context, request GetContentMitigationRequestObject) (GetContentMitigationResponseObject, error)
+	// ListContentSoftware List ATT&CK software (malware and tools).
+	// (GET /content/software)
+	ListContentSoftware(ctx context.Context, request ListContentSoftwareRequestObject) (ListContentSoftwareResponseObject, error)
+	// GetContentSoftware Read one ATT&CK software row.
+	// (GET /content/software/{softwareId})
+	GetContentSoftware(ctx context.Context, request GetContentSoftwareRequestObject) (GetContentSoftwareResponseObject, error)
 	// ListContentSources List content sources.
 	// (GET /content/sources)
 	ListContentSources(ctx context.Context, request ListContentSourcesRequestObject) (ListContentSourcesResponseObject, error)
@@ -10087,6 +11795,18 @@ type StrictServerInterface interface {
 	// ListContentSourceVersions List version snapshots under a content source.
 	// (GET /content/sources/{sourceId}/versions)
 	ListContentSourceVersions(ctx context.Context, request ListContentSourceVersionsRequestObject) (ListContentSourceVersionsResponseObject, error)
+	// ListContentTactics List ATT&CK tactics.
+	// (GET /content/tactics)
+	ListContentTactics(ctx context.Context, request ListContentTacticsRequestObject) (ListContentTacticsResponseObject, error)
+	// GetContentTactic Read one ATT&CK tactic.
+	// (GET /content/tactics/{tacticId})
+	GetContentTactic(ctx context.Context, request GetContentTacticRequestObject) (GetContentTacticResponseObject, error)
+	// ListContentTechniques List ATT&CK techniques.
+	// (GET /content/techniques)
+	ListContentTechniques(ctx context.Context, request ListContentTechniquesRequestObject) (ListContentTechniquesResponseObject, error)
+	// GetContentTechnique Read one ATT&CK technique.
+	// (GET /content/techniques/{techniqueId})
+	GetContentTechnique(ctx context.Context, request GetContentTechniqueRequestObject) (GetContentTechniqueResponseObject, error)
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
@@ -10828,6 +12548,58 @@ func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// ListContentGroups operation middleware
+func (sh *strictHandler) ListContentGroups(w http.ResponseWriter, r *http.Request, params ListContentGroupsParams) {
+	var request ListContentGroupsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentGroups(ctx, request.(ListContentGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentGroupsResponseObject); ok {
+		if err := validResponse.VisitListContentGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentGroup operation middleware
+func (sh *strictHandler) GetContentGroup(w http.ResponseWriter, r *http.Request, groupId ContentGroupId) {
+	var request GetContentGroupRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentGroup(ctx, request.(GetContentGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentGroupResponseObject); ok {
+		if err := validResponse.VisitGetContentGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListContentJobs operation middleware
 func (sh *strictHandler) ListContentJobs(w http.ResponseWriter, r *http.Request, params ListContentJobsParams) {
 	var request ListContentJobsRequestObject
@@ -10900,6 +12672,110 @@ func (sh *strictHandler) CancelContentJob(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelContentJobResponseObject); ok {
 		if err := validResponse.VisitCancelContentJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentMitigations operation middleware
+func (sh *strictHandler) ListContentMitigations(w http.ResponseWriter, r *http.Request, params ListContentMitigationsParams) {
+	var request ListContentMitigationsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentMitigations(ctx, request.(ListContentMitigationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentMitigations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentMitigationsResponseObject); ok {
+		if err := validResponse.VisitListContentMitigationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentMitigation operation middleware
+func (sh *strictHandler) GetContentMitigation(w http.ResponseWriter, r *http.Request, mitigationId ContentMitigationId) {
+	var request GetContentMitigationRequestObject
+
+	request.MitigationId = mitigationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentMitigation(ctx, request.(GetContentMitigationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentMitigation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentMitigationResponseObject); ok {
+		if err := validResponse.VisitGetContentMitigationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentSoftware operation middleware
+func (sh *strictHandler) ListContentSoftware(w http.ResponseWriter, r *http.Request, params ListContentSoftwareParams) {
+	var request ListContentSoftwareRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentSoftware(ctx, request.(ListContentSoftwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentSoftware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentSoftwareResponseObject); ok {
+		if err := validResponse.VisitListContentSoftwareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentSoftware operation middleware
+func (sh *strictHandler) GetContentSoftware(w http.ResponseWriter, r *http.Request, softwareId ContentSoftwareId) {
+	var request GetContentSoftwareRequestObject
+
+	request.SoftwareId = softwareId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentSoftware(ctx, request.(GetContentSoftwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentSoftware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentSoftwareResponseObject); ok {
+		if err := validResponse.VisitGetContentSoftwareResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11201,6 +13077,110 @@ func (sh *strictHandler) ListContentSourceVersions(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListContentSourceVersionsResponseObject); ok {
 		if err := validResponse.VisitListContentSourceVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentTactics operation middleware
+func (sh *strictHandler) ListContentTactics(w http.ResponseWriter, r *http.Request, params ListContentTacticsParams) {
+	var request ListContentTacticsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentTactics(ctx, request.(ListContentTacticsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentTactics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentTacticsResponseObject); ok {
+		if err := validResponse.VisitListContentTacticsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentTactic operation middleware
+func (sh *strictHandler) GetContentTactic(w http.ResponseWriter, r *http.Request, tacticId ContentTacticId) {
+	var request GetContentTacticRequestObject
+
+	request.TacticId = tacticId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentTactic(ctx, request.(GetContentTacticRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentTactic")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentTacticResponseObject); ok {
+		if err := validResponse.VisitGetContentTacticResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentTechniques operation middleware
+func (sh *strictHandler) ListContentTechniques(w http.ResponseWriter, r *http.Request, params ListContentTechniquesParams) {
+	var request ListContentTechniquesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentTechniques(ctx, request.(ListContentTechniquesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentTechniques")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentTechniquesResponseObject); ok {
+		if err := validResponse.VisitListContentTechniquesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentTechnique operation middleware
+func (sh *strictHandler) GetContentTechnique(w http.ResponseWriter, r *http.Request, techniqueId ContentTechniqueId) {
+	var request GetContentTechniqueRequestObject
+
+	request.TechniqueId = techniqueId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentTechnique(ctx, request.(GetContentTechniqueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentTechnique")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentTechniqueResponseObject); ok {
+		if err := validResponse.VisitGetContentTechniqueResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

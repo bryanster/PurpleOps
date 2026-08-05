@@ -2476,6 +2476,298 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/techniques:
+    get:
+      operationId: listContentTechniques
+      summary: List ATT&CK techniques.
+      description: |
+        Any authenticated subject (`content.read`). Returns techniques from
+        **enabled** sources only. Filter by ATT&CK `version`, substring `q`
+        (external id / name / description, case-insensitive), parent `tactic`
+        external id, and `isSubtechnique`.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentVersionFilter"
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentTacticFilter"
+        - $ref: "#/components/parameters/ContentIsSubtechniqueFilter"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching techniques, external id then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentTechniqueList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/techniques/{techniqueId}:
+    get:
+      operationId: getContentTechnique
+      summary: Read one ATT&CK technique.
+      description: |
+        Any authenticated subject. Includes tactic and mitigation external ids.
+        Techniques from disabled sources answer `404`.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentTechniqueId"
+      responses:
+        "200":
+          description: The technique.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentTechniqueDetail"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/tactics:
+    get:
+      operationId: listContentTactics
+      summary: List ATT&CK tactics.
+      description: |
+        Any authenticated subject (`content.read`). Enabled sources only.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentVersionFilter"
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching tactics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentTacticList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/tactics/{tacticId}:
+    get:
+      operationId: getContentTactic
+      summary: Read one ATT&CK tactic.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentTacticId"
+      responses:
+        "200":
+          description: The tactic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentTactic"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/mitigations:
+    get:
+      operationId: listContentMitigations
+      summary: List ATT&CK mitigations.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentVersionFilter"
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching mitigations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentMitigationList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/mitigations/{mitigationId}:
+    get:
+      operationId: getContentMitigation
+      summary: Read one ATT&CK mitigation.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentMitigationId"
+      responses:
+        "200":
+          description: The mitigation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentMitigation"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/groups:
+    get:
+      operationId: listContentGroups
+      summary: List ATT&CK groups.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentVersionFilter"
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching groups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentGroupList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/groups/{groupId}:
+    get:
+      operationId: getContentGroup
+      summary: Read one ATT&CK group.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentGroupId"
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentGroup"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/software:
+    get:
+      operationId: listContentSoftware
+      summary: List ATT&CK software (malware and tools).
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentVersionFilter"
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching software.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSoftwareList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/software/{softwareId}:
+    get:
+      operationId: getContentSoftware
+      summary: Read one ATT&CK software row.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSoftwareId"
+      responses:
+        "200":
+          description: The software row.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSoftware"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /events:
     get:
       operationId: subscribeEvents
@@ -2804,6 +3096,100 @@ components:
       in: query
       required: false
       description: Restrict to jobs for this content source.
+      schema:
+        type: string
+        format: uuid
+
+    ContentVersionFilter:
+      name: version
+      in: query
+      required: false
+      description: |
+        Restrict to one ATT&CK release label (for example `15.1`). Omit to
+        return rows across every installed version of enabled sources.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+
+    ContentSearchQ:
+      name: q
+      in: query
+      required: false
+      description: |
+        Case-insensitive substring match against `externalId`, `name`, and
+        `description`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 320
+
+    ContentTacticFilter:
+      name: tactic
+      in: query
+      required: false
+      description: Restrict techniques to those linked to this tactic external id (for example `TA0002`).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+
+    ContentIsSubtechniqueFilter:
+      name: isSubtechnique
+      in: query
+      required: false
+      description: When set, restrict to sub-techniques (`true`) or top-level techniques (`false`).
+      schema:
+        type: boolean
+
+    ContentLibraryLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of items to return (default 500, max 2000).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2000
+        default: 500
+
+    ContentTechniqueId:
+      name: techniqueId
+      in: path
+      required: true
+      description: Technique surrogate id (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
+    ContentTacticId:
+      name: tacticId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ContentMitigationId:
+      name: mitigationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ContentGroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ContentSoftwareId:
+      name: softwareId
+      in: path
+      required: true
       schema:
         type: string
         format: uuid
@@ -4506,3 +4892,266 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentSourceVersion"
+
+    ContentTechnique:
+      type: object
+      description: One ATT&CK technique or sub-technique.
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - isSubtechnique
+        - parentExternalId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: ATT&CK release label (for example `15.1`).
+        externalId:
+          type: string
+          description: MITRE id (`T1059`, `T1059.001`).
+          examples:
+            - T1059.001
+        name:
+          type: string
+        description:
+          type: string
+        isSubtechnique:
+          type: boolean
+        parentExternalId:
+          type: string
+          description: Parent technique MITRE id when `isSubtechnique` is true; empty otherwise.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentTechniqueDetail:
+      allOf:
+        - $ref: "#/components/schemas/ContentTechnique"
+        - type: object
+          required:
+            - tactics
+            - mitigations
+          properties:
+            tactics:
+              type: array
+              items:
+                type: string
+              description: Tactic external ids this technique maps to.
+            mitigations:
+              type: array
+              items:
+                type: string
+              description: Mitigation external ids that mitigate this technique.
+
+    ContentTechniqueList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentTechnique"
+
+    ContentTactic:
+      type: object
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+        externalId:
+          type: string
+          examples:
+            - TA0002
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentTacticList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentTactic"
+
+    ContentMitigation:
+      type: object
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+        externalId:
+          type: string
+          examples:
+            - M1049
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentMitigationList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentMitigation"
+
+    ContentGroup:
+      type: object
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+        externalId:
+          type: string
+          examples:
+            - G0016
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentGroupList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentGroup"
+
+    ContentSoftwareType:
+      type: string
+      enum:
+        - malware
+        - tool
+
+    ContentSoftware:
+      type: object
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - softwareType
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+        externalId:
+          type: string
+          examples:
+            - S0154
+        name:
+          type: string
+        description:
+          type: string
+        softwareType:
+          $ref: "#/components/schemas/ContentSoftwareType"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentSoftwareList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentSoftware"

@@ -52,13 +52,13 @@ content load and sets the quality bar for failures and fixtures.
 
 ## Acceptance criteria
 
-- [ ] Syncing fixture vA then fixture vB yields two versions; queries for vA never return vB rows.
-- [ ] Re-syncing vA after a fixture edit replaces vA rows; vB unchanged.
-- [ ] Broken fixture fails the job and leaves the prior good vA catalog intact.
-- [ ] Sub-technique has parent link; list filter `isSubtechnique=true` works.
-- [ ] Technique list substring query finds by external id (`T1059`) and by name case-insensitively.
-- [ ] Disabled ATT&CK source: list endpoints return empty for non-admin default views.
-- [ ] No test in CI performs real network I/O (httptest/forced client injection asserted).
+- [x] Syncing fixture vA then fixture vB yields two versions; queries for vA never return vB rows.
+- [x] Re-syncing vA after a fixture edit replaces vA rows; vB unchanged.
+- [x] Broken fixture fails the job and leaves the prior good vA catalog intact.
+- [x] Sub-technique has parent link; list filter `isSubtechnique=true` works.
+- [x] Technique list substring query finds by external id (`T1059`) and by name case-insensitively.
+- [x] Disabled ATT&CK source: list endpoints return empty for non-admin default views.
+- [x] No test in CI performs real network I/O (httptest/forced client injection asserted).
 
 ## Tests
 
@@ -74,3 +74,22 @@ content load and sets the quality bar for failures and fixtures.
 - Watch memory: stream/parse without holding multiple full bundles.
 - Document the exact default URL template on the seed row and in `docs/` so air-gap operators fetch
   the same artifact.
+
+## Implementation notes
+
+- Package: `internal/content/attack`. Registered by default in `httpapi` and
+  `blctl` when `ContentAdapters` does not already supply `kind=attack`.
+- Latest discovery: `{source.url}/index.json` → Enterprise collection
+  `versions[0]`. Fixture-friendly via `Adapter.IndexBytes` / `FetchBytes`.
+- Apply is stage-and-promote: rows land under `content.StagingVersion`
+  (`__staging__`), then `PromoteAttackVersion` deletes the target version and
+  renames staging in one `store.Write` transaction. Failed re-sync leaves the
+  prior ready catalog intact.
+- Migration `0012_attack_library.sql`: `content_technique_mitigation` join +
+  list indexes. Cascade delete updated.
+- Library list/get handlers on `Objects` with `EnabledOnly` default. OpenAPI
+  paths under `/content/techniques|tactics|mitigations|groups|software`.
+- Runner `countObjects` prefers `ItemCount()` when Normalize returns a single
+  catalog envelope so `item_count` is the real library total.
+- Operator docs: `docs/content-attack.md`.
+- Authz sweep pins Atomic for the "sync" 409 case (ATT&CK now has an adapter).

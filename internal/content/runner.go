@@ -685,7 +685,7 @@ func (r *Runner) runPipeline(ctx context.Context, adapter Adapter, src storecont
 		return out, err
 	}
 	prog.Report(ctx, PhaseNormalize, 1, 1, fmt.Sprintf("%d objects", len(objects)))
-	out.count = int64(len(objects))
+	out.count = countObjects(objects)
 
 	if err := r.ensureVersion(ctx, src.ID, bundle.Version); err != nil {
 		return out, err
@@ -1004,4 +1004,20 @@ func isDBGone(err error) bool {
 	return strings.Contains(msg, "database is closed") ||
 		strings.Contains(msg, "sql: database is closed") ||
 		strings.Contains(msg, "conn closed")
+}
+
+// objectCounter is implemented by adapter objects that wrap many library rows
+// in one envelope (ATT&CK catalog). When present, the runner uses it for
+// version/source item_count instead of len(objects).
+type objectCounter interface {
+	ItemCount() int64
+}
+
+func countObjects(objects []Object) int64 {
+	if len(objects) == 1 {
+		if c, ok := objects[0].(objectCounter); ok {
+			return c.ItemCount()
+		}
+	}
+	return int64(len(objects))
 }

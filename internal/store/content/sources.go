@@ -77,6 +77,7 @@ const insertSource = `INSERT INTO content.content_source (
 // issued by the caller so it can share a transaction with activity.
 var sourceSubtreeDeletes = []string{
 	`DELETE FROM content.content_technique_tactic WHERE source_id = ?`,
+	`DELETE FROM content.content_technique_mitigation WHERE source_id = ?`,
 	`DELETE FROM content.content_tactic WHERE source_id = ?`,
 	`DELETE FROM content.content_technique WHERE source_id = ?`,
 	`DELETE FROM content.content_mitigation WHERE source_id = ?`,

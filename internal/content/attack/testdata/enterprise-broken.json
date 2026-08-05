@@ -1,0 +1,19 @@
+{
+  "type": "bundle",
+  "id": "bundle--broken",
+  "objects": [
+    {
+      "type": "x-mitre-collection",
+      "id": "x-mitre-collection--broken",
+      "name": "Enterprise ATT&CK",
+      "x_mitre_version": "15.1"
+    },
+    {
+      "type": "x-mitre-tactic",
+      "id": "x-mitre-tactic--no-ext",
+      "name": "Broken Tactic",
+      "description": "Missing external_id on purpose.",
+      "x_mitre_shortname": "broken"
+    }
+  ]
+}

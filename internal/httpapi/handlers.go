@@ -14,6 +14,7 @@ import (
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
+	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	"github.com/bryanster/blacklight/internal/version"
 )
 
@@ -48,6 +49,9 @@ type handlers struct {
 	// runner is the global content job worker (M2-003). Nil only in tests that
 	// never hit sync/job endpoints.
 	runner *content.Runner
+
+	// objects is the ATT&CK object library (M2-006).
+	objects *storecontent.Objects
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit
 	// GET /events.
