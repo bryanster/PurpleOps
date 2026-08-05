@@ -8,8 +8,8 @@ import (
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 )
 
-// ATT&CK / Atomic library browse endpoints (M2-006, M2-008). content.read;
-// enabled sources only.
+// ATT&CK / Atomic / Sigma library browse endpoints (M2-006, M2-008, M2-009).
+// content.read; enabled sources only.
 
 func (h *handlers) ListContentTechniques(ctx context.Context, request gen.ListContentTechniquesRequestObject) (gen.ListContentTechniquesResponseObject, error) {
 	f := libraryFilter(request.Params.Version, request.Params.Q, request.Params.Limit)
@@ -200,6 +200,50 @@ func (h *handlers) GetContentProcedureTemplate(ctx context.Context, request gen.
 		return nil, err
 	}
 	return gen.GetContentProcedureTemplate200JSONResponse(wire), nil
+}
+
+func (h *handlers) ListContentDetectionRules(ctx context.Context, request gen.ListContentDetectionRulesRequestObject) (gen.ListContentDetectionRulesResponseObject, error) {
+	f := storecontent.DetectionListFilter{EnabledOnly: true}
+	if request.Params.Q != nil {
+		f.Q = *request.Params.Q
+	}
+	if request.Params.Technique != nil {
+		f.Technique = *request.Params.Technique
+	}
+	if request.Params.Level != nil {
+		f.Level = *request.Params.Level
+	}
+	if request.Params.SourceId != nil {
+		f.SourceID = request.Params.SourceId.String()
+	}
+	if request.Params.Limit != nil {
+		f.Limit = *request.Params.Limit
+	}
+	items, err := h.detections.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]gen.ContentDetectionRule, 0, len(items))
+	for _, d := range items {
+		wire, err := contentDetectionRule(d)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, wire)
+	}
+	return gen.ListContentDetectionRules200JSONResponse{Items: out}, nil
+}
+
+func (h *handlers) GetContentDetectionRule(ctx context.Context, request gen.GetContentDetectionRuleRequestObject) (gen.GetContentDetectionRuleResponseObject, error) {
+	d, err := h.detections.ByIDEnabled(ctx, request.RuleId.String(), true)
+	if err != nil {
+		return nil, err
+	}
+	wire, err := contentDetectionRule(d)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetContentDetectionRule200JSONResponse(wire), nil
 }
 
 func libraryFilter(version, q *string, limit *int) storecontent.ObjectListFilter {
@@ -395,6 +439,54 @@ func contentProcedureTemplate(p storecontent.ProcedureTemplate) (gen.ContentProc
 		CreatedAt:              p.CreatedAt,
 		UpdatedAt:              p.UpdatedAt,
 	}, nil
+}
+
+func contentDetectionRule(d storecontent.DetectionRuleRef) (gen.ContentDetectionRule, error) {
+	id, err := parseUUID(d.ID)
+	if err != nil {
+		return gen.ContentDetectionRule{}, err
+	}
+	sourceID, err := parseUUID(d.SourceID)
+	if err != nil {
+		return gen.ContentDetectionRule{}, err
+	}
+	techs, err := decodeStringArray(d.TechniqueExternalIDs)
+	if err != nil {
+		return gen.ContentDetectionRule{}, err
+	}
+	logsource, err := decodeLogsource(d.Logsource)
+	if err != nil {
+		return gen.ContentDetectionRule{}, err
+	}
+	return gen.ContentDetectionRule{
+		Id:                   id,
+		SourceId:             sourceID,
+		Version:              d.Version,
+		ExternalId:           d.ExternalID,
+		Name:                 d.Name,
+		Description:          d.Description,
+		TechniqueExternalIds: techs,
+		Level:                d.Level,
+		Status:               d.RuleStatus,
+		Logsource:            logsource,
+		RuleYaml:             d.RuleYAML,
+		CreatedAt:            d.CreatedAt,
+		UpdatedAt:            d.UpdatedAt,
+	}, nil
+}
+
+func decodeLogsource(raw json.RawMessage) (map[string]interface{}, error) {
+	if len(raw) == 0 {
+		return map[string]interface{}{}, nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = map[string]interface{}{}
+	}
+	return out, nil
 }
 
 func decodeStringArray(raw json.RawMessage) ([]string, error) {

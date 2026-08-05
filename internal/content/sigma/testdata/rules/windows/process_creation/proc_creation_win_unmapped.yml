@@ -1,0 +1,15 @@
+title: Generic Service Install
+id: 11111111-2222-4333-8444-555555555555
+status: stable
+description: A rule with no ATT&CK technique tags — must be skipped.
+tags:
+  - attack.persistence
+  - attack.defense_evasion
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 7045
+  condition: selection
+level: low

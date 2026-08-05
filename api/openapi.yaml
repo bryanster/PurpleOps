@@ -2837,6 +2837,79 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/detection-rules:
+    get:
+      operationId: listContentDetectionRules
+      summary: List detection rule references (Sigma and custom).
+      description: |
+        Any authenticated subject (`content.read`). Returns detection rule
+        references from **enabled** sources only. Filter by substring `q`
+        (external id / name / description), ATT&CK `technique` external id,
+        `level` (for example `high`), and optional `sourceId`.
+
+        Rules are **reference only** — Blacklight never executes, deploys, or
+        converts them (`PLAN.md` §3). Sigma is a rolling-head source: rows use
+        version `current`.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentTechniqueExternalIdFilter"
+        - $ref: "#/components/parameters/ContentDetectionLevelFilter"
+        - $ref: "#/components/parameters/ContentLibrarySourceIdFilter"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching detection rules, external id then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentDetectionRuleList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/detection-rules/{ruleId}:
+    get:
+      operationId: getContentDetectionRule
+      summary: Read one detection rule reference.
+      description: |
+        Any authenticated subject. Rules from disabled sources answer `404`.
+
+        The response includes the full rule body (`ruleYaml`) for display/copy.
+        Detection rules are **reference only** — never executed or deployed.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentDetectionRuleId"
+      responses:
+        "200":
+          description: The detection rule reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentDetectionRule"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
   /content/attack/versions:
     get:
       operationId: listContentAttackVersions
@@ -3410,6 +3483,28 @@ components:
       schema:
         type: string
         format: uuid
+
+    ContentDetectionRuleId:
+      name: ruleId
+      in: path
+      required: true
+      description: Detection rule surrogate id (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
+    ContentDetectionLevelFilter:
+      name: level
+      in: query
+      required: false
+      description: |
+        Restrict to rules with this Sigma level label (for example `low`,
+        `medium`, `high`, `critical`). Case-insensitive exact match.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+
 
     ContentTechniqueExternalIdFilter:
       name: technique
@@ -5547,6 +5642,90 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentProcedureTemplate"
+
+    ContentDetectionRule:
+      type: object
+      description: |
+        One detection rule reference (Sigma or custom). Reference only —
+        Blacklight never executes, deploys, or converts rules to product
+        queries (`PLAN.md` §3).
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - techniqueExternalIds
+        - level
+        - status
+        - logsource
+        - ruleYaml
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: |
+            Version token. SigmaHQ is rolling-head and always `current`.
+        externalId:
+          type: string
+          description: |
+            Stable id within the source. Prefer upstream rule `id` when present;
+            otherwise the archive-relative path (documented in
+            `docs/content-sigma.md`).
+          examples:
+            - 5d2c185a-6d5a-4f3e-9c1a-0b7e6f4d2a11
+        name:
+          type: string
+          description: Rule title.
+        description:
+          type: string
+        techniqueExternalIds:
+          type: array
+          items:
+            type: string
+          description: |
+            ATT&CK technique external ids extracted from Sigma tags
+            (`attack.t1059` → `T1059`). Only technique-mapped rules are stored.
+        level:
+          type: string
+          description: Sigma level (`informational`, `low`, `medium`, `high`, `critical`, …).
+        status:
+          type: string
+          description: Upstream rule status (`stable`, `test`, `experimental`, …).
+        logsource:
+          type: object
+          additionalProperties: true
+          description: Upstream `logsource` object as JSON (category/product/service/…).
+        ruleYaml:
+          type: string
+          description: |
+            Full rule body as YAML text, sufficient to display or copy in the UI.
+            Never executed by Blacklight.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentDetectionRuleList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentDetectionRule"
+
 
     ContentAttackVersion:
       type: object

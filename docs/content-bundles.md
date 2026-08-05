@@ -30,7 +30,7 @@ detail names the limit.
    |---|---|
    | `attack` | MITRE ATT&CK Enterprise STIX bundle for one release — see [`content-attack.md`](content-attack.md) for the exact URL template (`enterprise-attack-{version}.json`, optionally inside zip/tar). |
    | `atomic` | Atomic Red Team atomics release archive (yaml tree). |
-   | `sigma` | SigmaHQ rules release that includes ATT&CK-mapped detections. |
+   | `sigma` | SigmaHQ rules release that includes ATT&CK-mapped detections — see [`content-sigma.md`](content-sigma.md). |
    | `ctid` | CTID adversary-emulation plan catalog archive. |
 
 3. Copy the file to the air-gapped host unchanged. Do not re-pack or rename

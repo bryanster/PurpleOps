@@ -57,6 +57,9 @@ type handlers struct {
 	// procedures is the Atomic / custom procedure library (M2-008).
 	procedures *storecontent.Procedures
 
+	// detections is the Sigma / custom detection rule library (M2-009).
+	detections *storecontent.Detections
+
 	// attackpin is the ATT&CK version catalog and pin surface (M2-007).
 	attackpin *attackpin.Service
 

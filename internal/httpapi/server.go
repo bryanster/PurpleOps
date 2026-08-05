@@ -28,6 +28,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content/atomic"
 	"github.com/bryanster/blacklight/internal/content/attack"
 	"github.com/bryanster/blacklight/internal/content/attackpin"
+	"github.com/bryanster/blacklight/internal/content/sigma"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -512,6 +513,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	jobs := storecontent.NewJobs(deps.Store)
 	objects := storecontent.NewObjects(deps.Store)
 	procedures := storecontent.NewProcedures(deps.Store)
+	detections := storecontent.NewDetections(deps.Store)
 	registry, err := content.New(content.Deps{
 		Sources:  sources,
 		Versions: versions,
@@ -547,6 +549,9 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	}
 	if _, ok := adapters[storecontent.KindAtomic]; !ok {
 		adapters[storecontent.KindAtomic] = atomic.New()
+	}
+	if _, ok := adapters[storecontent.KindSigma]; !ok {
+		adapters[storecontent.KindSigma] = sigma.New()
 	}
 
 	runner, err := content.NewRunner(content.RunnerDeps{
@@ -600,6 +605,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			runner:          runner,
 			objects:         objects,
 			procedures:      procedures,
+			detections:      detections,
 			attackpin:       pin,
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,

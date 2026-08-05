@@ -536,6 +536,7 @@ func (r *Runner) tick(ctx context.Context) error {
 type pipelineResult struct {
 	version string
 	count   int64
+	message string // optional success message override from the adapter catalog
 }
 
 func (r *Runner) execute(parent context.Context, job storecontent.Job) error {
@@ -686,6 +687,9 @@ func (r *Runner) runPipeline(ctx context.Context, adapter Adapter, src storecont
 	}
 	prog.Report(ctx, PhaseNormalize, 1, 1, fmt.Sprintf("%d objects", len(objects)))
 	out.count = countObjects(objects)
+	if msg := successMessage(objects); msg != "" {
+		out.message = msg
+	}
 
 	if err := r.ensureVersion(ctx, src.ID, bundle.Version); err != nil {
 		return out, err
@@ -783,12 +787,16 @@ func (r *Runner) succeedJob(ctx context.Context, job storecontent.Job, src store
 		itemCount = ver.ItemCount
 	}
 
+	msg := "succeeded"
+	if result.message != "" {
+		msg = result.message
+	}
 	if _, err := r.jobs.Update(ctx, job.ID, storecontent.JobUpdate{
 		Status:          storecontent.JobStatusSucceeded,
 		Phase:           PhaseFinalize,
 		ProgressCurrent: 1,
 		ProgressTotal:   1,
-		Message:         "succeeded",
+		Message:         msg,
 		FinishedAt:      finished,
 	}); err != nil {
 		return err
@@ -809,7 +817,7 @@ func (r *Runner) succeedJob(ctx context.Context, job storecontent.Job, src store
 	})
 	r.publish(ProgressEvent{
 		JobID: job.ID, Phase: PhaseFinalize, Current: 1, Total: 1,
-		Message: "succeeded", Status: storecontent.JobStatusSucceeded,
+		Message: msg, Status: storecontent.JobStatusSucceeded,
 	})
 	return nil
 }
@@ -1020,4 +1028,20 @@ func countObjects(objects []Object) int64 {
 		}
 	}
 	return int64(len(objects))
+}
+
+// successMessenger is implemented by adapter catalogs that want a richer
+// terminal job message (for example Sigma skip counts).
+type successMessenger interface {
+	SuccessMessage() string
+}
+
+func successMessage(objects []Object) string {
+	if len(objects) != 1 {
+		return ""
+	}
+	if m, ok := objects[0].(successMessenger); ok {
+		return m.SuccessMessage()
+	}
+	return ""
 }

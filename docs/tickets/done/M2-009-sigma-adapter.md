@@ -36,11 +36,11 @@ carry ATT&CK technique mappings so the library stays relevant.
 
 ## Acceptance criteria
 
-- [ ] Unmapped fixture rules produce zero rows; job still succeeds with skip count > 0 in message.
-- [ ] Mapped rule's technique filter finds it by `Txxxx` / `Txxxx.xxx`.
-- [ ] Rule body returned on GET is sufficient to display/copy in UI.
-- [ ] No code path "runs" a rule against events (grep/architecture: package has no execution API).
-- [ ] CI fixtures only.
+- [x] Unmapped fixture rules produce zero rows; job still succeeds with skip count > 0 in message.
+- [x] Mapped rule's technique filter finds it by `Txxxx` / `Txxxx.xxx`.
+- [x] Rule body returned on GET is sufficient to display/copy in UI.
+- [x] No code path "runs" a rule against events (grep/architecture: package has no execution API).
+- [x] CI fixtures only.
 
 ## Tests
 
@@ -52,3 +52,29 @@ carry ATT&CK technique mappings so the library stays relevant.
 - Be conservative on technique extraction — wrong links are worse than skips. Document the tag
   patterns accepted.
 - Large archives: stream file-by-file from the zip; do not load all rules into memory.
+
+## Implementation notes
+
+- Package: `internal/content/sigma`. Registered by default in `httpapi` and
+  `blctl` when `ContentAdapters` does not already supply `kind=sigma`.
+- Fetch GETs the seed URL (GitHub archive zip). Fixture-friendly via
+  `Adapter.FetchBytes`. Offline bundle uses the same archive shape.
+- Parse streams zip/tar entries under `rules/` and `rules-*` (skips
+  `rules-placeholder`, tests, docs). Bare YAML accepted for fixtures.
+- Technique tags: only `attack.t####` / `attack.t####.###` (case-insensitive).
+  Tactic-only tags are ignored. Documented in `docs/content-sigma.md`.
+- External ids: prefer upstream rule `id`; else archive-relative path with
+  GitHub root prefix stripped.
+- Unmapped rules are skipped (not stored). All-unmapped archives succeed with
+  zero rows. Job success message includes skip count via optional
+  `SuccessMessage()` on the catalog envelope (runner change).
+- Apply is stage-and-promote: rows land under `content.StagingVersion`
+  (`__staging__`), then `PromoteDetectionVersion` deletes `current` and renames
+  staging in one `store.Write` transaction. Failed re-sync leaves the prior
+  ready catalog intact.
+- Migration `0014_detection_library.sql`: list indexes on
+  `(source_id, version, external_id)` and `(source_id, version, level)`.
+- Library list/get handlers on `Detections` with `EnabledOnly` default. OpenAPI
+  paths under `/content/detection-rules`. API descriptions state reference-only.
+- Authz sweep pins CTID for the "sync" 409 case (Sigma now has an adapter).
+- Operator docs: `docs/content-sigma.md`.

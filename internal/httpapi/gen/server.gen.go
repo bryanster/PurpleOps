@@ -538,6 +538,53 @@ type ContentAttackVersionList struct {
 	Items []ContentAttackVersion `json:"items"`
 }
 
+// ContentDetectionRule One detection rule reference (Sigma or custom). Reference only —
+// Blacklight never executes, deploys, or converts rules to product
+// queries (`PLAN.md` §3).
+type ContentDetectionRule struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId Stable id within the source. Prefer upstream rule `id` when present;
+	// otherwise the archive-relative path (documented in
+	// `docs/content-sigma.md`).
+	//
+	//
+	// Examples: 5d2c185a-6d5a-4f3e-9c1a-0b7e6f4d2a11
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Level Sigma level (`informational`, `low`, `medium`, `high`, `critical`, …).
+	Level string `json:"level"`
+
+	// Logsource Upstream `logsource` object as JSON (category/product/service/…).
+	Logsource map[string]interface{} `json:"logsource"`
+
+	// Name Rule title.
+	Name string `json:"name"`
+
+	// RuleYaml Full rule body as YAML text, sufficient to display or copy in the UI.
+	// Never executed by Blacklight.
+	RuleYaml string             `json:"ruleYaml"`
+	SourceId openapi_types.UUID `json:"sourceId"`
+
+	// Status Upstream rule status (`stable`, `test`, `experimental`, …).
+	Status string `json:"status"`
+
+	// TechniqueExternalIds ATT&CK technique external ids extracted from Sigma tags
+	// (`attack.t1059` → `T1059`). Only technique-mapped rules are stored.
+	TechniqueExternalIds []string  `json:"techniqueExternalIds"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+
+	// Version Version token. SigmaHQ is rolling-head and always `current`.
+	Version string `json:"version"`
+}
+
+// ContentDetectionRuleList defines model for ContentDetectionRuleList.
+type ContentDetectionRuleList struct {
+	Items []ContentDetectionRule `json:"items"`
+}
+
 // ContentGroup defines model for ContentGroup.
 type ContentGroup struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -1758,6 +1805,12 @@ type ContentAttackExternalId = string
 // ContentAttackVersionLabel defines model for ContentAttackVersionLabel.
 type ContentAttackVersionLabel = string
 
+// ContentDetectionLevelFilter defines model for ContentDetectionLevelFilter.
+type ContentDetectionLevelFilter = string
+
+// ContentDetectionRuleId defines model for ContentDetectionRuleId.
+type ContentDetectionRuleId = openapi_types.UUID
+
 // ContentGroupId defines model for ContentGroupId.
 type ContentGroupId = openapi_types.UUID
 
@@ -2171,6 +2224,28 @@ type DeleteContentAttackVersionParams struct {
 	// subject to the check — CSRF is a property of cookies, which browsers
 	// attach on their own.
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ListContentDetectionRulesParams defines parameters for ListContentDetectionRules.
+type ListContentDetectionRulesParams struct {
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Technique Restrict to templates that list this ATT&CK technique external id
+	// (for example `T1059.001`). Exact membership match against the stored
+	// technique id list.
+	Technique *ContentTechniqueExternalIdFilter `form:"technique,omitempty" json:"technique,omitempty"`
+
+	// Level Restrict to rules with this Sigma level label (for example `low`,
+	// `medium`, `high`, `critical`). Case-insensitive exact match.
+	Level *ContentDetectionLevelFilter `form:"level,omitempty" json:"level,omitempty"`
+
+	// SourceId Restrict to templates from this content source.
+	SourceId *ContentLibrarySourceIdFilter `form:"sourceId,omitempty" json:"sourceId,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListContentGroupsParams defines parameters for ListContentGroups.
@@ -2810,6 +2885,12 @@ type ServerInterface interface {
 	// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
 	// (GET /content/attack/versions/{version}/techniques/{externalId})
 	GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId)
+	// ListContentDetectionRules List detection rule references (Sigma and custom).
+	// (GET /content/detection-rules)
+	ListContentDetectionRules(w http.ResponseWriter, r *http.Request, params ListContentDetectionRulesParams)
+	// GetContentDetectionRule Read one detection rule reference.
+	// (GET /content/detection-rules/{ruleId})
+	GetContentDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId)
 	// ListContentGroups List ATT&CK groups.
 	// (GET /content/groups)
 	ListContentGroups(w http.ResponseWriter, r *http.Request, params ListContentGroupsParams)
@@ -3101,6 +3182,18 @@ func (_ Unimplemented) GetContentAttackVersion(w http.ResponseWriter, r *http.Re
 // GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
 // (GET /content/attack/versions/{version}/techniques/{externalId})
 func (_ Unimplemented) GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentDetectionRules List detection rule references (Sigma and custom).
+// (GET /content/detection-rules)
+func (_ Unimplemented) ListContentDetectionRules(w http.ResponseWriter, r *http.Request, params ListContentDetectionRulesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentDetectionRule Read one detection rule reference.
+// (GET /content/detection-rules/{ruleId})
+func (_ Unimplemented) GetContentDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4271,6 +4364,117 @@ func (siw *ServerInterfaceWrapper) GetContentAttackTechniqueByExternalId(w http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetContentAttackTechniqueByExternalId(w, r, version, externalId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentDetectionRules operation middleware
+func (siw *ServerInterfaceWrapper) ListContentDetectionRules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentDetectionRulesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "technique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "technique", r.URL.Query(), &params.Technique, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "technique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "technique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "level", r.URL.Query(), &params.Level, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "level"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sourceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sourceId", r.URL.Query(), &params.SourceId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sourceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentDetectionRules(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentDetectionRule operation middleware
+func (siw *ServerInterfaceWrapper) GetContentDetectionRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId ContentDetectionRuleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", chi.URLParam(r, "ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentDetectionRule(w, r, ruleId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6501,6 +6705,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/procedure-templates/{templateId}", wrapper.GetContentProcedureTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/detection-rules", wrapper.ListContentDetectionRules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/detection-rules/{ruleId}", wrapper.GetContentDetectionRule)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
@@ -8819,6 +9029,178 @@ type GetContentAttackTechniqueByExternalId500ApplicationProblemPlusJSONResponse 
 }
 
 func (response GetContentAttackTechniqueByExternalId500ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentDetectionRulesRequestObject struct {
+	Params ListContentDetectionRulesParams
+}
+
+type ListContentDetectionRulesResponseObject interface {
+	VisitListContentDetectionRulesResponse(w http.ResponseWriter) error
+}
+
+type ListContentDetectionRules200JSONResponse ContentDetectionRuleList
+
+func (response ListContentDetectionRules200JSONResponse) VisitListContentDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentDetectionRules400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentDetectionRules400ApplicationProblemPlusJSONResponse) VisitListContentDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentDetectionRules401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentDetectionRules401ApplicationProblemPlusJSONResponse) VisitListContentDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentDetectionRules403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentDetectionRules403ApplicationProblemPlusJSONResponse) VisitListContentDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentDetectionRules500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentDetectionRules500ApplicationProblemPlusJSONResponse) VisitListContentDetectionRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentDetectionRuleRequestObject struct {
+	RuleId ContentDetectionRuleId `json:"ruleId"`
+}
+
+type GetContentDetectionRuleResponseObject interface {
+	VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error
+}
+
+type GetContentDetectionRule200JSONResponse ContentDetectionRule
+
+func (response GetContentDetectionRule200JSONResponse) VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentDetectionRule401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentDetectionRule401ApplicationProblemPlusJSONResponse) VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentDetectionRule403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentDetectionRule403ApplicationProblemPlusJSONResponse) VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentDetectionRule404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentDetectionRule404ApplicationProblemPlusJSONResponse) VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentDetectionRule500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentDetectionRule500ApplicationProblemPlusJSONResponse) VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12797,6 +13179,12 @@ type StrictServerInterface interface {
 	// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
 	// (GET /content/attack/versions/{version}/techniques/{externalId})
 	GetContentAttackTechniqueByExternalId(ctx context.Context, request GetContentAttackTechniqueByExternalIdRequestObject) (GetContentAttackTechniqueByExternalIdResponseObject, error)
+	// ListContentDetectionRules List detection rule references (Sigma and custom).
+	// (GET /content/detection-rules)
+	ListContentDetectionRules(ctx context.Context, request ListContentDetectionRulesRequestObject) (ListContentDetectionRulesResponseObject, error)
+	// GetContentDetectionRule Read one detection rule reference.
+	// (GET /content/detection-rules/{ruleId})
+	GetContentDetectionRule(ctx context.Context, request GetContentDetectionRuleRequestObject) (GetContentDetectionRuleResponseObject, error)
 	// ListContentGroups List ATT&CK groups.
 	// (GET /content/groups)
 	ListContentGroups(ctx context.Context, request ListContentGroupsRequestObject) (ListContentGroupsResponseObject, error)
@@ -13710,6 +14098,58 @@ func (sh *strictHandler) GetContentAttackTechniqueByExternalId(w http.ResponseWr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetContentAttackTechniqueByExternalIdResponseObject); ok {
 		if err := validResponse.VisitGetContentAttackTechniqueByExternalIdResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentDetectionRules operation middleware
+func (sh *strictHandler) ListContentDetectionRules(w http.ResponseWriter, r *http.Request, params ListContentDetectionRulesParams) {
+	var request ListContentDetectionRulesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentDetectionRules(ctx, request.(ListContentDetectionRulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentDetectionRules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentDetectionRulesResponseObject); ok {
+		if err := validResponse.VisitListContentDetectionRulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentDetectionRule operation middleware
+func (sh *strictHandler) GetContentDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId) {
+	var request GetContentDetectionRuleRequestObject
+
+	request.RuleId = ruleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentDetectionRule(ctx, request.(GetContentDetectionRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentDetectionRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentDetectionRuleResponseObject); ok {
+		if err := validResponse.VisitGetContentDetectionRuleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

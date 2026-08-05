@@ -1709,6 +1709,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/detection-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List detection rule references (Sigma and custom).
+         * @description Any authenticated subject (`content.read`). Returns detection rule
+         *     references from **enabled** sources only. Filter by substring `q`
+         *     (external id / name / description), ATT&CK `technique` external id,
+         *     `level` (for example `high`), and optional `sourceId`.
+         *
+         *     Rules are **reference only** — Blacklight never executes, deploys, or
+         *     converts them (`PLAN.md` §3). Sigma is a rolling-head source: rows use
+         *     version `current`.
+         */
+        get: operations["listContentDetectionRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/detection-rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one detection rule reference.
+         * @description Any authenticated subject. Rules from disabled sources answer `404`.
+         *
+         *     The response includes the full rule body (`ruleYaml`) for display/copy.
+         *     Detection rules are **reference only** — never executed or deployed.
+         */
+        get: operations["getContentDetectionRule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/attack/versions": {
         parameters: {
             query?: never;
@@ -3087,6 +3137,54 @@ export interface components {
             items: components["schemas"]["ContentProcedureTemplate"][];
         };
         /**
+         * @description One detection rule reference (Sigma or custom). Reference only —
+         *     Blacklight never executes, deploys, or converts rules to product
+         *     queries (`PLAN.md` §3).
+         */
+        ContentDetectionRule: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description Version token. SigmaHQ is rolling-head and always `current`. */
+            version: string;
+            /**
+             * @description Stable id within the source. Prefer upstream rule `id` when present;
+             *     otherwise the archive-relative path (documented in
+             *     `docs/content-sigma.md`).
+             * @example 5d2c185a-6d5a-4f3e-9c1a-0b7e6f4d2a11
+             */
+            externalId: string;
+            /** @description Rule title. */
+            name: string;
+            description: string;
+            /**
+             * @description ATT&CK technique external ids extracted from Sigma tags
+             *     (`attack.t1059` → `T1059`). Only technique-mapped rules are stored.
+             */
+            techniqueExternalIds: string[];
+            /** @description Sigma level (`informational`, `low`, `medium`, `high`, `critical`, …). */
+            level: string;
+            /** @description Upstream rule status (`stable`, `test`, `experimental`, …). */
+            status: string;
+            /** @description Upstream `logsource` object as JSON (category/product/service/…). */
+            logsource: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description Full rule body as YAML text, sufficient to display or copy in the UI.
+             *     Never executed by Blacklight.
+             */
+            ruleYaml: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentDetectionRuleList: {
+            items: components["schemas"]["ContentDetectionRule"][];
+        };
+        /**
          * @description One installed ATT&CK release as the pin surface exposes it. The
          *     `version` string is what engagements will store as `attack_version`
          *     (M3) — opaque equality to `content_source_version.version`.
@@ -3349,6 +3447,13 @@ export interface components {
         ContentSoftwareId: string;
         /** @description Procedure template surrogate id (UUIDv7). */
         ContentProcedureTemplateId: string;
+        /** @description Detection rule surrogate id (UUIDv7). */
+        ContentDetectionRuleId: string;
+        /**
+         * @description Restrict to rules with this Sigma level label (for example `low`,
+         *     `medium`, `high`, `critical`). Case-insensitive exact match.
+         */
+        ContentDetectionLevelFilter: string;
         /**
          * @description Restrict to templates that list this ATT&CK technique external id
          *     (for example `T1059.001`). Exact membership match against the stored
@@ -5855,6 +5960,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContentProcedureTemplate"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentDetectionRules: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /**
+                 * @description Restrict to templates that list this ATT&CK technique external id
+                 *     (for example `T1059.001`). Exact membership match against the stored
+                 *     technique id list.
+                 */
+                technique?: components["parameters"]["ContentTechniqueExternalIdFilter"];
+                /**
+                 * @description Restrict to rules with this Sigma level label (for example `low`,
+                 *     `medium`, `high`, `critical`). Case-insensitive exact match.
+                 */
+                level?: components["parameters"]["ContentDetectionLevelFilter"];
+                /** @description Restrict to templates from this content source. */
+                sourceId?: components["parameters"]["ContentLibrarySourceIdFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching detection rules, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentDetectionRuleList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentDetectionRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Detection rule surrogate id (UUIDv7). */
+                ruleId: components["parameters"]["ContentDetectionRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The detection rule reference. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentDetectionRule"];
                 };
             };
             401: components["responses"]["Unauthenticated"];
