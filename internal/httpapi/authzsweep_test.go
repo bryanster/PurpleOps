@@ -207,10 +207,10 @@ var sweepOperations = []sweepOp{
 		Want: statuses{200, 403, 403, 403, 403, 403},
 	},
 	{
-		// Real endpoint M2-003 ships. Admin is allowed by authz; kinds without
-		// a concrete adapter yet (CTID until M2-010) answer 409. Members are
-		// refused with 403. ATT&CK, Atomic, and Sigma have adapters — the sweep
-		// pins CTID so the conflict stays deterministic without network I/O.
+		// Real endpoint M2-003 ships. Admin is allowed by authz; the custom
+		// source answers 409 (not synced from upstream). Members are refused
+		// with 403. ATT&CK, Atomic, Sigma, and CTID have adapters — the sweep
+		// pins custom so the conflict stays deterministic without network I/O.
 		Name: "sync the content library", Method: http.MethodPost,
 		Route: "/content/sources/{sourceId}/sync",
 		Real:  true, Body: `{}`,
@@ -519,7 +519,7 @@ func (s *sweepServer) target(route string) string {
 		"{engagementId}", sweepEngagement,
 		"{executionId}", sweepExecution,
 		"{userId}", s.targetUser.ID,
-		"{sourceId}", storecontent.SourceIDCTID,
+		"{sourceId}", storecontent.SourceIDCustom,
 	).Replace(route)
 }
 

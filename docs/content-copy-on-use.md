@@ -57,8 +57,17 @@ they created it, even if the template is later edited or the source re-synced.
   when the engagement pin is set).
 - Custom tactics/techniques (not a product feature).
 
+## CTID plan → scenario (M3-013)
+
+Emulation-plan import snapshots plan/step fields the same way procedure
+templates do. Field mapping lives in [content-ctid.md](content-ctid.md)
+§ M3 import contract. Lineage may keep `plan_id` / step external ids; they are
+not live foreign keys. Plan `metadata.attack_version` is advisory only — the
+engagement pin is authoritative for technique resolve.
+
 ## Related
 
 - Pin API: `internal/content/attackpin`
 - HTTP: `GET/DELETE /content/attack/versions…`
 - ATT&CK adapter & version coexistence: [content-attack.md](content-attack.md)
+- CTID catalog & import mapping: [content-ctid.md](content-ctid.md)

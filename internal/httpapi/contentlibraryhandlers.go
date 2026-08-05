@@ -8,7 +8,7 @@ import (
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 )
 
-// ATT&CK / Atomic / Sigma library browse endpoints (M2-006, M2-008, M2-009).
+// ATT&CK / Atomic / Sigma / CTID library browse endpoints (M2-006…M2-010).
 // content.read; enabled sources only.
 
 func (h *handlers) ListContentTechniques(ctx context.Context, request gen.ListContentTechniquesRequestObject) (gen.ListContentTechniquesResponseObject, error) {
@@ -246,6 +246,47 @@ func (h *handlers) GetContentDetectionRule(ctx context.Context, request gen.GetC
 	return gen.GetContentDetectionRule200JSONResponse(wire), nil
 }
 
+func (h *handlers) ListContentEmulationPlans(ctx context.Context, request gen.ListContentEmulationPlansRequestObject) (gen.ListContentEmulationPlansResponseObject, error) {
+	f := storecontent.EmulationPlanListFilter{EnabledOnly: true}
+	if request.Params.Q != nil {
+		f.Q = *request.Params.Q
+	}
+	if request.Params.Technique != nil {
+		f.Technique = *request.Params.Technique
+	}
+	if request.Params.SourceId != nil {
+		f.SourceID = request.Params.SourceId.String()
+	}
+	if request.Params.Limit != nil {
+		f.Limit = *request.Params.Limit
+	}
+	items, err := h.emulationPlans.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]gen.ContentEmulationPlan, 0, len(items))
+	for _, p := range items {
+		wire, err := contentEmulationPlan(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, wire)
+	}
+	return gen.ListContentEmulationPlans200JSONResponse{Items: out}, nil
+}
+
+func (h *handlers) GetContentEmulationPlan(ctx context.Context, request gen.GetContentEmulationPlanRequestObject) (gen.GetContentEmulationPlanResponseObject, error) {
+	d, err := h.emulationPlans.DetailByIDEnabled(ctx, request.PlanId.String(), true)
+	if err != nil {
+		return nil, err
+	}
+	wire, err := contentEmulationPlanDetail(d)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetContentEmulationPlan200JSONResponse(wire), nil
+}
+
 func libraryFilter(version, q *string, limit *int) storecontent.ObjectListFilter {
 	f := storecontent.ObjectListFilter{EnabledOnly: true}
 	if version != nil {
@@ -472,6 +513,94 @@ func contentDetectionRule(d storecontent.DetectionRuleRef) (gen.ContentDetection
 		RuleYaml:             d.RuleYAML,
 		CreatedAt:            d.CreatedAt,
 		UpdatedAt:            d.UpdatedAt,
+	}, nil
+}
+
+func contentEmulationPlan(p storecontent.EmulationPlan) (gen.ContentEmulationPlan, error) {
+	id, err := parseUUID(p.ID)
+	if err != nil {
+		return gen.ContentEmulationPlan{}, err
+	}
+	sourceID, err := parseUUID(p.SourceID)
+	if err != nil {
+		return gen.ContentEmulationPlan{}, err
+	}
+	meta, err := decodeLogsource(p.Metadata)
+	if err != nil {
+		return gen.ContentEmulationPlan{}, err
+	}
+	return gen.ContentEmulationPlan{
+		Id:            id,
+		SourceId:      sourceID,
+		Version:       p.Version,
+		ExternalId:    p.ExternalID,
+		Name:          p.Name,
+		Description:   p.Description,
+		AdversaryName: p.AdversaryName,
+		Metadata:      meta,
+		CreatedAt:     p.CreatedAt,
+		UpdatedAt:     p.UpdatedAt,
+	}, nil
+}
+
+func contentEmulationPlanDetail(d storecontent.EmulationPlanDetail) (gen.ContentEmulationPlanDetail, error) {
+	base, err := contentEmulationPlan(d.EmulationPlan)
+	if err != nil {
+		return gen.ContentEmulationPlanDetail{}, err
+	}
+	steps := make([]gen.ContentEmulationPlanStep, 0, len(d.Steps))
+	for _, s := range d.Steps {
+		wire, err := contentEmulationPlanStep(s)
+		if err != nil {
+			return gen.ContentEmulationPlanDetail{}, err
+		}
+		steps = append(steps, wire)
+	}
+	return gen.ContentEmulationPlanDetail{
+		Id:            base.Id,
+		SourceId:      base.SourceId,
+		Version:       base.Version,
+		ExternalId:    base.ExternalId,
+		Name:          base.Name,
+		Description:   base.Description,
+		AdversaryName: base.AdversaryName,
+		Metadata:      base.Metadata,
+		Steps:         steps,
+		CreatedAt:     base.CreatedAt,
+		UpdatedAt:     base.UpdatedAt,
+	}, nil
+}
+
+func contentEmulationPlanStep(s storecontent.EmulationPlanStep) (gen.ContentEmulationPlanStep, error) {
+	id, err := parseUUID(s.ID)
+	if err != nil {
+		return gen.ContentEmulationPlanStep{}, err
+	}
+	sourceID, err := parseUUID(s.SourceID)
+	if err != nil {
+		return gen.ContentEmulationPlanStep{}, err
+	}
+	planID, err := parseUUID(s.PlanID)
+	if err != nil {
+		return gen.ContentEmulationPlanStep{}, err
+	}
+	proc, err := decodeLogsource(s.Procedure)
+	if err != nil {
+		return gen.ContentEmulationPlanStep{}, err
+	}
+	return gen.ContentEmulationPlanStep{
+		Id:                  id,
+		SourceId:            sourceID,
+		Version:             s.Version,
+		PlanId:              planID,
+		Ordinal:             s.Position,
+		ExternalId:          s.ExternalID,
+		Name:                s.Name,
+		Description:         s.Description,
+		TechniqueExternalId: s.TechniqueExternalID,
+		Procedure:           proc,
+		CreatedAt:           s.CreatedAt,
+		UpdatedAt:           s.UpdatedAt,
 	}, nil
 }
 

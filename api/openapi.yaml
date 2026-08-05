@@ -2909,6 +2909,80 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/emulation-plans:
+    get:
+      operationId: listContentEmulationPlans
+      summary: List CTID emulation plans.
+      description: |
+        Any authenticated subject (`content.read`). Returns emulation plans
+        from **enabled** sources only. Filter by substring `q` (external id /
+        name / description / adversary name), ATT&CK `technique` external id
+        (plans that have at least one step with that id), and optional
+        `sourceId`.
+
+        CTID is a rolling-head source: rows use version `current`. Catalog only
+        in M2 — scenario import is M3-013.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSearchQ"
+        - $ref: "#/components/parameters/ContentTechniqueExternalIdFilter"
+        - $ref: "#/components/parameters/ContentLibrarySourceIdFilter"
+        - $ref: "#/components/parameters/ContentLibraryLimit"
+      responses:
+        "200":
+          description: Matching emulation plans, external id then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentEmulationPlanList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/emulation-plans/{planId}:
+    get:
+      operationId: getContentEmulationPlan
+      summary: Read one emulation plan with ordered steps.
+      description: |
+        Any authenticated subject. Plans from disabled sources answer `404`.
+
+        The response includes steps sorted by `ordinal` ascending (1-based
+        document order from the upstream plan YAML). Each step may carry a
+        structured `procedure` payload (platforms, executors/commands, input
+        args) for M3 scenario import — never executed by Blacklight.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentEmulationPlanId"
+      responses:
+        "200":
+          description: The emulation plan with ordered steps.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentEmulationPlanDetail"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
 
   /content/attack/versions:
     get:
@@ -3489,6 +3563,15 @@ components:
       in: path
       required: true
       description: Detection rule surrogate id (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
+    ContentEmulationPlanId:
+      name: planId
+      in: path
+      required: true
+      description: Emulation plan surrogate id (UUIDv7).
       schema:
         type: string
         format: uuid
@@ -5725,6 +5808,157 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentDetectionRule"
+
+    ContentEmulationPlanStep:
+      type: object
+      description: |
+        One ordered step under a CTID emulation plan. `ordinal` is 1-based
+        document order from the upstream plan YAML (dense, unique per plan).
+        Upstream `procedure_step` labels (for example `2.1`) live inside
+        `procedure` when present and are not used as the ordinal.
+      required:
+        - id
+        - sourceId
+        - version
+        - planId
+        - ordinal
+        - externalId
+        - name
+        - description
+        - techniqueExternalId
+        - procedure
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: Version token. CTID is rolling-head and always `current`.
+        planId:
+          type: string
+          format: uuid
+          description: Surrogate id of the parent plan.
+        ordinal:
+          type: integer
+          minimum: 1
+          description: 1-based position under the plan (document order).
+        externalId:
+          type: string
+          description: |
+            Stable id within the source. Prefer upstream step `id`; otherwise
+            `{plan_external_id}/{ordinal}` (documented in `docs/content-ctid.md`).
+        name:
+          type: string
+        description:
+          type: string
+        techniqueExternalId:
+          type: string
+          description: |
+            ATT&CK technique external id when upstream provides one (for
+            example `T1566.001`). Empty string when missing — allowed; M3 pin
+            resolve treats empty as no technique.
+        procedure:
+          type: object
+          additionalProperties: true
+          description: |
+            Structured procedure-ish payload when upstream provides commands:
+            platforms, executors (name/command/cleanup), input_arguments,
+            tactic, procedure_group/step labels, cti_source, dependencies.
+            Empty object when none. Snapshot onto scenario steps in M3-013 —
+            never executed by Blacklight.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentEmulationPlan:
+      type: object
+      description: |
+        One CTID adversary emulation plan (catalog only in M2). Threat actor /
+        group identity is `adversaryName`. Source metadata (attack_version,
+        format_version, archive path) is in `metadata`.
+      required:
+        - id
+        - sourceId
+        - version
+        - externalId
+        - name
+        - description
+        - adversaryName
+        - metadata
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: Version token. CTID is rolling-head and always `current`.
+        externalId:
+          type: string
+          description: |
+            Stable id within the source. Prefer upstream
+            `emulation_plan_details.id`; otherwise the actor directory slug
+            (documented in `docs/content-ctid.md`).
+          examples:
+            - 123700e5-44c8-4894-a409-6484992c8846
+        name:
+          type: string
+          description: Display name (usually the adversary name).
+        description:
+          type: string
+        adversaryName:
+          type: string
+          description: |
+            Upstream threat-actor / group label (for example `FIN6`, `APT29`).
+            Group refs are text labels in M2 — not resolved ATT&CK group rows.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: |
+            Source-side bookkeeping: `attack_version`, `format_version`,
+            archive `path`, `actor_slug` when known.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentEmulationPlanDetail:
+      allOf:
+        - $ref: "#/components/schemas/ContentEmulationPlan"
+        - type: object
+          required:
+            - steps
+          properties:
+            steps:
+              type: array
+              description: Steps sorted by ordinal ascending.
+              items:
+                $ref: "#/components/schemas/ContentEmulationPlanStep"
+
+    ContentEmulationPlanList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentEmulationPlan"
+
 
 
     ContentAttackVersion:

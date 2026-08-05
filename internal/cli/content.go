@@ -14,6 +14,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/content/atomic"
 	"github.com/bryanster/blacklight/internal/content/attack"
+	"github.com/bryanster/blacklight/internal/content/ctid"
 	"github.com/bryanster/blacklight/internal/content/sigma"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/store"
@@ -198,6 +199,9 @@ func (a *app) withContentRunner(
 		}
 		if _, ok := adapters[storecontent.KindSigma]; !ok {
 			adapters[storecontent.KindSigma] = sigma.New()
+		}
+		if _, ok := adapters[storecontent.KindCTID]; !ok {
+			adapters[storecontent.KindCTID] = ctid.New()
 		}
 		runner, err := content.NewRunner(content.RunnerDeps{
 			DB:         db,

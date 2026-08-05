@@ -1759,6 +1759,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/emulation-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List CTID emulation plans.
+         * @description Any authenticated subject (`content.read`). Returns emulation plans
+         *     from **enabled** sources only. Filter by substring `q` (external id /
+         *     name / description / adversary name), ATT&CK `technique` external id
+         *     (plans that have at least one step with that id), and optional
+         *     `sourceId`.
+         *
+         *     CTID is a rolling-head source: rows use version `current`. Catalog only
+         *     in M2 — scenario import is M3-013.
+         */
+        get: operations["listContentEmulationPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/emulation-plans/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one emulation plan with ordered steps.
+         * @description Any authenticated subject. Plans from disabled sources answer `404`.
+         *
+         *     The response includes steps sorted by `ordinal` ascending (1-based
+         *     document order from the upstream plan YAML). Each step may carry a
+         *     structured `procedure` payload (platforms, executors/commands, input
+         *     args) for M3 scenario import — never executed by Blacklight.
+         */
+        get: operations["getContentEmulationPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/attack/versions": {
         parameters: {
             query?: never;
@@ -3185,6 +3237,100 @@ export interface components {
             items: components["schemas"]["ContentDetectionRule"][];
         };
         /**
+         * @description One ordered step under a CTID emulation plan. `ordinal` is 1-based
+         *     document order from the upstream plan YAML (dense, unique per plan).
+         *     Upstream `procedure_step` labels (for example `2.1`) live inside
+         *     `procedure` when present and are not used as the ordinal.
+         */
+        ContentEmulationPlanStep: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description Version token. CTID is rolling-head and always `current`. */
+            version: string;
+            /**
+             * Format: uuid
+             * @description Surrogate id of the parent plan.
+             */
+            planId: string;
+            /** @description 1-based position under the plan (document order). */
+            ordinal: number;
+            /**
+             * @description Stable id within the source. Prefer upstream step `id`; otherwise
+             *     `{plan_external_id}/{ordinal}` (documented in `docs/content-ctid.md`).
+             */
+            externalId: string;
+            name: string;
+            description: string;
+            /**
+             * @description ATT&CK technique external id when upstream provides one (for
+             *     example `T1566.001`). Empty string when missing — allowed; M3 pin
+             *     resolve treats empty as no technique.
+             */
+            techniqueExternalId: string;
+            /**
+             * @description Structured procedure-ish payload when upstream provides commands:
+             *     platforms, executors (name/command/cleanup), input_arguments,
+             *     tactic, procedure_group/step labels, cti_source, dependencies.
+             *     Empty object when none. Snapshot onto scenario steps in M3-013 —
+             *     never executed by Blacklight.
+             */
+            procedure: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /**
+         * @description One CTID adversary emulation plan (catalog only in M2). Threat actor /
+         *     group identity is `adversaryName`. Source metadata (attack_version,
+         *     format_version, archive path) is in `metadata`.
+         */
+        ContentEmulationPlan: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description Version token. CTID is rolling-head and always `current`. */
+            version: string;
+            /**
+             * @description Stable id within the source. Prefer upstream
+             *     `emulation_plan_details.id`; otherwise the actor directory slug
+             *     (documented in `docs/content-ctid.md`).
+             * @example 123700e5-44c8-4894-a409-6484992c8846
+             */
+            externalId: string;
+            /** @description Display name (usually the adversary name). */
+            name: string;
+            description: string;
+            /**
+             * @description Upstream threat-actor / group label (for example `FIN6`, `APT29`).
+             *     Group refs are text labels in M2 — not resolved ATT&CK group rows.
+             */
+            adversaryName: string;
+            /**
+             * @description Source-side bookkeeping: `attack_version`, `format_version`,
+             *     archive `path`, `actor_slug` when known.
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentEmulationPlanDetail: components["schemas"]["ContentEmulationPlan"] & {
+            /** @description Steps sorted by ordinal ascending. */
+            steps: components["schemas"]["ContentEmulationPlanStep"][];
+        };
+        ContentEmulationPlanList: {
+            items: components["schemas"]["ContentEmulationPlan"][];
+        };
+        /**
          * @description One installed ATT&CK release as the pin surface exposes it. The
          *     `version` string is what engagements will store as `attack_version`
          *     (M3) — opaque equality to `content_source_version.version`.
@@ -3449,6 +3595,8 @@ export interface components {
         ContentProcedureTemplateId: string;
         /** @description Detection rule surrogate id (UUIDv7). */
         ContentDetectionRuleId: string;
+        /** @description Emulation plan surrogate id (UUIDv7). */
+        ContentEmulationPlanId: string;
         /**
          * @description Restrict to rules with this Sigma level label (for example `low`,
          *     `medium`, `high`, `critical`). Case-insensitive exact match.
@@ -6032,6 +6180,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContentDetectionRule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentEmulationPlans: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /**
+                 * @description Restrict to templates that list this ATT&CK technique external id
+                 *     (for example `T1059.001`). Exact membership match against the stored
+                 *     technique id list.
+                 */
+                technique?: components["parameters"]["ContentTechniqueExternalIdFilter"];
+                /** @description Restrict to templates from this content source. */
+                sourceId?: components["parameters"]["ContentLibrarySourceIdFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching emulation plans, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentEmulationPlanList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentEmulationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Emulation plan surrogate id (UUIDv7). */
+                planId: components["parameters"]["ContentEmulationPlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The emulation plan with ordered steps. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentEmulationPlanDetail"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

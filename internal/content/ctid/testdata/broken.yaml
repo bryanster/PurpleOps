@@ -1,0 +1,6 @@
+# broken.yaml — missing emulation_plan_details header
+- id: orphan-step
+  name: Orphan
+  description: A step without a plan header.
+  technique:
+    attack_id: T1059.001

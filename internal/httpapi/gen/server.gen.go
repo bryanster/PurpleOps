@@ -585,6 +585,114 @@ type ContentDetectionRuleList struct {
 	Items []ContentDetectionRule `json:"items"`
 }
 
+// ContentEmulationPlan One CTID adversary emulation plan (catalog only in M2). Threat actor /
+// group identity is `adversaryName`. Source metadata (attack_version,
+// format_version, archive path) is in `metadata`.
+type ContentEmulationPlan struct {
+	// AdversaryName Upstream threat-actor / group label (for example `FIN6`, `APT29`).
+	// Group refs are text labels in M2 — not resolved ATT&CK group rows.
+	AdversaryName string    `json:"adversaryName"`
+	CreatedAt     time.Time `json:"createdAt"`
+	Description   string    `json:"description"`
+
+	// ExternalId Stable id within the source. Prefer upstream
+	// `emulation_plan_details.id`; otherwise the actor directory slug
+	// (documented in `docs/content-ctid.md`).
+	//
+	//
+	// Examples: 123700e5-44c8-4894-a409-6484992c8846
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Metadata Source-side bookkeeping: `attack_version`, `format_version`,
+	// archive `path`, `actor_slug` when known.
+	Metadata map[string]interface{} `json:"metadata"`
+
+	// Name Display name (usually the adversary name).
+	Name      string             `json:"name"`
+	SourceId  openapi_types.UUID `json:"sourceId"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+
+	// Version Version token. CTID is rolling-head and always `current`.
+	Version string `json:"version"`
+}
+
+// ContentEmulationPlanDetail defines model for ContentEmulationPlanDetail.
+type ContentEmulationPlanDetail struct {
+	// AdversaryName Upstream threat-actor / group label (for example `FIN6`, `APT29`).
+	// Group refs are text labels in M2 — not resolved ATT&CK group rows.
+	AdversaryName string    `json:"adversaryName"`
+	CreatedAt     time.Time `json:"createdAt"`
+	Description   string    `json:"description"`
+
+	// ExternalId Stable id within the source. Prefer upstream
+	// `emulation_plan_details.id`; otherwise the actor directory slug
+	// (documented in `docs/content-ctid.md`).
+	//
+	//
+	// Examples: 123700e5-44c8-4894-a409-6484992c8846
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Metadata Source-side bookkeeping: `attack_version`, `format_version`,
+	// archive `path`, `actor_slug` when known.
+	Metadata map[string]interface{} `json:"metadata"`
+
+	// Name Display name (usually the adversary name).
+	Name     string             `json:"name"`
+	SourceId openapi_types.UUID `json:"sourceId"`
+
+	// Steps Steps sorted by ordinal ascending.
+	Steps     []ContentEmulationPlanStep `json:"steps"`
+	UpdatedAt time.Time                  `json:"updatedAt"`
+
+	// Version Version token. CTID is rolling-head and always `current`.
+	Version string `json:"version"`
+}
+
+// ContentEmulationPlanList defines model for ContentEmulationPlanList.
+type ContentEmulationPlanList struct {
+	Items []ContentEmulationPlan `json:"items"`
+}
+
+// ContentEmulationPlanStep One ordered step under a CTID emulation plan. `ordinal` is 1-based
+// document order from the upstream plan YAML (dense, unique per plan).
+// Upstream `procedure_step` labels (for example `2.1`) live inside
+// `procedure` when present and are not used as the ordinal.
+type ContentEmulationPlanStep struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ExternalId Stable id within the source. Prefer upstream step `id`; otherwise
+	// `{plan_external_id}/{ordinal}` (documented in `docs/content-ctid.md`).
+	ExternalId string             `json:"externalId"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+
+	// Ordinal 1-based position under the plan (document order).
+	Ordinal int `json:"ordinal"`
+
+	// PlanId Surrogate id of the parent plan.
+	PlanId openapi_types.UUID `json:"planId"`
+
+	// Procedure Structured procedure-ish payload when upstream provides commands:
+	// platforms, executors (name/command/cleanup), input_arguments,
+	// tactic, procedure_group/step labels, cti_source, dependencies.
+	// Empty object when none. Snapshot onto scenario steps in M3-013 —
+	// never executed by Blacklight.
+	Procedure map[string]interface{} `json:"procedure"`
+	SourceId  openapi_types.UUID     `json:"sourceId"`
+
+	// TechniqueExternalId ATT&CK technique external id when upstream provides one (for
+	// example `T1566.001`). Empty string when missing — allowed; M3 pin
+	// resolve treats empty as no technique.
+	TechniqueExternalId string    `json:"techniqueExternalId"`
+	UpdatedAt           time.Time `json:"updatedAt"`
+
+	// Version Version token. CTID is rolling-head and always `current`.
+	Version string `json:"version"`
+}
+
 // ContentGroup defines model for ContentGroup.
 type ContentGroup struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -1811,6 +1919,9 @@ type ContentDetectionLevelFilter = string
 // ContentDetectionRuleId defines model for ContentDetectionRuleId.
 type ContentDetectionRuleId = openapi_types.UUID
 
+// ContentEmulationPlanId defines model for ContentEmulationPlanId.
+type ContentEmulationPlanId = openapi_types.UUID
+
 // ContentGroupId defines model for ContentGroupId.
 type ContentGroupId = openapi_types.UUID
 
@@ -2240,6 +2351,24 @@ type ListContentDetectionRulesParams struct {
 	// Level Restrict to rules with this Sigma level label (for example `low`,
 	// `medium`, `high`, `critical`). Case-insensitive exact match.
 	Level *ContentDetectionLevelFilter `form:"level,omitempty" json:"level,omitempty"`
+
+	// SourceId Restrict to templates from this content source.
+	SourceId *ContentLibrarySourceIdFilter `form:"sourceId,omitempty" json:"sourceId,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListContentEmulationPlansParams defines parameters for ListContentEmulationPlans.
+type ListContentEmulationPlansParams struct {
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Technique Restrict to templates that list this ATT&CK technique external id
+	// (for example `T1059.001`). Exact membership match against the stored
+	// technique id list.
+	Technique *ContentTechniqueExternalIdFilter `form:"technique,omitempty" json:"technique,omitempty"`
 
 	// SourceId Restrict to templates from this content source.
 	SourceId *ContentLibrarySourceIdFilter `form:"sourceId,omitempty" json:"sourceId,omitempty"`
@@ -2891,6 +3020,12 @@ type ServerInterface interface {
 	// GetContentDetectionRule Read one detection rule reference.
 	// (GET /content/detection-rules/{ruleId})
 	GetContentDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId)
+	// ListContentEmulationPlans List CTID emulation plans.
+	// (GET /content/emulation-plans)
+	ListContentEmulationPlans(w http.ResponseWriter, r *http.Request, params ListContentEmulationPlansParams)
+	// GetContentEmulationPlan Read one emulation plan with ordered steps.
+	// (GET /content/emulation-plans/{planId})
+	GetContentEmulationPlan(w http.ResponseWriter, r *http.Request, planId ContentEmulationPlanId)
 	// ListContentGroups List ATT&CK groups.
 	// (GET /content/groups)
 	ListContentGroups(w http.ResponseWriter, r *http.Request, params ListContentGroupsParams)
@@ -3194,6 +3329,18 @@ func (_ Unimplemented) ListContentDetectionRules(w http.ResponseWriter, r *http.
 // GetContentDetectionRule Read one detection rule reference.
 // (GET /content/detection-rules/{ruleId})
 func (_ Unimplemented) GetContentDetectionRule(w http.ResponseWriter, r *http.Request, ruleId ContentDetectionRuleId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentEmulationPlans List CTID emulation plans.
+// (GET /content/emulation-plans)
+func (_ Unimplemented) ListContentEmulationPlans(w http.ResponseWriter, r *http.Request, params ListContentEmulationPlansParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentEmulationPlan Read one emulation plan with ordered steps.
+// (GET /content/emulation-plans/{planId})
+func (_ Unimplemented) GetContentEmulationPlan(w http.ResponseWriter, r *http.Request, planId ContentEmulationPlanId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4475,6 +4622,104 @@ func (siw *ServerInterfaceWrapper) GetContentDetectionRule(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetContentDetectionRule(w, r, ruleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentEmulationPlans operation middleware
+func (siw *ServerInterfaceWrapper) ListContentEmulationPlans(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentEmulationPlansParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "technique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "technique", r.URL.Query(), &params.Technique, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "technique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "technique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sourceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sourceId", r.URL.Query(), &params.SourceId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sourceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentEmulationPlans(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentEmulationPlan operation middleware
+func (siw *ServerInterfaceWrapper) GetContentEmulationPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planId" -------------
+	var planId ContentEmulationPlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentEmulationPlan(w, r, planId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6711,6 +6956,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/detection-rules/{ruleId}", wrapper.GetContentDetectionRule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/emulation-plans", wrapper.ListContentEmulationPlans)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/emulation-plans/{planId}", wrapper.GetContentEmulationPlan)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
@@ -9201,6 +9452,178 @@ type GetContentDetectionRule500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetContentDetectionRule500ApplicationProblemPlusJSONResponse) VisitGetContentDetectionRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentEmulationPlansRequestObject struct {
+	Params ListContentEmulationPlansParams
+}
+
+type ListContentEmulationPlansResponseObject interface {
+	VisitListContentEmulationPlansResponse(w http.ResponseWriter) error
+}
+
+type ListContentEmulationPlans200JSONResponse ContentEmulationPlanList
+
+func (response ListContentEmulationPlans200JSONResponse) VisitListContentEmulationPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentEmulationPlans400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentEmulationPlans400ApplicationProblemPlusJSONResponse) VisitListContentEmulationPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentEmulationPlans401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentEmulationPlans401ApplicationProblemPlusJSONResponse) VisitListContentEmulationPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentEmulationPlans403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentEmulationPlans403ApplicationProblemPlusJSONResponse) VisitListContentEmulationPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentEmulationPlans500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentEmulationPlans500ApplicationProblemPlusJSONResponse) VisitListContentEmulationPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentEmulationPlanRequestObject struct {
+	PlanId ContentEmulationPlanId `json:"planId"`
+}
+
+type GetContentEmulationPlanResponseObject interface {
+	VisitGetContentEmulationPlanResponse(w http.ResponseWriter) error
+}
+
+type GetContentEmulationPlan200JSONResponse ContentEmulationPlanDetail
+
+func (response GetContentEmulationPlan200JSONResponse) VisitGetContentEmulationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentEmulationPlan401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentEmulationPlan401ApplicationProblemPlusJSONResponse) VisitGetContentEmulationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentEmulationPlan403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentEmulationPlan403ApplicationProblemPlusJSONResponse) VisitGetContentEmulationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentEmulationPlan404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentEmulationPlan404ApplicationProblemPlusJSONResponse) VisitGetContentEmulationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentEmulationPlan500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentEmulationPlan500ApplicationProblemPlusJSONResponse) VisitGetContentEmulationPlanResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -13185,6 +13608,12 @@ type StrictServerInterface interface {
 	// GetContentDetectionRule Read one detection rule reference.
 	// (GET /content/detection-rules/{ruleId})
 	GetContentDetectionRule(ctx context.Context, request GetContentDetectionRuleRequestObject) (GetContentDetectionRuleResponseObject, error)
+	// ListContentEmulationPlans List CTID emulation plans.
+	// (GET /content/emulation-plans)
+	ListContentEmulationPlans(ctx context.Context, request ListContentEmulationPlansRequestObject) (ListContentEmulationPlansResponseObject, error)
+	// GetContentEmulationPlan Read one emulation plan with ordered steps.
+	// (GET /content/emulation-plans/{planId})
+	GetContentEmulationPlan(ctx context.Context, request GetContentEmulationPlanRequestObject) (GetContentEmulationPlanResponseObject, error)
 	// ListContentGroups List ATT&CK groups.
 	// (GET /content/groups)
 	ListContentGroups(ctx context.Context, request ListContentGroupsRequestObject) (ListContentGroupsResponseObject, error)
@@ -14150,6 +14579,58 @@ func (sh *strictHandler) GetContentDetectionRule(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetContentDetectionRuleResponseObject); ok {
 		if err := validResponse.VisitGetContentDetectionRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentEmulationPlans operation middleware
+func (sh *strictHandler) ListContentEmulationPlans(w http.ResponseWriter, r *http.Request, params ListContentEmulationPlansParams) {
+	var request ListContentEmulationPlansRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentEmulationPlans(ctx, request.(ListContentEmulationPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentEmulationPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentEmulationPlansResponseObject); ok {
+		if err := validResponse.VisitListContentEmulationPlansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentEmulationPlan operation middleware
+func (sh *strictHandler) GetContentEmulationPlan(w http.ResponseWriter, r *http.Request, planId ContentEmulationPlanId) {
+	var request GetContentEmulationPlanRequestObject
+
+	request.PlanId = planId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentEmulationPlan(ctx, request.(GetContentEmulationPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentEmulationPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentEmulationPlanResponseObject); ok {
+		if err := validResponse.VisitGetContentEmulationPlanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
