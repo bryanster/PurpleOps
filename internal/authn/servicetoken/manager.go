@@ -28,7 +28,8 @@ type Store interface {
 	Create(ctx context.Context, in identity.NewServiceToken, after ...identity.After) (identity.ServiceToken, error)
 	ByPrefix(ctx context.Context, prefix string) (identity.ServiceToken, error)
 	ListByOwner(ctx context.Context, ownerUserID string) ([]identity.ServiceToken, error)
-	Revoke(ctx context.Context, id, ownerUserID string, at time.Time, after ...identity.After) (identity.ServiceToken, error)
+	Revoke(ctx context.Context, id, ownerUserID, revokedBy string, at time.Time,
+		after ...identity.After) (identity.ServiceToken, error)
 	SetLastUsedAt(ctx context.Context, id string, at time.Time) error
 }
 
@@ -453,13 +454,21 @@ func (m *Manager) List(ctx context.Context, ownerUserID string) ([]identity.Serv
 	return m.store.ListByOwner(ctx, ownerUserID)
 }
 
-// Revoke ends one token, and only for its owner.
+// Revoke ends one token belonging to ownerUserID, on the authority of revokedBy.
 //
-// A token belonging to somebody else is [apierr.NotFound], indistinguishable
-// from one that does not exist — see [identity.ServiceTokens.Revoke], where the
-// ownership is part of the statement rather than a check in front of it.
-func (m *Manager) Revoke(ctx context.Context, id, ownerUserID string) (identity.ServiceToken, error) {
-	revoked, err := m.store.Revoke(ctx, id, ownerUserID, m.now(), m.revokedAfter(ownerUserID))
+// A token that does not belong to ownerUserID is [apierr.NotFound],
+// indistinguishable from one that does not exist — see
+// [identity.ServiceTokens.Revoke], where the ownership is part of the statement
+// rather than a check in front of it.
+//
+// The two callers differ only in the two arguments. An owner ending their own
+// passes their own identifier twice; an administrator ending somebody else's
+// (M1-018) passes the account named in the path and then themselves. What
+// happens to the token is the same act, which is why it is one function — a
+// second one would be a second definition of "revoked" to keep in step.
+func (m *Manager) Revoke(ctx context.Context, id, ownerUserID, revokedBy string) (identity.ServiceToken, error) {
+	revoked, err := m.store.Revoke(ctx, id, ownerUserID, revokedBy, m.now(),
+		m.revokedAfter(ownerUserID, revokedBy))
 	if err != nil {
 		return identity.ServiceToken{}, err
 	}
@@ -467,22 +476,41 @@ func (m *Manager) Revoke(ctx context.Context, id, ownerUserID string) (identity.
 	m.log.InfoContext(ctx, "service token revoked",
 		slog.String("token_id", revoked.ID),
 		slog.String("owner_user_id", revoked.OwnerUserID),
+		slog.String("revoked_by", revoked.RevokedBy),
 		slog.String("prefix", revoked.Prefix),
 		slog.Time("revoked_at", revoked.RevokedAt))
 
 	return revoked, nil
 }
 
-func (m *Manager) revokedAfter(actorID string) identity.After {
+// revokedAfter records the revocation, under the verb that says who did it to
+// whose (M1-015's vocabulary, M1-018's requirement).
+//
+// Two verbs rather than one with a delta field somebody has to notice: an
+// incident review filters for "an administrator ended somebody's credential",
+// and a filter that returns every routine rotation as well is a filter nobody
+// uses. It is the same distinction [events.VerbUserSessionsRevoked] draws
+// against [events.VerbSessionLogout].
+func (m *Manager) revokedAfter(ownerUserID, revokedBy string) identity.After {
 	if m.activity == nil {
 		return nil
 	}
+	verb := events.VerbTokenRevoked
+	delta := map[string]any{}
+	if revokedBy != ownerUserID {
+		verb = events.VerbTokenAdminRevoked
+		// Whose credential it was. The row's own object is the token, and an
+		// administrator's feed entry that does not say whose access just
+		// stopped is one a reader has to go and look up.
+		delta["owner_user_id"] = ownerUserID
+	}
 	return func(ctx context.Context, tx *sql.Tx) error {
 		return m.activity.Record(ctx, tx, events.Entry{
-			ActorID:    actorID,
-			Verb:       events.VerbTokenRevoked,
+			ActorID:    revokedBy,
+			Verb:       verb,
 			ObjectType: events.ObjectToken,
 			ObjectID:   identity.AfterEntityID(ctx),
+			Delta:      events.Delta(delta),
 		})
 	}
 }

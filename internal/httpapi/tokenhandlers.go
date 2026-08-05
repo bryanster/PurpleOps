@@ -24,9 +24,16 @@ import (
 // is entered (M1-013) — including a caller presenting a service token, whom the
 // session-only guard in internal/authz refuses whatever scopes they carry.
 //
-// What *is* here is the scoping, and it is one word repeated: every call below
-// passes the caller as the owner, so there is no argument any of these functions
+// What *is* here is the scoping, and it is one word repeated: every one of the
+// first three calls passes the caller as the owner, so there is no argument they
 // could be given that would reach somebody else's token.
+//
+// The last two are M1-018's administrative pair, and they are the exception that
+// proves it: they name an account because that is the whole of what they are for,
+// and what keeps them safe is not the scoping but `token.admin_read` and
+// `token.admin_manage` — held by administrators alone, and refused to a service
+// token whatever it carries. The middleware has turned everybody else away
+// before either function is entered.
 
 // ListServiceTokens returns the caller's own tokens.
 func (h *handlers) ListServiceTokens(ctx context.Context,
@@ -105,6 +112,50 @@ func (h *handlers) RevokeServiceToken(ctx context.Context,
 	return gen.RevokeServiceToken204Response{}, nil
 }
 
+// ListUserTokens returns the tokens one account holds, for an administrator
+// during an incident (M1-018).
+//
+// The same renderer as [handlers.ListServiceTokens], deliberately: two listings
+// of the same rows that could describe them differently would leave an
+// administrator and an owner arguing about what is revoked.
+func (h *handlers) ListUserTokens(ctx context.Context,
+	request gen.ListUserTokensRequestObject) (gen.ListUserTokensResponseObject, error) {
+	tokens, err := h.auth.AccountTokens(ctx, request.UserId.String())
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]gen.ServiceToken, 0, len(tokens))
+	for _, token := range tokens {
+		rendered, err := serviceToken(token, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, rendered)
+	}
+	return gen.ListUserTokens200JSONResponse{Items: items}, nil
+}
+
+// RevokeUserToken ends one token belonging to the named account.
+//
+// Both identifiers are passed down and both are part of the statement that does
+// the revoking: a token that does not belong to this account answers 404, the
+// same as one that does not exist, so the endpoint is neither a way to revoke by
+// identifier alone nor a way to find out which identifiers are real.
+func (h *handlers) RevokeUserToken(ctx context.Context,
+	request gen.RevokeUserTokenRequestObject) (gen.RevokeUserTokenResponseObject, error) {
+	subject, err := subjectFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := h.auth.RevokeAccountToken(ctx, subject,
+		request.UserId.String(), request.TokenId.String()); err != nil {
+		return nil, err
+	}
+	return gen.RevokeUserToken204Response{}, nil
+}
+
 // serviceToken renders one row for the wire, in one place, so the two responses
 // that carry a token cannot describe it differently.
 //
@@ -146,6 +197,18 @@ func serviceToken(token identity.ServiceToken, now time.Time) (gen.ServiceToken,
 	}
 	if !token.RevokedAt.IsZero() {
 		out.RevokedAt = &token.RevokedAt
+	}
+	if token.RevokedBy != "" {
+		// Absent rather than zero on a token nobody revoked, and absent rather
+		// than an error on a row migrated from before 0010 added the column —
+		// those were all revoked by their owner, and inventing that here would
+		// be this layer deciding a fact it does not have.
+		revoker, err := uuid.Parse(token.RevokedBy)
+		if err != nil {
+			return gen.ServiceToken{}, apierr.Internal(
+				fmt.Errorf("service token %s was revoked by %q, which is not a UUID: %w", token.ID, token.RevokedBy, err))
+		}
+		out.RevokedBy = &revoker
 	}
 	return out, nil
 }

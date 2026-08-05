@@ -160,12 +160,48 @@ curl -sS https://blacklight.example.com/api/v1/auth/tokens \
 Your own tokens, newest first, including expired and revoked ones — you cannot decide what to rotate
 without seeing what ended and when. `status` is `active`, `expired` or `revoked`.
 
-There is no way to list somebody else's. An administrator who needs to stop another account's tokens
-disables the account, which stops all of them at once.
+There is no parameter here that names another account, for an administrator either. Administrators
+have their own pair of endpoints; see below.
+
+## For administrators: somebody else's tokens
+
+These two are the incident case, and they need a signed-in administrator — a service token cannot
+call either of them, whatever it is scoped for and however senior its owner. A leaked credential
+must not be able to end every other credential in the installation.
+
+```bash
+# What does this account hold, and when was each last used?
+curl -sS "https://blacklight.example.com/api/v1/users/$USER_ID/tokens" \
+  --cookie "bl_session=$SESSION"
+
+# End one of them.
+curl -sS -X DELETE "https://blacklight.example.com/api/v1/users/$USER_ID/tokens/$TOKEN_ID" \
+  -H "X-CSRF-Token: $CSRF" \
+  --cookie "bl_session=$SESSION; bl_csrf=$CSRF"
+```
+
+The listing is the same shape as `GET /auth/tokens` and reads the same rows, so an administrator and
+an owner never disagree about what is revoked. It carries no secret, because none is stored.
+
+`$TOKEN_ID` has to belong to `$USER_ID`. A token identifier belonging to a different account answers
+`404`, exactly as an invented one does — this is not a way to revoke by identifier alone.
+
+Revoking here is the same act the owner's own revocation is: one row, one timestamp, taking effect on
+the token's next request. What differs is the record of it. The token's `revokedBy` names the account
+that ended it, so an administrator stepping in is tellable from a routine rotation afterwards, and
+the activity log files it under `token.admin_revoked` rather than `token.revoked` — an incident
+review can filter for one without wading through every rotation in the installation.
+
+**This is narrower than disabling the account, on purpose.** Disabling stops every token the account
+holds *and* stops the person; this stops one credential and leaves them able to work. Reach for
+`POST /users/{userId}/disable` when the account itself is the problem, and for this when one
+credential is.
 
 ## If a token leaks
 
-1. **Revoke it.** That is the whole of the immediate fix; there is no propagation delay.
+1. **Revoke it.** That is the whole of the immediate fix; there is no propagation delay. If it is not
+   yours, an administrator revokes it with `DELETE /users/{userId}/tokens/{tokenId}` — they do not
+   need to disable the account to stop one credential.
 2. Search the server log for its `prefix`. Every request the token made is logged with the
    authorization decision it produced, so the prefix is what tells you what was done with it. The
    secret is in no log — the type that carries one renders as `[redacted]` under every printf verb,

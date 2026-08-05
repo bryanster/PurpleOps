@@ -123,5 +123,50 @@ func (s *Service) ListTokens(ctx context.Context, subject Subject) ([]identity.S
 // never existed — the ownership is part of the statement rather than a check in
 // front of it, so the two cannot be told apart by trying.
 func (s *Service) RevokeToken(ctx context.Context, subject Subject, id string) (identity.ServiceToken, error) {
-	return s.tokens.Revoke(ctx, id, subject.UserID)
+	return s.tokens.Revoke(ctx, id, subject.UserID, subject.UserID)
+}
+
+// The administrative half (M1-018). An administrator who learns that an account
+// is compromised can already disable it, which stops every token it holds — and
+// stops the person with them. These two answer the narrower question: what does
+// this account hold, and end this one.
+//
+// Neither is scoped to the caller, which is the whole difference from the three
+// above, and it is why they carry their own actions rather than token.read and
+// token.manage — everybody holds those, over their own rows. `token.admin_read`
+// and `token.admin_manage` are held by administrators alone and are refused to a
+// service token whatever it carries, so the middleware has already turned
+// everybody else away before either function is entered.
+
+// AccountTokens returns the tokens one account holds, newest first.
+//
+// The account is read first so that an identifier naming nobody is a 404 rather
+// than an empty list. That distinction is safe here and nowhere else in this
+// file: only an administrator reaches this, and an administrator may already
+// read the account through GET /users/{userId}. What it buys is an answer to
+// "does this person hold no tokens, or did I mistype their identifier?", which
+// is a question somebody asks at exactly the wrong moment to guess.
+func (s *Service) AccountTokens(ctx context.Context, userID string) ([]identity.ServiceToken, error) {
+	if _, err := s.users.ByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	return s.tokens.List(ctx, userID)
+}
+
+// RevokeAccountToken ends one token belonging to userID, on actor's authority.
+//
+// It is the same statement the owner's own revocation runs, with the owner named
+// rather than assumed: a token identifier that belongs to a different account is
+// [apierr.NotFound] here too, so this endpoint is not a way to revoke by
+// identifier alone or to find out which identifiers are real.
+//
+// No check that actor is not the owner. An administrator revoking their own
+// token through this endpoint is doing something legitimate, and the activity
+// row will say token.revoked rather than token.admin_revoked because that is
+// what happened.
+func (s *Service) RevokeAccountToken(ctx context.Context, actor Subject, userID, tokenID string) (identity.ServiceToken, error) {
+	if _, err := s.users.ByID(ctx, userID); err != nil {
+		return identity.ServiceToken{}, err
+	}
+	return s.tokens.Revoke(ctx, tokenID, userID, actor.UserID)
 }

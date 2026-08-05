@@ -439,6 +439,12 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/users/{userId}/enable":          {body: ""},
 	"POST " + BasePath + "/users/{userId}/sessions/revoke": {body: ""},
 
+	// Administrative token revocation (M1-018). Protected for the reason the
+	// owner's own is, and for one more: it is session-only by policy, so there
+	// is no token-authenticated caller here for an exemption to be about — a
+	// browser is the only thing that ever reaches it.
+	"DELETE " + BasePath + "/users/{userId}/tokens/{tokenId}": {body: ""},
+
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request
 	// the *validator* accepts, so that whatever answers it is the middleware

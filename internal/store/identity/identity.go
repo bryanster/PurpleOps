@@ -273,6 +273,13 @@ type ServiceToken struct {
 	// revoked are different facts and are worth telling apart in an audit
 	// trail.
 	RevokedAt time.Time
+
+	// RevokedBy is who ended it, and is empty while RevokedAt is zero. It is
+	// the owner on every revocation the owner made and an administrator on the
+	// ones M1-018 added — "who ended this, and were they its owner?" is a
+	// question an incident review asks of the credential in front of it, and
+	// comparing this against OwnerUserID is the answer.
+	RevokedBy string
 }
 
 // NewServiceToken is the caller's half of creating one: the identifier and

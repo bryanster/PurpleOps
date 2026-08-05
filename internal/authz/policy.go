@@ -172,6 +172,32 @@ var rules = []Rule{
 		Platform: everyone, Token: TokenScopeAdminWrite, Guard: GuardSessionOnly,
 		Summary: "Create and revoke your own service tokens. A signed-in session only, never a token itself."},
 
+	// The administrative half (M1-018): the tokens *somebody else* holds, which
+	// an administrator has to be able to see and end during an incident without
+	// disabling the person along with them.
+	//
+	// They act on a [ResourceUser] and not on a [ResourceServiceToken], because
+	// the thing the request names is an account — the question is "what does
+	// this account hold", and the answer is a set rather than a row. That also
+	// keeps the pair above meaning exactly what they say: your own tokens.
+	//
+	// admins rather than everyone is the whole of the difference from the pair
+	// above, and it is what makes the endpoints safe to point at another
+	// account: there is no scoping to the caller in the repository, so the role
+	// is the only fence and it is stated here.
+	//
+	// [GuardSessionOnly] for the reason the pair above carries it, and M1-018
+	// asks for it in as many words: a service token must not be in the business
+	// of deciding which credentials exist, and an administrator's token is the
+	// one this would matter most for — it could otherwise end every other
+	// token in the installation.
+	{Action: ActionTokenAdminRead, Name: "token.admin_read", Resource: ResourceUser,
+		Platform: admins, Token: TokenScopeAdminRead, Guard: GuardSessionOnly,
+		Summary: "Read the service tokens one account holds, and when they were last used. Never their secrets."},
+	{Action: ActionTokenAdminManage, Name: "token.admin_manage", Resource: ResourceUser,
+		Platform: admins, Token: TokenScopeAdminWrite, Guard: GuardSessionOnly,
+		Summary: "Revoke somebody else's service token. A signed-in session only, never a token itself."},
+
 	// Sessions (M1-017), and the same two paragraphs apply word for word: the
 	// endpoints only ever name the caller's own rows, so "everybody" here is
 	// scoping rather than permission, and [GuardSessionOnly] is the decision.

@@ -811,9 +811,9 @@ paths:
 
         Yours and nobody else's. There is no parameter that names another
         account, and an administrator calling this sees their own tokens like
-        everybody else; what an administrator has instead is the ability to
-        disable the account, which stops every token that account holds at its
-        next request.
+        everybody else. An administrator who needs to see somebody else's has
+        `GET /users/{userId}/tokens`, which is a different permission and a
+        different endpoint — this one never widens.
       tags:
         - auth
       x-authz-action: token.read
@@ -908,7 +908,9 @@ paths:
         A token belonging to somebody else answers `404`, exactly as an
         identifier that names nothing does. The two are indistinguishable on
         purpose: an endpoint that answered `403` for real identifiers and `404`
-        for invented ones would be a way to find out which are real.
+        for invented ones would be a way to find out which are real. An
+        administrator revoking somebody else's uses
+        `DELETE /users/{userId}/tokens/{tokenId}`, which names the account.
 
         As with creation, a service token cannot call this.
       tags:
@@ -1709,6 +1711,112 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RevokedSessions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{userId}/tokens:
+    get:
+      operationId: listUserTokens
+      summary: List the service tokens one account holds.
+      description: |
+        Administrators only, and the question an incident starts with: what does
+        this account hold, and when was each of them last used? Until this
+        endpoint the answer needed a SQL console, at exactly the moment nobody
+        wants to be reaching for one.
+
+        The same shape and the same renderer as `GET /auth/tokens`, including
+        the expired and revoked rows — an administrator working from a
+        different set from the owner's is an administrator working from a
+        second account of what exists. No secret is here, for the reason no
+        secret is there: the server keeps a hash and could not produce one if
+        asked.
+
+        What this is *instead of* is disabling the account. Disabling stops
+        every token it holds, and it stops the person too; this stops one
+        credential and leaves them able to work.
+
+        A service token cannot call this, whatever it is scoped for and however
+        senior its owner — `403`. Reading which credentials exist is the
+        business of a person at a keyboard, for the reason
+        `POST /auth/tokens` says.
+      tags:
+        - users
+      x-authz-action: token.admin_read
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: The account's tokens.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceTokens"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{userId}/tokens/{tokenId}:
+    delete:
+      operationId: revokeUserToken
+      summary: Revoke one service token belonging to somebody else.
+      description: |
+        Administrators only. Takes effect on the token's next request, the same
+        as the owner revoking it themselves: nothing caches a token anywhere, so
+        there is no window in which it still works. The owner's own listing then
+        shows it as revoked, carrying the same timestamp — there is one
+        revocation and one row, not an administrative copy of one.
+
+        `revokedBy` on the token records who ended it, which is what makes an
+        administrative revocation tellable from a routine rotation afterwards.
+        The activity log says the same thing under `token.admin_revoked`.
+
+        Idempotent, and it keeps the original revocation time and revoker: the
+        first revocation is when access actually stopped, and whoever arrived
+        second stopped nothing.
+
+        `tokenId` must belong to `userId`. A token belonging to a different
+        account answers `404`, exactly as an identifier that names nothing does
+        — so this is not a way to revoke by identifier alone, and not a way to
+        find out which identifiers are real.
+
+        As with the listing, a service token cannot call this. That matters most
+        here: a leaked credential belonging to an administrator would otherwise
+        be able to end every other credential in the installation.
+      tags:
+        - users
+      x-authz-action: token.admin_manage
+      x-authz-resource:
+        type: user
+        param: userId
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: tokenId
+          in: path
+          required: true
+          description: The token's `id`, from `GET /users/{userId}/tokens`. Never its prefix and never its secret.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The token is revoked, or already was.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -3176,6 +3284,15 @@ components:
           description: |
             When somebody ended it early. Absent on a token nobody has revoked;
             expired and revoked are different facts and `status` says which.
+        revokedBy:
+          type: string
+          format: uuid
+          description: |
+            Which account ended it. Absent on a token nobody has revoked, and
+            equal to the owner on one its owner rotated themselves — so a value
+            here that is *not* the owner is an administrator having stepped in
+            (`DELETE /users/{userId}/tokens/{tokenId}`), which is the question
+            an incident review asks of the credential in front of it.
 
     ServiceTokenStatus:
       type: string
@@ -3190,7 +3307,11 @@ components:
 
     ServiceTokens:
       type: object
-      description: The caller's own tokens, newest first.
+      description: |
+        A set of service tokens, newest first. Both listings return it — your
+        own (`GET /auth/tokens`) and, for an administrator, one account's
+        (`GET /users/{userId}/tokens`) — so the two cannot come to describe a
+        token differently.
       required:
         - items
       properties:

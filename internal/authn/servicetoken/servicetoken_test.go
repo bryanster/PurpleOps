@@ -117,7 +117,8 @@ func (s *memStore) ListByOwner(_ context.Context, ownerUserID string) ([]identit
 	return out, nil
 }
 
-func (s *memStore) Revoke(ctx context.Context, id, ownerUserID string, at time.Time, after ...identity.After) (identity.ServiceToken, error) {
+func (s *memStore) Revoke(ctx context.Context, id, ownerUserID, revokedBy string, at time.Time,
+	after ...identity.After) (identity.ServiceToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failWith != nil {
@@ -130,6 +131,7 @@ func (s *memStore) Revoke(ctx context.Context, id, ownerUserID string, at time.T
 	}
 	if token.RevokedAt.IsZero() {
 		token.RevokedAt = at.UTC()
+		token.RevokedBy = revokedBy
 		s.byID[id] = token
 	}
 	for _, fn := range after {

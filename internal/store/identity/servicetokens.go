@@ -21,15 +21,15 @@ import (
 //
 //nolint:gosec // G101: a SELECT column list, not a hardcoded credential.
 const serviceTokenColumns = `id, name, prefix, token_hash, owner_user_id, created_by,
-	scopes, engagement_id, created_at, expires_at, last_used_at, revoked_at`
+	scopes, engagement_id, created_at, expires_at, last_used_at, revoked_at, revoked_by`
 
 const selectServiceToken = `SELECT ` + serviceTokenColumns + ` FROM app.service_token `
 
 //nolint:gosec // G101: an INSERT statement, not a hardcoded credential.
 const insertServiceToken = `INSERT INTO app.service_token
 	(id, name, prefix, token_hash, owner_user_id, created_by, scopes,
-	 engagement_id, created_at, expires_at, last_used_at, revoked_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+	 engagement_id, created_at, expires_at, last_used_at, revoked_at, revoked_by)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`
 
 // scopeSeparator joins the scope list into its column. It is a space because
 // that is how OAuth 2.0 spells a scope list (RFC 6749 §3.3) and because no
@@ -121,6 +121,12 @@ func (r *ServiceTokens) ByPrefix(ctx context.Context, prefix string) (ServiceTok
 // ListByOwner returns every token row a user holds, newest first, including
 // expired and revoked ones — an owner deciding whether to rotate needs to see
 // what ended and when, the same as they do for sessions.
+//
+// It is one query for two endpoints: the owner's own listing passes the caller,
+// and M1-018's administrative listing passes the account named in its path.
+// Nothing here knows which, deliberately — an administrator who could be shown a
+// different set from the owner is an administrator working from a second
+// account of what exists.
 func (r *ServiceTokens) ListByOwner(ctx context.Context, ownerUserID string) ([]ServiceToken, error) {
 	rows, err := r.db.Read().QueryContext(ctx,
 		selectServiceToken+`WHERE owner_user_id = ? ORDER BY id DESC`, ownerUserID)
@@ -143,24 +149,37 @@ func (r *ServiceTokens) ListByOwner(ctx context.Context, ownerUserID string) ([]
 	return tokens, nil
 }
 
-// Revoke ends one token, and does so only for its owner.
+// Revoke ends one token belonging to ownerUserID, and records revokedBy as who
+// ended it.
 //
 // The owner is part of the statement rather than checked beforehand, which is
-// what makes somebody else's token identifier indistinguishable from one that
-// does not exist: both match no row, and both are [apierr.NotFound]. A check
-// that read the row first and compared would answer the two differently, and
-// the difference is a way to find out which identifiers are real.
+// what makes a token that is not theirs indistinguishable from one that does not
+// exist: both match no row, and both are [apierr.NotFound]. A check that read the
+// row first and compared would answer the two differently, and the difference is
+// a way to find out which identifiers are real. That property is what M1-018's
+// administrative endpoint reuses rather than reimplements — it passes the account
+// named in its path as the owner, so a token identifier belonging to a *different*
+// account is a 404 there too.
 //
-// Revoking a token that has already been revoked keeps the original timestamp —
-// the first revocation is when access actually stopped — and is not an error,
-// because the caller's intent is satisfied either way.
-func (r *ServiceTokens) Revoke(ctx context.Context, id, ownerUserID string, at time.Time, after ...After) (ServiceToken, error) {
+// revokedBy is the owner on the owner's own revocation and an administrator on
+// M1-018's. It is written in the same statement as revoked_at so the two cannot
+// disagree.
+//
+// Revoking a token that has already been revoked keeps the original timestamp and
+// the original revoker — the first revocation is when access actually stopped, and
+// whoever arrived second did not stop anything — and is not an error, because the
+// caller's intent is satisfied either way.
+func (r *ServiceTokens) Revoke(ctx context.Context, id, ownerUserID, revokedBy string, at time.Time,
+	after ...After) (ServiceToken, error) {
 	var revoked ServiceToken
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := requireUser(ctx, tx, revokedBy); err != nil {
+			return err
+		}
 		result, err := tx.ExecContext(ctx,
-			`UPDATE app.service_token SET revoked_at = ?
+			`UPDATE app.service_token SET revoked_at = ?, revoked_by = ?
 			 WHERE id = ? AND owner_user_id = ? AND revoked_at IS NULL`,
-			toStorage(at), id, ownerUserID)
+			toStorage(at), revokedBy, id, ownerUserID)
 		if err != nil {
 			return err
 		}
@@ -264,9 +283,10 @@ func scanServiceToken(row interface{ Scan(...any) error }) (ServiceToken, error)
 		engagement sql.NullString
 		lastUsed   sql.NullTime
 		revoked    sql.NullTime
+		revokedBy  sql.NullString
 	)
 	if err := row.Scan(&t.ID, &t.Name, &t.Prefix, &t.TokenHash, &t.OwnerUserID, &t.CreatedBy,
-		&scopes, &engagement, &t.CreatedAt, &t.ExpiresAt, &lastUsed, &revoked); err != nil {
+		&scopes, &engagement, &t.CreatedAt, &t.ExpiresAt, &lastUsed, &revoked, &revokedBy); err != nil {
 		return ServiceToken{}, err
 	}
 	t.Scopes = splitScopes(scopes)
@@ -275,5 +295,6 @@ func scanServiceToken(row interface{ Scan(...any) error }) (ServiceToken, error)
 	t.ExpiresAt = t.ExpiresAt.UTC()
 	t.LastUsedAt = fromNullTime(lastUsed)
 	t.RevokedAt = fromNullTime(revoked)
+	t.RevokedBy = revokedBy.String
 	return t, nil
 }

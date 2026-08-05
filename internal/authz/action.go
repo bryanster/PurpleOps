@@ -45,6 +45,16 @@ const (
 	ActionTokenRead
 	ActionTokenManage
 
+	// The same two over *somebody else's* tokens (M1-018), which is a different
+	// question and therefore a different action: the two above are held by
+	// everybody and scoped to the caller's own rows, and these are held by
+	// administrators and name an account. Folding the administrative case into
+	// the pair above would make "everybody holds this" stop being true, and
+	// folding it into user.manage would drop the session-only guard that keeps
+	// a leaked token out of the credential business.
+	ActionTokenAdminRead
+	ActionTokenAdminManage
+
 	// Sessions (M1-017). The same shape as the two above, over the browsers
 	// somebody is signed in on rather than the credentials they issued.
 	ActionSessionRead

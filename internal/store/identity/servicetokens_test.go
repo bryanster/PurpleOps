@@ -216,8 +216,9 @@ func TestRevokingSomebodyElsesTokenIsIndistinguishableFromOneThatIsNotThere(t *t
 		t.Fatalf("Create() = %v", err)
 	}
 
-	_, theirs := r.tokens.Revoke(t.Context(), hers.ID, bob.ID, time.Now())
-	_, invented := r.tokens.Revoke(t.Context(), "0192f1a0-0000-7000-8000-00000000face", bob.ID, time.Now())
+	_, theirs := r.tokens.Revoke(t.Context(), hers.ID, bob.ID, bob.ID, time.Now())
+	_, invented := r.tokens.Revoke(t.Context(),
+		"0192f1a0-0000-7000-8000-00000000face", bob.ID, bob.ID, time.Now())
 
 	if !errors.Is(theirs, apierr.ErrNotFound) {
 		t.Errorf("revoking another owner's token = %v, want not-found", theirs)
@@ -237,13 +238,16 @@ func TestRevokingSomebodyElsesTokenIsIndistinguishableFromOneThatIsNotThere(t *t
 	}
 }
 
-// TestRevokingTwiceKeepsTheFirstTimestamp: the first revocation is when access
-// actually stopped, and overwriting it loses the fact an incident review wants.
-func TestRevokingTwiceKeepsTheFirstTimestamp(t *testing.T) {
+// TestRevokingTwiceKeepsTheFirstTimestampAndTheFirstRevoker: the first
+// revocation is when access actually stopped and who stopped it, and overwriting
+// either loses the fact an incident review wants. Whoever arrived second stopped
+// nothing.
+func TestRevokingTwiceKeepsTheFirstTimestampAndTheFirstRevoker(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
 	owner := mustCreateUser(t, r, "revoke@example.com")
+	admin := mustCreateUser(t, r, "revoke-admin@example.com")
 
 	created, err := r.tokens.Create(t.Context(), newToken(owner, "prefix-revoke-twice"))
 	if err != nil {
@@ -251,21 +255,68 @@ func TestRevokingTwiceKeepsTheFirstTimestamp(t *testing.T) {
 	}
 
 	first := time.Now()
-	revoked, err := r.tokens.Revoke(t.Context(), created.ID, owner.ID, first)
+	revoked, err := r.tokens.Revoke(t.Context(), created.ID, owner.ID, owner.ID, first)
 	if err != nil {
 		t.Fatalf("the first Revoke() = %v", err)
 	}
 	if revoked.RevokedAt.IsZero() {
 		t.Fatal("Revoke() returned a token with no revocation time")
 	}
+	if revoked.RevokedBy != owner.ID {
+		t.Errorf("the owner's own revocation recorded %q as the revoker, want %s", revoked.RevokedBy, owner.ID)
+	}
 
-	again, err := r.tokens.Revoke(t.Context(), created.ID, owner.ID, first.Add(time.Hour))
+	again, err := r.tokens.Revoke(t.Context(), created.ID, owner.ID, admin.ID, first.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("the second Revoke() = %v, want nil — the caller's intent is satisfied", err)
 	}
 	if !again.RevokedAt.Equal(revoked.RevokedAt) {
 		t.Errorf("the second revocation moved the timestamp from %s to %s",
 			revoked.RevokedAt, again.RevokedAt)
+	}
+	if again.RevokedBy != owner.ID {
+		t.Errorf("the second revocation rewrote the revoker to %s; %s is who actually ended it",
+			again.RevokedBy, owner.ID)
+	}
+}
+
+// TestAnAdministrativeRevocationRecordsWhoEndedIt is the column 0010 added, and
+// the question it exists to answer: comparing it against owner_user_id says
+// whether this was the owner's own rotation or somebody stepping in (M1-018).
+func TestAnAdministrativeRevocationRecordsWhoEndedIt(t *testing.T) {
+	t.Parallel()
+
+	r := newRepos(t)
+	owner := mustCreateUser(t, r, "held@example.com")
+	admin := mustCreateUser(t, r, "stepped-in@example.com")
+
+	created, err := r.tokens.Create(t.Context(), newToken(owner, "prefix-admin-revoked"))
+	if err != nil {
+		t.Fatalf("Create() = %v", err)
+	}
+	if created.RevokedBy != "" {
+		t.Errorf("a token nobody has revoked names %q as its revoker", created.RevokedBy)
+	}
+
+	revoked, err := r.tokens.Revoke(t.Context(), created.ID, owner.ID, admin.ID, time.Now())
+	if err != nil {
+		t.Fatalf("Revoke() = %v", err)
+	}
+	if revoked.RevokedBy != admin.ID {
+		t.Errorf("the revoker is %q, want the administrator %s", revoked.RevokedBy, admin.ID)
+	}
+	if revoked.OwnerUserID != owner.ID {
+		t.Errorf("revoking moved the owner to %s", revoked.OwnerUserID)
+	}
+
+	// And it reads back the same way, which is the half that would go unnoticed
+	// if the column were written but not selected.
+	stored, err := r.tokens.ByPrefix(t.Context(), "prefix-admin-revoked")
+	if err != nil {
+		t.Fatalf("ByPrefix() = %v", err)
+	}
+	if stored.RevokedBy != admin.ID {
+		t.Errorf("the stored row names %q as the revoker, want %s", stored.RevokedBy, admin.ID)
 	}
 }
 

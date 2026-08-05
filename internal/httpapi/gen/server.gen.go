@@ -837,6 +837,13 @@ type ServiceToken struct {
 	// expired and revoked are different facts and `status` says which.
 	RevokedAt *time.Time `json:"revokedAt,omitempty"`
 
+	// RevokedBy Which account ended it. Absent on a token nobody has revoked, and
+	// equal to the owner on one its owner rotated themselves — so a value
+	// here that is *not* the owner is an administrator having stepped in
+	// (`DELETE /users/{userId}/tokens/{tokenId}`), which is the question
+	// an incident review asks of the credential in front of it.
+	RevokedBy *openapi_types.UUID `json:"revokedBy,omitempty"`
+
 	// Scopes What this token may do, subject to what its owner may do.
 	Scopes []TokenScope `json:"scopes"`
 
@@ -851,7 +858,10 @@ type ServiceToken struct {
 // over `expired` where both are true: it is the fact somebody acted on.
 type ServiceTokenStatus string
 
-// ServiceTokens The caller's own tokens, newest first.
+// ServiceTokens A set of service tokens, newest first. Both listings return it — your
+// own (`GET /auth/tokens`) and, for an administrator, one account's
+// (`GET /users/{userId}/tokens`) — so the two cannot come to describe a
+// token differently.
 type ServiceTokens struct {
 	Items []ServiceToken `json:"items"`
 }
@@ -1625,6 +1635,25 @@ type RevokeUserSessionsParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// RevokeUserTokenParams defines parameters for RevokeUserToken.
+type RevokeUserTokenParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -1774,6 +1803,12 @@ type ServerInterface interface {
 	// RevokeUserSessions Sign an account out everywhere.
 	// (POST /users/{userId}/sessions/revoke)
 	RevokeUserSessions(w http.ResponseWriter, r *http.Request, userId UserId, params RevokeUserSessionsParams)
+	// ListUserTokens List the service tokens one account holds.
+	// (GET /users/{userId}/tokens)
+	ListUserTokens(w http.ResponseWriter, r *http.Request, userId UserId)
+	// RevokeUserToken Revoke one service token belonging to somebody else.
+	// (DELETE /users/{userId}/tokens/{tokenId})
+	RevokeUserToken(w http.ResponseWriter, r *http.Request, userId UserId, tokenId openapi_types.UUID, params RevokeUserTokenParams)
 	// GetVersion Return the build identity of the running binary.
 	// (GET /version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
@@ -1996,6 +2031,18 @@ func (_ Unimplemented) EnableUser(w http.ResponseWriter, r *http.Request, userId
 // RevokeUserSessions Sign an account out everywhere.
 // (POST /users/{userId}/sessions/revoke)
 func (_ Unimplemented) RevokeUserSessions(w http.ResponseWriter, r *http.Request, userId UserId, params RevokeUserSessionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListUserTokens List the service tokens one account holds.
+// (GET /users/{userId}/tokens)
+func (_ Unimplemented) ListUserTokens(w http.ResponseWriter, r *http.Request, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeUserToken Revoke one service token belonging to somebody else.
+// (DELETE /users/{userId}/tokens/{tokenId})
+func (_ Unimplemented) RevokeUserToken(w http.ResponseWriter, r *http.Request, userId UserId, tokenId openapi_types.UUID, params RevokeUserTokenParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3423,6 +3470,91 @@ func (siw *ServerInterfaceWrapper) RevokeUserSessions(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListUserTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListUserTokens(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUserTokens(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeUserToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeUserToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "tokenId" -------------
+	var tokenId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tokenId", chi.URLParam(r, "tokenId"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tokenId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeUserTokenParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeUserToken(w, r, userId, tokenId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetVersion operation middleware
 func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Request) {
 
@@ -3648,6 +3780,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/users/{userId}/sessions/revoke", wrapper.RevokeUserSessions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{userId}/tokens", wrapper.ListUserTokens)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{userId}/tokens/{tokenId}", wrapper.RevokeUserToken)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/mfa", wrapper.GetMfaPolicy)
@@ -6823,6 +6961,190 @@ func (response RevokeUserSessions500ApplicationProblemPlusJSONResponse) VisitRev
 	return err
 }
 
+type ListUserTokensRequestObject struct {
+	UserId UserId `json:"userId"`
+}
+
+type ListUserTokensResponseObject interface {
+	VisitListUserTokensResponse(w http.ResponseWriter) error
+}
+
+type ListUserTokens200JSONResponse ServiceTokens
+
+func (response ListUserTokens200JSONResponse) VisitListUserTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserTokens401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserTokens401ApplicationProblemPlusJSONResponse) VisitListUserTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserTokens403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserTokens403ApplicationProblemPlusJSONResponse) VisitListUserTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserTokens404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserTokens404ApplicationProblemPlusJSONResponse) VisitListUserTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserTokens500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserTokens500ApplicationProblemPlusJSONResponse) VisitListUserTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserTokenRequestObject struct {
+	UserId  UserId             `json:"userId"`
+	TokenId openapi_types.UUID `json:"tokenId"`
+	Params  RevokeUserTokenParams
+}
+
+type RevokeUserTokenResponseObject interface {
+	VisitRevokeUserTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokeUserToken204Response struct {
+}
+
+func (response RevokeUserToken204Response) VisitRevokeUserTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeUserToken400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserToken400ApplicationProblemPlusJSONResponse) VisitRevokeUserTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserToken401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserToken401ApplicationProblemPlusJSONResponse) VisitRevokeUserTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserToken403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserToken403ApplicationProblemPlusJSONResponse) VisitRevokeUserTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserToken404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserToken404ApplicationProblemPlusJSONResponse) VisitRevokeUserTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeUserToken500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeUserToken500ApplicationProblemPlusJSONResponse) VisitRevokeUserTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetVersionRequestObject struct {
 }
 
@@ -6970,6 +7292,12 @@ type StrictServerInterface interface {
 	// RevokeUserSessions Sign an account out everywhere.
 	// (POST /users/{userId}/sessions/revoke)
 	RevokeUserSessions(ctx context.Context, request RevokeUserSessionsRequestObject) (RevokeUserSessionsResponseObject, error)
+	// ListUserTokens List the service tokens one account holds.
+	// (GET /users/{userId}/tokens)
+	ListUserTokens(ctx context.Context, request ListUserTokensRequestObject) (ListUserTokensResponseObject, error)
+	// RevokeUserToken Revoke one service token belonging to somebody else.
+	// (DELETE /users/{userId}/tokens/{tokenId})
+	RevokeUserToken(ctx context.Context, request RevokeUserTokenRequestObject) (RevokeUserTokenResponseObject, error)
 	// GetVersion Return the build identity of the running binary.
 	// (GET /version)
 	GetVersion(ctx context.Context, request GetVersionRequestObject) (GetVersionResponseObject, error)
@@ -8024,6 +8352,60 @@ func (sh *strictHandler) RevokeUserSessions(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeUserSessionsResponseObject); ok {
 		if err := validResponse.VisitRevokeUserSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUserTokens operation middleware
+func (sh *strictHandler) ListUserTokens(w http.ResponseWriter, r *http.Request, userId UserId) {
+	var request ListUserTokensRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUserTokens(ctx, request.(ListUserTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUserTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUserTokensResponseObject); ok {
+		if err := validResponse.VisitListUserTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeUserToken operation middleware
+func (sh *strictHandler) RevokeUserToken(w http.ResponseWriter, r *http.Request, userId UserId, tokenId openapi_types.UUID, params RevokeUserTokenParams) {
+	var request RevokeUserTokenRequestObject
+
+	request.UserId = userId
+	request.TokenId = tokenId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeUserToken(ctx, request.(RevokeUserTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeUserToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeUserTokenResponseObject); ok {
+		if err := validResponse.VisitRevokeUserTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

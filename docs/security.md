@@ -427,10 +427,21 @@ path never visits, the way v1's were.
 demotion applies at that person's next request and there is no cached copy to invalidate. A token
 bound to one engagement is held to a third fence that only ever subtracts.
 
-**A token cannot create a token.** `authz.GuardSessionOnly` refuses `token.read` and `token.manage`
-to a token-authenticated request whatever it carries. Without it, a leaked token could mint a
-longer-lived sibling and outlive its own revocation — which neither of the two fences catches,
-because the sibling exceeds neither.
+**A token cannot manage a token.** `authz.GuardSessionOnly` refuses `token.read`, `token.manage`,
+`token.admin_read` and `token.admin_manage` to a token-authenticated request whatever it carries.
+Without it on the first two, a leaked token could mint a longer-lived sibling and outlive its own
+revocation — which neither of the two fences catches, because the sibling exceeds neither. Without it
+on the last two (M1-018), a leaked token belonging to an *administrator* could end every other
+credential in the installation, which is why those two carry their own actions rather than reusing
+`user.read` and `user.manage`, which hold no guard.
+
+**An administrator can see and end somebody else's tokens.** `GET /users/{userId}/tokens` and
+`DELETE /users/{userId}/tokens/{tokenId}` are the incident instrument that is narrower than disabling
+the account: they stop one credential and leave the person able to work. The listing is the same
+renderer as the owner's own, so the two cannot disagree about what is revoked, and the token's
+`revokedBy` plus the `token.admin_revoked` activity verb are what tell an administrative revocation
+from a routine rotation afterwards. `tokenId` must belong to `userId` — a mismatch is a `404`, the
+same as an invented identifier, so neither endpoint enumerates anything.
 
 **The secret is a type, not a discipline.** `servicetoken.Token` renders as `[redacted]` under every
 printf verb, `log/slog` attribute and JSON encoder; reading it takes `Reveal()`, which one handler

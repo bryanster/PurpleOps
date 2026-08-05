@@ -56,6 +56,20 @@ const (
 	VerbTokenRevoked   Verb = "token.revoked"
 	VerbTokenFirstUsed Verb = "token.first_used"
 
+	// VerbTokenAdminRevoked is an administrator ending somebody *else's*
+	// service token (M1-018). It is deliberately not token.revoked: that verb
+	// is somebody rotating their own credential, which happens routinely, and
+	// this one happens because there is an incident. An incident review wants
+	// to tell the two apart by filtering rather than by comparing the actor
+	// against a delta field, the same way VerbUserSessionsRevoked is kept apart
+	// from VerbSessionLogout.
+	//
+	//nolint:gosec // G101: a verb in the activity vocabulary, not a credential.
+	// The identifier holds the words "token" and "admin", which is what the
+	// heuristic matches on; there is no spelling of "an administrator revoked a
+	// token" that avoids them, and the name is right.
+	VerbTokenAdminRevoked Verb = "token.admin_revoked"
+
 	VerbSSOProvisioned Verb = "sso.provisioned"
 	VerbSSOLinked      Verb = "sso.linked"
 )

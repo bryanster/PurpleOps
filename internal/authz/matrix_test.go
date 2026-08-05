@@ -257,6 +257,35 @@ var matrix = []row{
 		},
 	},
 	{
+		// The administrative half of the two above (M1-018): somebody else's
+		// tokens, which is why the account is the resource and why the member
+		// row is a refusal rather than the `allow` the pair above carries. A
+		// member asking about another account's tokens is refused at exactly
+		// the point they would be refused asking about the account itself, and
+		// with the same 403 — the installation is not a secret, and an answer
+		// that varied with whether the account existed would be an account
+		// enumerator.
+		//
+		// sessionOnly is the part M1-018 asks for in as many words. Every token
+		// lens answers deny403 here however senior the owner: an administrator's
+		// leaked credential must not be able to end every other credential in
+		// the installation.
+		Action: authz.ActionTokenAdminRead, Resource: authz.ResourceUser,
+		Scope: authz.TokenScopeAdminRead, Token: sessionOnly,
+		Platform: seats{
+			Admin:  bySeat{allow, na, na, na, na},
+			Member: bySeat{deny403, na, na, na, na},
+		},
+	},
+	{
+		Action: authz.ActionTokenAdminManage, Resource: authz.ResourceUser,
+		Scope: authz.TokenScopeAdminWrite, Token: sessionOnly,
+		Platform: seats{
+			Admin:  bySeat{allow, na, na, na, na},
+			Member: bySeat{deny403, na, na, na, na},
+		},
+	},
+	{
 		// Sessions (M1-017) read the same as tokens do, and for the same two
 		// reasons: everybody holds them over their own rows only, and no
 		// service token holds them at all — a credential that could enumerate

@@ -498,9 +498,9 @@ export interface paths {
          *
          *     Yours and nobody else's. There is no parameter that names another
          *     account, and an administrator calling this sees their own tokens like
-         *     everybody else; what an administrator has instead is the ability to
-         *     disable the account, which stops every token that account holds at its
-         *     next request.
+         *     everybody else. An administrator who needs to see somebody else's has
+         *     `GET /users/{userId}/tokens`, which is a different permission and a
+         *     different endpoint — this one never widens.
          */
         get: operations["listServiceTokens"];
         put?: never;
@@ -560,7 +560,9 @@ export interface paths {
          *     A token belonging to somebody else answers `404`, exactly as an
          *     identifier that names nothing does. The two are indistinguishable on
          *     purpose: an endpoint that answered `403` for real identifiers and `404`
-         *     for invented ones would be a way to find out which are real.
+         *     for invented ones would be a way to find out which are real. An
+         *     administrator revoking somebody else's uses
+         *     `DELETE /users/{userId}/tokens/{tokenId}`, which names the account.
          *
          *     As with creation, a service token cannot call this.
          */
@@ -1005,6 +1007,86 @@ export interface paths {
          */
         post: operations["revokeUserSessions"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the service tokens one account holds.
+         * @description Administrators only, and the question an incident starts with: what does
+         *     this account hold, and when was each of them last used? Until this
+         *     endpoint the answer needed a SQL console, at exactly the moment nobody
+         *     wants to be reaching for one.
+         *
+         *     The same shape and the same renderer as `GET /auth/tokens`, including
+         *     the expired and revoked rows — an administrator working from a
+         *     different set from the owner's is an administrator working from a
+         *     second account of what exists. No secret is here, for the reason no
+         *     secret is there: the server keeps a hash and could not produce one if
+         *     asked.
+         *
+         *     What this is *instead of* is disabling the account. Disabling stops
+         *     every token it holds, and it stops the person too; this stops one
+         *     credential and leaves them able to work.
+         *
+         *     A service token cannot call this, whatever it is scoped for and however
+         *     senior its owner — `403`. Reading which credentials exist is the
+         *     business of a person at a keyboard, for the reason
+         *     `POST /auth/tokens` says.
+         */
+        get: operations["listUserTokens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one service token belonging to somebody else.
+         * @description Administrators only. Takes effect on the token's next request, the same
+         *     as the owner revoking it themselves: nothing caches a token anywhere, so
+         *     there is no window in which it still works. The owner's own listing then
+         *     shows it as revoked, carrying the same timestamp — there is one
+         *     revocation and one row, not an administrative copy of one.
+         *
+         *     `revokedBy` on the token records who ended it, which is what makes an
+         *     administrative revocation tellable from a routine rotation afterwards.
+         *     The activity log says the same thing under `token.admin_revoked`.
+         *
+         *     Idempotent, and it keeps the original revocation time and revoker: the
+         *     first revocation is when access actually stopped, and whoever arrived
+         *     second stopped nothing.
+         *
+         *     `tokenId` must belong to `userId`. A token belonging to a different
+         *     account answers `404`, exactly as an identifier that names nothing does
+         *     — so this is not a way to revoke by identifier alone, and not a way to
+         *     find out which identifiers are real.
+         *
+         *     As with the listing, a service token cannot call this. That matters most
+         *     here: a leaked credential belonging to an administrator would otherwise
+         *     be able to end every other credential in the installation.
+         */
+        delete: operations["revokeUserToken"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1823,6 +1905,15 @@ export interface components {
              *     expired and revoked are different facts and `status` says which.
              */
             revokedAt?: string;
+            /**
+             * Format: uuid
+             * @description Which account ended it. Absent on a token nobody has revoked, and
+             *     equal to the owner on one its owner rotated themselves — so a value
+             *     here that is *not* the owner is an administrator having stepped in
+             *     (`DELETE /users/{userId}/tokens/{tokenId}`), which is the question
+             *     an incident review asks of the credential in front of it.
+             */
+            revokedBy?: string;
         };
         /**
          * @description Whether a token works right now, derived from its timestamps so that a
@@ -1831,7 +1922,12 @@ export interface components {
          * @enum {string}
          */
         ServiceTokenStatus: "active" | "expired" | "revoked";
-        /** @description The caller's own tokens, newest first. */
+        /**
+         * @description A set of service tokens, newest first. Both listings return it — your
+         *     own (`GET /auth/tokens`) and, for an administrator, one account's
+         *     (`GET /users/{userId}/tokens`) — so the two cannot come to describe a
+         *     token differently.
+         */
         ServiceTokens: {
             items: components["schemas"]["ServiceToken"][];
         };
@@ -3462,6 +3558,79 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RevokedSessions"];
                 };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listUserTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's tokens. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceTokens"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeUserToken: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The account being read or changed. */
+                userId: components["parameters"]["UserId"];
+                /** @description The token's `id`, from `GET /users/{userId}/tokens`. Never its prefix and never its secret. */
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token is revoked, or already was. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
