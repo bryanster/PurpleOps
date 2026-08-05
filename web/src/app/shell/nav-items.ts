@@ -4,7 +4,7 @@ import {
   ADMIN_USERS_PATH,
   TOKENS_PATH,
 } from '@/features/auth/paths'
-import { CONTENT_PATH } from '@/features/content/paths'
+import { CONTENT_PATH, CONTENT_SOURCES_PATH } from '@/features/content/paths'
 
 /**
  * The left nav, as data.
@@ -56,6 +56,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     items: [
       { label: 'Users', to: ADMIN_USERS_PATH, adminOnly: true },
       { label: 'Activity', to: ADMIN_ACTIVITY_PATH, adminOnly: true },
+      { label: 'Content sources', to: CONTENT_SOURCES_PATH, adminOnly: true },
     ],
   },
   {

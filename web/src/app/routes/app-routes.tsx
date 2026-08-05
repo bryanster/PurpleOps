@@ -6,7 +6,8 @@ import { AccountPage } from '@/features/account/account-page'
 import { ActivityPage } from '@/features/admin/activity-page'
 import { UsersPage } from '@/features/admin/users-page'
 import { LibraryPage } from '@/features/content/library-page'
-import { CONTENT_PATH } from '@/features/content/paths'
+import { CONTENT_PATH, CONTENT_SOURCES_PATH } from '@/features/content/paths'
+import { SourcesPage } from '@/features/content/sources-page'
 import { EnrolmentPage } from '@/features/auth/enrolment-page'
 import { RequireAdmin, RequireAuth } from '@/features/auth/guards'
 import { LoginPage } from '@/features/auth/login-page'
@@ -66,6 +67,7 @@ export function AppRoutes(): ReactNode {
           <Route element={<RequireAdmin />}>
             <Route path={ADMIN_USERS_PATH} element={<UsersPage />} />
             <Route path={ADMIN_ACTIVITY_PATH} element={<ActivityPage />} />
+            <Route path={CONTENT_SOURCES_PATH} element={<SourcesPage />} />
           </Route>
 
           <Route path="system/version" element={<VersionPage />} />
