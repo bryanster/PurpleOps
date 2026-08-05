@@ -123,7 +123,7 @@ func TestTheRegressionsAreAbsences(t *testing.T) {
 	for _, action := range []authz.Action{
 		authz.ActionUserRead, authz.ActionUserManage,
 		authz.ActionSettingsRead, authz.ActionSettingsManage,
-		authz.ActionActivityRead, authz.ActionContentSync,
+		authz.ActionActivityRead, authz.ActionContentSync, authz.ActionContentManage,
 	} {
 		if grantsPlatform(rules[action], authz.PlatformRoleMember) {
 			t.Errorf("%s grants to the member platform role — this is v1's ungated /manage/access", action)

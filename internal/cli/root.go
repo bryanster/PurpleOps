@@ -58,7 +58,7 @@ func newRoot(a *app) *cobra.Command {
 		newMigrateCommand(a),
 		newDBCommand(a),
 		newUserCommand(a),
-		newContentCommand(),
+		newContentCommand(a),
 		newBackupCommand(),
 		newReportCommand(),
 	)

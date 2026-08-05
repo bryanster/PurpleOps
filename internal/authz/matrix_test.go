@@ -224,6 +224,17 @@ var matrix = []row{
 		},
 	},
 	{
+		// Enable/disable/delete/patch of sources and custom content CRUD. Same
+		// seat grid as content.sync, different scope so a pipeline can refresh
+		// without the right to remove a library.
+		Action: authz.ActionContentManage, Resource: authz.ResourceContent,
+		Scope: authz.TokenScopeContentWrite, Token: tokensMayHoldIt,
+		Platform: seats{
+			Admin:  bySeat{allow, na, na, na, na},
+			Member: bySeat{deny403, na, na, na, na},
+		},
+	},
+	{
 		// Everybody may start an engagement. It acts on the installation
 		// because the engagement it would create does not exist yet, and the
 		// creator becomes its lead — which is where the seat columns start

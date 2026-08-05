@@ -37,6 +37,7 @@ const (
 	ActionActivityRead
 	ActionContentRead
 	ActionContentSync
+	ActionContentManage
 	ActionEngagementCreate
 
 	// Service tokens (M1-011). Both are held by everybody, over their own
@@ -138,6 +139,7 @@ const (
 	TokenScopeEngagementsWrite TokenScope = "engagements:write"
 	TokenScopeContentRead      TokenScope = "content:read"
 	TokenScopeContentSync      TokenScope = "content:sync"
+	TokenScopeContentWrite     TokenScope = "content:write"
 	TokenScopeReportsRead      TokenScope = "reports:read"
 	TokenScopeReportsWrite     TokenScope = "reports:write"
 	TokenScopeAdminRead        TokenScope = "admin:read"

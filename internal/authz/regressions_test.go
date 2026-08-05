@@ -54,6 +54,7 @@ func TestRegression_NonAdminCannotReachUserManagement(t *testing.T) {
 		authz.ActionSettingsManage,
 		authz.ActionActivityRead,
 		authz.ActionContentSync,
+		authz.ActionContentManage,
 	}
 
 	for _, action := range administrative {

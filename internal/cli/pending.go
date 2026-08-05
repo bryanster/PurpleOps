@@ -31,18 +31,8 @@ func notImplemented(milestone, summary string) func(*cobra.Command, []string) er
 	}
 }
 
-func newContentCommand() *cobra.Command {
-	sync := &cobra.Command{
-		Use:   "sync",
-		Short: "Install or refresh a content source (M2)",
-		Long: "Installs or refreshes a content source — ATT&CK, Atomic Red Team, Sigma, CTID —\n" +
-			"from the command line, for a deployment that cannot reach them from the\n" +
-			"browser, or for seeding one before anybody signs in.",
-		Args: noArgs,
-		RunE: notImplemented("M2", "which builds the content registry"),
-	}
-	return group("content", "Manage content sources (M2)", sync)
-}
+// content commands live in content.go (M2-002). sync remains a stub there
+// until M2-003.
 
 func newBackupCommand() *cobra.Command {
 	return &cobra.Command{

@@ -9,6 +9,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/oidc"
 	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/session"
+	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
@@ -39,6 +40,9 @@ type handlers struct {
 	// activity is the append-only log (M1-015). Nil only in tests that never
 	// hit the list endpoints.
 	activity *events.Log
+
+	// content is the source registry (M2-002).
+	content *content.Registry
 
 	// signInURL is where this deployment is signed in to, absolute, for the one
 	// response that has to tell somebody who is not looking at the application:

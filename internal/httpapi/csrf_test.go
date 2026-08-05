@@ -445,6 +445,16 @@ var csrfCoverage = map[string]struct {
 	// browser is the only thing that ever reaches it.
 	"DELETE " + BasePath + "/users/{userId}/tokens/{tokenId}": {body: ""},
 
+	// Content source registry (M2-002). Protected like every other browser
+	// mutation; bodies are the smallest the specification accepts so the walks
+	// reach the middleware under test rather than a 400 about the request shape.
+	"PATCH " + BasePath + "/content/sources/{sourceId}": {
+		body: `{"name":"Walked"}`,
+	},
+	"DELETE " + BasePath + "/content/sources/{sourceId}":       {body: ""},
+	"POST " + BasePath + "/content/sources/{sourceId}/enable":  {body: ""},
+	"POST " + BasePath + "/content/sources/{sourceId}/disable": {body: ""},
+
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request
 	// the *validator* accepts, so that whatever answers it is the middleware

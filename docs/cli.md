@@ -197,6 +197,27 @@ enrolling again (`M1-008`). An account that had no second factor is not an error
 nothing was removed. The reset is also written to the log at warn level, which is the audit record
 until `M1-015` gives it a durable home.
 
+### `blctl content sources`
+
+Lists every content source (kind, enabled, status, item count), or shows one
+with `--id`. Filter with `--kind` and/or `--enabled=true|false`.
+
+```sh
+blctl content sources
+blctl content sources --kind attack
+blctl content sources --id 01900000-0000-7000-8000-000000000001 --json
+```
+
+### `blctl content enable` / `blctl content disable`
+
+Flip the soft switch on a source. Idempotent. Prefer disable over delete for
+builtin upstream seeds — delete is available over the API and is permanent.
+
+```sh
+blctl content enable --id 01900000-0000-7000-8000-000000000001
+blctl content disable --id 01900000-0000-7000-8000-000000000001
+```
+
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one
@@ -204,7 +225,7 @@ milestone at a time. Each exits 1 and names the milestone that will implement it
 
 | Command | Arrives in |
 |---|---|
-| `blctl content sync` | M2 — content sources |
+| `blctl content sync` | M2-003 — adapter interface and job runner |
 | `blctl report render` | M6 — reporting |
 | `blctl backup` | M7 — replaces the manual procedure in `docs/deploy.md` |
 

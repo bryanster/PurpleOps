@@ -1984,6 +1984,250 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/sources:
+    get:
+      operationId: listContentSources
+      summary: List content sources.
+      description: |
+        Any authenticated subject. The shared library is what an engagement is
+        planned from, so reading the registry is not an administrative act.
+
+        Filter by `kind` and/or `enabled`. Disabled sources stay in the list —
+        an administrator needs to see them to turn them back on — and library
+        browse endpoints (later tickets) are what omit their objects by default.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceKindFilter"
+        - $ref: "#/components/parameters/ContentSourceEnabledFilter"
+      responses:
+        "200":
+          description: Every matching source, kind then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSourceList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/sources/{sourceId}:
+    get:
+      operationId: getContentSource
+      summary: Read one content source.
+      description: |
+        Any authenticated subject. Carries license/attribution and a summary of
+        the most recent sync job, when one exists.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+      responses:
+        "200":
+          description: The source.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSourceDetail"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateContentSource
+      summary: Edit a content source's name, URL or ref.
+      description: |
+        Administrators only (`content.manage`). A patch: a field that is absent
+        is left alone. `kind` is not a field of this request — kinds are a
+        closed set seeded by migration, and there is no way to ask to change
+        one.
+
+        Builtin upstream seeds may have their mirror URL or ref retargeted so a
+        deployment can point at an internal cache. The custom source accepts a
+        rename the same way.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContentSourceRequest"
+      responses:
+        "200":
+          description: The source as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSource"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteContentSource
+      summary: Hard-delete a content source and its content subtree.
+      description: |
+        Administrators only (`content.manage`). Removes the source and every
+        version, object, and job row that names it, in one write transaction.
+        There is no path from content into app, so engagement history is never
+        touched.
+
+        The **custom** seed source cannot be deleted (`409`): user-authored rows
+        need a home. Builtin upstream seeds may be deleted; disabling is the
+        normal path, and re-seed is not automatic.
+
+        When a later milestone adds engagement-side references, a source that
+        is still referenced will answer `409` with counts rather than cascade
+        into war-room data. In M2 those refs do not exist, so a non-custom
+        source always deletes.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The source and its content subtree are gone.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/sources/{sourceId}/enable:
+    post:
+      operationId: enableContentSource
+      summary: Enable a content source.
+      description: |
+        Administrators only (`content.manage`). Sets `enabled=true`. Idempotent.
+
+        Enabling makes the source's objects eligible for library browse and for
+        new engagement-side references again.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The source, now enabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSource"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/sources/{sourceId}/disable:
+    post:
+      operationId: disableContentSource
+      summary: Disable a content source.
+      description: |
+        Administrators only (`content.manage`). Sets `enabled=false`. Idempotent.
+
+        Rows stay on disk. Library browse/search/pickers (later tickets) omit
+        objects from disabled sources by default, and APIs that would create a
+        *new* reference answer `409`. Existing engagement data is not modified.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The source, now disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSource"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/sources/{sourceId}/versions:
+    get:
+      operationId: listContentSourceVersions
+      summary: List version snapshots under a content source.
+      description: |
+        Any authenticated subject. ATT&CK carries many versions; rolling sources
+        (Atomic, Sigma, CTID, custom) carry at most the single `current` token.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentSourceId"
+      responses:
+        "200":
+          description: Every version under the source, version then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentSourceVersionList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
 components:
   securitySchemes:
     cookieSession:
@@ -2166,6 +2410,32 @@ components:
         type: string
         minLength: 1
         maxLength: 200
+
+    ContentSourceId:
+      name: sourceId
+      in: path
+      required: true
+      description: The content source identifier.
+      schema:
+        type: string
+        format: uuid
+
+    ContentSourceKindFilter:
+      name: kind
+      in: query
+      required: false
+      description: Restrict to one source kind.
+      schema:
+        $ref: "#/components/schemas/ContentSourceKind"
+
+    ContentSourceEnabledFilter:
+      name: enabled
+      in: query
+      required: false
+      description: Restrict to enabled or disabled sources.
+      schema:
+        type: boolean
+
 
   responses:
     # One reusable response per problem code, so an operation cannot invent its
@@ -3213,6 +3483,7 @@ components:
         - admin:write
         - content:read
         - content:sync
+        - content:write
         - engagements:read
         - engagements:write
         - reports:read
@@ -3469,3 +3740,271 @@ components:
           description: |
             Opaque cursor for the next page. Pass it back as `cursor`. Clients
             must not parse or construct one.
+
+    ContentSourceKind:
+      type: string
+      description: |
+        Closed vocabulary of content libraries. New kinds are a migration, not
+        a string somebody passed to an API. There is no create-source endpoint
+        in M2 — only the seeded rows.
+      enum:
+        - attack
+        - atomic
+        - sigma
+        - ctid
+        - custom
+
+    ContentSourceStatus:
+      type: string
+      description: |
+        Operational state of a source as a whole. Independent of `enabled`: a
+        disabled source can still be idle, and an enabled one can be in error.
+      enum:
+        - idle
+        - syncing
+        - error
+
+    ContentSourceVersionStatus:
+      type: string
+      description: State of one version snapshot under a source.
+      enum:
+        - pending
+        - ready
+        - error
+
+    ContentSyncJobKind:
+      type: string
+      description: What a content sync job is doing.
+      enum:
+        - sync
+        - reprocess
+        - bundle_import
+        - v1_import
+
+    ContentSyncJobStatus:
+      type: string
+      description: Lifecycle state of a content sync job.
+      enum:
+        - queued
+        - running
+        - cancelling
+        - cancelled
+        - succeeded
+        - failed
+        - interrupted
+
+    ContentSource:
+      type: object
+      description: |
+        One content library registry row — an upstream source or the custom
+        home for user-authored rows.
+      required:
+        - id
+        - kind
+        - name
+        - url
+        - ref
+        - enabled
+        - status
+        - itemCount
+        - error
+        - licenseSpdx
+        - licenseName
+        - licenseUrl
+        - attribution
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/ContentSourceKind"
+        name:
+          type: string
+          examples:
+            - ATT&CK Enterprise
+        url:
+          type: string
+          description: Default HTTPS archive / bundle base URL. Empty for custom.
+        ref:
+          type: string
+          description: Adapter-specific ref pattern or branch/tag hint. Empty when unused.
+        enabled:
+          type: boolean
+          description: |
+            Soft switch. Disabled sources stay on disk; browse/search/pickers
+            omit their objects and new references are refused.
+        status:
+          $ref: "#/components/schemas/ContentSourceStatus"
+        lastSyncedAt:
+          type: string
+          format: date-time
+          description: When this source last finished a successful sync. Absent if never.
+        itemCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Bookkeeping count of objects currently held for this source.
+        error:
+          type: string
+          description: Last error message from a failed job. Empty when none.
+        licenseSpdx:
+          type: string
+          description: SPDX license identifier.
+        licenseName:
+          type: string
+        licenseUrl:
+          type: string
+        attribution:
+          type: string
+          description: Attribution text shown in UI detail and export headers.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentSourceList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentSource"
+
+    ContentSyncJobSummary:
+      type: object
+      description: |
+        The most recent job for a source, as detail surfaces it. Full job APIs
+        land with the runner (M2-003).
+      required:
+        - id
+        - kind
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/ContentSyncJobKind"
+        status:
+          $ref: "#/components/schemas/ContentSyncJobStatus"
+        version:
+          type: string
+          description: Version token the job targeted, when one was named.
+        phase:
+          type: string
+        message:
+          type: string
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+
+    ContentSourceDetail:
+      allOf:
+        - $ref: "#/components/schemas/ContentSource"
+        - type: object
+          properties:
+            lastJob:
+              $ref: "#/components/schemas/ContentSyncJobSummary"
+              description: Most recent job for this source, when any exists.
+
+    UpdateContentSourceRequest:
+      type: object
+      description: |
+        A patch. Every field is optional; an absent field is left alone. `kind`
+        is deliberately not here.
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        url:
+          type: string
+          maxLength: 2000
+        ref:
+          type: string
+          maxLength: 500
+
+    ContentSourceVersion:
+      type: object
+      description: One version snapshot under a source.
+      required:
+        - id
+        - sourceId
+        - version
+        - status
+        - itemCount
+        - error
+        - rawSha256
+        - rawPath
+        - rawBytes
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: |
+            Release label for ATT&CK (e.g. `15.1`), or the rolling token
+            `current` for Atomic / Sigma / CTID / custom.
+          examples:
+            - "15.1"
+            - current
+        status:
+          $ref: "#/components/schemas/ContentSourceVersionStatus"
+        itemCount:
+          type: integer
+          format: int64
+          minimum: 0
+        syncedAt:
+          type: string
+          format: date-time
+          description: When this version last finished successfully. Absent if never.
+        error:
+          type: string
+        rawSha256:
+          type: string
+          description: Hex SHA-256 of the last successful raw snapshot. Empty if none.
+        rawPath:
+          type: string
+          description: Path of the raw snapshot relative to the content data root.
+        rawBytes:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ContentSourceVersionList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentSourceVersion"

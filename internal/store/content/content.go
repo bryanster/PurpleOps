@@ -24,6 +24,44 @@ type DB interface {
 	Write(ctx context.Context, fn func(tx *sql.Tx) error) error
 }
 
+// After runs inside a write transaction after the primary mutation succeeds.
+// Activity recording (M2-002) is the first consumer: the log row and the change
+// share one commit, so a failure here rolls both back.
+//
+// The entity the mutation just wrote (or deleted) is available to the hook as
+// [AfterEntityID] — mutators put it on the context before calling.
+type After func(ctx context.Context, tx *sql.Tx) error
+
+type afterEntityKey struct{}
+
+// AfterEntityID is the primary key of the row the mutator just touched, when
+// called from inside an [After] hook. Outside a hook it is "".
+func AfterEntityID(ctx context.Context) string {
+	id, ok := ctx.Value(afterEntityKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return id
+}
+
+// WithAfterEntity puts id on ctx for [AfterEntityID].
+func WithAfterEntity(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, afterEntityKey{}, id)
+}
+
+// runAfter invokes every non-nil side effect in order.
+func runAfter(ctx context.Context, tx *sql.Tx, after []After) error {
+	for _, fn := range after {
+		if fn == nil {
+			continue
+		}
+		if err := fn(ctx, tx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // VersionCurrent is the single version token used by rolling sources (Atomic,
 // Sigma, CTID, and custom). A re-sync replaces objects for this token inside
 // one transaction. ATT&CK never uses it; ATT&CK versions are release labels

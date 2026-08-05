@@ -46,6 +46,7 @@ Acts on the installation itself. Engagement membership is irrelevant to these.
 | `activity.read` | ✓ | · | `admin:read` | Read the installation-wide activity log. |
 | `content.read` | ✓ | ✓ | `content:read` | Read the shared technique and test-case library. |
 | `content.sync` | ✓ | · | `content:sync` | Sync the library from its upstream sources. |
+| `content.manage` | ✓ | · | `content:write` | Enable, disable, delete and edit content sources, and author custom content. |
 | `engagement.create` | ✓ | ✓ | `engagements:write` | Create an engagement. Acts on the installation, because the engagement does not exist yet. |
 | `token.read` | ✓ | ✓ | `admin:read` | List your own service tokens and when they were last used. Never their secrets. |
 | `token.manage` | ✓ | ✓ | `admin:write` | Create and revoke your own service tokens. A signed-in session only, never a token itself. |

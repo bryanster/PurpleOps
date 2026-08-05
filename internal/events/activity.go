@@ -72,18 +72,26 @@ const (
 
 	VerbSSOProvisioned Verb = "sso.provisioned"
 	VerbSSOLinked      Verb = "sso.linked"
+
+	// Content source lifecycle (M2-002). Platform-scoped: engagement_id is null.
+	// Sync/reprocess/bundle verbs land with the job runner (M2-003+).
+	VerbContentSourceEnabled  Verb = "content.source.enabled"
+	VerbContentSourceDisabled Verb = "content.source.disabled"
+	VerbContentSourceUpdated  Verb = "content.source.updated"
+	VerbContentSourceDeleted  Verb = "content.source.deleted"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
 const (
-	ObjectUser         = "user"
-	ObjectSession      = "session"
-	ObjectToken        = "service_token"
-	ObjectTOTP         = "totp"
-	ObjectRecoveryCode = "recovery_code"
-	ObjectIdentity     = "identity"
-	ObjectLogin        = "login"
+	ObjectUser          = "user"
+	ObjectSession       = "session"
+	ObjectToken         = "service_token"
+	ObjectTOTP          = "totp"
+	ObjectRecoveryCode  = "recovery_code"
+	ObjectIdentity      = "identity"
+	ObjectLogin         = "login"
+	ObjectContentSource = "content_source"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

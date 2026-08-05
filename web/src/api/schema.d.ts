@@ -1182,6 +1182,147 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List content sources.
+         * @description Any authenticated subject. The shared library is what an engagement is
+         *     planned from, so reading the registry is not an administrative act.
+         *
+         *     Filter by `kind` and/or `enabled`. Disabled sources stay in the list —
+         *     an administrator needs to see them to turn them back on — and library
+         *     browse endpoints (later tickets) are what omit their objects by default.
+         */
+        get: operations["listContentSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/sources/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one content source.
+         * @description Any authenticated subject. Carries license/attribution and a summary of
+         *     the most recent sync job, when one exists.
+         */
+        get: operations["getContentSource"];
+        put?: never;
+        post?: never;
+        /**
+         * Hard-delete a content source and its content subtree.
+         * @description Administrators only (`content.manage`). Removes the source and every
+         *     version, object, and job row that names it, in one write transaction.
+         *     There is no path from content into app, so engagement history is never
+         *     touched.
+         *
+         *     The **custom** seed source cannot be deleted (`409`): user-authored rows
+         *     need a home. Builtin upstream seeds may be deleted; disabling is the
+         *     normal path, and re-seed is not automatic.
+         *
+         *     When a later milestone adds engagement-side references, a source that
+         *     is still referenced will answer `409` with counts rather than cascade
+         *     into war-room data. In M2 those refs do not exist, so a non-custom
+         *     source always deletes.
+         */
+        delete: operations["deleteContentSource"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a content source's name, URL or ref.
+         * @description Administrators only (`content.manage`). A patch: a field that is absent
+         *     is left alone. `kind` is not a field of this request — kinds are a
+         *     closed set seeded by migration, and there is no way to ask to change
+         *     one.
+         *
+         *     Builtin upstream seeds may have their mirror URL or ref retargeted so a
+         *     deployment can point at an internal cache. The custom source accepts a
+         *     rename the same way.
+         */
+        patch: operations["updateContentSource"];
+        trace?: never;
+    };
+    "/content/sources/{sourceId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable a content source.
+         * @description Administrators only (`content.manage`). Sets `enabled=true`. Idempotent.
+         *
+         *     Enabling makes the source's objects eligible for library browse and for
+         *     new engagement-side references again.
+         */
+        post: operations["enableContentSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/sources/{sourceId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a content source.
+         * @description Administrators only (`content.manage`). Sets `enabled=false`. Idempotent.
+         *
+         *     Rows stay on disk. Library browse/search/pickers (later tickets) omit
+         *     objects from disabled sources by default, and APIs that would create a
+         *     *new* reference answer `409`. Existing engagement data is not modified.
+         */
+        post: operations["disableContentSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/sources/{sourceId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List version snapshots under a content source.
+         * @description Any authenticated subject. ATT&CK carries many versions; rolling sources
+         *     (Atomic, Sigma, CTID, custom) carry at most the single `current` token.
+         */
+        get: operations["listContentSourceVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1852,7 +1993,7 @@ export interface components {
          *     fails the build if this list and that one disagree.
          * @enum {string}
          */
-        TokenScope: "admin:read" | "admin:write" | "content:read" | "content:sync" | "engagements:read" | "engagements:write" | "reports:read" | "reports:write";
+        TokenScope: "admin:read" | "admin:write" | "content:read" | "content:sync" | "content:write" | "engagements:read" | "engagements:write" | "reports:read" | "reports:write";
         /**
          * @description One service token, as anybody but its creator ever sees it: everything
          *     about the credential except the credential.
@@ -2042,6 +2183,150 @@ export interface components {
              */
             nextCursor?: string | null;
         };
+        /**
+         * @description Closed vocabulary of content libraries. New kinds are a migration, not
+         *     a string somebody passed to an API. There is no create-source endpoint
+         *     in M2 — only the seeded rows.
+         * @enum {string}
+         */
+        ContentSourceKind: "attack" | "atomic" | "sigma" | "ctid" | "custom";
+        /**
+         * @description Operational state of a source as a whole. Independent of `enabled`: a
+         *     disabled source can still be idle, and an enabled one can be in error.
+         * @enum {string}
+         */
+        ContentSourceStatus: "idle" | "syncing" | "error";
+        /**
+         * @description State of one version snapshot under a source.
+         * @enum {string}
+         */
+        ContentSourceVersionStatus: "pending" | "ready" | "error";
+        /**
+         * @description What a content sync job is doing.
+         * @enum {string}
+         */
+        ContentSyncJobKind: "sync" | "reprocess" | "bundle_import" | "v1_import";
+        /**
+         * @description Lifecycle state of a content sync job.
+         * @enum {string}
+         */
+        ContentSyncJobStatus: "queued" | "running" | "cancelling" | "cancelled" | "succeeded" | "failed" | "interrupted";
+        /**
+         * @description One content library registry row — an upstream source or the custom
+         *     home for user-authored rows.
+         */
+        ContentSource: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ContentSourceKind"];
+            /** @example ATT&CK Enterprise */
+            name: string;
+            /** @description Default HTTPS archive / bundle base URL. Empty for custom. */
+            url: string;
+            /** @description Adapter-specific ref pattern or branch/tag hint. Empty when unused. */
+            ref: string;
+            /**
+             * @description Soft switch. Disabled sources stay on disk; browse/search/pickers
+             *     omit their objects and new references are refused.
+             */
+            enabled: boolean;
+            status: components["schemas"]["ContentSourceStatus"];
+            /**
+             * Format: date-time
+             * @description When this source last finished a successful sync. Absent if never.
+             */
+            lastSyncedAt?: string;
+            /**
+             * Format: int64
+             * @description Bookkeeping count of objects currently held for this source.
+             */
+            itemCount: number;
+            /** @description Last error message from a failed job. Empty when none. */
+            error: string;
+            /** @description SPDX license identifier. */
+            licenseSpdx: string;
+            licenseName: string;
+            licenseUrl: string;
+            /** @description Attribution text shown in UI detail and export headers. */
+            attribution: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentSourceList: {
+            items: components["schemas"]["ContentSource"][];
+        };
+        /**
+         * @description The most recent job for a source, as detail surfaces it. Full job APIs
+         *     land with the runner (M2-003).
+         */
+        ContentSyncJobSummary: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ContentSyncJobKind"];
+            status: components["schemas"]["ContentSyncJobStatus"];
+            /** @description Version token the job targeted, when one was named. */
+            version?: string;
+            phase?: string;
+            message?: string;
+            error?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+        };
+        ContentSourceDetail: components["schemas"]["ContentSource"] & {
+            /** @description Most recent job for this source, when any exists. */
+            lastJob?: components["schemas"]["ContentSyncJobSummary"];
+        };
+        /**
+         * @description A patch. Every field is optional; an absent field is left alone. `kind`
+         *     is deliberately not here.
+         */
+        UpdateContentSourceRequest: {
+            name?: string;
+            url?: string;
+            ref?: string;
+        };
+        /** @description One version snapshot under a source. */
+        ContentSourceVersion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /**
+             * @description Release label for ATT&CK (e.g. `15.1`), or the rolling token
+             *     `current` for Atomic / Sigma / CTID / custom.
+             * @example 15.1
+             * @example current
+             */
+            version: string;
+            status: components["schemas"]["ContentSourceVersionStatus"];
+            /** Format: int64 */
+            itemCount: number;
+            /**
+             * Format: date-time
+             * @description When this version last finished successfully. Absent if never.
+             */
+            syncedAt?: string;
+            error: string;
+            /** @description Hex SHA-256 of the last successful raw snapshot. Empty if none. */
+            rawSha256: string;
+            /** @description Path of the raw snapshot relative to the content data root. */
+            rawPath: string;
+            /** Format: int64 */
+            rawBytes: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentSourceVersionList: {
+            items: components["schemas"]["ContentSourceVersion"][];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -2223,6 +2508,12 @@ export interface components {
         ActivityObjectType: string;
         /** @description Restrict to entries whose object has this identifier. */
         ActivityObjectId: string;
+        /** @description The content source identifier. */
+        ContentSourceId: string;
+        /** @description Restrict to one source kind. */
+        ContentSourceKindFilter: components["schemas"]["ContentSourceKind"];
+        /** @description Restrict to enabled or disabled sources. */
+        ContentSourceEnabledFilter: boolean;
     };
     requestBodies: never;
     headers: never;
@@ -3794,6 +4085,273 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentSources: {
+        parameters: {
+            query?: {
+                /** @description Restrict to one source kind. */
+                kind?: components["parameters"]["ContentSourceKindFilter"];
+                /** @description Restrict to enabled or disabled sources. */
+                enabled?: components["parameters"]["ContentSourceEnabledFilter"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every matching source, kind then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSourceList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The source. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSourceDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteContentSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The source and its content subtree are gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateContentSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateContentSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description The source as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    enableContentSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The source, now enabled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSource"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    disableContentSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The source, now disabled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSource"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentSourceVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every version under the source, version then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSourceVersionList"];
+                };
+            };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

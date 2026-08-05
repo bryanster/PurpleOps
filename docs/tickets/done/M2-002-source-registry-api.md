@@ -57,15 +57,15 @@ contracts rather than table comments.
 
 ## Acceptance criteria
 
-- [ ] Spec paths exist; `make generate` produces server + TS client stubs.
-- [ ] Non-admin receives 403 on enable/disable/delete/patch; member can GET list/detail.
-- [ ] Disable then GET library helpers (unit on `AssertReferencable`) refuse new refs; object rows
+- [x] Spec paths exist; `make generate` produces server + TS client stubs.
+- [x] Non-admin receives 403 on enable/disable/delete/patch; member can GET list/detail.
+- [x] Disable then GET library helpers (unit on `AssertReferencable`) refuse new refs; object rows
       still readable by id for admin/debug if you expose that, but default lists exclude them.
-- [ ] Delete of `custom` seed source is 409.
-- [ ] Delete of a source with only content children succeeds and removes children in one write
+- [x] Delete of `custom` seed source is 409.
+- [x] Delete of a source with only content children succeeds and removes children in one write
       transaction (or documents staged delete); no orphan versions.
-- [ ] Activity rows written in the same transaction as the mutation (`M1-015` pattern).
-- [ ] Errors use `M0B-007` problem shape; unknown source id is 404 via authz conceal rules where
+- [x] Activity rows written in the same transaction as the mutation (`M1-015` pattern).
+- [x] Errors use `M0B-007` problem shape; unknown source id is 404 via authz conceal rules where
       applicable (platform resource — 404 vs 403 consistent with other admin APIs).
 
 ## Tests
@@ -80,3 +80,25 @@ contracts rather than table comments.
   default deny still applies.
 - Do not allow arbitrary `kind` creation via API in M2 — kinds are closed; only seed + custom.
   If PATCH url/ref is enough for mirrors, skip `POST /content/sources`.
+
+## Implementation notes
+
+- Authz: `content.manage` (admin) with distinct token scope `content:write`. `content.sync` /
+  `content:sync` left for job start only (M2-003+). Documented in `docs/api-tokens.md` and
+  regenerated `docs/authz.md`.
+- Domain: `internal/content.Registry` owns product rules; `AssertReferencable` returns 409 on
+  disabled sources for M3 pickers. Storage stays in `internal/store/content`.
+- Cascade delete: `Sources.DeleteCascade` clears every content table naming `source_id` (objects,
+  jobs, versions) then the registry row in one `store.Write`. No external refs exist in M2; when
+  M3 adds engagement refs this method must refuse with 409+counts before cascading. Custom seed
+  is refused in the domain layer (409). Builtin upstream seeds may be deleted; re-seed is not
+  automatic.
+- Activity verbs: `content.source.enabled|disabled|updated|deleted` on object type
+  `content_source`, same-txn via store `After` hooks (mirrors identity).
+- Disable only flips `enabled`; operational `status` stays independent (per schema comment).
+- HTTP: `/api/v1/content/sources` list/detail/patch/delete/enable/disable + versions. No
+  `POST /content/sources` — kinds are closed.
+- blctl: `content sources [--id|--kind|--enabled]`, `content enable|disable --id`. `content sync`
+  remains a stub until M2-003.
+- Resource type remains `ResourceContent` (platform). Unknown source id is plain 404 from the
+  repository, not conceal — consistent with other platform admin resources.

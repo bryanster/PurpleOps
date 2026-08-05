@@ -24,11 +24,13 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/authn/throttle"
 	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/activity"
+	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/settings"
 )
@@ -488,6 +490,20 @@ func signInURL(cfg config.Config) string {
 func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	challenges *challenge.Manager, provider *oidc.Provider, federation *saml.Provider,
 	activityLog *events.Log, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+	paths := storecontent.NewPaths(deps.Config.Content.Dir)
+	registry, err := content.New(content.Deps{
+		Sources:  storecontent.NewSources(deps.Store),
+		Versions: storecontent.NewVersions(deps.Store, paths),
+		Jobs:     storecontent.NewJobs(deps.Store),
+		Activity: activityLog,
+	})
+	if err != nil {
+		// Construction only fails when a repository is nil, which is a
+		// programming error at this call site rather than a runtime condition.
+		// Panicking keeps NewServer's signature and forces the bug loud.
+		panic("httpapi: content registry: " + err.Error())
+	}
+
 	return gen.NewStrictHandlerWithOptions(
 		&handlers{
 			store:      deps.Store,
@@ -497,6 +513,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			oidc:       provider,
 			saml:       federation,
 			activity:   activityLog,
+			content:    registry,
 			signInURL:  signInURL(deps.Config),
 			log:        log,
 		},

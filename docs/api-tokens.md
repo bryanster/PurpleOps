@@ -99,7 +99,8 @@ in step with the real one.
 | `engagements:read` | Reading engagements, members, executions. |
 | `engagements:write` | Creating and changing engagements, members, executions, findings, comments. |
 | `content:read` | Reading the shared technique and test-case library. |
-| `content:sync` | Syncing that library from upstream. |
+| `content:sync` | Syncing that library from upstream (start sync/reprocess/bundle). |
+| `content:write` | Enable, disable, delete and edit content sources, and author custom content. Does **not** include sync — hold `content:sync` for that. |
 | `reports:read` | Reading and exporting reports. |
 | `reports:write` | Publishing reports. |
 | `admin:read` | Reading accounts, platform settings and the activity log. |

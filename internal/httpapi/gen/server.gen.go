@@ -19,6 +19,132 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ContentSourceKind.
+const (
+	ContentSourceKindAtomic ContentSourceKind = "atomic"
+	ContentSourceKindAttack ContentSourceKind = "attack"
+	ContentSourceKindCtid   ContentSourceKind = "ctid"
+	ContentSourceKindCustom ContentSourceKind = "custom"
+	ContentSourceKindSigma  ContentSourceKind = "sigma"
+)
+
+// Valid indicates whether the value is a known member of the ContentSourceKind enum.
+func (e ContentSourceKind) Valid() bool {
+	switch e {
+	case ContentSourceKindAtomic:
+		return true
+	case ContentSourceKindAttack:
+		return true
+	case ContentSourceKindCtid:
+		return true
+	case ContentSourceKindCustom:
+		return true
+	case ContentSourceKindSigma:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContentSourceStatus.
+const (
+	ContentSourceStatusError   ContentSourceStatus = "error"
+	ContentSourceStatusIdle    ContentSourceStatus = "idle"
+	ContentSourceStatusSyncing ContentSourceStatus = "syncing"
+)
+
+// Valid indicates whether the value is a known member of the ContentSourceStatus enum.
+func (e ContentSourceStatus) Valid() bool {
+	switch e {
+	case ContentSourceStatusError:
+		return true
+	case ContentSourceStatusIdle:
+		return true
+	case ContentSourceStatusSyncing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContentSourceVersionStatus.
+const (
+	ContentSourceVersionStatusError   ContentSourceVersionStatus = "error"
+	ContentSourceVersionStatusPending ContentSourceVersionStatus = "pending"
+	ContentSourceVersionStatusReady   ContentSourceVersionStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ContentSourceVersionStatus enum.
+func (e ContentSourceVersionStatus) Valid() bool {
+	switch e {
+	case ContentSourceVersionStatusError:
+		return true
+	case ContentSourceVersionStatusPending:
+		return true
+	case ContentSourceVersionStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContentSyncJobKind.
+const (
+	ContentSyncJobKindBundleImport ContentSyncJobKind = "bundle_import"
+	ContentSyncJobKindReprocess    ContentSyncJobKind = "reprocess"
+	ContentSyncJobKindSync         ContentSyncJobKind = "sync"
+	ContentSyncJobKindV1Import     ContentSyncJobKind = "v1_import"
+)
+
+// Valid indicates whether the value is a known member of the ContentSyncJobKind enum.
+func (e ContentSyncJobKind) Valid() bool {
+	switch e {
+	case ContentSyncJobKindBundleImport:
+		return true
+	case ContentSyncJobKindReprocess:
+		return true
+	case ContentSyncJobKindSync:
+		return true
+	case ContentSyncJobKindV1Import:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContentSyncJobStatus.
+const (
+	ContentSyncJobStatusCancelled   ContentSyncJobStatus = "cancelled"
+	ContentSyncJobStatusCancelling  ContentSyncJobStatus = "cancelling"
+	ContentSyncJobStatusFailed      ContentSyncJobStatus = "failed"
+	ContentSyncJobStatusInterrupted ContentSyncJobStatus = "interrupted"
+	ContentSyncJobStatusQueued      ContentSyncJobStatus = "queued"
+	ContentSyncJobStatusRunning     ContentSyncJobStatus = "running"
+	ContentSyncJobStatusSucceeded   ContentSyncJobStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ContentSyncJobStatus enum.
+func (e ContentSyncJobStatus) Valid() bool {
+	switch e {
+	case ContentSyncJobStatusCancelled:
+		return true
+	case ContentSyncJobStatusCancelling:
+		return true
+	case ContentSyncJobStatusFailed:
+		return true
+	case ContentSyncJobStatusInterrupted:
+		return true
+	case ContentSyncJobStatusQueued:
+		return true
+	case ContentSyncJobStatusRunning:
+		return true
+	case ContentSyncJobStatusSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateUserRequestStatus.
 const (
 	CreateUserRequestStatusActive  CreateUserRequestStatus = "active"
@@ -202,6 +328,7 @@ const (
 	TokenScopeAdminWrite       TokenScope = "admin:write"
 	TokenScopeContentRead      TokenScope = "content:read"
 	TokenScopeContentSync      TokenScope = "content:sync"
+	TokenScopeContentWrite     TokenScope = "content:write"
 	TokenScopeEngagementsRead  TokenScope = "engagements:read"
 	TokenScopeEngagementsWrite TokenScope = "engagements:write"
 	TokenScopeReportsRead      TokenScope = "reports:read"
@@ -218,6 +345,8 @@ func (e TokenScope) Valid() bool {
 	case TokenScopeContentRead:
 		return true
 	case TokenScopeContentSync:
+		return true
+	case TokenScopeContentWrite:
 		return true
 	case TokenScopeEngagementsRead:
 		return true
@@ -329,6 +458,179 @@ type ChangePasswordRequest struct {
 	// is one definition of an acceptable password rather than one here and
 	// one in the client.
 	NewPassword string `json:"newPassword"`
+}
+
+// ContentSource One content library registry row — an upstream source or the custom
+// home for user-authored rows.
+type ContentSource struct {
+	// Attribution Attribution text shown in UI detail and export headers.
+	Attribution string    `json:"attribution"`
+	CreatedAt   time.Time `json:"createdAt"`
+
+	// Enabled Soft switch. Disabled sources stay on disk; browse/search/pickers
+	// omit their objects and new references are refused.
+	Enabled bool `json:"enabled"`
+
+	// Error Last error message from a failed job. Empty when none.
+	Error string             `json:"error"`
+	Id    openapi_types.UUID `json:"id"`
+
+	// ItemCount Bookkeeping count of objects currently held for this source.
+	ItemCount int64 `json:"itemCount"`
+
+	// Kind Closed vocabulary of content libraries. New kinds are a migration, not
+	// a string somebody passed to an API. There is no create-source endpoint
+	// in M2 — only the seeded rows.
+	Kind ContentSourceKind `json:"kind"`
+
+	// LastSyncedAt When this source last finished a successful sync. Absent if never.
+	LastSyncedAt *time.Time `json:"lastSyncedAt,omitempty"`
+	LicenseName  string     `json:"licenseName"`
+
+	// LicenseSpdx SPDX license identifier.
+	LicenseSpdx string `json:"licenseSpdx"`
+	LicenseUrl  string `json:"licenseUrl"`
+
+	// Name Examples: ATT&CK Enterprise
+	Name string `json:"name"`
+
+	// Ref Adapter-specific ref pattern or branch/tag hint. Empty when unused.
+	Ref string `json:"ref"`
+
+	// Status Operational state of a source as a whole. Independent of `enabled`: a
+	// disabled source can still be idle, and an enabled one can be in error.
+	Status    ContentSourceStatus `json:"status"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+
+	// Url Default HTTPS archive / bundle base URL. Empty for custom.
+	Url string `json:"url"`
+}
+
+// ContentSourceDetail defines model for ContentSourceDetail.
+type ContentSourceDetail struct {
+	// Attribution Attribution text shown in UI detail and export headers.
+	Attribution string    `json:"attribution"`
+	CreatedAt   time.Time `json:"createdAt"`
+
+	// Enabled Soft switch. Disabled sources stay on disk; browse/search/pickers
+	// omit their objects and new references are refused.
+	Enabled bool `json:"enabled"`
+
+	// Error Last error message from a failed job. Empty when none.
+	Error string             `json:"error"`
+	Id    openapi_types.UUID `json:"id"`
+
+	// ItemCount Bookkeeping count of objects currently held for this source.
+	ItemCount int64 `json:"itemCount"`
+
+	// Kind Closed vocabulary of content libraries. New kinds are a migration, not
+	// a string somebody passed to an API. There is no create-source endpoint
+	// in M2 — only the seeded rows.
+	Kind ContentSourceKind `json:"kind"`
+
+	// LastJob Most recent job for this source, when any exists.
+	LastJob *ContentSyncJobSummary `json:"lastJob,omitempty"`
+
+	// LastSyncedAt When this source last finished a successful sync. Absent if never.
+	LastSyncedAt *time.Time `json:"lastSyncedAt,omitempty"`
+	LicenseName  string     `json:"licenseName"`
+
+	// LicenseSpdx SPDX license identifier.
+	LicenseSpdx string `json:"licenseSpdx"`
+	LicenseUrl  string `json:"licenseUrl"`
+
+	// Name Examples: ATT&CK Enterprise
+	Name string `json:"name"`
+
+	// Ref Adapter-specific ref pattern or branch/tag hint. Empty when unused.
+	Ref string `json:"ref"`
+
+	// Status Operational state of a source as a whole. Independent of `enabled`: a
+	// disabled source can still be idle, and an enabled one can be in error.
+	Status    ContentSourceStatus `json:"status"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+
+	// Url Default HTTPS archive / bundle base URL. Empty for custom.
+	Url string `json:"url"`
+}
+
+// ContentSourceKind Closed vocabulary of content libraries. New kinds are a migration, not
+// a string somebody passed to an API. There is no create-source endpoint
+// in M2 — only the seeded rows.
+type ContentSourceKind string
+
+// ContentSourceList defines model for ContentSourceList.
+type ContentSourceList struct {
+	Items []ContentSource `json:"items"`
+}
+
+// ContentSourceStatus Operational state of a source as a whole. Independent of `enabled`: a
+// disabled source can still be idle, and an enabled one can be in error.
+type ContentSourceStatus string
+
+// ContentSourceVersion One version snapshot under a source.
+type ContentSourceVersion struct {
+	CreatedAt time.Time          `json:"createdAt"`
+	Error     string             `json:"error"`
+	Id        openapi_types.UUID `json:"id"`
+	ItemCount int64              `json:"itemCount"`
+	RawBytes  int64              `json:"rawBytes"`
+
+	// RawPath Path of the raw snapshot relative to the content data root.
+	RawPath string `json:"rawPath"`
+
+	// RawSha256 Hex SHA-256 of the last successful raw snapshot. Empty if none.
+	RawSha256 string             `json:"rawSha256"`
+	SourceId  openapi_types.UUID `json:"sourceId"`
+
+	// Status State of one version snapshot under a source.
+	Status ContentSourceVersionStatus `json:"status"`
+
+	// SyncedAt When this version last finished successfully. Absent if never.
+	SyncedAt  *time.Time `json:"syncedAt,omitempty"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+
+	// Version Release label for ATT&CK (e.g. `15.1`), or the rolling token
+	// `current` for Atomic / Sigma / CTID / custom.
+	//
+	//
+	// Examples: 15.1, current
+	Version string `json:"version"`
+}
+
+// ContentSourceVersionList defines model for ContentSourceVersionList.
+type ContentSourceVersionList struct {
+	Items []ContentSourceVersion `json:"items"`
+}
+
+// ContentSourceVersionStatus State of one version snapshot under a source.
+type ContentSourceVersionStatus string
+
+// ContentSyncJobKind What a content sync job is doing.
+type ContentSyncJobKind string
+
+// ContentSyncJobStatus Lifecycle state of a content sync job.
+type ContentSyncJobStatus string
+
+// ContentSyncJobSummary The most recent job for a source, as detail surfaces it. Full job APIs
+// land with the runner (M2-003).
+type ContentSyncJobSummary struct {
+	CreatedAt  time.Time          `json:"createdAt"`
+	Error      *string            `json:"error,omitempty"`
+	FinishedAt *time.Time         `json:"finishedAt,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Kind What a content sync job is doing.
+	Kind      ContentSyncJobKind `json:"kind"`
+	Message   *string            `json:"message,omitempty"`
+	Phase     *string            `json:"phase,omitempty"`
+	StartedAt *time.Time         `json:"startedAt,omitempty"`
+
+	// Status Lifecycle state of a content sync job.
+	Status ContentSyncJobStatus `json:"status"`
+
+	// Version Version token the job targeted, when one was named.
+	Version *string `json:"version,omitempty"`
 }
 
 // CreateServiceTokenRequest Body of `POST /auth/tokens`. The owner is the caller and is not a field.
@@ -976,6 +1278,14 @@ type TOTPEnrolment struct {
 // fails the build if this list and that one disagree.
 type TokenScope string
 
+// UpdateContentSourceRequest A patch. Every field is optional; an absent field is left alone. `kind`
+// is deliberately not here.
+type UpdateContentSourceRequest struct {
+	Name *string `json:"name,omitempty"`
+	Ref  *string `json:"ref,omitempty"`
+	Url  *string `json:"url,omitempty"`
+}
+
 // UpdateSelfRequest Body of `PATCH /users/me`. One field, and that is the design: a schema
 // with no `platformRole` in it is a request that cannot ask for one, which
 // is a stronger guarantee than a handler that declines to honour it
@@ -1101,6 +1411,17 @@ type ActivityVerb = string
 
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
+
+// ContentSourceEnabledFilter defines model for ContentSourceEnabledFilter.
+type ContentSourceEnabledFilter = bool
+
+// ContentSourceId defines model for ContentSourceId.
+type ContentSourceId = openapi_types.UUID
+
+// ContentSourceKindFilter Closed vocabulary of content libraries. New kinds are a migration, not
+// a string somebody passed to an API. There is no create-source endpoint
+// in M2 — only the seeded rows.
+type ContentSourceKindFilter = ContentSourceKind
 
 // Cursor defines model for Cursor.
 type Cursor = string
@@ -1436,6 +1757,91 @@ type RevokeServiceTokenParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// ListContentSourcesParams defines parameters for ListContentSources.
+type ListContentSourcesParams struct {
+	// Kind Restrict to one source kind.
+	Kind *ContentSourceKindFilter `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Enabled Restrict to enabled or disabled sources.
+	Enabled *ContentSourceEnabledFilter `form:"enabled,omitempty" json:"enabled,omitempty"`
+}
+
+// DeleteContentSourceParams defines parameters for DeleteContentSource.
+type DeleteContentSourceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// UpdateContentSourceParams defines parameters for UpdateContentSource.
+type UpdateContentSourceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DisableContentSourceParams defines parameters for DisableContentSource.
+type DisableContentSourceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// EnableContentSourceParams defines parameters for EnableContentSource.
+type EnableContentSourceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // ListEngagementActivityParams defines parameters for ListEngagementActivity.
 type ListEngagementActivityParams struct {
 	// Limit Maximum number of items to return.
@@ -1681,6 +2087,9 @@ type CompleteSamlSignInFormdataRequestBody CompleteSamlSignInFormdataBody
 // CreateServiceTokenJSONRequestBody defines body for CreateServiceToken for application/json ContentType.
 type CreateServiceTokenJSONRequestBody = CreateServiceTokenRequest
 
+// UpdateContentSourceJSONRequestBody defines body for UpdateContentSource for application/json ContentType.
+type UpdateContentSourceJSONRequestBody = UpdateContentSourceRequest
+
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
 
@@ -1764,6 +2173,27 @@ type ServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
+	// ListContentSources List content sources.
+	// (GET /content/sources)
+	ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams)
+	// DeleteContentSource Hard-delete a content source and its content subtree.
+	// (DELETE /content/sources/{sourceId})
+	DeleteContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params DeleteContentSourceParams)
+	// GetContentSource Read one content source.
+	// (GET /content/sources/{sourceId})
+	GetContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId)
+	// UpdateContentSource Edit a content source's name, URL or ref.
+	// (PATCH /content/sources/{sourceId})
+	UpdateContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params UpdateContentSourceParams)
+	// DisableContentSource Disable a content source.
+	// (POST /content/sources/{sourceId}/disable)
+	DisableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params DisableContentSourceParams)
+	// EnableContentSource Enable a content source.
+	// (POST /content/sources/{sourceId}/enable)
+	EnableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params EnableContentSourceParams)
+	// ListContentSourceVersions List version snapshots under a content source.
+	// (GET /content/sources/{sourceId}/versions)
+	ListContentSourceVersions(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId)
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
@@ -1953,6 +2383,48 @@ func (_ Unimplemented) CreateServiceToken(w http.ResponseWriter, r *http.Request
 // RevokeServiceToken Revoke one of your own service tokens.
 // (DELETE /auth/tokens/{tokenId})
 func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentSources List content sources.
+// (GET /content/sources)
+func (_ Unimplemented) ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteContentSource Hard-delete a content source and its content subtree.
+// (DELETE /content/sources/{sourceId})
+func (_ Unimplemented) DeleteContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params DeleteContentSourceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentSource Read one content source.
+// (GET /content/sources/{sourceId})
+func (_ Unimplemented) GetContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateContentSource Edit a content source's name, URL or ref.
+// (PATCH /content/sources/{sourceId})
+func (_ Unimplemented) UpdateContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params UpdateContentSourceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DisableContentSource Disable a content source.
+// (POST /content/sources/{sourceId}/disable)
+func (_ Unimplemented) DisableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params DisableContentSourceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// EnableContentSource Enable a content source.
+// (POST /content/sources/{sourceId}/enable)
+func (_ Unimplemented) EnableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params EnableContentSourceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentSourceVersions List version snapshots under a content source.
+// (GET /content/sources/{sourceId}/versions)
+func (_ Unimplemented) ListContentSourceVersions(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2842,6 +3314,304 @@ func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeServiceToken(w, r, tokenId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentSources operation middleware
+func (siw *ServerInterfaceWrapper) ListContentSources(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentSourcesParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "enabled" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "enabled", r.URL.Query(), &params.Enabled, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "enabled"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "enabled", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentSources(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteContentSource operation middleware
+func (siw *ServerInterfaceWrapper) DeleteContentSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteContentSourceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteContentSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentSource operation middleware
+func (siw *ServerInterfaceWrapper) GetContentSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentSource(w, r, sourceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateContentSource operation middleware
+func (siw *ServerInterfaceWrapper) UpdateContentSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateContentSourceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateContentSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisableContentSource operation middleware
+func (siw *ServerInterfaceWrapper) DisableContentSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DisableContentSourceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableContentSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EnableContentSource operation middleware
+func (siw *ServerInterfaceWrapper) EnableContentSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnableContentSourceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnableContentSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentSourceVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListContentSourceVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId ContentSourceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentSourceVersions(w, r, sourceId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3798,6 +4568,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/activity", wrapper.ListEngagementActivity)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/sources", wrapper.ListContentSources)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/content/sources/{sourceId}", wrapper.DeleteContentSource)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/sources/{sourceId}", wrapper.GetContentSource)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/content/sources/{sourceId}", wrapper.UpdateContentSource)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/sources/{sourceId}/enable", wrapper.EnableContentSource)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/content/sources/{sourceId}/disable", wrapper.DisableContentSource)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/sources/{sourceId}/versions", wrapper.ListContentSourceVersions)
 	})
 
 	return r
@@ -5725,6 +6516,639 @@ func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRev
 	return err
 }
 
+type ListContentSourcesRequestObject struct {
+	Params ListContentSourcesParams
+}
+
+type ListContentSourcesResponseObject interface {
+	VisitListContentSourcesResponse(w http.ResponseWriter) error
+}
+
+type ListContentSources200JSONResponse ContentSourceList
+
+func (response ListContentSources200JSONResponse) VisitListContentSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSources400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSources400ApplicationProblemPlusJSONResponse) VisitListContentSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSources401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSources401ApplicationProblemPlusJSONResponse) VisitListContentSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSources403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSources403ApplicationProblemPlusJSONResponse) VisitListContentSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSources500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSources500ApplicationProblemPlusJSONResponse) VisitListContentSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentSourceRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+	Params   DeleteContentSourceParams
+}
+
+type DeleteContentSourceResponseObject interface {
+	VisitDeleteContentSourceResponse(w http.ResponseWriter) error
+}
+
+type DeleteContentSource204Response struct {
+}
+
+func (response DeleteContentSource204Response) VisitDeleteContentSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteContentSource401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentSource401ApplicationProblemPlusJSONResponse) VisitDeleteContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentSource403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentSource403ApplicationProblemPlusJSONResponse) VisitDeleteContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentSource404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentSource404ApplicationProblemPlusJSONResponse) VisitDeleteContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentSource409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentSource409ApplicationProblemPlusJSONResponse) VisitDeleteContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentSource500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentSource500ApplicationProblemPlusJSONResponse) VisitDeleteContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSourceRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+}
+
+type GetContentSourceResponseObject interface {
+	VisitGetContentSourceResponse(w http.ResponseWriter) error
+}
+
+type GetContentSource200JSONResponse ContentSourceDetail
+
+func (response GetContentSource200JSONResponse) VisitGetContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSource401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSource401ApplicationProblemPlusJSONResponse) VisitGetContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSource403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSource403ApplicationProblemPlusJSONResponse) VisitGetContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSource404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSource404ApplicationProblemPlusJSONResponse) VisitGetContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentSource500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentSource500ApplicationProblemPlusJSONResponse) VisitGetContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateContentSourceRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+	Params   UpdateContentSourceParams
+	Body     *UpdateContentSourceJSONRequestBody
+}
+
+type UpdateContentSourceResponseObject interface {
+	VisitUpdateContentSourceResponse(w http.ResponseWriter) error
+}
+
+type UpdateContentSource200JSONResponse ContentSource
+
+func (response UpdateContentSource200JSONResponse) VisitUpdateContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateContentSource400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateContentSource400ApplicationProblemPlusJSONResponse) VisitUpdateContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateContentSource401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateContentSource401ApplicationProblemPlusJSONResponse) VisitUpdateContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateContentSource403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateContentSource403ApplicationProblemPlusJSONResponse) VisitUpdateContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateContentSource404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateContentSource404ApplicationProblemPlusJSONResponse) VisitUpdateContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateContentSource500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateContentSource500ApplicationProblemPlusJSONResponse) VisitUpdateContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableContentSourceRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+	Params   DisableContentSourceParams
+}
+
+type DisableContentSourceResponseObject interface {
+	VisitDisableContentSourceResponse(w http.ResponseWriter) error
+}
+
+type DisableContentSource200JSONResponse ContentSource
+
+func (response DisableContentSource200JSONResponse) VisitDisableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableContentSource401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DisableContentSource401ApplicationProblemPlusJSONResponse) VisitDisableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableContentSource403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DisableContentSource403ApplicationProblemPlusJSONResponse) VisitDisableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableContentSource404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DisableContentSource404ApplicationProblemPlusJSONResponse) VisitDisableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableContentSource500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DisableContentSource500ApplicationProblemPlusJSONResponse) VisitDisableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnableContentSourceRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+	Params   EnableContentSourceParams
+}
+
+type EnableContentSourceResponseObject interface {
+	VisitEnableContentSourceResponse(w http.ResponseWriter) error
+}
+
+type EnableContentSource200JSONResponse ContentSource
+
+func (response EnableContentSource200JSONResponse) VisitEnableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnableContentSource401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response EnableContentSource401ApplicationProblemPlusJSONResponse) VisitEnableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnableContentSource403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response EnableContentSource403ApplicationProblemPlusJSONResponse) VisitEnableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnableContentSource404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response EnableContentSource404ApplicationProblemPlusJSONResponse) VisitEnableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnableContentSource500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response EnableContentSource500ApplicationProblemPlusJSONResponse) VisitEnableContentSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSourceVersionsRequestObject struct {
+	SourceId ContentSourceId `json:"sourceId"`
+}
+
+type ListContentSourceVersionsResponseObject interface {
+	VisitListContentSourceVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListContentSourceVersions200JSONResponse ContentSourceVersionList
+
+func (response ListContentSourceVersions200JSONResponse) VisitListContentSourceVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSourceVersions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSourceVersions401ApplicationProblemPlusJSONResponse) VisitListContentSourceVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSourceVersions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSourceVersions403ApplicationProblemPlusJSONResponse) VisitListContentSourceVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSourceVersions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSourceVersions404ApplicationProblemPlusJSONResponse) VisitListContentSourceVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentSourceVersions500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentSourceVersions500ApplicationProblemPlusJSONResponse) VisitListContentSourceVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListEngagementActivityRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	Params       ListEngagementActivityParams
@@ -7253,6 +8677,27 @@ type StrictServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
+	// ListContentSources List content sources.
+	// (GET /content/sources)
+	ListContentSources(ctx context.Context, request ListContentSourcesRequestObject) (ListContentSourcesResponseObject, error)
+	// DeleteContentSource Hard-delete a content source and its content subtree.
+	// (DELETE /content/sources/{sourceId})
+	DeleteContentSource(ctx context.Context, request DeleteContentSourceRequestObject) (DeleteContentSourceResponseObject, error)
+	// GetContentSource Read one content source.
+	// (GET /content/sources/{sourceId})
+	GetContentSource(ctx context.Context, request GetContentSourceRequestObject) (GetContentSourceResponseObject, error)
+	// UpdateContentSource Edit a content source's name, URL or ref.
+	// (PATCH /content/sources/{sourceId})
+	UpdateContentSource(ctx context.Context, request UpdateContentSourceRequestObject) (UpdateContentSourceResponseObject, error)
+	// DisableContentSource Disable a content source.
+	// (POST /content/sources/{sourceId}/disable)
+	DisableContentSource(ctx context.Context, request DisableContentSourceRequestObject) (DisableContentSourceResponseObject, error)
+	// EnableContentSource Enable a content source.
+	// (POST /content/sources/{sourceId}/enable)
+	EnableContentSource(ctx context.Context, request EnableContentSourceRequestObject) (EnableContentSourceResponseObject, error)
+	// ListContentSourceVersions List version snapshots under a content source.
+	// (GET /content/sources/{sourceId}/versions)
+	ListContentSourceVersions(ctx context.Context, request ListContentSourceVersionsRequestObject) (ListContentSourceVersionsResponseObject, error)
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
@@ -7984,6 +9429,199 @@ func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeServiceTokenResponseObject); ok {
 		if err := validResponse.VisitRevokeServiceTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentSources operation middleware
+func (sh *strictHandler) ListContentSources(w http.ResponseWriter, r *http.Request, params ListContentSourcesParams) {
+	var request ListContentSourcesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentSources(ctx, request.(ListContentSourcesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentSources")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentSourcesResponseObject); ok {
+		if err := validResponse.VisitListContentSourcesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteContentSource operation middleware
+func (sh *strictHandler) DeleteContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params DeleteContentSourceParams) {
+	var request DeleteContentSourceRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteContentSource(ctx, request.(DeleteContentSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteContentSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteContentSourceResponseObject); ok {
+		if err := validResponse.VisitDeleteContentSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentSource operation middleware
+func (sh *strictHandler) GetContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId) {
+	var request GetContentSourceRequestObject
+
+	request.SourceId = sourceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentSource(ctx, request.(GetContentSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentSourceResponseObject); ok {
+		if err := validResponse.VisitGetContentSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateContentSource operation middleware
+func (sh *strictHandler) UpdateContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params UpdateContentSourceParams) {
+	var request UpdateContentSourceRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	var body UpdateContentSourceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateContentSource(ctx, request.(UpdateContentSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateContentSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateContentSourceResponseObject); ok {
+		if err := validResponse.VisitUpdateContentSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisableContentSource operation middleware
+func (sh *strictHandler) DisableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params DisableContentSourceParams) {
+	var request DisableContentSourceRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableContentSource(ctx, request.(DisableContentSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableContentSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableContentSourceResponseObject); ok {
+		if err := validResponse.VisitDisableContentSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EnableContentSource operation middleware
+func (sh *strictHandler) EnableContentSource(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId, params EnableContentSourceParams) {
+	var request EnableContentSourceRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EnableContentSource(ctx, request.(EnableContentSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EnableContentSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EnableContentSourceResponseObject); ok {
+		if err := validResponse.VisitEnableContentSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentSourceVersions operation middleware
+func (sh *strictHandler) ListContentSourceVersions(w http.ResponseWriter, r *http.Request, sourceId ContentSourceId) {
+	var request ListContentSourceVersionsRequestObject
+
+	request.SourceId = sourceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentSourceVersions(ctx, request.(ListContentSourceVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentSourceVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentSourceVersionsResponseObject); ok {
+		if err := validResponse.VisitListContentSourceVersionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

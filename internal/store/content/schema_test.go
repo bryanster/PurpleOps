@@ -66,7 +66,7 @@ func TestSeedSourcesExist(t *testing.T) {
 	db := storetest.Migrated(t)
 	sources := content.NewSources(db)
 
-	list, err := sources.List(t.Context())
+	list, err := sources.List(t.Context(), content.SourceFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}

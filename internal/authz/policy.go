@@ -148,6 +148,14 @@ var rules = []Rule{
 	{Action: ActionContentSync, Name: "content.sync", Resource: ResourceContent,
 		Platform: admins, Token: TokenScopeContentSync,
 		Summary: "Sync the library from its upstream sources."},
+	// content.manage is deliberately a third action rather than folding enable /
+	// disable / delete / metadata edits into content.sync: automation must be
+	// able to refresh a library without holding the right to remove one, and
+	// the two scopes (content:sync vs content:write) are how that split is
+	// expressed on a service token (M2-002).
+	{Action: ActionContentManage, Name: "content.manage", Resource: ResourceContent,
+		Platform: admins, Token: TokenScopeContentWrite,
+		Summary: "Enable, disable, delete and edit content sources, and author custom content."},
 	{Action: ActionEngagementCreate, Name: "engagement.create", Resource: ResourcePlatform,
 		Platform: everyone, Token: TokenScopeEngagementsWrite,
 		Summary: "Create an engagement. Acts on the installation, because the engagement does not exist yet."},
