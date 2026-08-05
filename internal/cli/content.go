@@ -12,6 +12,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/content"
+	"github.com/bryanster/blacklight/internal/content/atomic"
 	"github.com/bryanster/blacklight/internal/content/attack"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/store"
@@ -190,6 +191,9 @@ func (a *app) withContentRunner(
 		}
 		if _, ok := adapters[storecontent.KindAttack]; !ok {
 			adapters[storecontent.KindAttack] = attack.New()
+		}
+		if _, ok := adapters[storecontent.KindAtomic]; !ok {
+			adapters[storecontent.KindAtomic] = atomic.New()
 		}
 		runner, err := content.NewRunner(content.RunnerDeps{
 			DB:         db,

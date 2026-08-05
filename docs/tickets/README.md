@@ -57,7 +57,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
 | M1 — Identity & access | ✅ done — 18/18 | [18 tickets](#m1--identity--access) |
-| M2 — Content | refined — 7/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
+| M2 — Content | refined — 8/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
 | M5 — Analytics | epic, needs refinement | [`M5-EPIC.md`](M5-EPIC.md) |
@@ -138,7 +138,7 @@ Build roughly in this order — the dependency chain is real.
 | [M2-005](done/M2-005-bundle-upload-and-reprocess.md) ✅ | Offline bundle upload + reprocess-from-raw | M |
 | [M2-006](done/M2-006-attack-adapter.md) ✅ | ATT&CK Enterprise adapter (multi-version) | L |
 | [M2-007](done/M2-007-attack-version-pin-surface.md) ✅ | ATT&CK version catalog & pin surface | M |
-| [M2-008](M2-008-atomic-adapter.md) | Atomic Red Team adapter | M |
+| [M2-008](done/M2-008-atomic-adapter.md) ✅ | Atomic Red Team adapter | M |
 | [M2-009](M2-009-sigma-adapter.md) | Sigma adapter (technique-mapped rules) | M |
 | [M2-010](M2-010-ctid-adapter.md) | CTID emulation-plan catalog adapter | M |
 | [M2-011](M2-011-custom-content-api.md) | Custom content API: templates, rules, notes | M |

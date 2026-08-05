@@ -43,11 +43,11 @@ input args so M3 can snapshot a real procedure onto a step.
 
 ## Acceptance criteria
 
-- [ ] A fixture atomic with input args round-trips without flattening to a single string column.
-- [ ] Re-sync replaces `current` templates; row count matches fixture; no duplicate external_ids.
-- [ ] List filter by technique external id returns the expected templates.
-- [ ] Disabled source hides templates from default list.
-- [ ] CI uses fixtures only (no network).
+- [x] A fixture atomic with input args round-trips without flattening to a single string column.
+- [x] Re-sync replaces `current` templates; row count matches fixture; no duplicate external_ids.
+- [x] List filter by technique external id returns the expected templates.
+- [x] Disabled source hides templates from default list.
+- [x] CI uses fixtures only (no network).
 
 ## Tests
 
@@ -59,3 +59,26 @@ input args so M3 can snapshot a real procedure onto a step.
 - Guids from upstream are good external_ids when present; otherwise derive deterministically and
   document so re-sync upserts rather than duplicates.
 - License/attribution already on the source seed — do not strip.
+
+## Implementation notes
+
+- Package: `internal/content/atomic`. Registered by default in `httpapi` and
+  `blctl` when `ContentAdapters` does not already supply `kind=atomic`.
+- Fetch GETs the seed URL (GitHub archive zip). Fixture-friendly via
+  `Adapter.FetchBytes`. Offline bundle uses the same archive shape.
+- Parse walks `atomics/Txxxx/Txxxx.yaml` inside zip/tar(.gz), or a bare YAML
+  technique file. One `content_procedure_template` per `atomic_tests` entry.
+- External ids: prefer `auto_generated_guid`; else `{technique}/{zero-based-index}`.
+  Documented in `docs/content-atomic.md`.
+- `input_args` stored as JSON array of `{name,description,type,default}` (not
+  the upstream map) so the wire schema is stable.
+- Apply is stage-and-promote: rows land under `content.StagingVersion`
+  (`__staging__`), then `PromoteProcedureVersion` deletes `current` and renames
+  staging in one `store.Write` transaction. Failed re-sync leaves the prior
+  ready catalog intact.
+- Migration `0013_procedure_library.sql`: list index on
+  `(source_id, version, external_id)`.
+- Library list/get handlers on `Procedures` with `EnabledOnly` default. OpenAPI
+  paths under `/content/procedure-templates`.
+- Authz sweep pins Sigma for the "sync" 409 case (Atomic now has an adapter).
+- Operator docs: `docs/content-atomic.md`.

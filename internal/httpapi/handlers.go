@@ -54,6 +54,9 @@ type handlers struct {
 	// objects is the ATT&CK object library (M2-006).
 	objects *storecontent.Objects
 
+	// procedures is the Atomic / custom procedure library (M2-008).
+	procedures *storecontent.Procedures
+
 	// attackpin is the ATT&CK version catalog and pin surface (M2-007).
 	attackpin *attackpin.Service
 

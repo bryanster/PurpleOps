@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 )
 
-// ATT&CK library browse endpoints (M2-006). content.read; enabled sources only.
+// ATT&CK / Atomic library browse endpoints (M2-006, M2-008). content.read;
+// enabled sources only.
 
 func (h *handlers) ListContentTechniques(ctx context.Context, request gen.ListContentTechniquesRequestObject) (gen.ListContentTechniquesResponseObject, error) {
 	f := libraryFilter(request.Params.Version, request.Params.Q, request.Params.Limit)
@@ -154,6 +156,50 @@ func (h *handlers) GetContentSoftware(ctx context.Context, request gen.GetConten
 		return nil, err
 	}
 	return gen.GetContentSoftware200JSONResponse(wire), nil
+}
+
+func (h *handlers) ListContentProcedureTemplates(ctx context.Context, request gen.ListContentProcedureTemplatesRequestObject) (gen.ListContentProcedureTemplatesResponseObject, error) {
+	f := storecontent.ProcedureListFilter{EnabledOnly: true}
+	if request.Params.Q != nil {
+		f.Q = *request.Params.Q
+	}
+	if request.Params.Technique != nil {
+		f.Technique = *request.Params.Technique
+	}
+	if request.Params.Platform != nil {
+		f.Platform = *request.Params.Platform
+	}
+	if request.Params.SourceId != nil {
+		f.SourceID = request.Params.SourceId.String()
+	}
+	if request.Params.Limit != nil {
+		f.Limit = *request.Params.Limit
+	}
+	items, err := h.procedures.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]gen.ContentProcedureTemplate, 0, len(items))
+	for _, p := range items {
+		wire, err := contentProcedureTemplate(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, wire)
+	}
+	return gen.ListContentProcedureTemplates200JSONResponse{Items: out}, nil
+}
+
+func (h *handlers) GetContentProcedureTemplate(ctx context.Context, request gen.GetContentProcedureTemplateRequestObject) (gen.GetContentProcedureTemplateResponseObject, error) {
+	p, err := h.procedures.ByIDEnabled(ctx, request.TemplateId.String(), true)
+	if err != nil {
+		return nil, err
+	}
+	wire, err := contentProcedureTemplate(p)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetContentProcedureTemplate200JSONResponse(wire), nil
 }
 
 func libraryFilter(version, q *string, limit *int) storecontent.ObjectListFilter {
@@ -305,4 +351,115 @@ func contentSoftware(s storecontent.Software) (gen.ContentSoftware, error) {
 		CreatedAt:    s.CreatedAt,
 		UpdatedAt:    s.UpdatedAt,
 	}, nil
+}
+
+func contentProcedureTemplate(p storecontent.ProcedureTemplate) (gen.ContentProcedureTemplate, error) {
+	id, err := parseUUID(p.ID)
+	if err != nil {
+		return gen.ContentProcedureTemplate{}, err
+	}
+	sourceID, err := parseUUID(p.SourceID)
+	if err != nil {
+		return gen.ContentProcedureTemplate{}, err
+	}
+
+	platforms, err := decodeStringArray(p.Platforms)
+	if err != nil {
+		return gen.ContentProcedureTemplate{}, err
+	}
+	techs, err := decodeStringArray(p.TechniqueExternalIDs)
+	if err != nil {
+		return gen.ContentProcedureTemplate{}, err
+	}
+	args, err := decodeInputArgs(p.InputArgs)
+	if err != nil {
+		return gen.ContentProcedureTemplate{}, err
+	}
+
+	return gen.ContentProcedureTemplate{
+		Id:                     id,
+		SourceId:               sourceID,
+		Version:                p.Version,
+		ExternalId:             p.ExternalID,
+		Name:                   p.Name,
+		Description:            p.Description,
+		Platforms:              platforms,
+		Executor:               p.Executor,
+		ElevationRequired:      p.ElevationRequired,
+		Command:                p.Command,
+		Cleanup:                p.Cleanup,
+		InputArgs:              args,
+		TechniqueExternalIds:   techs,
+		DependencyExecutorName: p.DependencyExecutorName,
+		Dependencies:           p.Dependencies,
+		CreatedAt:              p.CreatedAt,
+		UpdatedAt:              p.UpdatedAt,
+	}, nil
+}
+
+func decodeStringArray(raw json.RawMessage) ([]string, error) {
+	if len(raw) == 0 {
+		return []string{}, nil
+	}
+	var out []string
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out, nil
+}
+
+func decodeInputArgs(raw json.RawMessage) ([]gen.ContentProcedureInputArg, error) {
+	if len(raw) == 0 {
+		return []gen.ContentProcedureInputArg{}, nil
+	}
+	// Adapter writes a JSON array of {name,description,type,default}.
+	// Older/custom rows may store the upstream map shape — accept both.
+	var arr []gen.ContentProcedureInputArg
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		if arr == nil {
+			arr = []gen.ContentProcedureInputArg{}
+		}
+		return arr, nil
+	}
+	var obj map[string]struct {
+		Description string `json:"description"`
+		Type        string `json:"type"`
+		Default     any    `json:"default"`
+	}
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, err
+	}
+	out := make([]gen.ContentProcedureInputArg, 0, len(obj))
+	for name, a := range obj {
+		out = append(out, gen.ContentProcedureInputArg{
+			Name:        name,
+			Description: a.Description,
+			Type:        a.Type,
+			Default:     coerceString(a.Default),
+		})
+	}
+	return out, nil
+}
+
+func coerceString(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	default:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
 }

@@ -1,0 +1,37 @@
+---
+attack_technique: T1059.001
+display_name: Command and Scripting Interpreter - PowerShell
+atomic_tests:
+- name: PowerShell Echo Input
+  auto_generated_guid: 11111111-1111-4111-8111-111111111111
+  description: |
+    Windows PowerShell test that takes an input argument and has cleanup.
+  supported_platforms:
+  - windows
+  input_arguments:
+    message:
+      description: Text to echo
+      type: string
+      default: hello-atomic
+    output_file:
+      description: Path for a throwaway file
+      type: path
+      default: C:\Windows\Temp\atomic-echo.txt
+  executor:
+    name: powershell
+    elevation_required: false
+    command: |
+      Write-Host "#{message}"
+      Set-Content -Path "#{output_file}" -Value "#{message}"
+    cleanup_command: |
+      Remove-Item -Path "#{output_file}" -ErrorAction Ignore
+- name: PowerShell Elevated Listing
+  auto_generated_guid: 22222222-2222-4222-8222-222222222222
+  description: Elevated listing without input args.
+  supported_platforms:
+  - windows
+  executor:
+    name: powershell
+    elevation_required: true
+    command: |
+      Get-ChildItem C:\Windows\System32 | Select-Object -First 1

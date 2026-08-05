@@ -1662,6 +1662,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/procedure-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List procedure templates (Atomic and custom).
+         * @description Any authenticated subject (`content.read`). Returns procedure templates
+         *     from **enabled** sources only. Filter by substring `q` (external id /
+         *     name / description), ATT&CK `technique` external id, `platform`
+         *     (for example `windows`), and optional `sourceId`.
+         *
+         *     Atomic Red Team is a rolling-head source: rows use version `current`.
+         */
+        get: operations["listContentProcedureTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/procedure-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one procedure template.
+         * @description Any authenticated subject. Templates from disabled sources answer `404`.
+         *     Structure is preserved: platforms, executor, command, cleanup, and
+         *     input args are distinct fields (not a flattened actions string).
+         */
+        get: operations["getContentProcedureTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/attack/versions": {
         parameters: {
             query?: never;
@@ -2982,6 +3029,63 @@ export interface components {
         ContentSoftwareList: {
             items: components["schemas"]["ContentSoftware"][];
         };
+        /** @description One parameterized input on a procedure template. */
+        ContentProcedureInputArg: {
+            /** @description Argument key as referenced in commands via `#{name}`. */
+            name: string;
+            description: string;
+            /** @description Upstream type label (`path`, `url`, `string`, `integer`, …). */
+            type: string;
+            /** @description Default value coerced to string for a stable wire shape. */
+            default: string;
+        };
+        /**
+         * @description One structured procedure template (Atomic test or custom). Platforms,
+         *     executor, command, cleanup, and input args stay distinct — never a
+         *     single flattened actions string (PLAN.md §3).
+         */
+        ContentProcedureTemplate: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @description Version token. Atomic Red Team is rolling-head and always `current`. */
+            version: string;
+            /**
+             * @description Stable id within the source. Prefer upstream `auto_generated_guid`;
+             *     otherwise `{technique}/{zero-based-index}` (documented in
+             *     `docs/content-atomic.md`).
+             * @example 99747561-ed8d-47f2-9c91-1e5fde1ed6e0
+             */
+            externalId: string;
+            name: string;
+            description: string;
+            /** @description Supported platforms (`windows`, `linux`, `macos`, …). */
+            platforms: string[];
+            /** @description Executor name (`powershell`, `command_prompt`, `sh`, `bash`, `manual`, …). */
+            executor: string;
+            elevationRequired: boolean;
+            /** @description Primary command or manual steps body. */
+            command: string;
+            /** @description Cleanup command when present; empty string otherwise. */
+            cleanup: string;
+            inputArgs: components["schemas"]["ContentProcedureInputArg"][];
+            /** @description ATT&CK technique external ids this template maps to. */
+            techniqueExternalIds: string[];
+            dependencyExecutorName: string;
+            /**
+             * @description Serialized dependency list when present (JSON array text). Empty
+             *     string when the upstream test has no dependencies.
+             */
+            dependencies: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ContentProcedureTemplateList: {
+            items: components["schemas"]["ContentProcedureTemplate"][];
+        };
         /**
          * @description One installed ATT&CK release as the pin surface exposes it. The
          *     `version` string is what engagements will store as `attack_version`
@@ -3243,6 +3347,21 @@ export interface components {
         ContentMitigationId: string;
         ContentGroupId: string;
         ContentSoftwareId: string;
+        /** @description Procedure template surrogate id (UUIDv7). */
+        ContentProcedureTemplateId: string;
+        /**
+         * @description Restrict to templates that list this ATT&CK technique external id
+         *     (for example `T1059.001`). Exact membership match against the stored
+         *     technique id list.
+         */
+        ContentTechniqueExternalIdFilter: string;
+        /**
+         * @description Restrict to templates that list this platform (for example `windows`,
+         *     `linux`, `macos`). Case-insensitive exact membership match.
+         */
+        ContentPlatformFilter: string;
+        /** @description Restrict to templates from this content source. */
+        ContentLibrarySourceIdFilter: string;
         /**
          * @description ATT&CK release label exactly as stored (for example `15.1`). Opaque
          *     text — no leading `v`, no semver rewriting. Surrounding whitespace is
@@ -5664,6 +5783,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContentSoftware"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentProcedureTemplates: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive substring match against `externalId`, `name`, and
+                 *     `description`.
+                 */
+                q?: components["parameters"]["ContentSearchQ"];
+                /**
+                 * @description Restrict to templates that list this ATT&CK technique external id
+                 *     (for example `T1059.001`). Exact membership match against the stored
+                 *     technique id list.
+                 */
+                technique?: components["parameters"]["ContentTechniqueExternalIdFilter"];
+                /**
+                 * @description Restrict to templates that list this platform (for example `windows`,
+                 *     `linux`, `macos`). Case-insensitive exact membership match.
+                 */
+                platform?: components["parameters"]["ContentPlatformFilter"];
+                /** @description Restrict to templates from this content source. */
+                sourceId?: components["parameters"]["ContentLibrarySourceIdFilter"];
+                /** @description Maximum number of items to return (default 500, max 2000). */
+                limit?: components["parameters"]["ContentLibraryLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching procedure templates, external id then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentProcedureTemplateList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentProcedureTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Procedure template surrogate id (UUIDv7). */
+                templateId: components["parameters"]["ContentProcedureTemplateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The procedure template. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentProcedureTemplate"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

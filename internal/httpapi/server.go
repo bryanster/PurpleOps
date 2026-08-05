@@ -25,6 +25,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/throttle"
 	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/content"
+	"github.com/bryanster/blacklight/internal/content/atomic"
 	"github.com/bryanster/blacklight/internal/content/attack"
 	"github.com/bryanster/blacklight/internal/content/attackpin"
 	"github.com/bryanster/blacklight/internal/events"
@@ -510,6 +511,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	versions := storecontent.NewVersions(deps.Store, paths)
 	jobs := storecontent.NewJobs(deps.Store)
 	objects := storecontent.NewObjects(deps.Store)
+	procedures := storecontent.NewProcedures(deps.Store)
 	registry, err := content.New(content.Deps{
 		Sources:  sources,
 		Versions: versions,
@@ -539,9 +541,12 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		adapters = map[storecontent.Kind]content.Adapter{}
 	}
 	// Production adapters. Tests may pre-populate ContentAdapters (including
-	// replacing attack with a fixture); only fill kinds that are still empty.
+	// replacing a kind with a fixture); only fill kinds that are still empty.
 	if _, ok := adapters[storecontent.KindAttack]; !ok {
 		adapters[storecontent.KindAttack] = attack.New()
+	}
+	if _, ok := adapters[storecontent.KindAtomic]; !ok {
+		adapters[storecontent.KindAtomic] = atomic.New()
 	}
 
 	runner, err := content.NewRunner(content.RunnerDeps{
@@ -594,6 +599,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			content:         registry,
 			runner:          runner,
 			objects:         objects,
+			procedures:      procedures,
 			attackpin:       pin,
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,

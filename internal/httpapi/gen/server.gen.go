@@ -576,6 +576,68 @@ type ContentMitigationList struct {
 	Items []ContentMitigation `json:"items"`
 }
 
+// ContentProcedureInputArg One parameterized input on a procedure template.
+type ContentProcedureInputArg struct {
+	// Default Default value coerced to string for a stable wire shape.
+	Default     string `json:"default"`
+	Description string `json:"description"`
+
+	// Name Argument key as referenced in commands via `#{name}`.
+	Name string `json:"name"`
+
+	// Type Upstream type label (`path`, `url`, `string`, `integer`, …).
+	Type string `json:"type"`
+}
+
+// ContentProcedureTemplate One structured procedure template (Atomic test or custom). Platforms,
+// executor, command, cleanup, and input args stay distinct — never a
+// single flattened actions string (PLAN.md §3).
+type ContentProcedureTemplate struct {
+	// Cleanup Cleanup command when present; empty string otherwise.
+	Cleanup string `json:"cleanup"`
+
+	// Command Primary command or manual steps body.
+	Command   string    `json:"command"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Dependencies Serialized dependency list when present (JSON array text). Empty
+	// string when the upstream test has no dependencies.
+	Dependencies           string `json:"dependencies"`
+	DependencyExecutorName string `json:"dependencyExecutorName"`
+	Description            string `json:"description"`
+	ElevationRequired      bool   `json:"elevationRequired"`
+
+	// Executor Executor name (`powershell`, `command_prompt`, `sh`, `bash`, `manual`, …).
+	Executor string `json:"executor"`
+
+	// ExternalId Stable id within the source. Prefer upstream `auto_generated_guid`;
+	// otherwise `{technique}/{zero-based-index}` (documented in
+	// `docs/content-atomic.md`).
+	//
+	//
+	// Examples: 99747561-ed8d-47f2-9c91-1e5fde1ed6e0
+	ExternalId string                     `json:"externalId"`
+	Id         openapi_types.UUID         `json:"id"`
+	InputArgs  []ContentProcedureInputArg `json:"inputArgs"`
+	Name       string                     `json:"name"`
+
+	// Platforms Supported platforms (`windows`, `linux`, `macos`, …).
+	Platforms []string           `json:"platforms"`
+	SourceId  openapi_types.UUID `json:"sourceId"`
+
+	// TechniqueExternalIds ATT&CK technique external ids this template maps to.
+	TechniqueExternalIds []string  `json:"techniqueExternalIds"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+
+	// Version Version token. Atomic Red Team is rolling-head and always `current`.
+	Version string `json:"version"`
+}
+
+// ContentProcedureTemplateList defines model for ContentProcedureTemplateList.
+type ContentProcedureTemplateList struct {
+	Items []ContentProcedureTemplate `json:"items"`
+}
+
 // ContentSoftware defines model for ContentSoftware.
 type ContentSoftware struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -1714,8 +1776,17 @@ type ContentJobStatusFilter = ContentSyncJobStatus
 // ContentLibraryLimit defines model for ContentLibraryLimit.
 type ContentLibraryLimit = int
 
+// ContentLibrarySourceIdFilter defines model for ContentLibrarySourceIdFilter.
+type ContentLibrarySourceIdFilter = openapi_types.UUID
+
 // ContentMitigationId defines model for ContentMitigationId.
 type ContentMitigationId = openapi_types.UUID
+
+// ContentPlatformFilter defines model for ContentPlatformFilter.
+type ContentPlatformFilter = string
+
+// ContentProcedureTemplateId defines model for ContentProcedureTemplateId.
+type ContentProcedureTemplateId = openapi_types.UUID
 
 // ContentSearchQ defines model for ContentSearchQ.
 type ContentSearchQ = string
@@ -1739,6 +1810,9 @@ type ContentTacticFilter = string
 
 // ContentTacticId defines model for ContentTacticId.
 type ContentTacticId = openapi_types.UUID
+
+// ContentTechniqueExternalIdFilter defines model for ContentTechniqueExternalIdFilter.
+type ContentTechniqueExternalIdFilter = string
 
 // ContentTechniqueId defines model for ContentTechniqueId.
 type ContentTechniqueId = openapi_types.UUID
@@ -2153,6 +2227,28 @@ type ListContentMitigationsParams struct {
 	// Q Case-insensitive substring match against `externalId`, `name`, and
 	// `description`.
 	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Maximum number of items to return (default 500, max 2000).
+	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListContentProcedureTemplatesParams defines parameters for ListContentProcedureTemplates.
+type ListContentProcedureTemplatesParams struct {
+	// Q Case-insensitive substring match against `externalId`, `name`, and
+	// `description`.
+	Q *ContentSearchQ `form:"q,omitempty" json:"q,omitempty"`
+
+	// Technique Restrict to templates that list this ATT&CK technique external id
+	// (for example `T1059.001`). Exact membership match against the stored
+	// technique id list.
+	Technique *ContentTechniqueExternalIdFilter `form:"technique,omitempty" json:"technique,omitempty"`
+
+	// Platform Restrict to templates that list this platform (for example `windows`,
+	// `linux`, `macos`). Case-insensitive exact membership match.
+	Platform *ContentPlatformFilter `form:"platform,omitempty" json:"platform,omitempty"`
+
+	// SourceId Restrict to templates from this content source.
+	SourceId *ContentLibrarySourceIdFilter `form:"sourceId,omitempty" json:"sourceId,omitempty"`
 
 	// Limit Maximum number of items to return (default 500, max 2000).
 	Limit *ContentLibraryLimit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2735,6 +2831,12 @@ type ServerInterface interface {
 	// GetContentMitigation Read one ATT&CK mitigation.
 	// (GET /content/mitigations/{mitigationId})
 	GetContentMitigation(w http.ResponseWriter, r *http.Request, mitigationId ContentMitigationId)
+	// ListContentProcedureTemplates List procedure templates (Atomic and custom).
+	// (GET /content/procedure-templates)
+	ListContentProcedureTemplates(w http.ResponseWriter, r *http.Request, params ListContentProcedureTemplatesParams)
+	// GetContentProcedureTemplate Read one procedure template.
+	// (GET /content/procedure-templates/{templateId})
+	GetContentProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId)
 	// ListContentSoftware List ATT&CK software (malware and tools).
 	// (GET /content/software)
 	ListContentSoftware(w http.ResponseWriter, r *http.Request, params ListContentSoftwareParams)
@@ -3041,6 +3143,18 @@ func (_ Unimplemented) ListContentMitigations(w http.ResponseWriter, r *http.Req
 // GetContentMitigation Read one ATT&CK mitigation.
 // (GET /content/mitigations/{mitigationId})
 func (_ Unimplemented) GetContentMitigation(w http.ResponseWriter, r *http.Request, mitigationId ContentMitigationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentProcedureTemplates List procedure templates (Atomic and custom).
+// (GET /content/procedure-templates)
+func (_ Unimplemented) ListContentProcedureTemplates(w http.ResponseWriter, r *http.Request, params ListContentProcedureTemplatesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentProcedureTemplate Read one procedure template.
+// (GET /content/procedure-templates/{templateId})
+func (_ Unimplemented) GetContentProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4462,6 +4576,117 @@ func (siw *ServerInterfaceWrapper) GetContentMitigation(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetContentMitigation(w, r, mitigationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentProcedureTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListContentProcedureTemplates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListContentProcedureTemplatesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "technique" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "technique", r.URL.Query(), &params.Technique, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "technique"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "technique", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "platform" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "platform", r.URL.Query(), &params.Platform, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "platform"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sourceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sourceId", r.URL.Query(), &params.SourceId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sourceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentProcedureTemplates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentProcedureTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetContentProcedureTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId ContentProcedureTemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentProcedureTemplate(w, r, templateId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6270,6 +6495,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/software/{softwareId}", wrapper.GetContentSoftware)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/procedure-templates", wrapper.ListContentProcedureTemplates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/procedure-templates/{templateId}", wrapper.GetContentProcedureTemplate)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
@@ -9207,6 +9438,178 @@ type GetContentMitigation500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetContentMitigation500ApplicationProblemPlusJSONResponse) VisitGetContentMitigationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentProcedureTemplatesRequestObject struct {
+	Params ListContentProcedureTemplatesParams
+}
+
+type ListContentProcedureTemplatesResponseObject interface {
+	VisitListContentProcedureTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListContentProcedureTemplates200JSONResponse ContentProcedureTemplateList
+
+func (response ListContentProcedureTemplates200JSONResponse) VisitListContentProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentProcedureTemplates400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentProcedureTemplates400ApplicationProblemPlusJSONResponse) VisitListContentProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentProcedureTemplates401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentProcedureTemplates401ApplicationProblemPlusJSONResponse) VisitListContentProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentProcedureTemplates403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentProcedureTemplates403ApplicationProblemPlusJSONResponse) VisitListContentProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentProcedureTemplates500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentProcedureTemplates500ApplicationProblemPlusJSONResponse) VisitListContentProcedureTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentProcedureTemplateRequestObject struct {
+	TemplateId ContentProcedureTemplateId `json:"templateId"`
+}
+
+type GetContentProcedureTemplateResponseObject interface {
+	VisitGetContentProcedureTemplateResponse(w http.ResponseWriter) error
+}
+
+type GetContentProcedureTemplate200JSONResponse ContentProcedureTemplate
+
+func (response GetContentProcedureTemplate200JSONResponse) VisitGetContentProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentProcedureTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentProcedureTemplate401ApplicationProblemPlusJSONResponse) VisitGetContentProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentProcedureTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentProcedureTemplate403ApplicationProblemPlusJSONResponse) VisitGetContentProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentProcedureTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentProcedureTemplate404ApplicationProblemPlusJSONResponse) VisitGetContentProcedureTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentProcedureTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentProcedureTemplate500ApplicationProblemPlusJSONResponse) VisitGetContentProcedureTemplateResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -12415,6 +12818,12 @@ type StrictServerInterface interface {
 	// GetContentMitigation Read one ATT&CK mitigation.
 	// (GET /content/mitigations/{mitigationId})
 	GetContentMitigation(ctx context.Context, request GetContentMitigationRequestObject) (GetContentMitigationResponseObject, error)
+	// ListContentProcedureTemplates List procedure templates (Atomic and custom).
+	// (GET /content/procedure-templates)
+	ListContentProcedureTemplates(ctx context.Context, request ListContentProcedureTemplatesRequestObject) (ListContentProcedureTemplatesResponseObject, error)
+	// GetContentProcedureTemplate Read one procedure template.
+	// (GET /content/procedure-templates/{templateId})
+	GetContentProcedureTemplate(ctx context.Context, request GetContentProcedureTemplateRequestObject) (GetContentProcedureTemplateResponseObject, error)
 	// ListContentSoftware List ATT&CK software (malware and tools).
 	// (GET /content/software)
 	ListContentSoftware(ctx context.Context, request ListContentSoftwareRequestObject) (ListContentSoftwareResponseObject, error)
@@ -13484,6 +13893,58 @@ func (sh *strictHandler) GetContentMitigation(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetContentMitigationResponseObject); ok {
 		if err := validResponse.VisitGetContentMitigationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentProcedureTemplates operation middleware
+func (sh *strictHandler) ListContentProcedureTemplates(w http.ResponseWriter, r *http.Request, params ListContentProcedureTemplatesParams) {
+	var request ListContentProcedureTemplatesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentProcedureTemplates(ctx, request.(ListContentProcedureTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentProcedureTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentProcedureTemplatesResponseObject); ok {
+		if err := validResponse.VisitListContentProcedureTemplatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentProcedureTemplate operation middleware
+func (sh *strictHandler) GetContentProcedureTemplate(w http.ResponseWriter, r *http.Request, templateId ContentProcedureTemplateId) {
+	var request GetContentProcedureTemplateRequestObject
+
+	request.TemplateId = templateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentProcedureTemplate(ctx, request.(GetContentProcedureTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentProcedureTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentProcedureTemplateResponseObject); ok {
+		if err := validResponse.VisitGetContentProcedureTemplateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
