@@ -62,6 +62,10 @@ func TestParseAppliesDocumentedDefaults(t *testing.T) {
 	if got, want := cfg.Evidence.Dir, "./evidence"; got != want {
 		t.Errorf("Evidence.Dir = %q, want %q", got, want)
 	}
+	if got, want := cfg.Content.Dir, "./content"; got != want {
+		t.Errorf("Content.Dir = %q, want %q", got, want)
+	}
+
 	if got, want := cfg.Log.Level, LevelInfo; got != want {
 		t.Errorf("Log.Level = %q, want %q", got, want)
 	}
@@ -229,6 +233,14 @@ func TestFields(t *testing.T) {
 		check: func(t *testing.T, cfg Config) {
 			if got, want := cfg.Evidence.Dir, "/srv/evidence"; got != want {
 				t.Errorf("Evidence.Dir = %q, want %q", got, want)
+			}
+		},
+	}, {
+		name: "content dir is taken verbatim",
+		env:  map[string]string{envContentDir: "/srv/content"},
+		check: func(t *testing.T, cfg Config) {
+			if got, want := cfg.Content.Dir, "/srv/content"; got != want {
+				t.Errorf("Content.Dir = %q, want %q", got, want)
 			}
 		},
 	}, {

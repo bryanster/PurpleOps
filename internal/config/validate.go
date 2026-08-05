@@ -13,10 +13,10 @@ import (
 	"time"
 )
 
-// evidenceDirPerm is owner+group only: evidence is customer data, and the
-// directory is created by this process rather than by an operator who might
-// have thought about umask.
-const evidenceDirPerm fs.FileMode = 0o750
+// pathDirPerm is owner+group only: evidence and content trees hold customer and
+// upstream data this process creates, rather than directories an operator might
+// have thought about umask for.
+const pathDirPerm fs.FileMode = 0o750
 
 // validate checks what a single value cannot check for itself: values that
 // only make sense in combination, and paths that only need reading. It has no
@@ -302,14 +302,22 @@ func (c *Config) ensurePaths() []error {
 		})
 	}
 
-	if err := os.MkdirAll(c.Evidence.Dir, evidenceDirPerm); err != nil {
-		errs = append(errs, &FieldError{
-			Name: envEvidenceDir, Value: c.Evidence.Dir, Msg: "could not be created: " + err.Error(),
-		})
-	} else if err := checkDirWritable(c.Evidence.Dir); err != nil {
-		errs = append(errs, &FieldError{
-			Name: envEvidenceDir, Value: c.Evidence.Dir, Msg: err.Error(),
-		})
+	for _, dir := range []struct {
+		name string
+		path string
+	}{
+		{envEvidenceDir, c.Evidence.Dir},
+		{envContentDir, c.Content.Dir},
+	} {
+		if err := os.MkdirAll(dir.path, pathDirPerm); err != nil {
+			errs = append(errs, &FieldError{
+				Name: dir.name, Value: dir.path, Msg: "could not be created: " + err.Error(),
+			})
+		} else if err := checkDirWritable(dir.path); err != nil {
+			errs = append(errs, &FieldError{
+				Name: dir.name, Value: dir.path, Msg: err.Error(),
+			})
+		}
 	}
 
 	return errs

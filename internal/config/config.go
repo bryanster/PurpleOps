@@ -25,6 +25,8 @@ const (
 	envTrustedProxies  = prefix + "TRUSTED_PROXIES"
 	envDBPath          = prefix + "DB_PATH"
 	envEvidenceDir     = prefix + "EVIDENCE_DIR"
+	envContentDir      = prefix + "CONTENT_DIR"
+
 	envSessionSecret   = prefix + "SESSION_SECRET"
 	envEncryptionKey   = prefix + "ENCRYPTION_KEY"
 	envSessionLifetime = prefix + "SESSION_LIFETIME"
@@ -66,9 +68,11 @@ type Config struct {
 	// control; see the individual controls for what each relaxation is.
 	Env Environment
 
-	Server     Server
-	Database   Database
-	Evidence   Evidence
+	Server   Server
+	Database Database
+	Evidence Evidence
+	Content  Content
+
 	Session    Session
 	Encryption Encryption
 	MFA        MFA
@@ -117,6 +121,15 @@ type Database struct {
 // Evidence locates the on-disk blob store.
 type Evidence struct {
 	// Dir holds uploaded evidence. It is created at startup if absent.
+	Dir string
+}
+
+// Content locates on-disk raw upstream snapshots and (later) uploaded bundles
+// (M2-001). The directory is created at startup if absent.
+type Content struct {
+	// Dir is the root for content artifacts. Raw snapshots are stored under
+	// Dir/raw/{source_id}/{version}/{sha256}. Repositories reject any stored
+	// path that would escape this root.
 	Dir string
 }
 
@@ -394,6 +407,8 @@ func (c *Config) bindings() []binding {
 		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
 		{name: envDBPath, target: &c.Database.Path, def: "./blacklight.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
+		{name: envContentDir, target: &c.Content.Dir, def: "./content"},
+
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
 		{name: envEncryptionKey, target: &c.Encryption.Key, required: true, sensitive: true},
 		{name: envSessionLifetime, target: &c.Session.Lifetime, def: "12h"},
