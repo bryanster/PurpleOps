@@ -11,6 +11,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authn/saml"
 	"github.com/bryanster/blacklight/internal/authn/session"
 	"github.com/bryanster/blacklight/internal/content"
+	"github.com/bryanster/blacklight/internal/content/attackpin"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
@@ -52,6 +53,9 @@ type handlers struct {
 
 	// objects is the ATT&CK object library (M2-006).
 	objects *storecontent.Objects
+
+	// attackpin is the ATT&CK version catalog and pin surface (M2-007).
+	attackpin *attackpin.Service
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit
 	// GET /events.

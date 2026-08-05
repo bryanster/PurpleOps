@@ -86,7 +86,45 @@ All require `content.read`. Objects from **disabled** sources are omitted
 | GET | `/content/software` | `version`, `q`, `limit` |
 | GET | `/content/software/{id}` | |
 
-`q` is a case-insensitive substring over `externalId`, `name`, and `description`.
+
+## Version strings
+
+ATT&CK version labels are **opaque text** equal to
+`content_source_version.version` (for example `15.1`).
+
+Single normalization rule (pin APIs and docs; ingest uses the same TrimSpace on
+the STIX collection label):
+
+1. Trim surrounding whitespace.
+2. Reject empty or internal whitespace.
+3. Reject reserved tokens `__staging__` and `current`.
+4. **Do not** strip a leading `v` / `V`, and **do not** rewrite semver.
+   `15.1` and `v15.1` are different strings; only the former matches a MITRE
+   release label installed by the adapter.
+
+## Version pin surface (M2-007)
+
+Engagements will store `attack_version` (M3). M2 ships the catalog and resolve
+helpers so that column has one definition:
+
+| Method | Path | Authz |
+|---|---|---|
+| GET | `/content/attack/versions` | `content.read` |
+| GET | `/content/attack/versions/{version}` | `content.read` (includes per-family counts) |
+| GET | `/content/attack/versions/{version}/techniques/{externalId}` | `content.read` — **never** cross-version |
+| DELETE | `/content/attack/versions/{version}` | `content.manage` — 409 if referenced |
+
+Domain package: `internal/content/attackpin`
+(`ListVersions`, `Resolve`, `ResolveTechnique`, `AssertPinned`, `DeleteVersion`).
+
+`AssertPinned` requires: version exists, ATT&CK source enabled, status `ready`,
+`item_count > 0`.
+
+Delete isolation: removing version X never mutates version Y. External ref
+counts go through `attackpin.References.AttackVersion` (M2 stub returns 0; M3
+implements). Activity verb: `content.version.deleted`.
+
+Copy-on-use for steps: [content-copy-on-use.md](content-copy-on-use.md).
 
 ## Failure behaviour
 
@@ -99,4 +137,4 @@ All require `content.read`. Objects from **disabled** sources are omitted
 ## Related
 
 - Offline bundle contract: [`content-bundles.md`](content-bundles.md)
-- Version pin surface for engagements: ticket `M2-007`
+- Copy-on-use (steps snapshot catalog fields): [`content-copy-on-use.md`](content-copy-on-use.md)

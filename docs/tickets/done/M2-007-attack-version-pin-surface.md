@@ -49,14 +49,14 @@ Review this with the same care as `M1-012`.
 
 ## Acceptance criteria
 
-- [ ] `ResolveTechnique("15.1", "T1059.001")` after installing 14.1 and 15.1 fixtures returns the
+- [x] `ResolveTechnique("15.1", "T1059.001")` after installing 14.1 and 15.1 fixtures returns the
       15.1 row only; wrong version → not-found even if the external id exists elsewhere.
-- [ ] `AssertPinned` fails for missing, empty, or disabled-source versions.
-- [ ] Version delete with zero refs succeeds and removes that version's object rows only.
-- [ ] There is exactly one normalization rule for version strings, tested with the confusing cases
+- [x] `AssertPinned` fails for missing, empty, or disabled-source versions.
+- [x] Version delete with zero refs succeeds and removes that version's object rows only.
+- [x] There is exactly one normalization rule for version strings, tested with the confusing cases
       you choose to accept or reject.
-- [ ] `docs/` contract page exists and is linked from the epic / contributing content section.
-- [ ] M3 extension interface for ref counts compiles with a stub that always returns 0.
+- [x] `docs/` contract page exists and is linked from the epic / contributing content section.
+- [x] M3 extension interface for ref counts compiles with a stub that always returns 0.
 
 ## Tests
 
@@ -70,3 +70,21 @@ Review this with the same care as `M1-012`.
   pin-sensitive endpoints — require the version path param. Broader library search may default to
   latest **only if** the response includes the version used.
 - Prefer typed errors (`ErrVersionNotFound`, `ErrNotReferencable`) mapped once to problem codes.
+
+## Implementation notes
+
+- Package: `internal/content/attackpin` — `ListVersions`, `Resolve`/`ResolveDetail`,
+  `ResolveTechnique`, `AssertPinned`, `DeleteVersion`, `NormalizeVersion`,
+  `References` + `NopReferences`, typed errors + `MapError`.
+- Version rule: TrimSpace only; reject empty/internal whitespace/`__staging__`/`current`.
+  **No** leading-`v` strip — `15.1` ≠ `v15.1` (tested). Documented in
+  `docs/content-attack.md` § Version strings.
+- Healthy pin: source enabled + status `ready` + `item_count > 0`.
+- Store: `Objects.TechniqueByExternal`, `Objects.CountFamilies`,
+  `Versions.DeleteAttackCatalog` (objects + version row, one txn, After hook).
+- HTTP (spec-first): `GET/DELETE /content/attack/versions…` under `content.read` /
+  `content.manage`. Pin-sensitive technique resolve requires version path param.
+- Activity: `content.version.deleted` on `content_source_version`.
+- Copy-on-use contract: `docs/content-copy-on-use.md` (linked from
+  `docs/content-attack.md` and M2-EPIC pin-surface row).
+- M3 ref extension: `attackpin.References.AttackVersion`; M2 wires `NopReferences`.

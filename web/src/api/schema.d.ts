@@ -1662,6 +1662,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/attack/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List installed ATT&CK versions.
+         * @description Any authenticated subject (`content.read`). Returns every version
+         *     snapshot under the ATT&CK source with item counts and `syncedAt`.
+         *
+         *     The version string is an opaque release label equal to
+         *     `content_source_version.version` (for example `15.1`). There is no
+         *     semver rewriting and no implicit "latest" — pin-sensitive callers must
+         *     name the version they mean. See `docs/content-attack.md` and
+         *     `docs/content-copy-on-use.md`.
+         */
+        get: operations["listContentAttackVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/attack/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one installed ATT&CK version and family counts.
+         * @description Any authenticated subject. Exact match on the version path param —
+         *     `15.1` does not resolve `v15.1`. Unknown version → `404`.
+         */
+        get: operations["getContentAttackVersion"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete one ATT&CK version catalog.
+         * @description Administrators only (`content.manage`). Removes that version's object
+         *     rows and version snapshot only — other installed versions are
+         *     untouched.
+         *
+         *     When anything outside content still references the pin, answers `409`
+         *     with counts rather than cascading. In M2 those refs do not exist yet
+         *     (M3 implements `References.AttackVersion`); a version with zero refs
+         *     always deletes.
+         *
+         *     Records activity `content.version.deleted`.
+         */
+        delete: operations["deleteContentAttackVersion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/attack/versions/{version}/techniques/{externalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve a technique by ATT&CK version and MITRE id.
+         * @description Any authenticated subject. Looks up the technique natural key inside
+         *     **exactly** the named version. Never falls back to another installed
+         *     version — a technique that exists only in `15.1` is `404` under `14.1`.
+         *
+         *     The version path param is required; there is no default "latest" on
+         *     this pin-sensitive endpoint.
+         */
+        get: operations["getContentAttackTechniqueByExternalId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -2896,6 +2982,52 @@ export interface components {
         ContentSoftwareList: {
             items: components["schemas"]["ContentSoftware"][];
         };
+        /**
+         * @description One installed ATT&CK release as the pin surface exposes it. The
+         *     `version` string is what engagements will store as `attack_version`
+         *     (M3) — opaque equality to `content_source_version.version`.
+         */
+        ContentAttackVersion: {
+            /**
+             * @description Release label (for example `15.1`).
+             * @example 15.1
+             */
+            version: string;
+            status: components["schemas"]["ContentSourceVersionStatus"];
+            /** Format: int64 */
+            itemCount: number;
+            /**
+             * Format: date-time
+             * @description When this version last finished successfully. Absent if never.
+             */
+            syncedAt?: string;
+            /**
+             * @description Whether the ATT&CK source is currently enabled. A disabled source
+             *     cannot accept new pins even when this version row is ready.
+             */
+            sourceEnabled: boolean;
+        };
+        /** @description Object counts by family for one ATT&CK version. */
+        ContentAttackVersionCounts: {
+            /** Format: int64 */
+            tactics: number;
+            /** Format: int64 */
+            techniques: number;
+            /** Format: int64 */
+            mitigations: number;
+            /** Format: int64 */
+            groups: number;
+            /** Format: int64 */
+            software: number;
+            /** Format: int64 */
+            dataSources: number;
+        };
+        ContentAttackVersionDetail: components["schemas"]["ContentAttackVersion"] & {
+            counts: components["schemas"]["ContentAttackVersionCounts"];
+        };
+        ContentAttackVersionList: {
+            items: components["schemas"]["ContentAttackVersion"][];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -3111,6 +3243,14 @@ export interface components {
         ContentMitigationId: string;
         ContentGroupId: string;
         ContentSoftwareId: string;
+        /**
+         * @description ATT&CK release label exactly as stored (for example `15.1`). Opaque
+         *     text — no leading `v`, no semver rewriting. Surrounding whitespace is
+         *     trimmed once; internal whitespace is rejected.
+         */
+        ContentAttackVersionLabel: string;
+        /** @description MITRE technique id (`T1059`, `T1059.001`). */
+        ContentAttackExternalId: string;
     };
     requestBodies: never;
     headers: never;
@@ -5526,6 +5666,144 @@ export interface operations {
                     "application/json": components["schemas"]["ContentSoftware"];
                 };
             };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentAttackVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed ATT&CK versions, version then id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentAttackVersionList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentAttackVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ATT&CK release label exactly as stored (for example `15.1`). Opaque
+                 *     text — no leading `v`, no semver rewriting. Surrounding whitespace is
+                 *     trimmed once; internal whitespace is rejected.
+                 */
+                version: components["parameters"]["ContentAttackVersionLabel"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version and per-family object counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentAttackVersionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteContentAttackVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /**
+                 * @description ATT&CK release label exactly as stored (for example `15.1`). Opaque
+                 *     text — no leading `v`, no semver rewriting. Surrounding whitespace is
+                 *     trimmed once; internal whitespace is rejected.
+                 */
+                version: components["parameters"]["ContentAttackVersionLabel"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version catalog is gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getContentAttackTechniqueByExternalId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ATT&CK release label exactly as stored (for example `15.1`). Opaque
+                 *     text — no leading `v`, no semver rewriting. Surrounding whitespace is
+                 *     trimmed once; internal whitespace is rejected.
+                 */
+                version: components["parameters"]["ContentAttackVersionLabel"];
+                /** @description MITRE technique id (`T1059`, `T1059.001`). */
+                externalId: components["parameters"]["ContentAttackExternalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The technique in that version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentTechnique"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

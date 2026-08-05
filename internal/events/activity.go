@@ -85,20 +85,26 @@ const (
 	VerbContentSyncFinished  Verb = "content.sync.finished"
 	VerbContentSyncFailed    Verb = "content.sync.failed"
 	VerbContentSyncCancelled Verb = "content.sync.cancelled"
+
+	// Content version lifecycle (M2-007). Object is the version row; the
+	// release label lives in the delta so a feed filtered by pin string does
+	// not need a join.
+	VerbContentVersionDeleted Verb = "content.version.deleted"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
 const (
-	ObjectUser           = "user"
-	ObjectSession        = "session"
-	ObjectToken          = "service_token"
-	ObjectTOTP           = "totp"
-	ObjectRecoveryCode   = "recovery_code"
-	ObjectIdentity       = "identity"
-	ObjectLogin          = "login"
-	ObjectContentSource  = "content_source"
-	ObjectContentSyncJob = "content_sync_job"
+	ObjectUser                 = "user"
+	ObjectSession              = "session"
+	ObjectToken                = "service_token"
+	ObjectTOTP                 = "totp"
+	ObjectRecoveryCode         = "recovery_code"
+	ObjectIdentity             = "identity"
+	ObjectLogin                = "login"
+	ObjectContentSource        = "content_source"
+	ObjectContentSyncJob       = "content_sync_job"
+	ObjectContentSourceVersion = "content_source_version"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

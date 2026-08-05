@@ -465,6 +465,7 @@ var csrfCoverage = map[string]struct {
 	},
 	"POST " + BasePath + "/content/sources/{sourceId}/reprocess": {body: `{}`},
 	"POST " + BasePath + "/content/jobs/{jobId}/cancel":          {body: ""},
+	"DELETE " + BasePath + "/content/attack/versions/{version}":  {body: ""},
 
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request

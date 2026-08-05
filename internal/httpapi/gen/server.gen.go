@@ -479,6 +479,65 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"newPassword"`
 }
 
+// ContentAttackVersion One installed ATT&CK release as the pin surface exposes it. The
+// `version` string is what engagements will store as `attack_version`
+// (M3) — opaque equality to `content_source_version.version`.
+type ContentAttackVersion struct {
+	ItemCount int64 `json:"itemCount"`
+
+	// SourceEnabled Whether the ATT&CK source is currently enabled. A disabled source
+	// cannot accept new pins even when this version row is ready.
+	SourceEnabled bool `json:"sourceEnabled"`
+
+	// Status State of one version snapshot under a source.
+	Status ContentSourceVersionStatus `json:"status"`
+
+	// SyncedAt When this version last finished successfully. Absent if never.
+	SyncedAt *time.Time `json:"syncedAt,omitempty"`
+
+	// Version Release label (for example `15.1`).
+	//
+	// Examples: 15.1
+	Version string `json:"version"`
+}
+
+// ContentAttackVersionCounts Object counts by family for one ATT&CK version.
+type ContentAttackVersionCounts struct {
+	DataSources int64 `json:"dataSources"`
+	Groups      int64 `json:"groups"`
+	Mitigations int64 `json:"mitigations"`
+	Software    int64 `json:"software"`
+	Tactics     int64 `json:"tactics"`
+	Techniques  int64 `json:"techniques"`
+}
+
+// ContentAttackVersionDetail defines model for ContentAttackVersionDetail.
+type ContentAttackVersionDetail struct {
+	// Counts Object counts by family for one ATT&CK version.
+	Counts    ContentAttackVersionCounts `json:"counts"`
+	ItemCount int64                      `json:"itemCount"`
+
+	// SourceEnabled Whether the ATT&CK source is currently enabled. A disabled source
+	// cannot accept new pins even when this version row is ready.
+	SourceEnabled bool `json:"sourceEnabled"`
+
+	// Status State of one version snapshot under a source.
+	Status ContentSourceVersionStatus `json:"status"`
+
+	// SyncedAt When this version last finished successfully. Absent if never.
+	SyncedAt *time.Time `json:"syncedAt,omitempty"`
+
+	// Version Release label (for example `15.1`).
+	//
+	// Examples: 15.1
+	Version string `json:"version"`
+}
+
+// ContentAttackVersionList defines model for ContentAttackVersionList.
+type ContentAttackVersionList struct {
+	Items []ContentAttackVersion `json:"items"`
+}
+
 // ContentGroup defines model for ContentGroup.
 type ContentGroup struct {
 	CreatedAt   time.Time `json:"createdAt"`
@@ -1631,6 +1690,12 @@ type ActivityVerb = string
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
 
+// ContentAttackExternalId defines model for ContentAttackExternalId.
+type ContentAttackExternalId = string
+
+// ContentAttackVersionLabel defines model for ContentAttackVersionLabel.
+type ContentAttackVersionLabel = string
+
 // ContentGroupId defines model for ContentGroupId.
 type ContentGroupId = openapi_types.UUID
 
@@ -1998,6 +2063,25 @@ type CreateServiceTokenParams struct {
 
 // RevokeServiceTokenParams defines parameters for RevokeServiceToken.
 type RevokeServiceTokenParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DeleteContentAttackVersionParams defines parameters for DeleteContentAttackVersion.
+type DeleteContentAttackVersionParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
 	// `bl_csrf` cookie, echoed back in this header.
 	//
@@ -2618,6 +2702,18 @@ type ServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
+	// ListContentAttackVersions List installed ATT&CK versions.
+	// (GET /content/attack/versions)
+	ListContentAttackVersions(w http.ResponseWriter, r *http.Request)
+	// DeleteContentAttackVersion Delete one ATT&CK version catalog.
+	// (DELETE /content/attack/versions/{version})
+	DeleteContentAttackVersion(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, params DeleteContentAttackVersionParams)
+	// GetContentAttackVersion Read one installed ATT&CK version and family counts.
+	// (GET /content/attack/versions/{version})
+	GetContentAttackVersion(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel)
+	// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
+	// (GET /content/attack/versions/{version}/techniques/{externalId})
+	GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId)
 	// ListContentGroups List ATT&CK groups.
 	// (GET /content/groups)
 	ListContentGroups(w http.ResponseWriter, r *http.Request, params ListContentGroupsParams)
@@ -2879,6 +2975,30 @@ func (_ Unimplemented) CreateServiceToken(w http.ResponseWriter, r *http.Request
 // RevokeServiceToken Revoke one of your own service tokens.
 // (DELETE /auth/tokens/{tokenId})
 func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentAttackVersions List installed ATT&CK versions.
+// (GET /content/attack/versions)
+func (_ Unimplemented) ListContentAttackVersions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteContentAttackVersion Delete one ATT&CK version catalog.
+// (DELETE /content/attack/versions/{version})
+func (_ Unimplemented) DeleteContentAttackVersion(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, params DeleteContentAttackVersionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentAttackVersion Read one installed ATT&CK version and family counts.
+// (GET /content/attack/versions/{version})
+func (_ Unimplemented) GetContentAttackVersion(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
+// (GET /content/attack/versions/{version}/techniques/{externalId})
+func (_ Unimplemented) GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3912,6 +4032,131 @@ func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeServiceToken(w, r, tokenId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentAttackVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListContentAttackVersions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentAttackVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteContentAttackVersion operation middleware
+func (siw *ServerInterfaceWrapper) DeleteContentAttackVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "version" -------------
+	var version ContentAttackVersionLabel
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteContentAttackVersionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteContentAttackVersion(w, r, version, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentAttackVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetContentAttackVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "version" -------------
+	var version ContentAttackVersionLabel
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentAttackVersion(w, r, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetContentAttackTechniqueByExternalId operation middleware
+func (siw *ServerInterfaceWrapper) GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "version" -------------
+	var version ContentAttackVersionLabel
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "externalId" -------------
+	var externalId ContentAttackExternalId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "externalId", chi.URLParam(r, "externalId"), &externalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "externalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetContentAttackTechniqueByExternalId(w, r, version, externalId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6027,6 +6272,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/content/software/{softwareId}", wrapper.GetContentSoftware)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/content/attack/versions/{version}", wrapper.DeleteContentAttackVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/attack/versions/{version}", wrapper.GetContentAttackVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/attack/versions/{version}/techniques/{externalId}", wrapper.GetContentAttackTechniqueByExternalId)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.SubscribeEvents)
 	})
 
@@ -7944,6 +8201,393 @@ type RevokeServiceToken500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackVersionsRequestObject struct {
+}
+
+type ListContentAttackVersionsResponseObject interface {
+	VisitListContentAttackVersionsResponse(w http.ResponseWriter) error
+}
+
+type ListContentAttackVersions200JSONResponse ContentAttackVersionList
+
+func (response ListContentAttackVersions200JSONResponse) VisitListContentAttackVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackVersions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackVersions401ApplicationProblemPlusJSONResponse) VisitListContentAttackVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackVersions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackVersions403ApplicationProblemPlusJSONResponse) VisitListContentAttackVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackVersions500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackVersions500ApplicationProblemPlusJSONResponse) VisitListContentAttackVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentAttackVersionRequestObject struct {
+	Version ContentAttackVersionLabel `json:"version"`
+	Params  DeleteContentAttackVersionParams
+}
+
+type DeleteContentAttackVersionResponseObject interface {
+	VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error
+}
+
+type DeleteContentAttackVersion204Response struct {
+}
+
+func (response DeleteContentAttackVersion204Response) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteContentAttackVersion400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentAttackVersion400ApplicationProblemPlusJSONResponse) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentAttackVersion401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentAttackVersion401ApplicationProblemPlusJSONResponse) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentAttackVersion403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentAttackVersion403ApplicationProblemPlusJSONResponse) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentAttackVersion404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentAttackVersion404ApplicationProblemPlusJSONResponse) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentAttackVersion409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentAttackVersion409ApplicationProblemPlusJSONResponse) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteContentAttackVersion500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteContentAttackVersion500ApplicationProblemPlusJSONResponse) VisitDeleteContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackVersionRequestObject struct {
+	Version ContentAttackVersionLabel `json:"version"`
+}
+
+type GetContentAttackVersionResponseObject interface {
+	VisitGetContentAttackVersionResponse(w http.ResponseWriter) error
+}
+
+type GetContentAttackVersion200JSONResponse ContentAttackVersionDetail
+
+func (response GetContentAttackVersion200JSONResponse) VisitGetContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackVersion400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackVersion400ApplicationProblemPlusJSONResponse) VisitGetContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackVersion401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackVersion401ApplicationProblemPlusJSONResponse) VisitGetContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackVersion403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackVersion403ApplicationProblemPlusJSONResponse) VisitGetContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackVersion404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackVersion404ApplicationProblemPlusJSONResponse) VisitGetContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackVersion500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackVersion500ApplicationProblemPlusJSONResponse) VisitGetContentAttackVersionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackTechniqueByExternalIdRequestObject struct {
+	Version    ContentAttackVersionLabel `json:"version"`
+	ExternalId ContentAttackExternalId   `json:"externalId"`
+}
+
+type GetContentAttackTechniqueByExternalIdResponseObject interface {
+	VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error
+}
+
+type GetContentAttackTechniqueByExternalId200JSONResponse ContentTechnique
+
+func (response GetContentAttackTechniqueByExternalId200JSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackTechniqueByExternalId400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackTechniqueByExternalId400ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackTechniqueByExternalId401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackTechniqueByExternalId401ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackTechniqueByExternalId403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackTechniqueByExternalId403ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackTechniqueByExternalId404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackTechniqueByExternalId404ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetContentAttackTechniqueByExternalId500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetContentAttackTechniqueByExternalId500ApplicationProblemPlusJSONResponse) VisitGetContentAttackTechniqueByExternalIdResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -11738,6 +12382,18 @@ type StrictServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
+	// ListContentAttackVersions List installed ATT&CK versions.
+	// (GET /content/attack/versions)
+	ListContentAttackVersions(ctx context.Context, request ListContentAttackVersionsRequestObject) (ListContentAttackVersionsResponseObject, error)
+	// DeleteContentAttackVersion Delete one ATT&CK version catalog.
+	// (DELETE /content/attack/versions/{version})
+	DeleteContentAttackVersion(ctx context.Context, request DeleteContentAttackVersionRequestObject) (DeleteContentAttackVersionResponseObject, error)
+	// GetContentAttackVersion Read one installed ATT&CK version and family counts.
+	// (GET /content/attack/versions/{version})
+	GetContentAttackVersion(ctx context.Context, request GetContentAttackVersionRequestObject) (GetContentAttackVersionResponseObject, error)
+	// GetContentAttackTechniqueByExternalId Resolve a technique by ATT&CK version and MITRE id.
+	// (GET /content/attack/versions/{version}/techniques/{externalId})
+	GetContentAttackTechniqueByExternalId(ctx context.Context, request GetContentAttackTechniqueByExternalIdRequestObject) (GetContentAttackTechniqueByExternalIdResponseObject, error)
 	// ListContentGroups List ATT&CK groups.
 	// (GET /content/groups)
 	ListContentGroups(ctx context.Context, request ListContentGroupsRequestObject) (ListContentGroupsResponseObject, error)
@@ -12541,6 +13197,110 @@ func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeServiceTokenResponseObject); ok {
 		if err := validResponse.VisitRevokeServiceTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentAttackVersions operation middleware
+func (sh *strictHandler) ListContentAttackVersions(w http.ResponseWriter, r *http.Request) {
+	var request ListContentAttackVersionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentAttackVersions(ctx, request.(ListContentAttackVersionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentAttackVersions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentAttackVersionsResponseObject); ok {
+		if err := validResponse.VisitListContentAttackVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteContentAttackVersion operation middleware
+func (sh *strictHandler) DeleteContentAttackVersion(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, params DeleteContentAttackVersionParams) {
+	var request DeleteContentAttackVersionRequestObject
+
+	request.Version = version
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteContentAttackVersion(ctx, request.(DeleteContentAttackVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteContentAttackVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteContentAttackVersionResponseObject); ok {
+		if err := validResponse.VisitDeleteContentAttackVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentAttackVersion operation middleware
+func (sh *strictHandler) GetContentAttackVersion(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel) {
+	var request GetContentAttackVersionRequestObject
+
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentAttackVersion(ctx, request.(GetContentAttackVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentAttackVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentAttackVersionResponseObject); ok {
+		if err := validResponse.VisitGetContentAttackVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetContentAttackTechniqueByExternalId operation middleware
+func (sh *strictHandler) GetContentAttackTechniqueByExternalId(w http.ResponseWriter, r *http.Request, version ContentAttackVersionLabel, externalId ContentAttackExternalId) {
+	var request GetContentAttackTechniqueByExternalIdRequestObject
+
+	request.Version = version
+	request.ExternalId = externalId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetContentAttackTechniqueByExternalId(ctx, request.(GetContentAttackTechniqueByExternalIdRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetContentAttackTechniqueByExternalId")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetContentAttackTechniqueByExternalIdResponseObject); ok {
+		if err := validResponse.VisitGetContentAttackTechniqueByExternalIdResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

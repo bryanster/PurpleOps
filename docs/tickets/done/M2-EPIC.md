@@ -20,7 +20,7 @@ directly replacing v1's ~1 GB git-clone-on-first-boot.
 | Authz | **Platform admin** for every content mutation. `content.read` for everyone (members see empty CTA until an admin installs). |
 | ATT&CK domain | **Enterprise only.** |
 | Version model | **One `content_source`, many version snapshots** for ATT&CK. Atomic / Sigma / CTID are **single rolling head** (re-sync replaces catalog). |
-| Pin surface | **M2** ships version catalog + resolve helpers + invariants; **M3** wires `engagement.attack_version`. |
+| Pin surface | **M2** ships version catalog + resolve helpers + invariants (`internal/content/attackpin`, `docs/content-copy-on-use.md`); **M3** wires `engagement.attack_version`. |
 | Fetch | **HTTPS release archives / known bundle URLs** — no git binary. Offline bundle is the same bytes. |
 | Custom entities | `procedure_template` + `detection_rule_ref` + `content_note` (KB). Not custom tactics/techniques. |
 | Concurrency | **One sync job globally.** Fetch may be slow; writes stay on the serialized writer. |

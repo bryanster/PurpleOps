@@ -2768,6 +2768,145 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /content/attack/versions:
+    get:
+      operationId: listContentAttackVersions
+      summary: List installed ATT&CK versions.
+      description: |
+        Any authenticated subject (`content.read`). Returns every version
+        snapshot under the ATT&CK source with item counts and `syncedAt`.
+
+        The version string is an opaque release label equal to
+        `content_source_version.version` (for example `15.1`). There is no
+        semver rewriting and no implicit "latest" — pin-sensitive callers must
+        name the version they mean. See `docs/content-attack.md` and
+        `docs/content-copy-on-use.md`.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      responses:
+        "200":
+          description: Installed ATT&CK versions, version then id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentAttackVersionList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/attack/versions/{version}:
+    get:
+      operationId: getContentAttackVersion
+      summary: Read one installed ATT&CK version and family counts.
+      description: |
+        Any authenticated subject. Exact match on the version path param —
+        `15.1` does not resolve `v15.1`. Unknown version → `404`.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentAttackVersionLabel"
+      responses:
+        "200":
+          description: The version and per-family object counts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentAttackVersionDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteContentAttackVersion
+      summary: Delete one ATT&CK version catalog.
+      description: |
+        Administrators only (`content.manage`). Removes that version's object
+        rows and version snapshot only — other installed versions are
+        untouched.
+
+        When anything outside content still references the pin, answers `409`
+        with counts rather than cascading. In M2 those refs do not exist yet
+        (M3 implements `References.AttackVersion`); a version with zero refs
+        always deletes.
+
+        Records activity `content.version.deleted`.
+      tags:
+        - content
+      x-authz-action: content.manage
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentAttackVersionLabel"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The version catalog is gone.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/attack/versions/{version}/techniques/{externalId}:
+    get:
+      operationId: getContentAttackTechniqueByExternalId
+      summary: Resolve a technique by ATT&CK version and MITRE id.
+      description: |
+        Any authenticated subject. Looks up the technique natural key inside
+        **exactly** the named version. Never falls back to another installed
+        version — a technique that exists only in `15.1` is `404` under `14.1`.
+
+        The version path param is required; there is no default "latest" on
+        this pin-sensitive endpoint.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      parameters:
+        - $ref: "#/components/parameters/ContentAttackVersionLabel"
+        - $ref: "#/components/parameters/ContentAttackExternalId"
+      responses:
+        "200":
+          description: The technique in that version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentTechnique"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
   /events:
     get:
       operationId: subscribeEvents
@@ -3193,6 +3332,30 @@ components:
       schema:
         type: string
         format: uuid
+
+    ContentAttackVersionLabel:
+      name: version
+      in: path
+      required: true
+      description: |
+        ATT&CK release label exactly as stored (for example `15.1`). Opaque
+        text — no leading `v`, no semver rewriting. Surrounding whitespace is
+        trimmed once; internal whitespace is rejected.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+
+    ContentAttackExternalId:
+      name: externalId
+      in: path
+      required: true
+      description: MITRE technique id (`T1059`, `T1059.001`).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+
 
 
   responses:
@@ -5155,3 +5318,92 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentSoftware"
+
+    ContentAttackVersion:
+      type: object
+      description: |
+        One installed ATT&CK release as the pin surface exposes it. The
+        `version` string is what engagements will store as `attack_version`
+        (M3) — opaque equality to `content_source_version.version`.
+      required:
+        - version
+        - status
+        - itemCount
+        - sourceEnabled
+      properties:
+        version:
+          type: string
+          description: Release label (for example `15.1`).
+          examples:
+            - "15.1"
+        status:
+          $ref: "#/components/schemas/ContentSourceVersionStatus"
+        itemCount:
+          type: integer
+          format: int64
+          minimum: 0
+        syncedAt:
+          type: string
+          format: date-time
+          description: When this version last finished successfully. Absent if never.
+        sourceEnabled:
+          type: boolean
+          description: |
+            Whether the ATT&CK source is currently enabled. A disabled source
+            cannot accept new pins even when this version row is ready.
+
+    ContentAttackVersionCounts:
+      type: object
+      description: Object counts by family for one ATT&CK version.
+      required:
+        - tactics
+        - techniques
+        - mitigations
+        - groups
+        - software
+        - dataSources
+      properties:
+        tactics:
+          type: integer
+          format: int64
+          minimum: 0
+        techniques:
+          type: integer
+          format: int64
+          minimum: 0
+        mitigations:
+          type: integer
+          format: int64
+          minimum: 0
+        groups:
+          type: integer
+          format: int64
+          minimum: 0
+        software:
+          type: integer
+          format: int64
+          minimum: 0
+        dataSources:
+          type: integer
+          format: int64
+          minimum: 0
+
+    ContentAttackVersionDetail:
+      allOf:
+        - $ref: "#/components/schemas/ContentAttackVersion"
+        - type: object
+          required:
+            - counts
+          properties:
+            counts:
+              $ref: "#/components/schemas/ContentAttackVersionCounts"
+
+    ContentAttackVersionList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentAttackVersion"

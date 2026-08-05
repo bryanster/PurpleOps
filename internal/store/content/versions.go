@@ -218,6 +218,40 @@ func (r *Versions) Delete(ctx context.Context, id string) error {
 	})
 }
 
+// DeleteAttackCatalog removes every ATT&CK object row for (sourceID, version)
+// and the matching content_source_version row in one write transaction.
+//
+// after runs after the version row is gone, still inside the transaction, so
+// activity (M2-007 content.version.deleted) and the delete share a commit.
+// The deleted version row id is available as [AfterEntityID].
+//
+// Product rules that refuse a delete (external refs) live above this package.
+func (r *Versions) DeleteAttackCatalog(ctx context.Context, sourceID, version string, after ...After) (SourceVersion, error) {
+	before, err := r.BySourceVersion(ctx, sourceID, version)
+	if err != nil {
+		return SourceVersion{}, err
+	}
+	err = r.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := clearAttackVersionTx(ctx, tx, sourceID, version); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx,
+			`DELETE FROM content.content_source_version WHERE id = ?`, before.ID,
+		)
+		if err != nil {
+			return fmt.Errorf("content: delete version %s: %w", before.ID, err)
+		}
+		if err := requireOneRow(res, "content_source_version", before.ID); err != nil {
+			return err
+		}
+		return runAfter(WithAfterEntity(ctx, before.ID), tx, after)
+	})
+	if err != nil {
+		return SourceVersion{}, err
+	}
+	return before, nil
+}
+
 func scanVersion(row interface{ Scan(...any) error }) (SourceVersion, error) {
 	var (
 		v        SourceVersion

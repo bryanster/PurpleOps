@@ -26,6 +26,7 @@ import (
 	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/content/attack"
+	"github.com/bryanster/blacklight/internal/content/attackpin"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -508,6 +509,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	sources := storecontent.NewSources(deps.Store)
 	versions := storecontent.NewVersions(deps.Store, paths)
 	jobs := storecontent.NewJobs(deps.Store)
+	objects := storecontent.NewObjects(deps.Store)
 	registry, err := content.New(content.Deps{
 		Sources:  sources,
 		Versions: versions,
@@ -519,6 +521,17 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		// programming error at this call site rather than a runtime condition.
 		// Panicking keeps NewServer's signature and forces the bug loud.
 		panic("httpapi: content registry: " + err.Error())
+	}
+	pin, err := attackpin.New(attackpin.Deps{
+		Sources:  sources,
+		Versions: versions,
+		Objects:  objects,
+		Paths:    paths,
+		Activity: activityLog,
+		Refs:     attackpin.NopReferences{},
+	})
+	if err != nil {
+		panic("httpapi: attackpin: " + err.Error())
 	}
 
 	adapters := deps.ContentAdapters
@@ -580,7 +593,8 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			activity:        activityLog,
 			content:         registry,
 			runner:          runner,
-			objects:         storecontent.NewObjects(deps.Store),
+			objects:         objects,
+			attackpin:       pin,
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,
 			signInURL:       signInURL(deps.Config),

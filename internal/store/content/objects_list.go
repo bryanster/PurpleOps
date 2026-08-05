@@ -181,6 +181,69 @@ func (r *Objects) MitigationByIDEnabled(ctx context.Context, id string, enabledO
 	return m, nil
 }
 
+// TechniqueByExternal returns the technique for the natural key
+// (sourceID, version, externalID), or [apierr.NotFound].
+//
+// The lookup is exact on all three parts — it never falls back to another
+// version. Pin-sensitive callers (M2-007) depend on that isolation.
+func (r *Objects) TechniqueByExternal(ctx context.Context, sourceID, version, externalID string) (Technique, error) {
+	row := r.db.Read().QueryRowContext(ctx, `
+		SELECT id, source_id, version, external_id, name, description,
+			is_subtechnique, parent_external_id, created_at, updated_at
+		FROM content.content_technique
+		WHERE source_id = ? AND version = ? AND external_id = ?`,
+		sourceID, version, externalID,
+	)
+	var t Technique
+	err := row.Scan(
+		&t.ID, &t.SourceID, &t.Version, &t.ExternalID, &t.Name, &t.Description,
+		&t.IsSubtechnique, &t.ParentExternalID, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return Technique{}, wrapObjErr(err, "content_technique", sourceID+"/"+version+"/"+externalID)
+	}
+	t.CreatedAt = t.CreatedAt.UTC()
+	t.UpdatedAt = t.UpdatedAt.UTC()
+	return t, nil
+}
+
+// ObjectFamilyCounts is the per-type object tally for one ATT&CK version.
+type ObjectFamilyCounts struct {
+	Tactics     int64
+	Techniques  int64
+	Mitigations int64
+	Groups      int64
+	Software    int64
+	DataSources int64
+}
+
+// CountFamilies returns object counts by family for (sourceID, version).
+func (r *Objects) CountFamilies(ctx context.Context, sourceID, version string) (ObjectFamilyCounts, error) {
+	var c ObjectFamilyCounts
+	tables := []struct {
+		name string
+		dst  *int64
+	}{
+		{"content_tactic", &c.Tactics},
+		{"content_technique", &c.Techniques},
+		{"content_mitigation", &c.Mitigations},
+		{"content_group", &c.Groups},
+		{"content_software", &c.Software},
+		{"content_data_source", &c.DataSources},
+	}
+	for _, t := range tables {
+		// Fixed table names from the closed list above — not caller input.
+		q := fmt.Sprintf(
+			`SELECT COUNT(*) FROM content.%s WHERE source_id = ? AND version = ?`,
+			t.name,
+		)
+		if err := r.db.Read().QueryRowContext(ctx, q, sourceID, version).Scan(t.dst); err != nil {
+			return ObjectFamilyCounts{}, fmt.Errorf("content: count %s: %w", t.name, err)
+		}
+	}
+	return c, nil
+}
+
 // ListGroups returns groups matching f.
 func (r *Objects) ListGroups(ctx context.Context, f ObjectListFilter) ([]Group, error) {
 	return listNamed[Group](ctx, r, f, "content_group", scanGroup)
