@@ -15,7 +15,7 @@ import { renderWithProviders } from '@/test/render'
 
 import { REFERENCE_ONLY_MESSAGE } from './detections-panel'
 import { LibraryPage } from './library-page'
-import { CONTENT_PATH, CONTENT_SOURCES_PATH } from './paths'
+import { CONTENT_CUSTOM_PATH, CONTENT_PATH, CONTENT_SOURCES_PATH } from './paths'
 
 const attackVersion15: components['schemas']['ContentAttackVersion'] = {
   version: '15.1',
@@ -183,8 +183,10 @@ describe('LibraryPage', () => {
     stubEmptyLibrary()
     renderLibrary(adminUserFixture)
 
-    const link = await screen.findByRole('link', { name: 'Open sources admin' })
-    expect(link).toHaveAttribute('href', CONTENT_SOURCES_PATH)
+    const sources = await screen.findByRole('link', { name: 'Open sources admin' })
+    expect(sources).toHaveAttribute('href', CONTENT_SOURCES_PATH)
+    const importLink = screen.getByRole('link', { name: 'Import v1 testcases' })
+    expect(importLink).toHaveAttribute('href', CONTENT_CUSTOM_PATH)
     expect(screen.queryByRole('button', { name: /sync/i })).not.toBeInTheDocument()
   })
 

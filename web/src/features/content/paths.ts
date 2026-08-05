@@ -9,3 +9,9 @@ export const CONTENT_PATH = '/content'
 
 /** Admin control plane for sources (M2-014). Linked from the empty library CTA. */
 export const CONTENT_SOURCES_PATH = '/admin/content/sources'
+
+/**
+ * Admin authoring surface for custom content + v1 import (M2-015).
+ * Linked from library empty states and the Administration nav.
+ */
+export const CONTENT_CUSTOM_PATH = '/admin/content/custom'

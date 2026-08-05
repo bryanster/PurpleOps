@@ -1,4 +1,5 @@
 import { type ReactNode, useId, useState } from 'react'
+import { Link } from 'react-router'
 
 import { PageEmpty, PageError, PageLoading } from '@/app/shell/page-state'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +15,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { useSignedInUser } from '@/features/auth/current-user'
+import { isAdmin } from '@/features/auth/queries'
+
+import { CONTENT_CUSTOM_PATH } from './paths'
 import {
   ANY,
   CopyBlock,
@@ -43,6 +48,8 @@ const PLATFORMS = [
  * flattened blob (PLAN.md §3).
  */
 export function ProceduresPanel(): ReactNode {
+  const user = useSignedInUser()
+  const admin = isAdmin(user)
   const [search, setSearch] = useState('')
   const [technique, setTechnique] = useState('')
   const [platform, setPlatform] = useState<string>(ANY)
@@ -100,7 +107,21 @@ export function ProceduresPanel(): ReactNode {
             description={
               filtered
                 ? 'Widen the search or clear the filters.'
-                : 'Install Atomic Red Team (or add a custom template) to populate this list.'
+                : admin
+                  ? 'Install Atomic Red Team, or create/import a custom template.'
+                  : 'Install Atomic Red Team (or ask an admin to add a custom template) to populate this list.'
+            }
+            action={
+              !filtered && admin ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={CONTENT_CUSTOM_PATH}>Create custom procedure</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={CONTENT_CUSTOM_PATH}>Import v1 testcases</Link>
+                  </Button>
+                </div>
+              ) : undefined
             }
           />
         ) : (

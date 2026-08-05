@@ -5,8 +5,9 @@ import { AppShell } from '@/app/shell/app-shell'
 import { AccountPage } from '@/features/account/account-page'
 import { ActivityPage } from '@/features/admin/activity-page'
 import { UsersPage } from '@/features/admin/users-page'
+import { CustomContentPage } from '@/features/content/custom-page'
 import { LibraryPage } from '@/features/content/library-page'
-import { CONTENT_PATH, CONTENT_SOURCES_PATH } from '@/features/content/paths'
+import { CONTENT_CUSTOM_PATH, CONTENT_PATH, CONTENT_SOURCES_PATH } from '@/features/content/paths'
 import { SourcesPage } from '@/features/content/sources-page'
 import { EnrolmentPage } from '@/features/auth/enrolment-page'
 import { RequireAdmin, RequireAuth } from '@/features/auth/guards'
@@ -68,6 +69,7 @@ export function AppRoutes(): ReactNode {
             <Route path={ADMIN_USERS_PATH} element={<UsersPage />} />
             <Route path={ADMIN_ACTIVITY_PATH} element={<ActivityPage />} />
             <Route path={CONTENT_SOURCES_PATH} element={<SourcesPage />} />
+            <Route path={CONTENT_CUSTOM_PATH} element={<CustomContentPage />} />
           </Route>
 
           <Route path="system/version" element={<VersionPage />} />

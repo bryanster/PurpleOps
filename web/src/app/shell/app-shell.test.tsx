@@ -155,7 +155,7 @@ describe('AppShell', () => {
     // order should fail this, and a loop that stops at the wrap would not
     // notice.
     const reachable: (Element | null)[] = []
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 12; i++) {
       await user.tab()
       reachable.push(document.activeElement)
     }

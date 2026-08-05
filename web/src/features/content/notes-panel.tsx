@@ -1,4 +1,5 @@
 import { type ReactNode, useId, useState } from 'react'
+import { Link } from 'react-router'
 
 import { PageEmpty, PageError, PageLoading } from '@/app/shell/page-state'
 import { Badge } from '@/components/ui/badge'
@@ -14,14 +15,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { useSignedInUser } from '@/features/auth/current-user'
+import { isAdmin } from '@/features/auth/queries'
+
+import { CONTENT_CUSTOM_PATH } from './paths'
 import { DetailDrawer, FilterChrome, MetaRow } from './shared'
 import { useNote, useNotes, type ContentNote, type NoteFilters } from './queries'
 
 /**
- * Custom knowledge-base notes: list/search and a read-only detail. Creating and
- * editing belong to M2-015.
+ * Custom knowledge-base notes: list/search and a read-only detail. Authoring
+ * (create/edit/import) lives on the admin Custom content page (M2-015).
  */
 export function NotesPanel(): ReactNode {
+  const user = useSignedInUser()
+  const admin = isAdmin(user)
   const [search, setSearch] = useState('')
   const [technique, setTechnique] = useState('')
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
@@ -70,7 +77,21 @@ export function NotesPanel(): ReactNode {
             description={
               filtered
                 ? 'Widen the search or clear the filters.'
-                : 'Custom notes appear here once an administrator adds them.'
+                : admin
+                  ? 'Create a note or import knowledgebase YAML under Custom content.'
+                  : 'Custom notes appear here once an administrator adds them.'
+            }
+            action={
+              !filtered && admin ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={CONTENT_CUSTOM_PATH}>Create note</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={CONTENT_CUSTOM_PATH}>Import v1 testcases</Link>
+                  </Button>
+                </div>
+              ) : undefined
             }
           />
         ) : (

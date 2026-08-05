@@ -25,7 +25,7 @@ import { useSignedInUser } from '@/features/auth/current-user'
 import { isAdmin } from '@/features/auth/queries'
 import { cn } from '@/lib/utils'
 
-import { CONTENT_SOURCES_PATH } from './paths'
+import { CONTENT_CUSTOM_PATH, CONTENT_SOURCES_PATH } from './paths'
 import type { ContentAttackVersion } from './queries'
 
 /** Sentinel for "do not narrow by this filter". Not a real API value. */
@@ -47,14 +47,19 @@ export function EmptyLibrary(): ReactNode {
       title="No ATT&CK content installed"
       description={
         admin
-          ? 'Install an ATT&CK release from the sources admin before anyone can browse techniques.'
+          ? 'Install an ATT&CK release from the sources admin before anyone can browse techniques. Custom procedures and notes do not need ATT&CK — author or import them under Custom content.'
           : 'Ask an admin to install ATT&CK.'
       }
       action={
         admin ? (
-          <Button asChild variant="outline" size="sm">
-            <Link to={CONTENT_SOURCES_PATH}>Open sources admin</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={CONTENT_SOURCES_PATH}>Open sources admin</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to={CONTENT_CUSTOM_PATH}>Import v1 testcases</Link>
+            </Button>
+          </div>
         ) : undefined
       }
     />
