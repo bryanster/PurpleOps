@@ -31,6 +31,18 @@ const noop = (): void => {}
  * real browser and not of this one. They are no-ops: the tests assert what ends
  * up in the DOM, not how the pointer got there.
  */
+/**
+ * Radix measures elements with a ResizeObserver — the checkbox indicator and
+ * the select's popper both do — and jsdom implements none. The stub reports
+ * nothing, which is right for a DOM with no layout: the tests assert what is in
+ * the document, not what size it came out.
+ */
+globalThis.ResizeObserver = class {
+  observe = noop
+  unobserve = noop
+  disconnect = noop
+}
+
 Element.prototype.hasPointerCapture = () => false
 Element.prototype.setPointerCapture = noop
 Element.prototype.releasePointerCapture = noop

@@ -2,11 +2,10 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
+import { loginUrlFor } from '@/features/auth/return-to'
+
 import type { ApiError } from './errors'
 import { createQueryClient } from './query-client'
-
-/** Where a 401 sends the user. A placeholder route until M1-017 builds the form. */
-const LOGIN_PATH = '/login'
 
 /**
  * Owns the QueryClient and the two failures that are the whole app's problem
@@ -24,11 +23,16 @@ export function QueryProvider({ children }: { children: ReactNode }): ReactNode 
         // the SPA is served from this same origin (M0B-010) so it costs one
         // request.
         //
-        // Stub until M1-003: there are no sessions yet, so nothing can reach
-        // this. What matters now is that the decision lives in one place
-        // instead of in every component that makes a request.
-        if (window.location.pathname !== LOGIN_PATH) {
-          window.location.assign(LOGIN_PATH)
+        // This is the session-died-mid-use path only. A browser that simply has
+        // no session never reaches here — `SESSION_QUERY_KEY` in
+        // query-client.ts explains why — so this cannot fire on the sign-in
+        // screens, and the guard clause below is a second line of defence
+        // against a redirect loop rather than the mechanism.
+        const here = `${window.location.pathname}${window.location.search}`
+        if (!window.location.pathname.startsWith('/login')) {
+          // Carrying where they were, so that signing in again lands back on
+          // the screen the expiry interrupted rather than on the home page.
+          window.location.assign(loginUrlFor(here))
         }
       },
       onServerError: (error: ApiError) => {

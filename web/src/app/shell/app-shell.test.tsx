@@ -1,26 +1,43 @@
-import { render, screen, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
 import { THEME_STORAGE_KEY } from '@/app/theme/theme'
 import { ThemeProvider } from '@/app/theme/theme-provider'
+import { CurrentUserContext } from '@/features/auth/current-user'
+import type { CurrentUser } from '@/features/auth/queries'
+import { adminUserFixture, memberUserFixture } from '@/test/msw/handlers'
+import { createTestQueryClient } from '@/test/query'
 import { setSystemTheme } from '@/test/setup'
 
 import { AppShell } from './app-shell'
 
-function renderShell(): void {
+/**
+ * The shell renders below the auth guard (M1-017), so it is given a user and a
+ * QueryClient — the top bar reads the one and signs out through the other.
+ * Which user matters for the nav: an administrator sees entries a member does
+ * not.
+ */
+function renderShell(user: CurrentUser = adminUserFixture): void {
+  const { queryClient } = createTestQueryClient()
+
   render(
-    <ThemeProvider>
-      <MemoryRouter initialEntries={['/system/version']}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/system/version" element={<p>version screen</p>} />
-            <Route path="/system/health" element={<p>health screen</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </ThemeProvider>,
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <CurrentUserContext value={user}>
+          <MemoryRouter initialEntries={['/system/version']}>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path="/system/version" element={<p>version screen</p>} />
+                <Route path="/system/health" element={<p>health screen</p>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </CurrentUserContext>
+      </ThemeProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -46,6 +63,22 @@ describe('AppShell', () => {
     )
     expect(within(nav).getByRole('link', { name: 'Health' })).toBeInTheDocument()
     expect(screen.getByText('version screen')).toBeInTheDocument()
+  })
+
+  it('shows the administration entries to an administrator and not to a member', () => {
+    renderShell(adminUserFixture)
+    const adminNav = screen.getByRole('navigation', { name: 'Sections' })
+    expect(within(adminNav).getByRole('link', { name: 'Users' })).toBeInTheDocument()
+
+    cleanup()
+
+    renderShell(memberUserFixture)
+    const memberNav = screen.getByRole('navigation', { name: 'Sections' })
+    // Hiding is not what keeps them out — RequireAdmin and the server do that
+    // (guards.test.tsx) — but a nav that advertised a locked door would be
+    // describing somebody else's account.
+    expect(within(memberNav).queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
+    expect(within(memberNav).queryByText('Administration')).not.toBeInTheDocument()
   })
 
   it('lists unbuilt sections without putting them in the tab order', () => {
@@ -114,15 +147,20 @@ describe('AppShell', () => {
     const user = userEvent.setup()
     renderShell()
 
+    // One tab per focusable thing in the shell, which grew when the settings
+    // and administration entries arrived (M1-017). Deliberately a fixed number
+    // rather than "until it wraps": an element that quietly leaves the tab
+    // order should fail this, and a loop that stops at the wrap would not
+    // notice.
     const reachable: (Element | null)[] = []
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 10; i++) {
       await user.tab()
       reachable.push(document.activeElement)
     }
 
     expect(reachable).toContain(screen.getByRole('link', { name: 'Blacklight' }))
     expect(reachable).toContain(screen.getByRole('button', { name: /^Theme:/ }))
-    expect(reachable).toContain(screen.getByRole('button', { name: 'Account' }))
+    expect(reachable).toContain(screen.getByRole('button', { name: /^Account:/ }))
     expect(reachable).toContain(screen.getByRole('link', { name: 'Version' }))
     expect(reachable).toContain(screen.getByRole('link', { name: 'Health' }))
   })

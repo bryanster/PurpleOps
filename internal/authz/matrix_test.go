@@ -256,6 +256,27 @@ var matrix = []row{
 			Member: bySeat{allow, na, na, na, na},
 		},
 	},
+	{
+		// Sessions (M1-017) read the same as tokens do, and for the same two
+		// reasons: everybody holds them over their own rows only, and no
+		// service token holds them at all — a credential that could enumerate
+		// or end its owner's browsers is one that could act against the person
+		// holding it.
+		Action: authz.ActionSessionRead, Resource: authz.ResourceSession,
+		Scope: authz.TokenScopeAdminRead, Token: sessionOnly,
+		Platform: seats{
+			Admin:  bySeat{allow, na, na, na, na},
+			Member: bySeat{allow, na, na, na, na},
+		},
+	},
+	{
+		Action: authz.ActionSessionManage, Resource: authz.ResourceSession,
+		Scope: authz.TokenScopeAdminWrite, Token: sessionOnly,
+		Platform: seats{
+			Admin:  bySeat{allow, na, na, na, na},
+			Member: bySeat{allow, na, na, na, na},
+		},
+	},
 
 	// ── Engagement ──────────────────────────────────────────────────────────
 	//

@@ -1,6 +1,19 @@
-import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient, type QueryKey } from '@tanstack/react-query'
 
 import { ApiError } from './errors'
+
+/**
+ * The key of the query that answers "who is the caller" (`GET /auth/me`).
+ *
+ * It is declared here, rather than only in `features/auth`, because this module
+ * has to recognise it: a 401 from *that* query is the ordinary state of a
+ * browser with no session, and the route guard built on it redirects in-router
+ * while preserving where the user was going. A 401 from anything else means a
+ * session died mid-use, which is what [GlobalErrorHandlers.onUnauthorized] is
+ * for. `features/auth/queries.ts` builds its key from this constant, so the two
+ * cannot drift into disagreeing about which query is which.
+ */
+export const SESSION_QUERY_KEY = ['auth', 'me'] as const
 
 /** How many times a request is retried after the first attempt fails. */
 export const MAX_QUERY_RETRIES = 2
@@ -28,7 +41,10 @@ export function shouldRetryQuery(failureCount: number, error: Error): boolean {
  * (`query-provider.tsx`).
  */
 export interface GlobalErrorHandlers {
-  /** A session expired or was never there. Stubbed until M1-003 ships login. */
+  /**
+   * A session died while the application was being used. Not called for the
+   * session query itself — see [SESSION_QUERY_KEY].
+   */
   onUnauthorized: () => void
   /** The server broke. The user cannot act on it, so it is a toast, not a page. */
   onServerError: (error: ApiError) => void
@@ -44,8 +60,8 @@ export interface GlobalErrorHandlers {
 export function createQueryClient(handlers: GlobalErrorHandlers): QueryClient {
   return new QueryClient({
     queryCache: new QueryCache({
-      onError: (error) => {
-        reportGlobally(error, handlers)
+      onError: (error, query) => {
+        reportGlobally(error, handlers, query.queryKey)
       },
     }),
     mutationCache: new MutationCache({
@@ -94,15 +110,29 @@ export function createQueryClient(handlers: GlobalErrorHandlers): QueryClient {
  * Everything else — a 404, a validation failure, a network error — belongs to
  * the screen that made the request, which has the context to say what it means.
  */
-function reportGlobally(error: Error, handlers: GlobalErrorHandlers): void {
+function reportGlobally(error: Error, handlers: GlobalErrorHandlers, key?: QueryKey): void {
   if (!(error instanceof ApiError)) {
     return
   }
   if (error.status === 401) {
+    if (isSessionQuery(key)) {
+      // Asking who you are and being told "nobody" is not a failure worth
+      // navigating over: it is how a signed-out browser answers, and the route
+      // guard turns it into a redirect that keeps the intended destination.
+      return
+    }
     handlers.onUnauthorized()
     return
   }
   if (error.status >= 500) {
     handlers.onServerError(error)
   }
+}
+
+/** Whether a failed query was the session query. A mutation has no key. */
+function isSessionQuery(key: QueryKey | undefined): boolean {
+  return (
+    key?.length === SESSION_QUERY_KEY.length &&
+    SESSION_QUERY_KEY.every((segment, index) => key[index] === segment)
+  )
 }

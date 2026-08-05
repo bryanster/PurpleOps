@@ -172,6 +172,23 @@ var rules = []Rule{
 		Platform: everyone, Token: TokenScopeAdminWrite, Guard: GuardSessionOnly,
 		Summary: "Create and revoke your own service tokens. A signed-in session only, never a token itself."},
 
+	// Sessions (M1-017), and the same two paragraphs apply word for word: the
+	// endpoints only ever name the caller's own rows, so "everybody" here is
+	// scoping rather than permission, and [GuardSessionOnly] is the decision.
+	//
+	// The guard matters more here than it does above, because a session is the
+	// thing a service token is not. A token that could end its owner's browser
+	// sessions would be a leaked credential able to sign the person out while
+	// it kept working — and one that could *read* them would be a leaked
+	// credential enumerating where its owner is signed in from. Neither is
+	// something a token needs, and a token has no session of its own to manage.
+	{Action: ActionSessionRead, Name: "session.read", Resource: ResourceSession,
+		Platform: everyone, Token: TokenScopeAdminRead, Guard: GuardSessionOnly,
+		Summary: "List the browsers you are signed in on. Never the tokens in their cookies."},
+	{Action: ActionSessionManage, Name: "session.manage", Resource: ResourceSession,
+		Platform: everyone, Token: TokenScopeAdminWrite, Guard: GuardSessionOnly,
+		Summary: "Revoke your own sessions, one at a time or everywhere but here. A signed-in session only."},
+
 	// ── Engagement ──────────────────────────────────────────────────────────
 	{Action: ActionEngagementRead, Name: "engagement.read", Resource: ResourceEngagement,
 		Platform: admins, Engagement: allMembers, Token: TokenScopeEngagementsRead,

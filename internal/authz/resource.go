@@ -24,6 +24,11 @@ const (
 	// and where it may point is a separate question from who may hold it.
 	ResourceServiceToken ResourceType = "service_token"
 
+	// ResourceSession is a browser somebody is signed in on (M1-017). Owned by
+	// the platform for the same reason a service token is: it is a credential
+	// belonging to a person, and no engagement has a say in who holds it.
+	ResourceSession ResourceType = "session"
+
 	ResourceEngagement ResourceType = "engagement"
 	ResourceMember     ResourceType = "member"
 	ResourceExecution  ResourceType = "execution"
@@ -40,6 +45,7 @@ var resourceOwners = map[ResourceType]owner{
 	ResourceUser:         ownedByPlatform,
 	ResourceContent:      ownedByPlatform,
 	ResourceServiceToken: ownedByPlatform,
+	ResourceSession:      ownedByPlatform,
 	ResourceEngagement:   ownedByEngagement,
 	ResourceMember:       ownedByEngagement,
 	ResourceExecution:    ownedByEngagement,

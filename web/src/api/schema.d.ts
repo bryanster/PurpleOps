@@ -171,6 +171,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the browsers you are currently signed in on.
+         * @description Your own live sessions, newest first, and nobody else's — there is no
+         *     parameter that names another account. An administrator wanting somebody
+         *     else's reaches for `POST /users/{userId}/sessions/revoke`, which ends
+         *     them rather than reading them.
+         *
+         *     **Live** means what the authentication middleware means by it: not
+         *     revoked, not past its absolute expiry, and not idle for longer than the
+         *     idle timeout. The same function decides both, so this list cannot
+         *     disagree with what would actually be accepted on the next request — a
+         *     row here is a browser that could act right now, which is what makes
+         *     revoking one worth doing.
+         *
+         *     `current` marks the session this request arrived on. It is the one row a
+         *     client should not offer an ordinary "revoke" for: ending it is signing
+         *     out, and `POST /auth/logout` is where that lives, with the cookie
+         *     clearing that goes with it.
+         *
+         *     No token and no hash of one. What is in the cookie stays in the cookie.
+         */
+        get: operations["listSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign yourself out everywhere except here.
+         * @description Ends every session you hold except the one making the request, and
+         *     reports how many. The browser doing the asking keeps working, which is
+         *     what separates this from signing out.
+         *
+         *     It is the one control that is useful without reading the list first: the
+         *     person who has just remembered a laptop in a hotel does not need to
+         *     identify which row it is.
+         *
+         *     Idempotent, and `revoked: 0` is a normal answer for somebody signed in
+         *     only here. Service tokens are not sessions and are untouched — those are
+         *     `DELETE /auth/tokens/{tokenId}`.
+         */
+        post: operations["revokeOtherSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one of your own sessions.
+         * @description Takes effect at that browser's next request: the row is revoked, and
+         *     every request resolves its session from the row rather than from
+         *     anything cached.
+         *
+         *     A session belonging to somebody else answers `404`, exactly as an
+         *     identifier that names nothing does, and for the same reason
+         *     `DELETE /auth/tokens/{tokenId}` does: an endpoint that answered `403`
+         *     for real identifiers and `404` for invented ones would be a way to find
+         *     out which are real.
+         *
+         *     Revoking the session making the request is allowed and is a way to sign
+         *     out — but it leaves this browser holding a cookie nothing accepts and
+         *     nothing told it to drop, so `POST /auth/logout` is the operation for
+         *     that. Clients should offer it for the other rows.
+         */
+        delete: operations["revokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/mfa/totp/enroll": {
         parameters: {
             query?: never;
@@ -1389,7 +1489,10 @@ export interface components {
         UpdateSelfRequest: {
             displayName: string;
         };
-        /** @description What `POST /users/{userId}/sessions/revoke` ended. */
+        /**
+         * @description What `POST /users/{userId}/sessions/revoke` or
+         *     `POST /auth/sessions/revoke-others` ended.
+         */
         RevokedSessions: {
             /**
              * @description How many live sessions were ended. Zero is a normal answer: the
@@ -1397,6 +1500,78 @@ export interface components {
              *     moment ago.
              */
             revoked: number;
+        };
+        /**
+         * @description One browser this account is signed in on, as `GET /auth/sessions`
+         *     reports it.
+         *
+         *     Everything here is what the server observed when the session was issued
+         *     and last used. Nothing in it identifies the token: the value in the
+         *     cookie is not stored — only a hash of it is — so there is no field to
+         *     leave out by mistake.
+         */
+        Session: {
+            /**
+             * Format: uuid
+             * @description The session's identifier, and what `DELETE /auth/sessions/{sessionId}` takes.
+             */
+            id: string;
+            /**
+             * @description Whether this is the session the request was made on. Exactly one row
+             *     in a response has it, and it is the row a client marks as "this
+             *     device" rather than offering to revoke.
+             */
+            current: boolean;
+            /**
+             * Format: date-time
+             * @description When this session was issued — the sign-in it belongs to.
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When a request last arrived on it, to within a minute: recording
+             *     every request would put a write in front of every read, so it is
+             *     written back at most once a minute (`internal/authn/session`).
+             */
+            lastSeenAt: string;
+            /**
+             * Format: date-time
+             * @description The absolute expiry. Nothing extends it, so a session ends at this
+             *     moment however busy it has been. It may end sooner by going idle,
+             *     which is a policy this document does not carry — a client that
+             *     wanted to render "expires in" should say "expires by".
+             */
+            expiresAt: string;
+            /**
+             * @description Whether a second factor was presented for *this* session, as
+             *     opposed to at some point in this account's past (M1-006). A
+             *     deployment that has just turned the requirement on can have live
+             *     sessions where this is false.
+             */
+            mfaSatisfied: boolean;
+            /**
+             * @description The client address the session was issued to, as the server saw it
+             *     (`internal/httpapi.clientIP`). Absent when the request did not carry
+             *     one. It is what somebody scans the list for, and it is the server's
+             *     observation rather than anything the client claimed.
+             */
+            ip?: string;
+            /**
+             * @description The `User-Agent` the session was issued to, absent when the request
+             *     sent none. Attacker-controlled, like every request header: render it
+             *     as text and never as markup.
+             */
+            userAgent?: string;
+        };
+        /**
+         * @description Your live sessions. Unpaginated, like `GET /auth/tokens` and for the
+         *     same reason: this is one person's own credentials, the count is small
+         *     and bounded by how many browsers they sign in from, and a page boundary
+         *     in the middle of "where am I signed in" would be a list somebody could
+         *     act on half of.
+         */
+        Sessions: {
+            items: components["schemas"]["Session"][];
         };
         /**
          * @description Where this person and this session stand on multi-factor authentication.
@@ -2176,6 +2351,114 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Your live sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sessions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many other sessions were ended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokedSessions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeSession: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The session's `id`, from `GET /auth/sessions`. Never the token in the cookie. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session is revoked, or already was. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

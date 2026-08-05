@@ -170,6 +170,9 @@ func TestResourceOwnershipIsDeclaredForEveryRule(t *testing.T) {
 		// the binding constrains where it may point (M1-011), and who may hold
 		// one is not a question about membership.
 		authz.ResourceServiceToken: true,
+		// A session belongs to the person signed in on it, and the
+		// installation is what issued it. No engagement has a say (M1-017).
+		authz.ResourceSession: true,
 	}
 
 	for _, rule := range authz.Rules() {

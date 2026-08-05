@@ -771,7 +771,8 @@ type RegenerateRecoveryCodesRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 }
 
-// RevokedSessions What `POST /users/{userId}/sessions/revoke` ended.
+// RevokedSessions What `POST /users/{userId}/sessions/revoke` or
+// `POST /auth/sessions/revoke-others` ended.
 type RevokedSessions struct {
 	// Revoked How many live sessions were ended. Zero is a normal answer: the
 	// account may have had none, or somebody may have revoked them a
@@ -853,6 +854,63 @@ type ServiceTokenStatus string
 // ServiceTokens The caller's own tokens, newest first.
 type ServiceTokens struct {
 	Items []ServiceToken `json:"items"`
+}
+
+// Session One browser this account is signed in on, as `GET /auth/sessions`
+// reports it.
+//
+// Everything here is what the server observed when the session was issued
+// and last used. Nothing in it identifies the token: the value in the
+// cookie is not stored — only a hash of it is — so there is no field to
+// leave out by mistake.
+type Session struct {
+	// CreatedAt When this session was issued — the sign-in it belongs to.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Current Whether this is the session the request was made on. Exactly one row
+	// in a response has it, and it is the row a client marks as "this
+	// device" rather than offering to revoke.
+	Current bool `json:"current"`
+
+	// ExpiresAt The absolute expiry. Nothing extends it, so a session ends at this
+	// moment however busy it has been. It may end sooner by going idle,
+	// which is a policy this document does not carry — a client that
+	// wanted to render "expires in" should say "expires by".
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Id The session's identifier, and what `DELETE /auth/sessions/{sessionId}` takes.
+	Id openapi_types.UUID `json:"id"`
+
+	// Ip The client address the session was issued to, as the server saw it
+	// (`internal/httpapi.clientIP`). Absent when the request did not carry
+	// one. It is what somebody scans the list for, and it is the server's
+	// observation rather than anything the client claimed.
+	Ip *string `json:"ip,omitempty"`
+
+	// LastSeenAt When a request last arrived on it, to within a minute: recording
+	// every request would put a write in front of every read, so it is
+	// written back at most once a minute (`internal/authn/session`).
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// MfaSatisfied Whether a second factor was presented for *this* session, as
+	// opposed to at some point in this account's past (M1-006). A
+	// deployment that has just turned the requirement on can have live
+	// sessions where this is false.
+	MfaSatisfied bool `json:"mfaSatisfied"`
+
+	// UserAgent The `User-Agent` the session was issued to, absent when the request
+	// sent none. Attacker-controlled, like every request header: render it
+	// as text and never as markup.
+	UserAgent *string `json:"userAgent,omitempty"`
+}
+
+// Sessions Your live sessions. Unpaginated, like `GET /auth/tokens` and for the
+// same reason: this is one person's own credentials, the count is small
+// and bounded by how many browsers they sign in from, and a page boundary
+// in the middle of "where am I signed in" would be a list somebody could
+// act on half of.
+type Sessions struct {
+	Items []Session `json:"items"`
 }
 
 // TOTPCodeRequest A six-digit code from an authenticator app. The same body confirms an
@@ -1292,6 +1350,44 @@ type StartSamlSignInParams struct {
 	ReturnTo *string `form:"return_to,omitempty" json:"return_to,omitempty"`
 }
 
+// RevokeOtherSessionsParams defines parameters for RevokeOtherSessions.
+type RevokeOtherSessionsParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// RevokeSessionParams defines parameters for RevokeSession.
+type RevokeSessionParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // CreateServiceTokenParams defines parameters for CreateServiceToken.
 type CreateServiceTokenParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -1621,6 +1717,15 @@ type ServerInterface interface {
 	// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
 	// (GET /auth/saml/start)
 	StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams)
+	// ListSessions List the browsers you are currently signed in on.
+	// (GET /auth/sessions)
+	ListSessions(w http.ResponseWriter, r *http.Request)
+	// RevokeOtherSessions Sign yourself out everywhere except here.
+	// (POST /auth/sessions/revoke-others)
+	RevokeOtherSessions(w http.ResponseWriter, r *http.Request, params RevokeOtherSessionsParams)
+	// RevokeSession Revoke one of your own sessions.
+	// (DELETE /auth/sessions/{sessionId})
+	RevokeSession(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID, params RevokeSessionParams)
 	// ListServiceTokens List your own service tokens.
 	// (GET /auth/tokens)
 	ListServiceTokens(w http.ResponseWriter, r *http.Request)
@@ -1777,6 +1882,24 @@ func (_ Unimplemented) GetSamlMetadata(w http.ResponseWriter, r *http.Request) {
 // StartSamlSignIn Begin a single sign-on through the configured SAML provider.
 // (GET /auth/saml/start)
 func (_ Unimplemented) StartSamlSignIn(w http.ResponseWriter, r *http.Request, params StartSamlSignInParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListSessions List the browsers you are currently signed in on.
+// (GET /auth/sessions)
+func (_ Unimplemented) ListSessions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeOtherSessions Sign yourself out everywhere except here.
+// (POST /auth/sessions/revoke-others)
+func (_ Unimplemented) RevokeOtherSessions(w http.ResponseWriter, r *http.Request, params RevokeOtherSessionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeSession Revoke one of your own sessions.
+// (DELETE /auth/sessions/{sessionId})
+func (_ Unimplemented) RevokeSession(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID, params RevokeSessionParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2462,6 +2585,111 @@ func (siw *ServerInterfaceWrapper) StartSamlSignIn(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartSamlSignIn(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListSessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSessions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeOtherSessions operation middleware
+func (siw *ServerInterfaceWrapper) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeOtherSessionsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeOtherSessions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeSession operation middleware
+func (siw *ServerInterfaceWrapper) RevokeSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", chi.URLParam(r, "sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeSessionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeSession(w, r, sessionId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3339,6 +3567,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/password", wrapper.ChangePassword)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/sessions", wrapper.ListSessions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/sessions/revoke-others", wrapper.RevokeOtherSessions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/auth/sessions/{sessionId}", wrapper.RevokeSession)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/mfa/totp/enroll", wrapper.EnrollTotp)
@@ -4834,6 +5071,242 @@ type StartSamlSignIn500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response StartSamlSignIn500ApplicationProblemPlusJSONResponse) VisitStartSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessionsRequestObject struct {
+}
+
+type ListSessionsResponseObject interface {
+	VisitListSessionsResponse(w http.ResponseWriter) error
+}
+
+type ListSessions200JSONResponse Sessions
+
+func (response ListSessions200JSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListSessions401ApplicationProblemPlusJSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListSessions403ApplicationProblemPlusJSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSessions500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListSessions500ApplicationProblemPlusJSONResponse) VisitListSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOtherSessionsRequestObject struct {
+	Params RevokeOtherSessionsParams
+}
+
+type RevokeOtherSessionsResponseObject interface {
+	VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error
+}
+
+type RevokeOtherSessions200JSONResponse RevokedSessions
+
+func (response RevokeOtherSessions200JSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOtherSessions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeOtherSessions401ApplicationProblemPlusJSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOtherSessions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeOtherSessions403ApplicationProblemPlusJSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOtherSessions500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeOtherSessions500ApplicationProblemPlusJSONResponse) VisitRevokeOtherSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSessionRequestObject struct {
+	SessionId openapi_types.UUID `json:"sessionId"`
+	Params    RevokeSessionParams
+}
+
+type RevokeSessionResponseObject interface {
+	VisitRevokeSessionResponse(w http.ResponseWriter) error
+}
+
+type RevokeSession204Response struct {
+}
+
+func (response RevokeSession204Response) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeSession400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeSession400ApplicationProblemPlusJSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSession401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeSession401ApplicationProblemPlusJSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSession403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeSession403ApplicationProblemPlusJSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSession404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeSession404ApplicationProblemPlusJSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSession500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeSession500ApplicationProblemPlusJSONResponse) VisitRevokeSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -6440,6 +6913,15 @@ type StrictServerInterface interface {
 	// StartSamlSignIn Begin a single sign-on through the configured SAML provider.
 	// (GET /auth/saml/start)
 	StartSamlSignIn(ctx context.Context, request StartSamlSignInRequestObject) (StartSamlSignInResponseObject, error)
+	// ListSessions List the browsers you are currently signed in on.
+	// (GET /auth/sessions)
+	ListSessions(ctx context.Context, request ListSessionsRequestObject) (ListSessionsResponseObject, error)
+	// RevokeOtherSessions Sign yourself out everywhere except here.
+	// (POST /auth/sessions/revoke-others)
+	RevokeOtherSessions(ctx context.Context, request RevokeOtherSessionsRequestObject) (RevokeOtherSessionsResponseObject, error)
+	// RevokeSession Revoke one of your own sessions.
+	// (DELETE /auth/sessions/{sessionId})
+	RevokeSession(ctx context.Context, request RevokeSessionRequestObject) (RevokeSessionResponseObject, error)
 	// ListServiceTokens List your own service tokens.
 	// (GET /auth/tokens)
 	ListServiceTokens(ctx context.Context, request ListServiceTokensRequestObject) (ListServiceTokensResponseObject, error)
@@ -7013,6 +7495,83 @@ func (sh *strictHandler) StartSamlSignIn(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartSamlSignInResponseObject); ok {
 		if err := validResponse.VisitStartSamlSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSessions operation middleware
+func (sh *strictHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	var request ListSessionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSessions(ctx, request.(ListSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSessionsResponseObject); ok {
+		if err := validResponse.VisitListSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeOtherSessions operation middleware
+func (sh *strictHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request, params RevokeOtherSessionsParams) {
+	var request RevokeOtherSessionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeOtherSessions(ctx, request.(RevokeOtherSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeOtherSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeOtherSessionsResponseObject); ok {
+		if err := validResponse.VisitRevokeOtherSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeSession operation middleware
+func (sh *strictHandler) RevokeSession(w http.ResponseWriter, r *http.Request, sessionId openapi_types.UUID, params RevokeSessionParams) {
+	var request RevokeSessionRequestObject
+
+	request.SessionId = sessionId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeSession(ctx, request.(RevokeSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeSessionResponseObject); ok {
+		if err := validResponse.VisitRevokeSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

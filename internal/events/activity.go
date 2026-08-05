@@ -35,6 +35,15 @@ const (
 	VerbSessionLoginFailed Verb = "session.login_failed"
 	VerbSessionLogout      Verb = "session.logout"
 
+	// VerbSessionOthersRevoked is somebody signing *themselves* out of every
+	// browser but the one they are using (M1-017). It is a third thing again
+	// from the two above it: not an administrator acting on an account
+	// (VerbUserSessionsRevoked) and not one session ending
+	// (VerbSessionLogout), but the account holder deciding that everywhere
+	// else should stop. An incident review wants to tell those apart by
+	// filtering, so they are three verbs rather than one with a delta.
+	VerbSessionOthersRevoked Verb = "session.others_revoked"
+
 	VerbLoginThrottled Verb = "login.throttled"
 
 	VerbMFAEnrolled       Verb = "mfa.enrolled"

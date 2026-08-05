@@ -17,6 +17,17 @@ export const PROBLEM_MEDIA_TYPE = 'application/problem+json'
 export const REQUEST_ID_HEADER = 'X-Request-Id'
 
 /**
+ * How long to wait after a 429, in seconds. The spec makes it required on every
+ * rate-limited answer, and it is a *header* rather than a body field — so it is
+ * read here, once, rather than by whichever screen happens to care.
+ *
+ * The screen that cares most is the login form (M1-004): "too many attempts" on
+ * its own is a dead end, and "try again in 4 minutes" is something a person can
+ * act on.
+ */
+export const RETRY_AFTER_HEADER = 'Retry-After'
+
+/**
  * Every code in the spec, so an unrecognised one can be rejected at runtime
  * rather than typed optimistically.
  *
@@ -69,6 +80,13 @@ export class ApiError extends Error {
   readonly errors: readonly FieldError[]
   readonly requestId: string | undefined
 
+  /**
+   * Seconds to wait before trying again, from `Retry-After`. Defined only on a
+   * rate-limited answer, and `undefined` rather than `0` everywhere else — a
+   * screen must be able to tell "wait four minutes" from "no waiting involved".
+   */
+  readonly retryAfterSeconds: number | undefined
+
   constructor(
     message: string,
     init: {
@@ -77,6 +95,7 @@ export class ApiError extends Error {
       detail?: string
       errors?: readonly FieldError[]
       requestId?: string
+      retryAfterSeconds?: number
     },
   ) {
     super(message)
@@ -86,6 +105,12 @@ export class ApiError extends Error {
     this.detail = init.detail
     this.errors = init.errors ?? []
     this.requestId = init.requestId
+    this.retryAfterSeconds = init.retryAfterSeconds
+  }
+
+  /** The message for `field`, when the server named one. */
+  fieldError(field: string): string | undefined {
+    return this.errors.find((entry) => entry.field === field)?.message
   }
 }
 
@@ -121,11 +146,12 @@ export function isApiError(error: unknown, code?: ProblemCode): error is ApiErro
  */
 export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
   const requestId = response.headers.get(REQUEST_ID_HEADER) ?? undefined
+  const retryAfterSeconds = readRetryAfter(response)
   const fallback = `${String(response.status)} ${response.statusText}`.trim()
 
   const problem = await readProblem(response)
   if (!problem) {
-    return new ApiError(fallback, { status: response.status, requestId })
+    return new ApiError(fallback, { status: response.status, requestId, retryAfterSeconds })
   }
 
   const detail = nonEmptyString(problem.detail)
@@ -134,10 +160,28 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
     code: isProblemCode(problem.code) ? problem.code : undefined,
     detail,
     errors: readFieldErrors(problem.errors),
+    retryAfterSeconds,
     // The header is authoritative — it is set by the middleware that owns the
     // ID — but a problem document forwarded without its headers still has it.
     requestId: requestId ?? nonEmptyString(problem.instance),
   })
+}
+
+/**
+ * `Retry-After` as a number of seconds, or undefined.
+ *
+ * Only the delta-seconds form is read. RFC 9110 also allows an HTTP date, and
+ * this server never sends one — a client that guessed at the date form would be
+ * parsing something it has never seen, and the failure mode of getting it wrong
+ * is telling somebody to wait until 1970.
+ */
+function readRetryAfter(response: Response): number | undefined {
+  const raw = response.headers.get(RETRY_AFTER_HEADER)
+  if (raw === null) {
+    return undefined
+  }
+  const seconds = Number.parseInt(raw.trim(), 10)
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined
 }
 
 function nonEmptyString(value: unknown): string | undefined {

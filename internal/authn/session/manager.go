@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/bryanster/blacklight/internal/config"
@@ -22,6 +23,7 @@ import (
 type Store interface {
 	Create(ctx context.Context, in identity.NewSession, after ...identity.After) (identity.Session, error)
 	ByTokenHash(ctx context.Context, hash string) (identity.Session, error)
+	ListByUser(ctx context.Context, userID string) ([]identity.Session, error)
 	Rotate(ctx context.Context, id, tokenHash string, at time.Time) (identity.Session, error)
 	SetLastSeenAt(ctx context.Context, id string, at time.Time) error
 	SetMFASatisfied(ctx context.Context, id string) error
@@ -297,6 +299,53 @@ func (m *Manager) SatisfyMFA(ctx context.Context, sessionID string) (Issued, err
 		return Issued{}, err
 	}
 	return m.Rotate(ctx, sessionID)
+}
+
+// Live returns the sessions a user could act on right now, newest first.
+//
+// "Could act on" is decided by [Manager.usable] — the same function
+// [Manager.Resolve] applies to the cookie on every request — rather than by a
+// second comparison of the same three timestamps. That is the point of the
+// method: a list that disagreed with what actually authenticates would either
+// offer somebody a browser to revoke that had already ended, or hide one that
+// was still live, and the second is the dangerous direction (M1-017).
+func (m *Manager) Live(ctx context.Context, userID string) ([]identity.Session, error) {
+	all, err := m.store.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	live := make([]identity.Session, 0, len(all))
+	for _, s := range all {
+		if m.usable(s) == nil {
+			live = append(live, s)
+		}
+	}
+	return live, nil
+}
+
+// RevokeOwned ends one session belonging to userID, and attributes the logout
+// to them.
+//
+// A session identifier that belongs to somebody else is [apierr.ErrNotFound],
+// the same answer as one that names nothing at all. The ownership check is the
+// whole reason this exists rather than callers reaching for [Manager.Revoke]
+// with an identifier a client sent: that one takes any session in the
+// installation, and an endpoint handing it a request parameter would be an
+// endpoint that ends anybody's session.
+//
+// Revoking one that has already ended is not an error, for the reason
+// [Manager.Revoke] gives — and it stays reachable here, because the ownership
+// lookup reads every row rather than only the live ones.
+func (m *Manager) RevokeOwned(ctx context.Context, userID, sessionID string) error {
+	all, err := m.store.ListByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(all, func(s identity.Session) bool { return s.ID == sessionID }) {
+		return apierr.NotFound("session", sessionID)
+	}
+	return m.RevokeAs(ctx, sessionID, userID)
 }
 
 // Revoke ends one session. Revoking one that has already ended is not an error:

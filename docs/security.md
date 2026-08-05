@@ -379,6 +379,38 @@ Retirement is a status and never a deletion: an account that wrote executions, c
 keeps its authorship, so `DELETE /users/{userId}` sets the status to `disabled` and the row stays.
 There is no hard delete in the API.
 
+## Your own sessions
+
+Three endpoints let somebody see and end the browsers they are signed in on, without an
+administrator (M1-017): `GET /auth/sessions`, `DELETE /auth/sessions/{sessionId}` and
+`POST /auth/sessions/revoke-others`. Four properties are worth stating.
+
+**The list is what would actually be accepted.** Liveness is decided by `session.Manager.usable`,
+the same function `Resolve` applies to the cookie on every request — not by a second comparison of
+the same three timestamps. A list that disagreed would either offer somebody a browser to revoke
+that had already ended, or hide one that was still live, and the second is the dangerous direction.
+
+**Nothing in the response could be replayed.** `Session` has no field for the token or its hash, so
+there is nothing to leave out by mistake; `current` is derived server-side from the session the
+request arrived on, because a browser cannot know its own session identifier — the only thing it was
+ever given is the cookie.
+
+**Somebody else's session is a 404, not a 403.** The ownership lookup happens before the
+revocation and is scoped to the caller, so a real identifier belonging to another account and an
+identifier that names nothing are indistinguishable. The same reasoning as
+`DELETE /auth/tokens/{tokenId}`.
+
+**A service token holds none of this.** `session.read` and `session.manage` carry
+`authz.GuardSessionOnly`, so a token-authenticated request is refused whatever scopes it has. A
+leaked token that could read this list would enumerate where its owner signs in from, and one that
+could post to `revoke-others` would sign them out — neither is something a token needs, and a token
+has no session of its own to manage.
+
+`POST /auth/sessions/revoke-others` keeps the session it was called on and refuses a caller that has
+none, rather than treating "no session to keep" as "revoke everything". The administrative
+equivalent for somebody else's account is `POST /users/{userId}/sessions/revoke`, which ends all of
+them because the person asking is not among them.
+
 ## Service tokens
 
 The REST API is the only supported integration surface, so these are the credentials for all of it.

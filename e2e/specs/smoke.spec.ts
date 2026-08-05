@@ -1,3 +1,4 @@
+import { seedAdmin, signIn } from '../harness/auth'
 import { reportedBuild } from '../harness/build-info'
 import { fieldValue } from '../harness/locators'
 import { expect, test } from '../harness/test'
@@ -11,10 +12,15 @@ import { expect, test } from '../harness/test'
  * milestone at a time. What matters now is that the scaffolding underneath it
  * is honest: this run started a real server, on a real database, and would have
  * failed loudly if it had not.
+ *
+ * It signs in first because as of M1-017 there is nothing to look at without a
+ * session — which is itself worth having a spec walk into, since "the shell
+ * renders" and "the shell renders for anybody" are different claims.
  */
+test.use({ seed: { steps: seedAdmin() } })
 
 test('the shell renders and the version screen agrees with the binary', async ({ page }) => {
-  await page.goto('/')
+  await signIn(page)
 
   await expect(page.getByRole('link', { name: 'Blacklight' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
@@ -35,7 +41,7 @@ test('the shell renders and the version screen agrees with the binary', async ({
 })
 
 test('the nav reaches the health screen, and it reports a live database', async ({ page }) => {
-  await page.goto('/')
+  await signIn(page)
 
   await page.getByRole('link', { name: 'Health' }).click()
 

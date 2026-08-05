@@ -74,6 +74,25 @@ version:
 Tests run against MSW handlers built from the same generated types (`src/test/msw/`), so a fixture
 cannot describe a response the real server would not send. An unhandled request fails the test.
 
+## Who is signed in, and what they may see
+
+Everything but the two sign-in screens renders below `RequireAuth` (`src/features/auth/guards.tsx`),
+which is built on one query — `GET /auth/me` — and does three things:
+
+- **No session** → redirect to `/login`, carrying the intended path as a _relative_ `return_to`.
+  `src/features/auth/return-to.ts` is the check that keeps that from becoming an open redirect, and
+  it is the client's copy of `internal/authn/returnto`.
+- **A second factor is required and not enrolled** → redirect to `/login/enrol`, from every in-app
+  path, with no shell around it. That screen is the one thing the session may reach (M1-008), and
+  the route table is what makes it inescapable rather than a check inside a component.
+- **Otherwise** → render, with the user in `CurrentUserContext`. Screens below the guard call
+  `useSignedInUser()` and get a `CurrentUser` rather than `CurrentUser | undefined`.
+
+`RequireAdmin` wraps the `/admin` routes the same way. **None of this is access control** — the
+server decides that on every request (`docs/authz.md`) — it is what stops the interface offering
+somebody a door that will be shut in their face. Nav entries are hidden for the same reason and are
+not a substitute for the guard: `app/shell/nav-items.ts` marks them `adminOnly`.
+
 ## shadcn/ui
 
 `npx shadcn@latest add <name>` copies a component into `src/components/ui/` and it is then ours to

@@ -351,6 +351,133 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /auth/sessions:
+    get:
+      operationId: listSessions
+      summary: List the browsers you are currently signed in on.
+      description: |
+        Your own live sessions, newest first, and nobody else's — there is no
+        parameter that names another account. An administrator wanting somebody
+        else's reaches for `POST /users/{userId}/sessions/revoke`, which ends
+        them rather than reading them.
+
+        **Live** means what the authentication middleware means by it: not
+        revoked, not past its absolute expiry, and not idle for longer than the
+        idle timeout. The same function decides both, so this list cannot
+        disagree with what would actually be accepted on the next request — a
+        row here is a browser that could act right now, which is what makes
+        revoking one worth doing.
+
+        `current` marks the session this request arrived on. It is the one row a
+        client should not offer an ordinary "revoke" for: ending it is signing
+        out, and `POST /auth/logout` is where that lives, with the cookie
+        clearing that goes with it.
+
+        No token and no hash of one. What is in the cookie stays in the cookie.
+      tags:
+        - auth
+      x-authz-action: session.read
+      x-authz-resource:
+        type: session
+      responses:
+        "200":
+          description: Your live sessions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sessions"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/sessions/revoke-others:
+    post:
+      operationId: revokeOtherSessions
+      summary: Sign yourself out everywhere except here.
+      description: |
+        Ends every session you hold except the one making the request, and
+        reports how many. The browser doing the asking keeps working, which is
+        what separates this from signing out.
+
+        It is the one control that is useful without reading the list first: the
+        person who has just remembered a laptop in a hotel does not need to
+        identify which row it is.
+
+        Idempotent, and `revoked: 0` is a normal answer for somebody signed in
+        only here. Service tokens are not sessions and are untouched — those are
+        `DELETE /auth/tokens/{tokenId}`.
+      tags:
+        - auth
+      x-authz-action: session.manage
+      x-authz-resource:
+        type: session
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: How many other sessions were ended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokedSessions"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/sessions/{sessionId}:
+    delete:
+      operationId: revokeSession
+      summary: Revoke one of your own sessions.
+      description: |
+        Takes effect at that browser's next request: the row is revoked, and
+        every request resolves its session from the row rather than from
+        anything cached.
+
+        A session belonging to somebody else answers `404`, exactly as an
+        identifier that names nothing does, and for the same reason
+        `DELETE /auth/tokens/{tokenId}` does: an endpoint that answered `403`
+        for real identifiers and `404` for invented ones would be a way to find
+        out which are real.
+
+        Revoking the session making the request is allowed and is a way to sign
+        out — but it leaves this browser holding a cookie nothing accepts and
+        nothing told it to drop, so `POST /auth/logout` is the operation for
+        that. Clients should offer it for the other rows.
+      tags:
+        - auth
+      x-authz-action: session.manage
+      x-authz-resource:
+        type: session
+        param: sessionId
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: sessionId
+          in: path
+          required: true
+          description: The session's `id`, from `GET /auth/sessions`. Never the token in the cookie.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The session is revoked, or already was.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /auth/mfa/totp/enroll:
     post:
       operationId: enrollTotp
@@ -2615,7 +2742,9 @@ components:
 
     RevokedSessions:
       type: object
-      description: What `POST /users/{userId}/sessions/revoke` ended.
+      description: |
+        What `POST /users/{userId}/sessions/revoke` or
+        `POST /auth/sessions/revoke-others` ended.
       required:
         - revoked
       properties:
@@ -2626,6 +2755,90 @@ components:
             How many live sessions were ended. Zero is a normal answer: the
             account may have had none, or somebody may have revoked them a
             moment ago.
+
+    Session:
+      type: object
+      description: |
+        One browser this account is signed in on, as `GET /auth/sessions`
+        reports it.
+
+        Everything here is what the server observed when the session was issued
+        and last used. Nothing in it identifies the token: the value in the
+        cookie is not stored — only a hash of it is — so there is no field to
+        leave out by mistake.
+      required:
+        - id
+        - current
+        - createdAt
+        - lastSeenAt
+        - expiresAt
+        - mfaSatisfied
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The session's identifier, and what `DELETE /auth/sessions/{sessionId}` takes.
+        current:
+          type: boolean
+          description: |
+            Whether this is the session the request was made on. Exactly one row
+            in a response has it, and it is the row a client marks as "this
+            device" rather than offering to revoke.
+        createdAt:
+          type: string
+          format: date-time
+          description: When this session was issued — the sign-in it belongs to.
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: |
+            When a request last arrived on it, to within a minute: recording
+            every request would put a write in front of every read, so it is
+            written back at most once a minute (`internal/authn/session`).
+        expiresAt:
+          type: string
+          format: date-time
+          description: |
+            The absolute expiry. Nothing extends it, so a session ends at this
+            moment however busy it has been. It may end sooner by going idle,
+            which is a policy this document does not carry — a client that
+            wanted to render "expires in" should say "expires by".
+        mfaSatisfied:
+          type: boolean
+          description: |
+            Whether a second factor was presented for *this* session, as
+            opposed to at some point in this account's past (M1-006). A
+            deployment that has just turned the requirement on can have live
+            sessions where this is false.
+        ip:
+          type: string
+          description: |
+            The client address the session was issued to, as the server saw it
+            (`internal/httpapi.clientIP`). Absent when the request did not carry
+            one. It is what somebody scans the list for, and it is the server's
+            observation rather than anything the client claimed.
+        userAgent:
+          type: string
+          description: |
+            The `User-Agent` the session was issued to, absent when the request
+            sent none. Attacker-controlled, like every request header: render it
+            as text and never as markup.
+
+    Sessions:
+      type: object
+      description: |
+        Your live sessions. Unpaginated, like `GET /auth/tokens` and for the
+        same reason: this is one person's own credentials, the count is small
+        and bounded by how many browsers they sign in from, and a page boundary
+        in the middle of "where am I signed in" would be a list somebody could
+        act on half of.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
 
     MFAState:
       type: object

@@ -45,6 +45,11 @@ const (
 	ActionTokenRead
 	ActionTokenManage
 
+	// Sessions (M1-017). The same shape as the two above, over the browsers
+	// somebody is signed in on rather than the credentials they issued.
+	ActionSessionRead
+	ActionSessionManage
+
 	// Engagement-scoped: done inside one engagement, which the caller must be
 	// a member of — or a platform administrator, who holds all of these on
 	// every engagement.

@@ -418,6 +418,13 @@ var csrfCoverage = map[string]struct {
 	},
 	"DELETE " + BasePath + "/auth/tokens/{tokenId}": {body: ""},
 
+	// The self-service session endpoints (M1-017). Protected for the same
+	// reason the token ones are, and with more to lose: a cross-site POST that
+	// reached revoke-others would sign somebody out of every other browser they
+	// hold, which is a denial of service anybody's page could trigger.
+	"POST " + BasePath + "/auth/sessions/revoke-others": {body: ""},
+	"DELETE " + BasePath + "/auth/sessions/{sessionId}": {body: ""},
+
 	// User administration (M1-016). Protected like everything else a browser
 	// reaches; the bodies are the smallest ones the specification accepts, so
 	// that whatever answers the walks below is the middleware under test rather
