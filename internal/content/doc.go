@@ -20,6 +20,10 @@
 // persisted on the job row and fanned out to in-process subscribers so M2-004
 // can wire SSE without rewriting the runner.
 //
+// Offline bundle upload and reprocess-from-raw (M2-005) skip Fetch and feed the
+// same Parse → Normalize → Apply path from a local file (spooled upload or the
+// last raw snapshot). See docs/content-bundles.md for the operator contract.
+//
 // Rolling sources (Atomic, Sigma, CTID) always write version token "current"
 // and replace objects for that token. ATT&CK multi-version applies into the
 // target version key only. On failure the prior successful catalog is left

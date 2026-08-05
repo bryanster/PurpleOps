@@ -1352,6 +1352,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/content/sources/{sourceId}/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an offline content bundle for a source.
+         * @description Administrators only (`content.sync`). Accepts a multipart release archive
+         *     (zip / tar.gz) whose bytes match what the adapter's HTTPS fetch would
+         *     have produced. Creates a `bundle_import` job and runs Parse → Normalize
+         *     → Apply with no network Fetch. The upload is spooled under the content
+         *     data directory; archives larger than `BLACKLIGHT_CONTENT_MAX_BYTES`
+         *     are refused before a job is enqueued, with the limit named in the
+         *     problem detail.
+         *
+         *     Takes the same global job slot as online sync (`409` when another job
+         *     is active). Progress streams over `GET /events` exactly like sync.
+         *
+         *     See `docs/content-bundles.md` for per-kind archive layout and how to
+         *     obtain a bundle on a connected machine.
+         */
+        post: operations["uploadContentSourceBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/sources/{sourceId}/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess a source from its last raw snapshot.
+         * @description Administrators only (`content.sync`). Creates a `reprocess` job that
+         *     opens the last successful raw snapshot for the named version and runs
+         *     Parse → Normalize → Apply with no network Fetch. Use this after an
+         *     adapter bugfix to repair the catalog without another download.
+         *
+         *     The optional body pin `{ "version": "15.1" }` selects which snapshot.
+         *     Rolling sources (Atomic, Sigma, CTID) default to `current` when the
+         *     pin is omitted. ATT&CK requires an explicit version. Answers `409`
+         *     when no raw snapshot exists for that source/version, and when another
+         *     content job already holds the global slot.
+         */
+        post: operations["reprocessContentSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/jobs": {
         parameters: {
             query?: never;
@@ -2464,6 +2525,35 @@ export interface components {
             /**
              * @description ATT&CK release label (e.g. `15.1`). Omit for latest discoverable.
              *     Ignored by rolling sources.
+             */
+            version?: string;
+        };
+        /**
+         * @description Multipart offline bundle upload. `file` is the release archive; optional
+         *     `version` pins ATT&CK multi-version sources the same way sync does.
+         */
+        UploadContentBundleRequest: {
+            /**
+             * Format: binary
+             * @description Release archive bytes (typically `.zip` or `.tar.gz`) matching the
+             *     adapter's online fetch shape. Size is capped by
+             *     `BLACKLIGHT_CONTENT_MAX_BYTES` (default 512 MiB).
+             */
+            file: string;
+            /**
+             * @description ATT&CK release label (e.g. `15.1`). Omit for latest discoverable /
+             *     the version embedded in the archive. Ignored by rolling sources.
+             */
+            version?: string;
+        };
+        /**
+         * @description Optional pin for which raw snapshot to reprocess. Additional properties
+         *     are rejected so a mistyped field cannot silently no-op.
+         */
+        ReprocessContentSourceRequest: {
+            /**
+             * @description ATT&CK release label (e.g. `15.1`). Omit for rolling sources
+             *     (`current`). Required for ATT&CK.
              */
             version?: string;
         };
@@ -4588,6 +4678,108 @@ export interface operations {
         };
         responses: {
             /** @description The job was enqueued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadContentSourceBundle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["UploadContentBundleRequest"];
+            };
+        };
+        responses: {
+            /** @description The bundle_import job was enqueued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSyncJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reprocessContentSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The content source identifier. */
+                sourceId: components["parameters"]["ContentSourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReprocessContentSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description The reprocess job was enqueued. */
             202: {
                 headers: {
                     [name: string]: unknown;

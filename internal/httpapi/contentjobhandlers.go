@@ -14,10 +14,11 @@ import (
 // content runner. It must never reach a client on a correctly wired process.
 var errRunnerMissing = apierr.Internal(errors.New("httpapi: content runner is not configured"))
 
-// Content job endpoints (M2-003).
+// Content job endpoints (M2-003 / M2-005).
 //
 // Thin translators over content.Runner. Authorization is decided by
-// api/openapi.yaml (content.sync for start/cancel/list, content.read for get).
+// api/openapi.yaml (content.sync for start/cancel/list/bundle/reprocess,
+// content.read for get).
 
 // StartContentSourceSync enqueues a sync job for a source.
 func (h *handlers) StartContentSourceSync(ctx context.Context, request gen.StartContentSourceSyncRequestObject) (gen.StartContentSourceSyncResponseObject, error) {
@@ -44,6 +45,65 @@ func (h *handlers) StartContentSourceSync(ctx context.Context, request gen.Start
 		return nil, err
 	}
 	return gen.StartContentSourceSync202JSONResponse(wire), nil
+}
+
+// UploadContentSourceBundle accepts an offline release archive and enqueues a
+// bundle_import job (M2-005). The multipart body is streamed to disk under the
+// content data root; oversized uploads fail before a job row exists.
+func (h *handlers) UploadContentSourceBundle(ctx context.Context, request gen.UploadContentSourceBundleRequestObject) (gen.UploadContentSourceBundleResponseObject, error) {
+	subject, err := subjectFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if h.runner == nil {
+		return nil, errRunnerMissing
+	}
+	path, sha, version, _, err := h.runner.ReadBundleMultipart(ctx, request.Body)
+	if err != nil {
+		return nil, err
+	}
+	job, err := h.runner.StartBundleImport(ctx, subject, content.StartBundleImportRequest{
+		SourceID:     request.SourceId.String(),
+		Version:      version,
+		BundlePath:   path,
+		BundleSHA256: sha,
+	})
+	if err != nil {
+		return nil, err
+	}
+	wire, err := contentSyncJob(job)
+	if err != nil {
+		return nil, err
+	}
+	return gen.UploadContentSourceBundle202JSONResponse(wire), nil
+}
+
+// ReprocessContentSource enqueues a reprocess job from the last raw snapshot
+// (M2-005). No network I/O.
+func (h *handlers) ReprocessContentSource(ctx context.Context, request gen.ReprocessContentSourceRequestObject) (gen.ReprocessContentSourceResponseObject, error) {
+	subject, err := subjectFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if h.runner == nil {
+		return nil, errRunnerMissing
+	}
+	var version string
+	if request.Body != nil && request.Body.Version != nil {
+		version = *request.Body.Version
+	}
+	job, err := h.runner.StartReprocess(ctx, subject, content.StartReprocessRequest{
+		SourceID: request.SourceId.String(),
+		Version:  version,
+	})
+	if err != nil {
+		return nil, err
+	}
+	wire, err := contentSyncJob(job)
+	if err != nil {
+		return nil, err
+	}
+	return gen.ReprocessContentSource202JSONResponse(wire), nil
 }
 
 // ListContentJobs returns jobs newest first (admin).

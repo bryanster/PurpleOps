@@ -287,10 +287,15 @@ type StartSyncRequest struct {
 	Kind storecontent.JobKind
 	// BundlePath, when set, skips Fetch and reads this absolute path as the
 	// bundle (reprocess / offline upload). Must sit under the content data root
-	// when provided by untrusted input — callers validate.
+	// when provided by untrusted input — callers validate via
+	// [Runner.StartBundleImport] / [Runner.StartReprocess].
 	BundlePath string
 	// BundleSHA256 optional precomputed digest of BundlePath.
 	BundleSHA256 string
+	// CleanupUpload, when true, removes BundlePath after the job reaches any
+	// terminal status. Used for spooled offline uploads under uploads/; never
+	// set for reprocess (that path is the durable raw snapshot).
+	CleanupUpload bool
 }
 
 // StartSync enqueues a job or returns 409 if the global slot is taken.
@@ -329,11 +334,17 @@ func (r *Runner) StartSync(ctx context.Context, actor authn.Subject, req StartSy
 
 	checkpoint := map[string]any{}
 	if req.BundlePath != "" {
+		if err := r.requirePathUnderRoot(req.BundlePath); err != nil {
+			return storecontent.Job{}, err
+		}
 		checkpoint["bundle_path"] = req.BundlePath
 		if req.BundleSHA256 != "" {
 			checkpoint["bundle_sha256"] = req.BundleSHA256
 		}
 		checkpoint["skip_fetch"] = true
+		if req.CleanupUpload {
+			checkpoint["cleanup_upload"] = true
+		}
 	}
 	rawCP, err := json.Marshal(checkpoint)
 	if err != nil {
@@ -425,6 +436,7 @@ func (r *Runner) Cancel(ctx context.Context, actor authn.Subject, jobID string) 
 			Message: "cancelled before start",
 			Status:  storecontent.JobStatusCancelled,
 		})
+		r.cleanupJobUpload(job)
 		return job, nil
 	case storecontent.JobStatusRunning:
 		job, err = r.jobs.Update(ctx, job.ID, storecontent.JobUpdate{
@@ -527,6 +539,10 @@ type pipelineResult struct {
 }
 
 func (r *Runner) execute(parent context.Context, job storecontent.Job) error {
+	// Drop spooled uploads once the job can no longer need them — success,
+	// failure, or cancel. Reprocess paths (cleanup_upload=false) are left alone.
+	defer r.cleanupJobUpload(job)
+
 	src, err := r.sources.ByID(parent, job.SourceID)
 	if err != nil {
 		return r.failJob(parent, job, "", fmt.Errorf("load source: %w", err))
@@ -593,7 +609,7 @@ func (r *Runner) runPipeline(ctx context.Context, adapter Adapter, src storecont
 		out    pipelineResult
 	)
 
-	skipFetch, bundlePath, bundleSHA := parseCheckpoint(job.Checkpoint)
+	skipFetch, bundlePath, bundleSHA, _ := parseCheckpoint(job.Checkpoint)
 	if skipFetch && bundlePath != "" {
 		prog.Report(ctx, PhaseFetch, 0, 1, "using pre-seated bundle")
 		raw, err := ReadAll(ctx, FileSource{Path: bundlePath})
@@ -946,19 +962,28 @@ func (p *jobProgress) Report(ctx context.Context, phase string, current, total i
 	})
 }
 
-func parseCheckpoint(raw json.RawMessage) (skip bool, path, sha string) {
+func parseCheckpoint(raw json.RawMessage) (skip bool, path, sha string, cleanup bool) {
 	if len(raw) == 0 {
-		return false, "", ""
+		return false, "", "", false
 	}
 	var cp struct {
-		SkipFetch    bool   `json:"skip_fetch"`
-		BundlePath   string `json:"bundle_path"`
-		BundleSHA256 string `json:"bundle_sha256"`
+		SkipFetch     bool   `json:"skip_fetch"`
+		BundlePath    string `json:"bundle_path"`
+		BundleSHA256  string `json:"bundle_sha256"`
+		CleanupUpload bool   `json:"cleanup_upload"`
 	}
 	if err := json.Unmarshal(raw, &cp); err != nil {
-		return false, "", ""
+		return false, "", "", false
 	}
-	return cp.SkipFetch, cp.BundlePath, cp.BundleSHA256
+	return cp.SkipFetch, cp.BundlePath, cp.BundleSHA256, cp.CleanupUpload
+}
+
+func (r *Runner) cleanupJobUpload(job storecontent.Job) {
+	_, path, _, cleanup := parseCheckpoint(job.Checkpoint)
+	if !cleanup || path == "" {
+		return
+	}
+	r.removeUpload(path)
 }
 
 func isMissingContentSchema(err error) bool {

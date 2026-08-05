@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -77,14 +78,25 @@ func requestValidator(doc *openapi3.T, responder *apierr.Responder) (func(http.H
 				return
 			}
 
+			// Multipart uploads (content bundle, later v1 import) can be hundreds
+			// of MiB. kin-openapi's ValidateRequestBody always io.ReadAlls the
+			// body into memory before decoding, which would defeat spool-to-disk
+			// and the max-bytes gate in the handler. Skip body validation for
+			// multipart; path/params/auth still run, and the handler enforces
+			// required parts + size while streaming.
+			opts := *options
+			if ct := r.Header.Get("Content-Type"); strings.HasPrefix(ct, "multipart/") {
+				opts.ExcludeRequestBody = true
+			}
+
 			input := &openapi3filter.RequestValidationInput{
 				Request:    r,
 				PathParams: pathParams,
 				Route:      route,
-				Options:    options,
+				Options:    &opts,
 			}
-			// ValidateRequest reads the body and puts it back, so the handler
-			// still gets one it can read.
+			// ValidateRequest reads non-multipart bodies and puts them back, so
+			// the handler still gets one it can read.
 			if err := openapi3filter.ValidateRequest(r.Context(), input); err != nil {
 				responder.Write(w, r, err)
 				return

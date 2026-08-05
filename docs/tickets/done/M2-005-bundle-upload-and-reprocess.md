@@ -35,16 +35,16 @@ repairs a catalog without another download.
 
 ## Acceptance criteria
 
-- [ ] Uploading a fixture bundle for the test/fake adapter produces the same DB rows as a Fetch of
+- [x] Uploading a fixture bundle for the test/fake adapter produces the same DB rows as a Fetch of
       identical bytes (hash-equal raw snapshot).
-- [ ] Upload over the configured max size fails before the job runs, with a problem detail naming
+- [x] Upload over the configured max size fails before the job runs, with a problem detail naming
       the limit.
-- [ ] Reprocess after intentionally breaking normalized rows (test-only) restores them from raw
+- [x] Reprocess after intentionally breaking normalized rows (test-only) restores them from raw
       without calling HTTP.
-- [ ] Reprocess with missing raw → 409.
-- [ ] Air-gap proof: with network blocked (test httptest or pull adapter's HTTP client), bundle import
+- [x] Reprocess with missing raw → 409.
+- [x] Air-gap proof: with network blocked (test httptest or pull adapter's HTTP client), bundle import
       still succeeds.
-- [ ] Concurrent bundle import while another job runs → 409.
+- [x] Concurrent bundle import while another job runs → 409.
 
 ## Tests
 
@@ -56,3 +56,29 @@ repairs a catalog without another download.
 - Spool uploads to a temp file under `CONTENT_DIR`, never hold whole archives in memory.
 - Virus scanning is out of scope; treat upload as trusted admin input (same as sync URL).
 - Do not invent a different Apply for reprocess — if Normalize changes, Apply must upsert cleanly.
+
+## Implementation notes
+
+- **Domain:** `Runner.SpoolUpload` / `ReadBundleMultipart` / `StartBundleImport` /
+  `StartReprocess` in `internal/content/bundle.go`. Checkpoint gains
+  `cleanup_upload` so spooled files under `{CONTENT_DIR}/uploads/` are removed
+  on any terminal status (and immediately if enqueue fails). Reprocess never
+  sets cleanup — the path is the durable raw snapshot.
+- **Pipeline:** same skip-Fetch path M2-003 stubbed via
+  `StartSyncRequest.{Kind,BundlePath,BundleSHA256,CleanupUpload}`; bundle path
+  must sit under the content data root.
+- **HTTP:** `POST .../bundle` (multipart) and `POST .../reprocess` (JSON), both
+  `content.sync`. Multipart body validation is skipped in
+  `requestValidator` (kin-openapi `io.ReadAll`s the whole body); the handler
+  enforces required parts + `MaxBytes` while streaming to disk. Oversized
+  upload → 400 validation with the limit in the field message (before any job
+  row). Missing raw → 409.
+- **Activity:** reuse `content.sync.*` with `kind=bundle_import|reprocess` in
+  the started delta (no separate `content.bundle.imported` verb).
+- **CLI:** `blctl content import-bundle --source --file [--version] [--wait]`
+  and `blctl content reprocess --source [--version] [--wait]`. Shared
+  `withContentRunner` / `finishContentJob` helpers.
+- **Docs:** `docs/content-bundles.md` (operator contract); `docs/cli.md` updated.
+- **Fixtures:** `internal/content/testdata/fixture-bundle.json` (+ zip companion).
+- **Verified:** `make lint test build`; package tests cover parity, size limit,
+  reprocess restore, missing-raw 409, concurrent 409, air-gap multipart.

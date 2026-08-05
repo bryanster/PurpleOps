@@ -218,6 +218,38 @@ blctl content enable --id 01900000-0000-7000-8000-000000000001
 blctl content disable --id 01900000-0000-7000-8000-000000000001
 ```
 
+### `blctl content sync`
+
+Enqueues an online sync job for a source (`--source` id or kind). Optional
+`--version` pins an ATT&CK release. `--wait` blocks until the job finishes.
+
+```sh
+blctl content sync --source atomic --wait
+blctl content sync --source attack --version 15.1 --wait
+```
+
+Production adapters land with `M2-006`…; until then a sync of a seeded kind
+fails with "no adapter registered".
+
+### `blctl content import-bundle`
+
+Offline install from a release archive on disk. Same parse path as online sync;
+no network. See [`docs/content-bundles.md`](content-bundles.md).
+
+```sh
+blctl content import-bundle --source atomic --file ./atomics.zip --wait
+```
+
+### `blctl content reprocess`
+
+Re-parse the last successful raw snapshot for a source/version (no download).
+ATT&CK requires `--version`. Fails if no raw snapshot exists.
+
+```sh
+blctl content reprocess --source atomic --wait
+blctl content reprocess --source attack --version 15.1 --wait
+```
+
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one
@@ -225,7 +257,6 @@ milestone at a time. Each exits 1 and names the milestone that will implement it
 
 | Command | Arrives in |
 |---|---|
-| `blctl content sync` | M2-003 — adapter interface and job runner |
 | `blctl report render` | M6 — reporting |
 | `blctl backup` | M7 — replaces the manual procedure in `docs/deploy.md` |
 

@@ -455,7 +455,16 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/content/sources/{sourceId}/enable":  {body: ""},
 	"POST " + BasePath + "/content/sources/{sourceId}/disable": {body: ""},
 	"POST " + BasePath + "/content/sources/{sourceId}/sync":    {body: `{}`},
-	"POST " + BasePath + "/content/jobs/{jobId}/cancel":        {body: ""},
+	// Offline bundle upload (M2-005). Multipart body validation is skipped in
+	// the request validator (large uploads spool to disk in the handler), so a
+	// minimal multipart envelope is enough for the auth/CSRF walks to reach
+	// the middleware rather than a 400 about Content-Type.
+	"POST " + BasePath + "/content/sources/{sourceId}/bundle": {
+		body:      "------blwalk\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.bin\"\r\nContent-Type: application/octet-stream\r\n\r\nx\r\n------blwalk--\r\n",
+		mediaType: "multipart/form-data; boundary=----blwalk",
+	},
+	"POST " + BasePath + "/content/sources/{sourceId}/reprocess": {body: `{}`},
+	"POST " + BasePath + "/content/jobs/{jobId}/cancel":          {body: ""},
 
 	// The SAML assertion consumer (M1-010). The body is a form rather than JSON
 	// and the value is nonsense on purpose: what the two walks need is a request

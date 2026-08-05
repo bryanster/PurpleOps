@@ -57,7 +57,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
 | M1 — Identity & access | ✅ done — 18/18 | [18 tickets](#m1--identity--access) |
-| M2 — Content | refined — 4/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](M2-EPIC.md) |
+| M2 — Content | refined — 5/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
 | M5 — Analytics | epic, needs refinement | [`M5-EPIC.md`](M5-EPIC.md) |
@@ -125,7 +125,7 @@ here traces to a named defect in `PLAN.md` §4 — the regression cases are the 
 
 Goal: reference content is installable from the UI, not seeded as a 1 GB git clone. Sources are
 enabled, synced, versioned and disabled; ATT&CK versions coexist; Atomic structure is preserved.
-Decisions are locked in [`M2-EPIC.md`](M2-EPIC.md).
+Decisions are locked in [`M2-EPIC.md`](done/M2-EPIC.md).
 
 Build roughly in this order — the dependency chain is real.
 
@@ -135,7 +135,7 @@ Build roughly in this order — the dependency chain is real.
 | [M2-002](done/M2-002-source-registry-api.md) ✅ | Source registry API, enable/disable/delete, authz actions | M |
 | [M2-003](done/M2-003-adapter-and-job-runner.md) ✅ | Adapter interface + global DB-backed job runner | L |
 | [M2-004](done/M2-004-sse-hub.md) ✅ | Minimal shared SSE hub + sync progress | L |
-| [M2-005](M2-005-bundle-upload-and-reprocess.md) | Offline bundle upload + reprocess-from-raw | M |
+| [M2-005](done/M2-005-bundle-upload-and-reprocess.md) ✅ | Offline bundle upload + reprocess-from-raw | M |
 | [M2-006](M2-006-attack-adapter.md) | ATT&CK Enterprise adapter (multi-version) | L |
 | [M2-007](M2-007-attack-version-pin-surface.md) | ATT&CK version catalog & pin surface | M |
 | [M2-008](M2-008-atomic-adapter.md) | Atomic Red Team adapter | M |
