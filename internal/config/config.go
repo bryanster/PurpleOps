@@ -17,18 +17,21 @@ const prefix = "BLACKLIGHT_"
 // The variables this package reads. Each one appears exactly three times: here,
 // in Config.bindings, and in .env.example — tests tie the three together.
 const (
-	envEnv               = prefix + "ENV"
-	envAddr              = prefix + "ADDR"
-	envBaseURL           = prefix + "BASE_URL"
-	envRequestTimeout    = prefix + "REQUEST_TIMEOUT"
-	envShutdownTimeout   = prefix + "SHUTDOWN_TIMEOUT"
-	envTrustedProxies    = prefix + "TRUSTED_PROXIES"
-	envDBPath            = prefix + "DB_PATH"
-	envEvidenceDir       = prefix + "EVIDENCE_DIR"
-	envContentDir        = prefix + "CONTENT_DIR"
-	envContentMaxBytes   = prefix + "CONTENT_MAX_BYTES"
-	envContentJobTimeout = prefix + "CONTENT_JOB_TIMEOUT"
-	envContentWriteBatch = prefix + "CONTENT_WRITE_BATCH"
+	envEnv                  = prefix + "ENV"
+	envAddr                 = prefix + "ADDR"
+	envBaseURL              = prefix + "BASE_URL"
+	envRequestTimeout       = prefix + "REQUEST_TIMEOUT"
+	envShutdownTimeout      = prefix + "SHUTDOWN_TIMEOUT"
+	envTrustedProxies       = prefix + "TRUSTED_PROXIES"
+	envDBPath               = prefix + "DB_PATH"
+	envEvidenceDir          = prefix + "EVIDENCE_DIR"
+	envContentDir           = prefix + "CONTENT_DIR"
+	envContentMaxBytes      = prefix + "CONTENT_MAX_BYTES"
+	envContentJobTimeout    = prefix + "CONTENT_JOB_TIMEOUT"
+	envContentWriteBatch    = prefix + "CONTENT_WRITE_BATCH"
+	envEventsMaxSubscribers = prefix + "EVENTS_MAX_SUBSCRIBERS"
+	envEventsBuffer         = prefix + "EVENTS_BUFFER"
+	envEventsHeartbeat      = prefix + "EVENTS_HEARTBEAT"
 
 	envSessionSecret   = prefix + "SESSION_SECRET"
 	envEncryptionKey   = prefix + "ENCRYPTION_KEY"
@@ -75,6 +78,7 @@ type Config struct {
 	Database Database
 	Evidence Evidence
 	Content  Content
+	Events   Events
 
 	Session    Session
 	Encryption Encryption
@@ -147,6 +151,22 @@ type Content struct {
 	// transaction. Large enough to be fast; small enough not to hold the
 	// serialized writer for seconds.
 	WriteBatch int
+}
+
+// Events bounds the shared SSE hub (M2-004). The hub is pure fan-out; these
+// knobs keep memory and idle proxies under control.
+type Events struct {
+	// MaxSubscribers caps concurrent live SSE subscriptions installation-wide.
+	MaxSubscribers int
+
+	// Buffer is the per-subscriber event channel capacity. A full buffer drops
+	// that subscriber rather than blocking publishers.
+	Buffer int
+
+	// Heartbeat is how often the SSE handler writes a comment frame so idle
+	// proxies do not close the connection. Must be well under typical proxy
+	// idle timeouts (60s+).
+	Heartbeat time.Duration
 }
 
 // Session holds the secrets and the timings behind cookie sessions.
@@ -430,6 +450,9 @@ func (c *Config) bindings() []binding {
 		{name: envContentMaxBytes, target: &c.Content.MaxBytes, def: "512MiB", tool: true},
 		{name: envContentJobTimeout, target: &c.Content.JobTimeout, def: "30m", tool: true},
 		{name: envContentWriteBatch, target: &c.Content.WriteBatch, def: "250", tool: true},
+		{name: envEventsMaxSubscribers, target: &c.Events.MaxSubscribers, def: "256"},
+		{name: envEventsBuffer, target: &c.Events.Buffer, def: "16"},
+		{name: envEventsHeartbeat, target: &c.Events.Heartbeat, def: "15s"},
 
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
 		{name: envEncryptionKey, target: &c.Encryption.Key, required: true, sensitive: true},

@@ -233,6 +233,30 @@ from — which is your proxy, so every request appears to come from one IP and r
 activity log lose their meaning. With it set too widely (never `0.0.0.0/0`) anyone can choose the
 address that gets throttled and logged by sending a header. Set it to the proxy, and nothing else.
 
+
+### Server-sent events
+
+`GET /api/v1/events` is a long-lived `text/event-stream` (content sync progress
+today; the war room later). Reverse proxies that buffer upstream responses will
+hold frames until a buffer fills, which looks like a hung UI. Disable buffering
+on that path and keep the idle timeout above the server heartbeat
+(`BLACKLIGHT_EVENTS_HEARTBEAT`, default 15s):
+
+```nginx
+# nginx
+location /api/v1/events {
+    proxy_pass         http://blacklight;
+    proxy_http_version 1.1;
+    proxy_set_header   Connection '';
+    proxy_buffering    off;
+    proxy_cache        off;
+    proxy_read_timeout 1h;
+}
+```
+
+Caddy does not buffer by default; raise `read_timeout` if a front-end idle
+limit sits under a minute. Traefik: `responsestreaming=true` on the service.
+
 ---
 
 ## Where the data lives

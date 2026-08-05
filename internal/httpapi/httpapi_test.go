@@ -77,6 +77,11 @@ func testConfig(t *testing.T) config.Config {
 			JobTimeout: 30 * time.Minute,
 			WriteBatch: 250,
 		},
+		Events: config.Events{
+			MaxSubscribers: 256,
+			Buffer:         16,
+			Heartbeat:      15 * time.Second,
+		},
 	}
 }
 
@@ -86,7 +91,7 @@ func newTestServer(t *testing.T) (http.Handler, *logBuffer) {
 	return newTestServerWith(t, testConfig(t), storetest.New(t))
 }
 
-func newTestServerWith(t *testing.T, cfg config.Config, db store.Store) (http.Handler, *logBuffer) {
+func newTestServerWith(t *testing.T, cfg config.Config, db store.Store, adjust ...func(*Deps)) (http.Handler, *logBuffer) {
 	t.Helper()
 
 	logs := &logBuffer{}
@@ -95,6 +100,9 @@ func newTestServerWith(t *testing.T, cfg config.Config, db store.Store) (http.Ha
 	// cannot answer content boot writes. Only a real *store.DB runs the worker.
 	if _, ok := db.(*store.DB); !ok {
 		deps.DisableContentRunner = true
+	}
+	for _, fn := range adjust {
+		fn(&deps)
 	}
 	server, err := NewServer(deps)
 	if err != nil {

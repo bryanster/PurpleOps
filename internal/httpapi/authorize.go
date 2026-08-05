@@ -301,6 +301,22 @@ func decide(ctx context.Context, requirement api.Requirement, route specRoute, o
 	if err != nil {
 		return decided{}, err
 	}
+
+	// Cookie-only operations (SSE): refuse a service token before asking the
+	// policy, so content.sync stays token-reachable for REST while the stream
+	// stays session-bound. Distinct from GuardSessionOnly on the rule table.
+	if requirement.SessionOnly && subject.Method == authz.MethodServiceToken {
+		authorization.Subject = subject
+		authorization.Action = requirement.Action
+		authorization.Resource = resource
+		authorization.Allowed = false
+		authorization.Reason = "this operation accepts a session cookie only, not a service token"
+		return decided{
+			authorization: authorization,
+			refusal:       apierr.Forbidden("subscribe to events with a service token"),
+		}, nil
+	}
+
 	decision := authz.Can(ctx, subject, requirement.Action, resource)
 
 	authorization.Subject = subject

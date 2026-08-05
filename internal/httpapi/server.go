@@ -540,6 +540,10 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	// map is empty and StartSync refuses unknown kinds with 409 — correct:
 	// there is nothing to fetch yet. Tests inject fixture adapters via
 	// Deps.ContentAdapters when they need a full pipeline.
+	hub := events.NewHub(events.Options{
+		MaxSubscribers: deps.Config.Events.MaxSubscribers,
+		Buffer:         deps.Config.Events.Buffer,
+	})
 	if !deps.DisableContentRunner {
 		// Boot/Start are process-lifetime, not request-scoped. There is no
 		// request context at server construction.
@@ -550,21 +554,29 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		}
 		//nolint:contextcheck // process worker, cancelled via Runner.Stop
 		runner.Start(context.Background())
+
+		// Bridge runner progress → hub for the life of the process. The
+		// channel closes when nothing holds the subscription; we never unsub
+		// deliberately so every job tick reaches SSE clients.
+		progCh, progUnsub := runner.Subscribe(deps.Config.Events.Buffer)
+		go bridgeContentProgress(hub, progCh, progUnsub, log)
 	}
 
 	return gen.NewStrictHandlerWithOptions(
 		&handlers{
-			store:      deps.Store,
-			auth:       auth,
-			sessions:   sessions,
-			challenges: challenges,
-			oidc:       provider,
-			saml:       federation,
-			activity:   activityLog,
-			content:    registry,
-			runner:     runner,
-			signInURL:  signInURL(deps.Config),
-			log:        log,
+			store:           deps.Store,
+			auth:            auth,
+			sessions:        sessions,
+			challenges:      challenges,
+			oidc:            provider,
+			saml:            federation,
+			activity:        activityLog,
+			content:         registry,
+			runner:          runner,
+			hub:             hub,
+			eventsHeartbeat: deps.Config.Events.Heartbeat,
+			signInURL:       signInURL(deps.Config),
+			log:             log,
 		},
 		nil, // No strict middleware: the chain is chi's, so there is one of them.
 		gen.StrictHTTPServerOptions{

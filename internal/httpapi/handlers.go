@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authn/challenge"
@@ -47,6 +48,13 @@ type handlers struct {
 	// runner is the global content job worker (M2-003). Nil only in tests that
 	// never hit sync/job endpoints.
 	runner *content.Runner
+
+	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit
+	// GET /events.
+	hub *events.Hub
+
+	// eventsHeartbeat is how often the SSE handler writes a comment frame.
+	eventsHeartbeat time.Duration
 
 	// signInURL is where this deployment is signed in to, absolute, for the one
 	// response that has to tell somebody who is not looking at the application:

@@ -48,13 +48,13 @@ mechanism (`M4`). Building a throwaway `/content/.../events` pipe guarantees a r
 
 ## Acceptance criteria
 
-- [ ] An admin starting a sync receives progress events without polling; a member subscribing to
+- [x] An admin starting a sync receives progress events without polling; a member subscribing to
       `content.jobs` is 403 at subscribe or filtered to zero topics (pick one, test it).
-- [ ] Heartbeats keep the connection alive through an idle proxy timeout of ≥60s in local compose.
-- [ ] A subscriber that never reads is dropped; a subsequent Publish still returns promptly.
-- [ ] Job terminal event fires once per job with final status matching `GET /content/jobs/{id}`.
-- [ ] Hub has no dependency on DuckDB or adapters — pure fan-out. Activity recorder stays separate.
-- [ ] Package doc lists extension points M4 will use (engagement topic prefix, authz callback).
+- [x] Heartbeats keep the connection alive through an idle proxy timeout of ≥60s in local compose.
+- [x] A subscriber that never reads is dropped; a subsequent Publish still returns promptly.
+- [x] Job terminal event fires once per job with final status matching `GET /content/jobs/{id}`.
+- [x] Hub has no dependency on DuckDB or adapters — pure fan-out. Activity recorder stays separate.
+- [x] Package doc lists extension points M4 will use (engagement topic prefix, authz callback).
 
 ## Tests
 
@@ -70,3 +70,31 @@ mechanism (`M4`). Building a throwaway `/content/.../events` pipe guarantees a r
   `activity` rows from `M2-003`.
 - Keep memory bounded: max subscribers config (sane default), max buffer length.
 - Naming: put hub code where M4 expects it (`internal/events`) so M4-001 is "extend", not "move".
+
+## Implementation notes
+
+- **Hub:** `internal/events/hub.go` — pure fan-out beside the activity `Log`. Topics
+  `content.jobs` / `content.jobs.{id}`; types `content.job.progress` |
+  `content.job.terminal`. `Options.TopicAuthz` is the M4 per-topic filter hook;
+  package doc lists engagement prefix + catch-up extension points.
+- **Backpressure:** per-subscriber buffer (default 16); overflow closes the
+  channel and detaches under a send mutex so Publish never blocks and never
+  races close. `BLACKLIGHT_EVENTS_{MAX_SUBSCRIBERS,BUFFER,HEARTBEAT}` (256 / 16
+  / 15s).
+- **HTTP:** `GET /api/v1/events` in OpenAPI → strict handler returns
+  `text/event-stream` via `io.Pipe` (generated Visit already flushes). Timeout
+  middleware opts out by path. Heartbeat comment frames (`: ping`).
+- **Authz:** operation uses `content.sync` (admin → member 403 at subscribe).
+  Session-only via OpenAPI `security: [cookieSession]` +
+  `api.Requirement.SessionOnly` enforced in authorize middleware *before*
+  `authz.Can` — so `content.sync` stays token-reachable for REST start/cancel.
+  Unknown topics → 400 validation. `topics` is optional in the schema so the
+  request validator does not 400 before auth on the M1-011/M1-008 route sweeps;
+  empty list is still 400 from the handler after authz.
+- **Bridge:** `runner.Subscribe` → `bridgeContentProgress` publishes both
+  broadcast and per-job topics. Queued-job cancel now also publishes a terminal
+  tick (gap closed from M2-003).
+- **Frontend:** `web/src/lib/use-event-source.ts` + URL unit test. Deploy note
+  under reverse proxy in `docs/deploy.md`; timeout table updated in
+  `docs/http.md`.
+- **Verified:** `make lint test build`; `go test -race ./internal/events/`.

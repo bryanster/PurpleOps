@@ -65,13 +65,24 @@ type authServer struct {
 // the configuration for the tests that are about a particular setting.
 func newAuthServer(t *testing.T, adjust ...func(*config.Config)) *authServer {
 	t.Helper()
+	return newAuthServerDeps(t, nil, adjust...)
+}
+
+// newAuthServerDeps is newAuthServer with an optional Deps mutator (fixture
+// adapters, etc.).
+func newAuthServerDeps(t *testing.T, adjustDeps func(*Deps), adjust ...func(*config.Config)) *authServer {
+	t.Helper()
 
 	cfg := testConfig(t)
 	for _, fn := range adjust {
 		fn(&cfg)
 	}
 	db := storetest.Migrated(t)
-	handler, logs := newTestServerWith(t, cfg, db)
+	var depsFns []func(*Deps)
+	if adjustDeps != nil {
+		depsFns = append(depsFns, adjustDeps)
+	}
+	handler, logs := newTestServerWith(t, cfg, db, depsFns...)
 
 	manager, err := session.New(identity.NewSessions(db), session.OptionsFrom(cfg))
 	if err != nil {

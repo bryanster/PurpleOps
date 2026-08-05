@@ -419,6 +419,12 @@ func (r *Runner) Cancel(ctx context.Context, actor authn.Subject, jobID string) 
 			ObjectID:   job.ID,
 			Delta:      events.Delta(map[string]any{"source_id": job.SourceID}),
 		})
+		r.publish(ProgressEvent{
+			JobID:   job.ID,
+			Phase:   job.Phase,
+			Message: "cancelled before start",
+			Status:  storecontent.JobStatusCancelled,
+		})
 		return job, nil
 	case storecontent.JobStatusRunning:
 		job, err = r.jobs.Update(ctx, job.ID, storecontent.JobUpdate{

@@ -109,6 +109,14 @@ type Requirement struct {
 	// Resource locates the thing the action acts on, and is the zero value when
 	// Public or Self.
 	Resource ResourceRef
+
+	// SessionOnly is true when the operation's security requirement accepts a
+	// cookie session and not a bearer service token. The middleware then refuses
+	// MethodServiceToken even when the action's rule would allow a token
+	// (M2-004 SSE). Distinct from [authz.GuardSessionOnly] on the rule itself:
+	// content.sync stays token-reachable for sync start/cancel; only the stream
+	// is cookie-bound.
+	SessionOnly bool
 }
 
 // ResourceRef says where in a request the resource being acted on is named. It
@@ -236,7 +244,31 @@ func requirementOf(method, path string, item *openapi3.PathItem, op *openapi3.Op
 	if requirement.Resource, err = parseResource(where, item, op, requirement.Action); err != nil {
 		return Requirement{}, err
 	}
+	requirement.SessionOnly = sessionOnlySecurity(op)
 	return requirement, nil
+}
+
+// sessionOnlySecurity reports whether the operation accepts a cookie session
+// and nothing else. An explicit operation-level security list that names only
+// cookieSession is the signal; inheriting the document default (cookie OR
+// bearer) is not.
+func sessionOnlySecurity(op *openapi3.Operation) bool {
+	if op.Security == nil || len(*op.Security) == 0 {
+		return false
+	}
+	sawCookie := false
+	for _, req := range *op.Security {
+		// Each requirement is an OR alternative. Any alternative that is not
+		// exactly cookieSession means a non-cookie credential is acceptable.
+		if len(req) != 1 {
+			return false
+		}
+		if _, ok := req["cookieSession"]; !ok {
+			return false
+		}
+		sawCookie = true
+	}
+	return sawCookie
 }
 
 // hasCredential refuses an operation that requires a permission while declaring

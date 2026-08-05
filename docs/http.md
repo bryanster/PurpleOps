@@ -240,12 +240,13 @@ development, use the Vite dev proxy rather than opening the API up.
 
 | Setting | Applies to |
 |---|---|
-| `BLACKLIGHT_REQUEST_TIMEOUT` | The deadline on each request's context. A handler that respects its context — every database call does — gives up there, and the failure travels back as a 500 |
+| `BLACKLIGHT_REQUEST_TIMEOUT` | The deadline on each request's context. A handler that respects its context — every database call does — gives up there, and the failure travels back as a 500. **Not applied to `GET /api/v1/events`** (M2-004): the stream opts out by path so a 30s default cannot kill a live subscription |
 | `BLACKLIGHT_SHUTDOWN_TIMEOUT` | How long in-flight requests get after a termination signal |
+| `BLACKLIGHT_EVENTS_HEARTBEAT` | How often the SSE handler writes a comment frame so idle proxies keep the socket (default 15s) |
 | `readHeaderTimeout` (10s), `idleTimeout` (2m) | Constants in `serve.go`: properties of the protocol rather than of a deployment |
 
 There is deliberately no `ReadTimeout` or `WriteTimeout` on the server: the first would cap how long
-an evidence upload may take (`M3`) and the second how long an SSE stream may stay open (`M4`), and
+an evidence upload may take (`M3`) and the second how long an SSE stream may stay open (`M2`/`M4`), and
 both would fail as a truncated response rather than as anything a user could act on.
 
 ## Shutdown

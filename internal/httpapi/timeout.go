@@ -21,14 +21,18 @@ import (
 // validated as positive) but a zero-valued config.Server in a test should not
 // mean "every request expires immediately".
 //
-// M4's SSE stream is the one endpoint this cannot apply to; it opts out at the
-// route, not here.
+// GET /api/v1/events is the one endpoint this cannot apply to: the stream is
+// meant to outlive the ordinary request budget. It opts out by path here.
 func timeout(d time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if d <= 0 {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isSSEPath(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			ctx, cancel := context.WithTimeout(r.Context(), d)
 			// Releases the timer as soon as the handler returns, rather than at
 			// the deadline: without it, a fast request holds a timer for the

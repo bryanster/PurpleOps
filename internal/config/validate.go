@@ -71,6 +71,28 @@ func (c *Config) validate() []error {
 		})
 	}
 
+	if c.Events.MaxSubscribers < 1 {
+		errs = append(errs, &FieldError{
+			Name:  envEventsMaxSubscribers,
+			Value: strconv.Itoa(c.Events.MaxSubscribers),
+			Msg:   "must be at least 1",
+		})
+	}
+	if c.Events.Buffer < 1 {
+		errs = append(errs, &FieldError{
+			Name:  envEventsBuffer,
+			Value: strconv.Itoa(c.Events.Buffer),
+			Msg:   "must be at least 1",
+		})
+	}
+	if c.Events.Heartbeat <= 0 {
+		errs = append(errs, &FieldError{
+			Name:  envEventsHeartbeat,
+			Value: c.Events.Heartbeat.String(),
+			Msg:   "must be a positive duration",
+		})
+	}
+
 	errs = append(errs, c.validateOIDC()...)
 	errs = append(errs, c.validateSAML()...)
 

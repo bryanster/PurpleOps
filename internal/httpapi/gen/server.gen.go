@@ -1969,6 +1969,20 @@ type ListEngagementActivityParams struct {
 	ObjectId *ActivityObjectId `form:"objectId,omitempty" json:"objectId,omitempty"`
 }
 
+// SubscribeEventsParams defines parameters for SubscribeEvents.
+type SubscribeEventsParams struct {
+	// Topics One or more topic names to subscribe to. Repeat the parameter
+	// (`?topics=content.jobs&topics=content.jobs.{id}`). Required in
+	// practice — an empty list is `400` from the handler after authz, so
+	// a missing credential still answers `401` rather than a validation
+	// failure about the query string.
+	Topics *[]string `form:"topics,omitempty" json:"topics,omitempty"`
+
+	// LastEventID SSE last-event cursor. Accepted and ignored in M2 (live tail only;
+	// no activity-log catch-up). M4 will replay from this id.
+	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
 // SetMfaPolicyParams defines parameters for SetMfaPolicy.
 type SetMfaPolicyParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -2315,6 +2329,9 @@ type ServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
+	// SubscribeEvents Subscribe to server-sent events.
+	// (GET /events)
+	SubscribeEvents(w http.ResponseWriter, r *http.Request, params SubscribeEventsParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -2573,6 +2590,12 @@ func (_ Unimplemented) ListContentSourceVersions(w http.ResponseWriter, r *http.
 // ListEngagementActivity List one engagement's activity log.
 // (GET /engagements/{engagementId}/activity)
 func (_ Unimplemented) ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SubscribeEvents Subscribe to server-sent events.
+// (GET /events)
+func (_ Unimplemented) SubscribeEvents(w http.ResponseWriter, r *http.Request, params SubscribeEventsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4055,6 +4078,60 @@ func (siw *ServerInterfaceWrapper) ListEngagementActivity(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// SubscribeEvents operation middleware
+func (siw *ServerInterfaceWrapper) SubscribeEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SubscribeEventsParams
+
+	// ------------- Optional query parameter "topics" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "topics", r.URL.Query(), &params.Topics, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "topics"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topics", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Last-Event-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Last-Event-ID")]; found {
+		var LastEventID string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Last-Event-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Last-Event-ID", valueList[0], &LastEventID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Last-Event-ID", Err: err})
+			return
+		}
+
+		params.LastEventID = &LastEventID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubscribeEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -4928,6 +5005,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/content/jobs/{jobId}/cancel", wrapper.CancelContentJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/events", wrapper.SubscribeEvents)
 	})
 
 	return r
@@ -7986,6 +8066,133 @@ func (response ListEngagementActivity500ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type SubscribeEventsRequestObject struct {
+	Params SubscribeEventsParams
+}
+
+type SubscribeEventsResponseObject interface {
+	VisitSubscribeEventsResponse(w http.ResponseWriter) error
+}
+
+type SubscribeEvents200ResponseHeaders struct {
+	CacheControl *string
+	ContentType  *string
+}
+
+type SubscribeEvents200TexteventStreamResponse struct {
+	Body          io.Reader
+	Headers       SubscribeEvents200ResponseHeaders
+	ContentLength int64
+}
+
+func (response SubscribeEvents200TexteventStreamResponse) VisitSubscribeEventsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.ContentType != nil {
+		w.Header().Set("Content-Type", fmt.Sprint(*response.Headers.ContentType))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// If w doesn't support flushing, fall back to io.Copy.
+		_, err := io.Copy(w, response.Body)
+		return err
+	}
+	// text/event-stream messages are typically small; use a
+	// modest buffer and flush after each chunk so clients see
+	// events immediately instead of waiting on OS buffering.
+	buf := make([]byte, 4096)
+	for {
+		n, err := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+type SubscribeEvents400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SubscribeEvents400ApplicationProblemPlusJSONResponse) VisitSubscribeEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubscribeEvents401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SubscribeEvents401ApplicationProblemPlusJSONResponse) VisitSubscribeEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubscribeEvents403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SubscribeEvents403ApplicationProblemPlusJSONResponse) VisitSubscribeEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubscribeEvents500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response SubscribeEvents500ApplicationProblemPlusJSONResponse) VisitSubscribeEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -9447,6 +9654,9 @@ type StrictServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
+	// SubscribeEvents Subscribe to server-sent events.
+	// (GET /events)
+	SubscribeEvents(ctx context.Context, request SubscribeEventsRequestObject) (SubscribeEventsResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -10511,6 +10721,32 @@ func (sh *strictHandler) ListEngagementActivity(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListEngagementActivityResponseObject); ok {
 		if err := validResponse.VisitListEngagementActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SubscribeEvents operation middleware
+func (sh *strictHandler) SubscribeEvents(w http.ResponseWriter, r *http.Request, params SubscribeEventsParams) {
+	var request SubscribeEventsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SubscribeEvents(ctx, request.(SubscribeEventsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SubscribeEvents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SubscribeEventsResponseObject); ok {
+		if err := validResponse.VisitSubscribeEventsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

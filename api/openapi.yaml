@@ -2374,6 +2374,103 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /events:
+    get:
+      operationId: subscribeEvents
+      summary: Subscribe to server-sent events.
+      description: |
+        Opens a long-lived `text/event-stream` for live UI updates. M2 streams
+        content sync job progress; M4 extends the same hub with engagement
+        topics.
+
+        **Session cookie only.** Service tokens are refused even when they hold
+        `content:sync` — EventSource cannot attach an Authorization header, and
+        a long-lived token-authenticated stream is not a browser subscription.
+        Documented and enforced: the operation's `security` lists only
+        `cookieSession`, and the authorization middleware refuses
+        `MethodServiceToken`.
+
+        Query `topics` is repeatable. The server intersects the list with what
+        the subject may see; unknown topic names are `400` (never silently
+        widened). M2 topics:
+
+        - `content.jobs` — every content job progress tick (requires
+          `content.sync`, administrators)
+        - `content.jobs.{jobId}` — one job
+
+        Event `type` values are stable: `content.job.progress` while a job runs,
+        `content.job.terminal` once when it ends. Each frame carries `id`
+        (UUIDv7), `event` (the type), and a JSON `data` payload.
+
+        `Last-Event-ID` is accepted but **best-effort only in M2**: there is no
+        replay against the activity log yet. On reconnect, the SPA should
+        reconcile from `GET /content/jobs/{id}`. M4 owns guaranteed catch-up.
+
+        Heartbeat comment frames (`: ping`) are written periodically so idle
+        reverse proxies do not close the connection. Operators must disable
+        response buffering on this path — see `docs/deploy.md`.
+      tags:
+        - collaboration
+      security:
+        - cookieSession: []
+      x-authz-action: content.sync
+      x-authz-resource:
+        type: content
+      parameters:
+        - name: topics
+          in: query
+          required: false
+          description: |
+            One or more topic names to subscribe to. Repeat the parameter
+            (`?topics=content.jobs&topics=content.jobs.{id}`). Required in
+            practice — an empty list is `400` from the handler after authz, so
+            a missing credential still answers `401` rather than a validation
+            failure about the query string.
+          schema:
+            type: array
+            items:
+              type: string
+              minLength: 1
+          style: form
+          explode: true
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: |
+            SSE last-event cursor. Accepted and ignored in M2 (live tail only;
+            no activity-log catch-up). M4 will replay from this id.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: |
+            The event stream. Each event is one SSE frame; the connection stays
+            open until the client disconnects or the server drops a slow
+            subscriber.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always `no-cache`.
+            Content-Type:
+              schema:
+                type: string
+              description: Always `text/event-stream`.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE frames (`id` / `event` / `data` / comment heartbeats).
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
 
 components:
   securitySchemes:

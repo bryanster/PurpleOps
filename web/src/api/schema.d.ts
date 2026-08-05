@@ -1418,6 +1418,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subscribe to server-sent events.
+         * @description Opens a long-lived `text/event-stream` for live UI updates. M2 streams
+         *     content sync job progress; M4 extends the same hub with engagement
+         *     topics.
+         *
+         *     **Session cookie only.** Service tokens are refused even when they hold
+         *     `content:sync` — EventSource cannot attach an Authorization header, and
+         *     a long-lived token-authenticated stream is not a browser subscription.
+         *     Documented and enforced: the operation's `security` lists only
+         *     `cookieSession`, and the authorization middleware refuses
+         *     `MethodServiceToken`.
+         *
+         *     Query `topics` is repeatable. The server intersects the list with what
+         *     the subject may see; unknown topic names are `400` (never silently
+         *     widened). M2 topics:
+         *
+         *     - `content.jobs` — every content job progress tick (requires
+         *       `content.sync`, administrators)
+         *     - `content.jobs.{jobId}` — one job
+         *
+         *     Event `type` values are stable: `content.job.progress` while a job runs,
+         *     `content.job.terminal` once when it ends. Each frame carries `id`
+         *     (UUIDv7), `event` (the type), and a JSON `data` payload.
+         *
+         *     `Last-Event-ID` is accepted but **best-effort only in M2**: there is no
+         *     replay against the activity log yet. On reconnect, the SPA should
+         *     reconcile from `GET /content/jobs/{id}`. M4 owns guaranteed catch-up.
+         *
+         *     Heartbeat comment frames (`: ping`) are written periodically so idle
+         *     reverse proxies do not close the connection. Operators must disable
+         *     response buffering on this path — see `docs/deploy.md`.
+         */
+        get: operations["subscribeEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4656,6 +4705,53 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    subscribeEvents: {
+        parameters: {
+            query?: {
+                /**
+                 * @description One or more topic names to subscribe to. Repeat the parameter
+                 *     (`?topics=content.jobs&topics=content.jobs.{id}`). Required in
+                 *     practice — an empty list is `400` from the handler after authz, so
+                 *     a missing credential still answers `401` rather than a validation
+                 *     failure about the query string.
+                 */
+                topics?: string[];
+            };
+            header?: {
+                /**
+                 * @description SSE last-event cursor. Accepted and ignored in M2 (live tail only;
+                 *     no activity-log catch-up). M4 will replay from this id.
+                 */
+                "Last-Event-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description The event stream. Each event is one SSE frame; the connection stays
+             *     open until the client disconnects or the server drops a slow
+             *     subscriber.
+             */
+            200: {
+                headers: {
+                    /** @description Always `no-cache`. */
+                    "Cache-Control"?: string;
+                    /** @description Always `text/event-stream`. */
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
         };
     };
