@@ -57,7 +57,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M0a — Clean slate | ✅ done on branch `v2` (see note below) | — |
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
 | M1 — Identity & access | ✅ done — 18/18 | [18 tickets](#m1--identity--access) |
-| M2 — Content | refined — 15/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
+| M2 — Content | ✅ done — 16/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
 | M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
 | M5 — Analytics | epic, needs refinement | [`M5-EPIC.md`](M5-EPIC.md) |
@@ -146,4 +146,4 @@ Build roughly in this order — the dependency chain is real.
 | [M2-013](done/M2-013-library-browser-ui.md) ✅ | Content library browser UI | L |
 | [M2-014](done/M2-014-sources-admin-ui.md) ✅ | Sources admin UI: sync, bundle, status, reprocess | L |
 | [M2-015](done/M2-015-custom-and-import-ui.md) ✅ | Custom editor + v1 import UI | M |
-| [M2-016](M2-016-sync-write-load-test.md) | Sync write load test (serialized writer fairness) | M |
+| [M2-016](done/M2-016-sync-write-load-test.md) ✅ | Sync write load test (serialized writer fairness) | M |

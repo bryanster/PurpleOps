@@ -186,6 +186,46 @@ when you are done.
 The suite grows one milestone at a time towards the single spec `PLAN.md` §9 describes: install
 content, run an engagement over two rounds, and share a report. M6 owns finishing it.
 
+## Content sync write fairness (M2-016)
+
+Content Apply is the largest write volume in the system and shares the single
+serialized DuckDB writer with interactive paths (session touch, user update).
+`internal/content/loadtest` proves Apply batching does not starve those paths.
+
+### CI (always on)
+
+```sh
+go test ./internal/content/loadtest/
+```
+
+| Test | What it proves |
+|---|---|
+| `TestSyncWriteFairness` | Multi-batch fixture sync + session-touch every 50ms; interactive **p95 ≤ 200ms**, max ≤ 2s, sync succeeds |
+| `TestSyncWriteFairnessDetectsLockHold` | Same setup with Apply sleeping **250ms inside** `store.Write`; interactive p95 **exceeds** 200ms — the gate would catch a lock held across work |
+
+Both ride along with `make test` / `make test-race`. A failure on the first means
+shrink `BLACKLIGHT_CONTENT_WRITE_BATCH` or stop holding `store.Write` across
+non-trivial work. A failure on the second means the detector itself regressed
+(HoldWrite no longer inside the lock, or the budget went soft).
+
+### Full developer load
+
+```sh
+BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/content/loadtest/ -run TestSyncWriteLoad
+```
+
+Writes **20 000** fixture notes at the production default batch size (250) while
+probing the same way. Pass/fail uses the same p95 budget. Ballpark on a local
+SSD / arm64 devcontainer: ~10s sync, interactive p95 well under 200ms.
+
+Assumptions: single process, local NVMe/SSD (or the codespace disk), no competing
+writers. Not a multi-node test and not the M3 war-room scoring load.
+
+ATT&CK checked-in fixtures are deliberately tiny (a handful of STIX objects);
+the multi-batch volume under test is the synthetic fixture adapter, which is
+what production adapters already share for `Writer` batching.
+
+
 ## What CI runs
 
 Every job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), on every pull request; see

@@ -21,8 +21,10 @@ import (
 //	{"version":"current","notes":[{"externalId":"n1","title":"…","body":"…"}]}
 //
 // Apply writes notes via Writer batches and respects ctx cancellation between
-// batches. DelayBatch, when > 0, sleeps before each batch so cancel tests can
-// land mid-Apply.
+// batches. DelayBatch, when > 0, sleeps before each batch (outside the write
+// lock) so cancel tests can land mid-Apply. HoldWrite, when > 0, sleeps inside
+// each Write transaction — M2-016 uses this as a fault injection to prove the
+// fairness test fails when Apply holds the lock across a sleep.
 type FixtureAdapter struct {
 	kind storecontent.Kind
 
@@ -34,8 +36,13 @@ type FixtureAdapter struct {
 	FetchErr error
 
 	// DelayBatch is slept at the start of every Apply batch (after the ctx
-	// check). Zero means no delay.
+	// check, outside the write lock). Zero means no delay.
 	DelayBatch time.Duration
+
+	// HoldWrite is slept inside every Apply Write transaction while the
+	// serialized writer lock is held. Zero in production paths; set only by
+	// the M2-016 lock-hold fault injection.
+	HoldWrite time.Duration
 
 	// batchesApplied counts completed Write calls — tests assert cancel stops
 	// further batches.
@@ -161,6 +168,9 @@ func (a *FixtureAdapter) Apply(ctx context.Context, w Writer, objects []Object, 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if err := a.holdWrite(ctx); err != nil {
+			return err
+		}
 		_, err := tx.ExecContext(ctx, `
 			DELETE FROM content.content_note
 			WHERE source_id = ? AND version = ?`,
@@ -189,6 +199,9 @@ func (a *FixtureAdapter) Apply(ctx context.Context, w Writer, objects []Object, 
 		}
 		chunk := objects[i:end]
 		if err := w.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+			if err := a.holdWrite(ctx); err != nil {
+				return err
+			}
 			for _, obj := range chunk {
 				n, ok := obj.(fixtureNote)
 				if !ok {
@@ -208,6 +221,21 @@ func (a *FixtureAdapter) Apply(ctx context.Context, w Writer, objects []Object, 
 		}
 	}
 	return nil
+}
+
+// holdWrite sleeps HoldWrite while the write lock is held, honouring ctx.
+func (a *FixtureAdapter) holdWrite(ctx context.Context) error {
+	if a.HoldWrite <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(a.HoldWrite)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 type fixtureDoc struct {

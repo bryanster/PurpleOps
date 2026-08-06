@@ -150,8 +150,9 @@ type Content struct {
 	JobTimeout time.Duration
 
 	// WriteBatch is how many normalized objects Apply writes per store.Write
-	// transaction. Large enough to be fast; small enough not to hold the
-	// serialized writer for seconds.
+	// transaction. Default 250: M2-016 loadtest (20k fixture notes, local SSD)
+	// kept interactive session-touch p95 under 200ms at this size; larger
+	// batches risk starving interactive writers on the serialized lock.
 	WriteBatch int
 
 	// NoteMaxBytes is the largest markdown body a custom knowledge-base note

@@ -24,6 +24,8 @@ import (
 )
 
 // Default runner knobs when config left a zero (tests that skip config.Load).
+// defaultWriteBatch matches config.Content.WriteBatch (250); M2-016 loadtest
+// justified that size against interactive p95 ≤ 200ms.
 const (
 	defaultMaxBytes    int64 = 512 << 20
 	defaultJobTimeout        = 30 * time.Minute
