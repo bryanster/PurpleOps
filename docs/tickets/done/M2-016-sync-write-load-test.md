@@ -30,7 +30,7 @@ parse work, interactive auth and (later) scoring stutter. Prove fairness **befor
 
 **Out**
 
-- Full war-room scoring load (`M3-017`).
+- Full war-room scoring load (`M3-016`).
 - Multi-process / multi-node tests.
 
 ## Acceptance criteria

@@ -1,7 +1,9 @@
 # Blacklight v2 — Ticket Backlog
 
 Every ticket here derives from [`PLAN.md`](../../PLAN.md). If a ticket and `PLAN.md` disagree,
-`PLAN.md` wins — raise it rather than guessing.
+`PLAN.md` wins — raise it rather than guessing. **Exception:** locked epic decision tables (e.g.
+[`M3-EPIC.md`](M3-EPIC.md) “no rounds”) are explicit, reviewed deviations — follow the epic for that
+milestone and update `PLAN.md` when the deviation is permanent.
 
 ## How to read a ticket
 
@@ -58,7 +60,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M0b — Foundations | ✅ done — 14/14 | [14 tickets](#m0b--foundations) |
 | M1 — Identity & access | ✅ done — 18/18 | [18 tickets](#m1--identity--access) |
 | M2 — Content | ✅ done — 16/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
-| M3 — Core domain | epic, needs refinement | [`M3-EPIC.md`](M3-EPIC.md) |
+| M3 — Core domain | refined — 0/16 | [16 tickets](#m3--core-domain) · [`M3-EPIC.md`](M3-EPIC.md) |
 | M4 — Collaboration | epic, needs refinement | [`M4-EPIC.md`](M4-EPIC.md) |
 | M5 — Analytics | epic, needs refinement | [`M5-EPIC.md`](M5-EPIC.md) |
 | M6 — Reporting | epic, needs refinement | [`M6-EPIC.md`](M6-EPIC.md) |
@@ -147,3 +149,31 @@ Build roughly in this order — the dependency chain is real.
 | [M2-014](done/M2-014-sources-admin-ui.md) ✅ | Sources admin UI: sync, bundle, status, reprocess | L |
 | [M2-015](done/M2-015-custom-and-import-ui.md) ✅ | Custom editor + v1 import UI | M |
 | [M2-016](done/M2-016-sync-write-load-test.md) ✅ | Sync write load test (serialized writer fairness) | M |
+
+## M3 — Core domain
+
+Goal: Engagement → Scenario → Step → Execution, scored in ATT&CK Evaluations terms, with evidence,
+comments, and findings. **No retest rounds in v1** — operators recreate the assessment
+(`M3-EPIC` decisions; deliberate `PLAN.md` deviation). Decisions are locked in
+[`M3-EPIC.md`](M3-EPIC.md).
+
+Build roughly in this order — the dependency chain is real. **M3-016 is a gate before M4–M6.**
+
+| ID | Title | Size |
+|---|---|---|
+| [M3-001](M3-001-domain-schema.md) | `app` domain schema: engagement, scenario, step, execution, finding, evidence, comment | L |
+| [M3-002](M3-002-engagement-crud.md) | Engagement CRUD, status lifecycle, attack pin, mode | M |
+| [M3-003](M3-003-membership-api.md) | Engagement membership management API | M |
+| [M3-004](M3-004-scenarios.md) | Scenarios CRUD + reorder (`workbook.write`) | M |
+| [M3-005](M3-005-steps.md) | Steps CRUD, copy-on-use, soft freeze, reveal | L |
+| [M3-006](M3-006-executions-red.md) | Executions — red side PATCH + optimistic lock | M |
+| [M3-007](M3-007-executions-blue.md) | Executions — blue side PATCH + optimistic lock | M |
+| [M3-008](M3-008-scoring-domain.md) | Scoring domain: category ordinal, modifiers, derived outcome, MTTD | M |
+| [M3-009](M3-009-evidence-store.md) | Evidence blob store + upload/download API | L |
+| [M3-010](M3-010-comments.md) | Comments on executions + edit history | S |
+| [M3-011](M3-011-findings.md) | Findings + `finding_step` join | M |
+| [M3-012](M3-012-ctid-import.md) | CTID emulation plan → Scenario import | M |
+| [M3-013](M3-013-atomic-to-step.md) | Atomic / procedure template → Step | M |
+| [M3-014](M3-014-engagement-ui.md) | Engagement UI: board / workbook | L |
+| [M3-015](M3-015-scoring-ui.md) | Scoring UI: 5-button scale + modifiers | M |
+| [M3-016](M3-016-concurrency-load-test.md) | War-room concurrency load test (**gate before M4–M6**) | M |

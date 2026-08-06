@@ -27,7 +27,7 @@ directly replacing v1's ~1 GB git-clone-on-first-boot.
 | Jobs | **DB-backed** job rows. Restart marks in-flight jobs interrupted (not silent). |
 | Delete | Allowed only when **nothing references**; else **409** with counts. |
 | Sigma | Ingest rules that carry **ATT&CK technique mappings only**. |
-| CTID | **Catalog ingest only** in M2. Scenario import is M3-013. |
+| CTID | **Catalog ingest only** in M2. Scenario import is M3-012. |
 | v1 import | **UI upload + `blctl content import`**, shared parser. |
 | UI | Full: sources admin + library browser + custom editor + import. |
 | Licensing | Store SPDX + attribution per source; show in UI detail; include in export headers. |

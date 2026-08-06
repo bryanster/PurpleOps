@@ -3,7 +3,7 @@
 Blacklight installs **Center for Threat-Informed Defense (CTID)** adversary
 emulation plans as a **catalog only** in M2. Plans and ordered steps are
 browsable and syncable; turning a plan into an engagement Scenario is
-**M3-013** (`PLAN.md` §3).
+**M3-012** (`PLAN.md` §3).
 
 ## Default source row
 
@@ -100,7 +100,7 @@ catalog intact.
 
 ## M3 import contract
 
-Normative for M3-013 (`POST /engagements/{id}/import-plan`). M2 only catalogs;
+Normative for M3-012 (`POST /engagements/{id}/import-plan`). M2 only catalogs;
 M3 snapshots. See also [content-copy-on-use.md](content-copy-on-use.md).
 
 | Scenario / step field (M3) | Catalog source |

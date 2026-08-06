@@ -72,6 +72,23 @@ func mustCreateUser(t *testing.T, r repos, email string) identity.User {
 	return u
 }
 
+// mustCreateEngagement inserts a minimal engagement row so that membership
+// tests pass the FK added in M3 (0016_app_domain.sql).
+func mustCreateEngagement(t *testing.T, r repos, id string) {
+	t.Helper()
+	err := r.db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(),
+			`INSERT INTO app.engagement (id, name, client, description, status, starts_on, ends_on, attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+			VALUES (?, 'test', 'test', '', 'draft', '2026-01-01', '2026-06-01', '15.1', 'standard', false, 'u1', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+			id,
+		)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("mustCreateEngagement(%q): %v", id, err)
+	}
+}
+
 // TestNoRepositoryOwnsADatabaseHandle is the structural half of the
 // single-writer rule (PLAN.md §6, M0B-003). A repository holding a *sql.DB
 // could begin its own transaction and write outside store.Write, and the
@@ -158,6 +175,7 @@ func TestTimestampsAreUTC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("identities.Create() = %v", err)
 	}
+	mustCreateEngagement(t, r, "e-utc")
 	membership, err := r.memberships.Add(ctx, identity.NewMembership{
 		EngagementID: "e-utc", UserID: user.ID, Role: authz.EngagementRoleRed,
 	})

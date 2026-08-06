@@ -32,6 +32,7 @@ func TestTheSchemaRefusesAnUnknownRoleOrStatus(t *testing.T) {
 
 	r := newRepos(t)
 	user := mustCreateUser(t, r, "alice@example.com")
+	mustCreateEngagement(t, r, "e1")
 
 	cases := []struct {
 		name string
@@ -213,6 +214,7 @@ func TestAUserWhoOwnsRowsCanStillBeUpdated(t *testing.T) {
 	r := newRepos(t)
 	ctx := t.Context()
 	user := mustCreateUser(t, r, "alice@example.com")
+	mustCreateEngagement(t, r, "e1")
 
 	if _, err := r.identities.Create(ctx, identity.NewIdentity{
 		UserID: user.ID, Provider: identity.ProviderLocal, Subject: "alice@example.com",

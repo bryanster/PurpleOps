@@ -31,10 +31,10 @@ context, and blind mode working end to end (`PLAN.md` §2 decisions table, §4).
    disabled (nginx does).
 3. **Presence storage.** In-memory (correct for single-node, lost on restart) vs. persisted. Memory
    is almost certainly right — state it explicitly.
-4. **Blind-mode reveal policy** — carried over from M3's open questions; must be settled before
-   M4-007.
-5. **Concurrent editing UX.** If M3 chose optimistic locking, what does the UI show on conflict?
-   Presence makes collisions visible, but not impossible.
+4. **Blind-mode reveal policy** — **locked in `M3-EPIC`:** lead/red manual reveal; optional
+   `auto_reveal_on_start` on red start. M4-007 implements the live UX/audit on top of that policy.
+5. **Concurrent editing UX.** M3 locked **optimistic locking** (`execution.version`, 409 on stale).
+   M4 UI should surface conflicts (toast + reload); presence makes collisions visible, not impossible.
 
 ## Risks
 

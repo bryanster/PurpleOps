@@ -5,7 +5,7 @@
 ## Why
 
 CTID adversary emulation plans are the fastest path to a realistic scenario. M2 only **catalogs**
-them (`emulation_plan` + ordered steps). Turning a plan into an engagement Scenario is M3-013 —
+them (`emulation_plan` + ordered steps). Turning a plan into an engagement Scenario is M3-012 —
 but M3 should find complete, ordered, structured rows waiting.
 
 ## Scope
@@ -30,7 +30,7 @@ but M3 should find complete, ordered, structured rows waiting.
 
 **Out**
 
-- `POST /engagements/{id}/import-plan` (M3-013).
+- `POST /engagements/{id}/import-plan` (M3-012).
 - Editing upstream plans in UI (custom plans are not this ticket).
 
 ## Acceptance criteria

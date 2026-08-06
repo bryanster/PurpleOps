@@ -57,7 +57,7 @@ they created it, even if the template is later edited or the source re-synced.
   when the engagement pin is set).
 - Custom tactics/techniques (not a product feature).
 
-## CTID plan → scenario (M3-013)
+## CTID plan → scenario (M3-012)
 
 Emulation-plan import snapshots plan/step fields the same way procedure
 templates do. Field mapping lives in [content-ctid.md](content-ctid.md)

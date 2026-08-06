@@ -526,6 +526,15 @@ func TestGetCurrentUserReportsMembershipsAndMFAState(t *testing.T) {
 	t.Parallel()
 
 	server := newAuthServer(t)
+	if err := server.db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(),
+			`INSERT INTO app.engagement (id, name, client, description, status, starts_on, ends_on, attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+			VALUES ('engagement-1', 'test', 'test', '', 'draft', '2026-01-01', '2026-06-01', '15.1', 'standard', false, 'u1', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+		)
+		return err
+	}); err != nil {
+		t.Fatalf("creating engagement: %v", err)
+	}
 	user := server.seedUser(t)
 	if _, err := identity.NewMemberships(server.db).Add(t.Context(), identity.NewMembership{
 		EngagementID: "engagement-1",

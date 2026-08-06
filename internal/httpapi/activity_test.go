@@ -91,6 +91,16 @@ func TestEngagementActivityRequiresMembership(t *testing.T) {
 	}
 
 	engID := "01900000-0000-7000-8000-000000000001"
+	if err := server.db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(),
+			`INSERT INTO app.engagement (id, name, client, description, status, starts_on, ends_on, attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+			VALUES (?, 'test', 'test', '', 'draft', '2026-01-01', '2026-06-01', '15.1', 'standard', false, 'u1', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+			engID,
+		)
+		return err
+	}); err != nil {
+		t.Fatalf("creating engagement: %v", err)
+	}
 	if _, err := identity.NewMemberships(server.db).Add(t.Context(), identity.NewMembership{
 		EngagementID: engID, UserID: member.ID, Role: authz.EngagementRoleRed,
 	}); err != nil {

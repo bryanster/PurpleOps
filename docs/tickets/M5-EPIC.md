@@ -17,7 +17,7 @@ becomes single statements.
 | M5-003 | Detection-category distribution | Uses the `none`..`technique` ordinal from M3-008 |
 | M5-004 | MTTD analysis | Percentiles, not just means — the mean is misleading with a few undetected outliers |
 | M5-005 | Protection rate | `blocked` / `partial` / `not_blocked` breakdown |
-| M5-006 | Round-over-round deltas | The self-join on `(step_id, round_id)`; the headline metric |
+| M5-006 | Round-over-round deltas | **Blocked on product:** M3 dropped rounds. Re-scope to cross-engagement compare or defer. |
 | M5-007 | Findings burndown | Open → resolved over time, per round |
 | M5-008 | Read endpoints for all of the above | Consumed by both the UI and M6's report blocks — one source, two consumers |
 | M5-009 | ATT&CK Navigator layer export | One query now (`PLAN.md` §5) |
@@ -33,7 +33,8 @@ becomes single statements.
    inflates performance; include an explicit "undetected" count next to any MTTD figure.
 3. **Cross-engagement analytics.** Does a programme-level view across engagements exist in v1 of the
    rebuild, or is everything scoped to one engagement? `PLAN.md` implies per-engagement; confirm.
-4. **Rounds beyond two.** Deltas between round 1 and round *n*, or only consecutive pairs?
+4. **Rounds beyond two.** **M3 dropped rounds entirely** (recreate assessment). This question and
+   M5-006 need a new framing before refinement — do not assume `round_id` exists.
 5. **Navigator layer version.** Which Navigator schema version do we emit, and does it need to track
    the engagement's pinned ATT&CK version?
 

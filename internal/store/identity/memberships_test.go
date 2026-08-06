@@ -13,6 +13,7 @@ func TestMembershipRoundTrips(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
 	lead := mustCreateUser(t, r, "lead@example.com")
 	alice := mustCreateUser(t, r, "alice@example.com")
 
@@ -47,8 +48,8 @@ func TestMembershipRoundTrips(t *testing.T) {
 // one as the other is the v1 defect this schema is shaped to prevent.
 func TestAPlatformRoleIsNotAnEngagementRole(t *testing.T) {
 	t.Parallel()
-
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
 	admin, err := r.users.Create(t.Context(), identity.NewUser{
 		Email:        "admin@example.com",
 		DisplayName:  "Admin",
@@ -84,8 +85,8 @@ func TestAddRefusesSomebodyWhoIsAlreadyAMember(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
 	alice := mustCreateUser(t, r, "alice@example.com")
-
 	if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
 		EngagementID: "engagement-1", UserID: alice.ID, Role: authz.EngagementRoleRed,
 	}); err != nil {
@@ -113,6 +114,8 @@ func TestOnePersonCanBeInSeveralEngagements(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
+	mustCreateEngagement(t, r, "engagement-2")
 	alice := mustCreateUser(t, r, "alice@example.com")
 
 	for engagement, role := range map[string]authz.EngagementRole{
@@ -137,8 +140,8 @@ func TestOnePersonCanBeInSeveralEngagements(t *testing.T) {
 
 func TestSetRoleChangesOnlyTheRole(t *testing.T) {
 	t.Parallel()
-
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
 	lead := mustCreateUser(t, r, "lead@example.com")
 	alice := mustCreateUser(t, r, "alice@example.com")
 	created, err := r.memberships.Add(t.Context(), identity.NewMembership{
@@ -169,9 +172,9 @@ func TestSetRoleChangesOnlyTheRole(t *testing.T) {
 }
 
 func TestRemoveTakesSomebodyOutOfOneEngagementOnly(t *testing.T) {
-	t.Parallel()
-
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
+	mustCreateEngagement(t, r, "engagement-2")
 	alice := mustCreateUser(t, r, "alice@example.com")
 	for _, engagement := range []string{"engagement-1", "engagement-2"} {
 		if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
@@ -200,6 +203,8 @@ func TestListByEngagementReturnsTheWholeTeam(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
+	mustCreateEngagement(t, r, "engagement-2")
 	roles := map[string]authz.EngagementRole{
 		"lead@example.com":     authz.EngagementRoleLead,
 		"red@example.com":      authz.EngagementRoleRed,
@@ -244,6 +249,7 @@ func TestAMembershipMustBelongToARealUser(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
+	mustCreateEngagement(t, r, "engagement-1")
 	_, err := r.memberships.Add(t.Context(), identity.NewMembership{
 		EngagementID: "engagement-1", UserID: "no-such-user", Role: authz.EngagementRoleRed,
 	})
@@ -251,12 +257,10 @@ func TestAMembershipMustBelongToARealUser(t *testing.T) {
 		t.Fatal("a membership was created for a user who does not exist")
 	}
 }
-
-// TestAnUnknownEngagementIsAccepted documents the one thing this schema does
-// not enforce, so that a reader meeting it does not think it is an oversight:
-// app.engagement arrives with M3, and until it does nothing checks the
-// identifier. See the comment in 0002_identity.sql.
-func TestAnUnknownEngagementIsAccepted(t *testing.T) {
+// TestAnUnknownEngagementIsRejected replaces the pre-M3 test of the same name.
+// M3 adds the FK on engagement_member.engagement_id → engagement(id), so a
+// membership for an engagement that does not exist must now fail.
+func TestAnUnknownEngagementIsRejected(t *testing.T) {
 	t.Parallel()
 
 	r := newRepos(t)
@@ -265,7 +269,7 @@ func TestAnUnknownEngagementIsAccepted(t *testing.T) {
 	if _, err := r.memberships.Add(t.Context(), identity.NewMembership{
 		EngagementID: "an-engagement-that-does-not-exist", UserID: alice.ID,
 		Role: authz.EngagementRoleRed,
-	}); err != nil {
-		t.Errorf("Add() = %v; until M3 there is nothing to check the engagement against", err)
+	}); err == nil {
+		t.Error("Add() for a non-existent engagement should fail the FK")
 	}
 }

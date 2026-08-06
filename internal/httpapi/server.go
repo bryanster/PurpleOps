@@ -36,6 +36,7 @@ import (
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/activity"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/store/identity"
 	"github.com/bryanster/blacklight/internal/store/settings"
 )
@@ -530,13 +531,15 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		// Panicking keeps NewServer's signature and forces the bug loud.
 		panic("httpapi: content registry: " + err.Error())
 	}
+	engagements := storengagement.NewEngagements(deps.Store)
+	refs := storengagement.NewReferences(engagements)
 	pin, err := attackpin.New(attackpin.Deps{
 		Sources:  sources,
 		Versions: versions,
 		Objects:  objects,
 		Paths:    paths,
 		Activity: activityLog,
-		Refs:     attackpin.NopReferences{},
+		Refs:     refs,
 	})
 	if err != nil {
 		panic("httpapi: attackpin: " + err.Error())

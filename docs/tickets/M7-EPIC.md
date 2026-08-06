@@ -17,7 +17,7 @@ Ship it: documentation, deploy assets, and closing out the v1 tree (`PLAN.md` §
 | M7-005 | Upgrade path | Migration behaviour across releases, and what an operator does before upgrading (back up the DuckDB file and `evidence/`) |
 | M7-006 | Old-tree deletion follow-through | Confirm nothing v1-only is still referenced; `PLAN.md` §8 treats this as work separable from the merge |
 | M7-007 | Security review pass | Fresh review over the whole surface: headers, cookies, uploads, share links, SSO, tokens |
-| M7-008 | Performance sanity pass | Realistic engagement size; confirm the M3-017 load-test conclusions still hold with M4–M6 on top |
+| M7-008 | Performance sanity pass | Realistic engagement size; confirm the M3-016 load-test conclusions still hold with M4–M6 on top |
 
 ## Open questions
 
