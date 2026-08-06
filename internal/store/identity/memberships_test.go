@@ -257,6 +257,7 @@ func TestAMembershipMustBelongToARealUser(t *testing.T) {
 		t.Fatal("a membership was created for a user who does not exist")
 	}
 }
+
 // TestAnUnknownEngagementIsRejected replaces the pre-M3 test of the same name.
 // M3 adds the FK on engagement_member.engagement_id → engagement(id), so a
 // membership for an engagement that does not exist must now fail.

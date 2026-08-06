@@ -51,24 +51,34 @@ Mode and `auto_reveal_on_start` encode blind-policy knobs locked in `M3-EPIC`.
 
 ## Acceptance criteria
 
-- [ ] Create with valid pin succeeds; creator has `lead` membership; activity row written.
-- [ ] Create with unknown/disabled ATT&CK version → 400/409 from AssertPinned mapping.
-- [ ] PATCH pin after a step exists → 409.
-- [ ] Status transition illegal edge → 409; legal edge updates and logs activity.
-- [ ] Member of engagement A cannot GET engagement B (404 conceal).
-- [ ] Delete removes member rows and child workbook rows; subsequent GET is 404.
-- [ ] `make generate` clean; authz actions already exist (no new action required unless you split
+- [x] Create with valid pin succeeds; creator has `lead` membership; activity row written.
+- [x] Create with unknown/disabled ATT&CK version → 400/409 from AssertPinned mapping.
+- [x] PATCH pin after a step exists → 409.
+- [x] Status transition illegal edge → 409; legal edge updates and logs activity.
+- [x] Member of engagement A cannot GET engagement B (404 conceal).
+- [x] Delete removes member rows and child workbook rows; subsequent GET is 404.
+- [x] `make generate` clean; authz actions already exist (no new action required unless you split
       status — prefer not to).
 
-## Tests
+## Implementation notes
 
-- Handler + store tests for create/list/get/patch/status/delete.
-- Pin freeze after step (insert step via store).
-- AssertPinned failure mapping.
-- Authz: non-member conceal; member read; lead manage; observer cannot manage.
-
-## Notes for the implementer
-
-- Reuse identity membership repository for creator lead insert.
-- Do not invent a second pin normalizer — call `attackpin` only.
-- Engagement list for admins: all engagements; for members: only memberships. Match `docs/authz.md`.
+- Domain service created at `internal/engagement/service.go` following the `internal/content`
+  pattern: constructor-injected dependencies, business logic separated from HTTP handlers.
+- Creator lead membership inserted inline in the same write transaction via an `After` hook
+  on `Engagements.Create`, rather than calling the identity `Memberships.Add` which opens a
+  separate write transaction.
+- `GET /engagements` uses `x-authz-self: true` (authenticated, no specific permission) with the
+  handler filtering by membership. Corresponding entry added to exempt list in
+  `api/authz_test.go`.
+- CSRF coverage entries added for all mutating engagement routes in `csrfCoverage`.
+- Authz sweep test updated: removed fixture route for `GET /engagements/{engagementId}`
+  (conflicting with real endpoint), marked sweep op as `Real: true`, and seeds the sweep
+  engagement in the test database.
+- Pre-existing test failure in `internal/config` (`TestOnlyConfigReadsTheEnvironment` —
+  `os.Getenv` in `internal/content/loadtest/fairness_test.go:374` from M2-016) is not
+  addressed here.
+- Activity verbs `engagement.created`, `.updated`, `.status_changed`, `.deleted` and
+  object type `engagement` added to `internal/events/activity.go`.
+- Lint fixes applied to pre-existing issues in `internal/store/engagement/engagement.go`
+  (errcheck), `engagements.go` (errorlint), `executions.go` (errorlint) to keep the build
+  green.

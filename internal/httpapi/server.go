@@ -30,6 +30,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content/attackpin"
 	"github.com/bryanster/blacklight/internal/content/ctid"
 	"github.com/bryanster/blacklight/internal/content/sigma"
+	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -544,6 +545,14 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: attackpin: " + err.Error())
 	}
+	engSvc, err := engagement.New(engagement.Deps{
+		Engagements: engagements,
+		AttackPin:   pin,
+		Activity:    activityLog,
+	})
+	if err != nil {
+		panic("httpapi: engagement: " + err.Error())
+	}
 	customSvc, err := content.NewCustom(content.CustomDeps{
 		Sources:      sources,
 		Procedures:   procedures,
@@ -632,6 +641,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			custom:         customSvc,
 
 			attackpin:       pin,
+			engagements:     engSvc,
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,
 			signInURL:       signInURL(deps.Config),

@@ -27,6 +27,8 @@ package httpapi
 // [sweepOp.Real] marks a row that drives the shipped endpoint rather than a stub.
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -77,15 +79,6 @@ components:
       required: false
       schema: {type: string}
 paths:
-  /engagements/{engagementId}:
-    parameters:
-      - {name: engagementId, in: path, required: true, schema: {type: string}}
-    get:
-      operationId: sweepReadEngagement
-      summary: Read one engagement.
-      x-authz-action: engagement.read
-      x-authz-resource: {type: engagement, engagement: engagementId}
-      responses: {"200": {description: ok}}
   /engagements/{engagementId}/executions/{executionId}/red:
     parameters:
       - {name: engagementId, in: path, required: true, schema: {type: string}}
@@ -176,6 +169,7 @@ var sweepOperations = []sweepOp{
 	{
 		Name: "read the engagement", Method: http.MethodGet,
 		Route: "/engagements/{engagementId}",
+		Real:  true,
 		Want:  statuses{200, 200, 200, 200, 200, 404},
 	},
 	{
@@ -427,6 +421,23 @@ func newSweepServer(t *testing.T) *sweepServer {
 	own := ownedBy(sweepEngagement, false)
 	db := storetest.Migrated(t)
 	logs := &logBuffer{}
+
+	// Seed the engagement the sweep routes reference, so that the real
+	// GET /engagements/{engagementId} handler (M3-002) does not 500 on a
+	// missing row.
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(
+			`INSERT INTO app.engagement
+			(id, name, client, description, status, starts_on, ends_on,
+			 attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+			VALUES (?, 'Sweep', '', '', 'draft', '2025-01-01', '2025-01-01',
+			        '15.1', 'standard', false,
+			        '0192f1a0-0000-7000-8000-000000000000', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z')`,
+			sweepEngagement)
+		return err
+	}); err != nil {
+		t.Fatalf("seeding sweep engagement: %v", err)
+	}
 	cfg := testConfig(t)
 
 	handler, err := newServer(

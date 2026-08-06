@@ -1157,6 +1157,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List engagements the caller can see.
+         * @description Platform administrators see every engagement. Members see only the ones
+         *     they belong to. Non-members see an empty list — the existence of an
+         *     engagement is not revealed to someone outside it.
+         */
+        get: operations["listEngagements"];
+        put?: never;
+        /**
+         * Create a new engagement.
+         * @description The creator becomes **lead** member in the same transaction.
+         *     `attack_version` must pass attackpin.AssertPinned — an unknown,
+         *     disabled or empty ATT&CK version is refused.
+         */
+        post: operations["createEngagement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one engagement.
+         * @description Members and platform administrators. A non-member receives 404 rather
+         *     than 403, so the existence of an engagement is not confirmed.
+         */
+        get: operations["getEngagement"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an engagement and every row in its workbook graph.
+         * @description Lead and platform administrators. Hard delete: scenarios, steps,
+         *     executions, findings, evidence links, comments, members and
+         *     engagement-scoped activity are removed.
+         */
+        delete: operations["deleteEngagement"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch engagement fields.
+         * @description Lead and platform administrators. Every field is optional; only the ones
+         *     present are changed. Changing `attack_version` after any step exists
+         *     returns 409.
+         */
+        patch: operations["patchEngagement"];
+        trace?: never;
+    };
+    "/engagements/{engagementId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transition the engagement to a new status.
+         * @description Lead and platform administrators. The state machine is:
+         *     `draft` → `active` → `closed` → `archived`, plus `draft` → `closed`.
+         *     Illegal transitions return 409 with a problem detail.
+         */
+        post: operations["setEngagementStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagements/{engagementId}/activity": {
         parameters: {
             query?: never;
@@ -3766,6 +3849,88 @@ export interface components {
         ContentAttackVersionList: {
             items: components["schemas"]["ContentAttackVersion"][];
         };
+        /**
+         * @description The lifecycle state of an assessment.
+         *     `draft` → `active` → `closed` → `archived`, plus `draft` → `closed`.
+         * @enum {string}
+         */
+        EngagementStatus: "draft" | "active" | "closed" | "archived";
+        /**
+         * @description `standard`: both sides see the workbook.
+         *     `blind`: red/lead decide what blue sees via per-step reveal.
+         * @enum {string}
+         */
+        EngagementMode: "standard" | "blind";
+        Engagement: {
+            /**
+             * Format: uuid
+             * @description UUIDv7, sortable by creation time.
+             */
+            id: string;
+            name: string;
+            client: string;
+            description: string;
+            status: components["schemas"]["EngagementStatus"];
+            /** Format: date */
+            startsOn: string;
+            /** Format: date */
+            endsOn: string;
+            /** @description Pinned ATT&CK version string, e.g. "15.1". */
+            attackVersion: string;
+            mode: components["schemas"]["EngagementMode"];
+            /** @description When true, the first red transition reveals the step. */
+            autoRevealOnStart: boolean;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateEngagement: {
+            name: string;
+            /** @default  */
+            client: string;
+            /** @default  */
+            description: string;
+            /**
+             * Format: date
+             * @description Defaults to today when unset.
+             */
+            startsOn?: string;
+            /**
+             * Format: date
+             * @description Defaults to today when unset.
+             */
+            endsOn?: string;
+            /** @description ATT&CK version pin. Must pass attackpin.AssertPinned. */
+            attackVersion: string;
+            /** @default standard */
+            mode: components["schemas"]["EngagementMode"];
+            /** @default false */
+            autoRevealOnStart: boolean;
+        };
+        /** @description Every field is optional; only the ones present are changed. */
+        PatchEngagement: {
+            name?: string;
+            client?: string;
+            description?: string;
+            /** Format: date */
+            startsOn?: string;
+            /** Format: date */
+            endsOn?: string;
+            attackVersion?: string;
+            mode?: components["schemas"]["EngagementMode"];
+            autoRevealOnStart?: boolean;
+        };
+        SetEngagementStatus: {
+            status: components["schemas"]["EngagementStatus"];
+        };
+        EngagementPage: {
+            items: components["schemas"]["Engagement"][];
+            /** @description Opaque cursor for the next page; null on the last. */
+            nextCursor?: string | null;
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -5541,6 +5706,189 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listEngagements: {
+        parameters: {
+            query?: {
+                /** @description Filter by engagement status. */
+                status?: "draft" | "active" | "closed" | "archived";
+                /** @description Maximum number of items to return. */
+                limit?: components["parameters"]["Limit"];
+                /**
+                 * @description Opaque cursor taken verbatim from the `nextCursor` of a previous
+                 *     response. Absent means "from the beginning". Its contents are an
+                 *     implementation detail — clients must not parse or construct one.
+                 */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of engagements, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createEngagement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEngagement"];
+            };
+        };
+        responses: {
+            /** @description The engagement was created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getEngagement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The engagement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteEngagement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The engagement and its graph are deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchEngagement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchEngagement"];
+            };
+        };
+        responses: {
+            /** @description The patched engagement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setEngagementStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetEngagementStatus"];
+            };
+        };
+        responses: {
+            /** @description The engagement with its new status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

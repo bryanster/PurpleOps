@@ -259,10 +259,13 @@ func sampleInteractive(
 	}
 	// Content read on the read pool — must stay unblocked by writers.
 	var n int
-	_ = db.Read().QueryRowContext(ctx,
+	if err := db.Read().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM content.content_source WHERE id = ?`,
 		storecontent.SourceIDAtomic,
-	).Scan(&n)
+	).Scan(&n); err != nil {
+		// Scan can fail on context deadline; that's expected under load.
+		_ = err
+	}
 
 	mu.Lock()
 	*latencies = append(*latencies, elapsed)

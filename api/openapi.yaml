@@ -1941,6 +1941,220 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+
+  /engagements:
+    post:
+      operationId: createEngagement
+      summary: Create a new engagement.
+      description: |
+        The creator becomes **lead** member in the same transaction.
+        `attack_version` must pass attackpin.AssertPinned — an unknown,
+        disabled or empty ATT&CK version is refused.
+      tags:
+        - engagements
+      x-authz-action: engagement.create
+      x-authz-resource:
+        type: platform
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEngagement"
+      responses:
+        "201":
+          description: The engagement was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Engagement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: listEngagements
+      summary: List engagements the caller can see.
+      description: |
+        Platform administrators see every engagement. Members see only the ones
+        they belong to. Non-members see an empty list — the existence of an
+        engagement is not revealed to someone outside it.
+      tags:
+        - engagements
+      x-authz-self: true
+      x-authz-because: listing returns only what the caller can see; the handler filters by membership
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by engagement status.
+          schema:
+            type: string
+            enum: [draft, active, closed, archived]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of engagements, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}:
+    get:
+      operationId: getEngagement
+      summary: Return one engagement.
+      description: |
+        Members and platform administrators. A non-member receives 404 rather
+        than 403, so the existence of an engagement is not confirmed.
+      tags:
+        - engagements
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The engagement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Engagement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: patchEngagement
+      summary: Patch engagement fields.
+      description: |
+        Lead and platform administrators. Every field is optional; only the ones
+        present are changed. Changing `attack_version` after any step exists
+        returns 409.
+      tags:
+        - engagements
+      x-authz-action: engagement.manage
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchEngagement"
+      responses:
+        "200":
+          description: The patched engagement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Engagement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteEngagement
+      summary: Delete an engagement and every row in its workbook graph.
+      description: |
+        Lead and platform administrators. Hard delete: scenarios, steps,
+        executions, findings, evidence links, comments, members and
+        engagement-scoped activity are removed.
+      tags:
+        - engagements
+      x-authz-action: engagement.delete
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "204":
+          description: The engagement and its graph are deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/status:
+    post:
+      operationId: setEngagementStatus
+      summary: Transition the engagement to a new status.
+      description: |
+        Lead and platform administrators. The state machine is:
+        `draft` → `active` → `closed` → `archived`, plus `draft` → `closed`.
+        Illegal transitions return 409 with a problem detail.
+      tags:
+        - engagements
+      x-authz-action: engagement.manage
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetEngagementStatus"
+      responses:
+        "200":
+          description: The engagement with its new status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Engagement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /engagements/{engagementId}/activity:
     get:
       operationId: listEngagementActivity
@@ -7094,3 +7308,161 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentAttackVersion"
+
+    EngagementStatus:
+      type: string
+      description: |
+        The lifecycle state of an assessment.
+        `draft` → `active` → `closed` → `archived`, plus `draft` → `closed`.
+      enum: [draft, active, closed, archived]
+
+    EngagementMode:
+      type: string
+      description: |
+        `standard`: both sides see the workbook.
+        `blind`: red/lead decide what blue sees via per-step reveal.
+      enum: [standard, blind]
+
+    Engagement:
+      type: object
+      required:
+        - id
+        - name
+        - client
+        - description
+        - status
+        - startsOn
+        - endsOn
+        - attackVersion
+        - mode
+        - autoRevealOnStart
+        - createdBy
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7, sortable by creation time.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        client:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 4096
+        status:
+          $ref: "#/components/schemas/EngagementStatus"
+        startsOn:
+          type: string
+          format: date
+        endsOn:
+          type: string
+          format: date
+        attackVersion:
+          type: string
+          description: Pinned ATT&CK version string, e.g. "15.1".
+          maxLength: 32
+        mode:
+          $ref: "#/components/schemas/EngagementMode"
+        autoRevealOnStart:
+          type: boolean
+          description: When true, the first red transition reveals the step.
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateEngagement:
+      type: object
+      required:
+        - name
+        - attackVersion
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        client:
+          type: string
+          maxLength: 255
+          default: ""
+        description:
+          type: string
+          maxLength: 4096
+          default: ""
+        startsOn:
+          type: string
+          format: date
+          description: Defaults to today when unset.
+        endsOn:
+          type: string
+          format: date
+          description: Defaults to today when unset.
+        attackVersion:
+          type: string
+          description: ATT&CK version pin. Must pass attackpin.AssertPinned.
+          maxLength: 32
+        mode:
+          $ref: "#/components/schemas/EngagementMode"
+          default: standard
+        autoRevealOnStart:
+          type: boolean
+          default: false
+
+    PatchEngagement:
+      type: object
+      description: Every field is optional; only the ones present are changed.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        client:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 4096
+        startsOn:
+          type: string
+          format: date
+        endsOn:
+          type: string
+          format: date
+        attackVersion:
+          type: string
+          maxLength: 32
+        mode:
+          $ref: "#/components/schemas/EngagementMode"
+        autoRevealOnStart:
+          type: boolean
+
+    SetEngagementStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/EngagementStatus"
+
+    EngagementPage:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Engagement"
+        nextCursor:
+          type: [string, "null"]
+          description: Opaque cursor for the next page; null on the last.

@@ -99,9 +99,9 @@ var roleLiterals = func() map[string]string {
 // Every entry is a claim that the string is not a role. Adding one is fine;
 // adding one without reading it is how the rule stops meaning anything.
 var justifiedLiterals = map[string]string{
-	"internal/cli/user.go:admin":                               "the name of the --admin flag, not the role it sets",
-	"internal/store/engagement/engagement.go:red":             "EvidenceSide value, not an engagement role",
-	"internal/store/engagement/engagement.go:blue":            "EvidenceSide value, not an engagement role",
+	"internal/cli/user.go:admin":                   "the name of the --admin flag, not the role it sets",
+	"internal/store/engagement/engagement.go:red":  "EvidenceSide value, not an engagement role",
+	"internal/store/engagement/engagement.go:blue": "EvidenceSide value, not an engagement role",
 }
 
 // TestRoleLiteralsLiveOnlyInThisPackage is M1-012's fourth acceptance criterion.

@@ -568,7 +568,6 @@ func TestCommentRoundTrip(t *testing.T) {
 	}
 }
 
-
 func TestEvidenceRoundTrip_DirectSQL(t *testing.T) {
 	db := storetest.Migrated(t)
 	r := repos{

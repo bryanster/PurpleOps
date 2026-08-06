@@ -505,6 +505,18 @@ var csrfCoverage = map[string]struct {
 		mediaType: formMediaType,
 		exempt:    true, // A cross-site POST from the identity provider; see csrfExemptRoutes.
 	},
+
+	// Engagement CRUD (M3-002).
+	"POST " + BasePath + "/engagements": {
+		body: `{"name":"test","attackVersion":"15.1"}`,
+	},
+	"DELETE " + BasePath + "/engagements/{engagementId}": {},
+	"PATCH " + BasePath + "/engagements/{engagementId}": {
+		body: `{"name":"patched"}`,
+	},
+	"POST " + BasePath + "/engagements/{engagementId}/status": {
+		body: `{"status":"active"}`,
+	},
 }
 
 // The two media types the walks send.

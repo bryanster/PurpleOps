@@ -102,6 +102,12 @@ const (
 	// (sync path) or the job id (async path); counts live in the delta.
 	VerbContentImportFinished Verb = "content.import.finished"
 	VerbContentImportFailed   Verb = "content.import.failed"
+
+	// Engagement lifecycle (M3-002). Object is the engagement itself.
+	VerbEngagementCreated       Verb = "engagement.created"
+	VerbEngagementUpdated       Verb = "engagement.updated"
+	VerbEngagementStatusChanged Verb = "engagement.status_changed"
+	VerbEngagementDeleted       Verb = "engagement.deleted"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -114,6 +120,7 @@ const (
 	ObjectRecoveryCode             = "recovery_code"
 	ObjectIdentity                 = "identity"
 	ObjectLogin                    = "login"
+	ObjectEngagement               = "engagement"
 	ObjectContentSource            = "content_source"
 	ObjectContentSyncJob           = "content_sync_job"
 	ObjectContentSourceVersion     = "content_source_version"

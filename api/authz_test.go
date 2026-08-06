@@ -75,6 +75,9 @@ func TestTheMappingIsAnExemptionOrAPermissionAndNeverBoth(t *testing.T) {
 		// why it is an exemption rather than a permission nobody could fail to
 		// hold.
 		"updateCurrentUser": true,
+		// Engagement list returns only what the caller can see — members see
+		// their memberships, admins see all. Non-members get an empty list.
+		"listEngagements": true,
 	}
 
 	for id, requirement := range requirements {

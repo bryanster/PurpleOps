@@ -22,6 +22,7 @@ type DB interface {
 	Read() store.Reader
 	Write(ctx context.Context, fn func(tx *sql.Tx) error) error
 }
+
 // After runs inside a write transaction after the primary mutation succeeds.
 // Activity recording (M1-015) is the first consumer: the log row and the change
 // share one commit, so a failure here rolls both back.
@@ -30,14 +31,15 @@ type DB interface {
 // [AfterEntityID] — mutators put it on the context before calling.
 type After func(ctx context.Context, tx *sql.Tx) error
 
-
 type afterEntityKey struct{}
 
 // AfterEntityID is the primary key of the row the mutator just touched, when
 // called from inside an [After] hook. Outside a hook it is "".
 func AfterEntityID(ctx context.Context) string {
-	id, _ := ctx.Value(afterEntityKey{}).(string)
-	return id
+	if id, ok := ctx.Value(afterEntityKey{}).(string); ok {
+		return id
+	}
+	return ""
 }
 
 // WithAfterEntity puts id on ctx for [AfterEntityID].
@@ -313,8 +315,8 @@ type NewStep struct {
 // Execution is the red + blue fill-in for one step. One execution per step
 // (UNIQUE(step_id)). Version is the optimistic-lock column.
 type Execution struct {
-	ID    string
-	StepID string
+	ID      string
+	StepID  string
 	Version int
 
 	// Red side

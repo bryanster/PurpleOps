@@ -3,6 +3,7 @@ package engagement
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -70,7 +71,8 @@ func (r *Executions) IncrementVersion(ctx context.Context, id string, expectedVe
 		return nil
 	})
 	if err != nil {
-		if vc, ok := err.(*versionConflictError); ok {
+		var vc *versionConflictError
+		if errors.As(err, &vc) {
 			return 0, fmt.Errorf("execution %s: version conflict: expected %d, current %d: %w",
 				id, expectedVersion, vc.current.Version, err)
 		}
