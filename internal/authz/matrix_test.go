@@ -537,6 +537,25 @@ var matrix = []row{
 			Member: bySeat{deny404, allow, deny403, deny403, deny403},
 		},
 	},
+
+	{
+		// workbook.write (M3-004): lead + red write the workbook (scenarios,
+		// steps and their contents). Blue and observer do not.
+		Action: authz.ActionWorkbookWrite, Resource: authz.ResourceEngagement,
+		Scope: authz.TokenScopeEngagementsWrite, Token: tokensMayHoldIt,
+		Standard: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, deny403, deny403},
+		},
+		BlindRevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, deny403, deny403},
+		},
+		BlindUnrevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, deny403, deny403},
+		},
+	},
 }
 
 // lens is one way of arriving at a cell: how the request authenticated, and with

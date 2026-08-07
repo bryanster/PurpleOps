@@ -233,6 +233,10 @@ var rules = []Rule{
 	{Action: ActionEngagementDelete, Name: "engagement.delete", Resource: ResourceEngagement,
 		Platform: admins, Engagement: leadOnly, Token: TokenScopeEngagementsWrite,
 		Summary: "Delete an engagement and everything in it."},
+	{Action: ActionWorkbookWrite, Name: "workbook.write", Resource: ResourceEngagement,
+		Platform: admins, Engagement: leadAndRed, Token: TokenScopeEngagementsWrite,
+		Summary: "Create, edit, reorder and delete scenarios, steps and their contents."},
+
 	{Action: ActionMemberRead, Name: "member.read", Resource: ResourceMember,
 		Platform: admins, Engagement: allMembers, Token: TokenScopeEngagementsRead,
 		Summary: "Read who is in an engagement and in what seat."},

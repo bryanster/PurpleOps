@@ -65,6 +65,7 @@ a role held elsewhere grants nothing here. A non-member is refused with a 404.
 | `engagement.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | See that an engagement exists and read its settings. |
 | `engagement.manage` | ✓ | ✓ | · | · | · | · | `engagements:write` | Change an engagement's settings, including whether it runs blind. |
 | `engagement.delete` | ✓ | ✓ | · | · | · | · | `engagements:write` | Delete an engagement and everything in it. |
+| `workbook.write` | ✓ | ✓ | ✓ | · | · | · | `engagements:write` | Create, edit, reorder and delete scenarios, steps and their contents. |
 | `member.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read who is in an engagement and in what seat. |
 | `member.manage` | ✓ | ✓ | · | · | · | · | `engagements:write` | Add, remove and re-seat members of one engagement. |
 | `execution.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read an execution and its steps. |

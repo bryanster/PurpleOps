@@ -1320,6 +1320,86 @@ export interface paths {
         patch: operations["patchEngagementMember"];
         trace?: never;
     };
+    "/engagements/{engagementId}/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List every scenario in an engagement.
+         * @description Members and platform administrators. Ordered by ordinal ascending.
+         */
+        get: operations["listScenarios"];
+        put?: never;
+        /**
+         * Create a new scenario in an engagement.
+         * @description Lead, red and platform administrators. The ordinal is assigned as
+         *     the next dense position (1-based). Closed/archived engagements
+         *     return 409.
+         */
+        post: operations["createScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/scenarios/{scenarioId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one scenario.
+         * @description Members and platform administrators. A non-member receives 404.
+         */
+        get: operations["getScenario"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a scenario and cascade its children.
+         * @description Lead, red and platform administrators. Cascades: steps, executions,
+         *     comment revisions, comments, evidence links, finding_step links for
+         *     those steps. Closed/archived engagements return 409.
+         */
+        delete: operations["deleteScenario"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch scenario fields.
+         * @description Lead, red and platform administrators. Every field is optional;
+         *     only the ones present are changed. Closed/archived engagements
+         *     return 409.
+         */
+        patch: operations["patchScenario"];
+        trace?: never;
+    };
+    "/engagements/{engagementId}/scenarios/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder scenarios in an engagement.
+         * @description Lead, red and platform administrators. The body lists every scenario
+         *     id in the desired order. Ordinals are reassigned 1..N to match.
+         *     Closed/archived engagements return 409.
+         */
+        put: operations["reorderScenarios"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/sources": {
         parameters: {
             query?: never;
@@ -4008,6 +4088,56 @@ export interface components {
             /** @description Opaque cursor for the next page; null on the last. */
             nextCursor?: string | null;
         };
+        /**
+         * @description Provenance of a scenario. `manual` is authored here; `ctid` and `imported` come from content.
+         * @enum {string}
+         */
+        ScenarioSource: "manual" | "ctid" | "imported";
+        Scenario: {
+            /**
+             * Format: uuid
+             * @description UUIDv7.
+             */
+            id: string;
+            /** Format: uuid */
+            engagementId: string;
+            /** @description 1-based dense position; UI order. */
+            ordinal: number;
+            name: string;
+            narrative: string;
+            source: components["schemas"]["ScenarioSource"];
+            threatActor?: string;
+            /** @description External reference (CTID plan id, import key). */
+            sourceRef?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ScenarioList: {
+            items: components["schemas"]["Scenario"][];
+        };
+        CreateScenario: {
+            name: string;
+            /** @default  */
+            narrative: string;
+            /** @default  */
+            threatActor: string;
+            /** @default manual */
+            source: components["schemas"]["ScenarioSource"];
+            /** @default  */
+            sourceRef: string;
+        };
+        /** @description Every field is optional; only the ones present are changed. */
+        PatchScenario: {
+            name?: string;
+            narrative?: string;
+            threatActor?: string;
+        };
+        ReorderScenarios: {
+            /** @description Ordered list of scenario ids. Every scenario in the engagement must appear exactly once. Ordinals are reassigned 1..N to match this order. */
+            ids: string[];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -4167,6 +4297,8 @@ export interface components {
         EngagementId: string;
         /** @description The account being read or changed. */
         UserId: string;
+        /** @description The scenario being read or changed. */
+        ScenarioId: string;
         /** @description Restrict the listing to accounts in this state. */
         UserStatusFilter: components["schemas"]["UserStatus"];
         /** @description Restrict the listing to accounts holding this platform role. */
@@ -6132,6 +6264,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EngagementMember"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listScenarios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list of scenarios. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScenario"];
+            };
+        };
+        responses: {
+            /** @description The created scenario. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scenario"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scenario. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scenario"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scenario and its children are deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchScenario"];
+            };
+        };
+        responses: {
+            /** @description The patched scenario. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scenario"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reorderScenarios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderScenarios"];
+            };
+        };
+        responses: {
+            /** @description The reordered scenario list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioList"];
                 };
             };
             400: components["responses"]["BadRequest"];

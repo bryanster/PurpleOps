@@ -57,6 +57,8 @@ import (
 const (
 	sweepEngagement = "0192f1a0-0000-7000-8000-00000000e001"
 	sweepExecution  = "0192f1a0-0000-7000-8000-00000000e002"
+	sweepScenario  = "0192f1a0-0000-7000-8000-00000000e003"
+
 )
 
 // sweepSpec declares the five endpoints that do not exist yet, mapped the way M2
@@ -201,6 +203,15 @@ var sweepOperations = []sweepOp{
 		Route: "/content/sources/{sourceId}/sync",
 		Real:  true, Body: `{}`,
 		Want: statuses{409, 403, 403, 403, 403, 403},
+	},
+
+	{
+		// workbook.write (M3-004): lead + red + admin, not blue or observer.
+		// The scenario does not exist → 404 for those who pass authz.
+		Name: "write the workbook", Method: http.MethodDelete,
+		Route: "/engagements/{engagementId}/scenarios/{scenarioId}",
+		Real:  true,
+		Want:  statuses{404, 404, 404, 403, 403, 404},
 	},
 }
 
@@ -520,7 +531,7 @@ func sweepDoc(t *testing.T) *openapi3.T {
 func (s *sweepServer) target(route string) string {
 	return BasePath + strings.NewReplacer(
 		"{engagementId}", sweepEngagement,
-		"{executionId}", sweepExecution,
+		"{scenarioId}", sweepScenario,
 		"{userId}", s.targetUser.ID,
 		"{sourceId}", storecontent.SourceIDCustom,
 	).Replace(route)

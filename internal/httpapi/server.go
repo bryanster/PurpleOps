@@ -532,6 +532,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		// Panicking keeps NewServer's signature and forces the bug loud.
 		panic("httpapi: content registry: " + err.Error())
 	}
+	scenarios := storengagement.NewScenarios(deps.Store)
 	engagements := storengagement.NewEngagements(deps.Store)
 	refs := storengagement.NewReferences(engagements)
 	pin, err := attackpin.New(attackpin.Deps{
@@ -552,6 +553,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		AttackPin:   pin,
 		Activity:    activityLog,
 		Memberships: memberships,
+		Scenarios:  scenarios,
 		Users:       users,
 	})
 	if err != nil {

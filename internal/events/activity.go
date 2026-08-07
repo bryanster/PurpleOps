@@ -114,6 +114,13 @@ const (
 	VerbMemberAdded       Verb = "member.added"
 	VerbMemberRoleChanged Verb = "member.role_changed"
 	VerbMemberRemoved     Verb = "member.removed"
+
+	// Workbook scenario lifecycle (M3-004). Object is the scenario row;
+	// engagement_id names which engagement they belong to.
+	VerbScenarioCreated   Verb = "scenario.created"
+	VerbScenarioUpdated   Verb = "scenario.updated"
+	VerbScenarioDeleted   Verb = "scenario.deleted"
+	VerbScenarioReordered Verb = "scenario.reordered"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -135,6 +142,8 @@ const (
 	ObjectContentNote              = "content_note"
 
 	ObjectMember = "member"
+
+	ObjectScenario = "scenario"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

@@ -386,6 +386,27 @@ func (e SSOProviderId) Valid() bool {
 	}
 }
 
+// Defines values for ScenarioSource.
+const (
+	ScenarioSourceCtid     ScenarioSource = "ctid"
+	ScenarioSourceImported ScenarioSource = "imported"
+	ScenarioSourceManual   ScenarioSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ScenarioSource enum.
+func (e ScenarioSource) Valid() bool {
+	switch e {
+	case ScenarioSourceCtid:
+		return true
+	case ScenarioSourceImported:
+		return true
+	case ScenarioSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ServiceTokenStatus.
 const (
 	ServiceTokenStatusActive  ServiceTokenStatus = "active"
@@ -1389,6 +1410,17 @@ type CreateEngagement struct {
 	StartsOn *openapi_types.Date `json:"startsOn,omitempty"`
 }
 
+// CreateScenario defines model for CreateScenario.
+type CreateScenario struct {
+	Name      string  `json:"name"`
+	Narrative *string `json:"narrative,omitempty"`
+
+	// Source Provenance of a scenario. `manual` is authored here; `ctid` and `imported` come from content.
+	Source      *ScenarioSource `json:"source,omitempty"`
+	SourceRef   *string         `json:"sourceRef,omitempty"`
+	ThreatActor *string         `json:"threatActor,omitempty"`
+}
+
 // CreateServiceTokenRequest Body of `POST /auth/tokens`. The owner is the caller and is not a field.
 type CreateServiceTokenRequest struct {
 	// EngagementId Bind the token to one engagement. Omit for a token that may reach
@@ -1806,6 +1838,13 @@ type PatchMember struct {
 	Role EngagementRole `json:"role"`
 }
 
+// PatchScenario Every field is optional; only the ones present are changed.
+type PatchScenario struct {
+	Name        *string `json:"name,omitempty"`
+	Narrative   *string `json:"narrative,omitempty"`
+	ThreatActor *string `json:"threatActor,omitempty"`
+}
+
 // PlatformRole What somebody may do to this installation: `admin` manages users, content
 // and every engagement; `member` takes part in the engagements they belong
 // to. What they may do *inside* one is `EngagementRole`, and the two are
@@ -1929,6 +1968,12 @@ type RegenerateRecoveryCodesRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 }
 
+// ReorderScenarios defines model for ReorderScenarios.
+type ReorderScenarios struct {
+	// Ids Ordered list of scenario ids. Every scenario in the engagement must appear exactly once. Ordinals are reassigned 1..N to match this order.
+	Ids []openapi_types.UUID `json:"ids"`
+}
+
 // ReprocessContentSourceRequest Optional pin for which raw snapshot to reprocess. Additional properties
 // are rejected so a mistyped field cannot silently no-op.
 type ReprocessContentSourceRequest struct {
@@ -1964,6 +2009,36 @@ type SSOProvider struct {
 
 // SSOProviderId Which protocol this provider speaks.
 type SSOProviderId string
+
+// Scenario defines model for Scenario.
+type Scenario struct {
+	CreatedAt    time.Time          `json:"createdAt"`
+	EngagementId openapi_types.UUID `json:"engagementId"`
+
+	// Id UUIDv7.
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+	Narrative string             `json:"narrative"`
+
+	// Ordinal 1-based dense position; UI order.
+	Ordinal int `json:"ordinal"`
+
+	// Source Provenance of a scenario. `manual` is authored here; `ctid` and `imported` come from content.
+	Source ScenarioSource `json:"source"`
+
+	// SourceRef External reference (CTID plan id, import key).
+	SourceRef   *string   `json:"sourceRef,omitempty"`
+	ThreatActor *string   `json:"threatActor,omitempty"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// ScenarioList defines model for ScenarioList.
+type ScenarioList struct {
+	Items []Scenario `json:"items"`
+}
+
+// ScenarioSource Provenance of a scenario. `manual` is authored here; `ctid` and `imported` come from content.
+type ScenarioSource string
 
 // ServiceToken One service token, as anybody but its creator ever sees it: everything
 // about the credential except the credential.
@@ -2431,6 +2506,9 @@ type EngagementId = openapi_types.UUID
 
 // Limit defines model for Limit.
 type Limit = int
+
+// ScenarioId defines model for ScenarioId.
+type ScenarioId = openapi_types.UUID
 
 // UserId defines model for UserId.
 type UserId = openapi_types.UUID
@@ -3672,6 +3750,15 @@ type AddEngagementMemberJSONRequestBody = AddMember
 // PatchEngagementMemberJSONRequestBody defines body for PatchEngagementMember for application/json ContentType.
 type PatchEngagementMemberJSONRequestBody = PatchMember
 
+// CreateScenarioJSONRequestBody defines body for CreateScenario for application/json ContentType.
+type CreateScenarioJSONRequestBody = CreateScenario
+
+// ReorderScenariosJSONRequestBody defines body for ReorderScenarios for application/json ContentType.
+type ReorderScenariosJSONRequestBody = ReorderScenarios
+
+// PatchScenarioJSONRequestBody defines body for PatchScenario for application/json ContentType.
+type PatchScenarioJSONRequestBody = PatchScenario
+
 // SetEngagementStatusJSONRequestBody defines body for SetEngagementStatus for application/json ContentType.
 type SetEngagementStatusJSONRequestBody = SetEngagementStatus
 
@@ -3938,6 +4025,24 @@ type ServerInterface interface {
 	// PatchEngagementMember Change a member's engagement role.
 	// (PATCH /engagements/{engagementId}/members/{userId})
 	PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string)
+	// ListScenarios List every scenario in an engagement.
+	// (GET /engagements/{engagementId}/scenarios)
+	ListScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// CreateScenario Create a new scenario in an engagement.
+	// (POST /engagements/{engagementId}/scenarios)
+	CreateScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// ReorderScenarios Reorder scenarios in an engagement.
+	// (PUT /engagements/{engagementId}/scenarios/order)
+	ReorderScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// DeleteScenario Delete a scenario and cascade its children.
+	// (DELETE /engagements/{engagementId}/scenarios/{scenarioId})
+	DeleteScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId)
+	// GetScenario Return one scenario.
+	// (GET /engagements/{engagementId}/scenarios/{scenarioId})
+	GetScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId)
+	// PatchScenario Patch scenario fields.
+	// (PATCH /engagements/{engagementId}/scenarios/{scenarioId})
+	PatchScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId)
 	// SetEngagementStatus Transition the engagement to a new status.
 	// (POST /engagements/{engagementId}/status)
 	SetEngagementStatus(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -4490,6 +4595,42 @@ func (_ Unimplemented) RemoveEngagementMember(w http.ResponseWriter, r *http.Req
 // PatchEngagementMember Change a member's engagement role.
 // (PATCH /engagements/{engagementId}/members/{userId})
 func (_ Unimplemented) PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListScenarios List every scenario in an engagement.
+// (GET /engagements/{engagementId}/scenarios)
+func (_ Unimplemented) ListScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateScenario Create a new scenario in an engagement.
+// (POST /engagements/{engagementId}/scenarios)
+func (_ Unimplemented) CreateScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReorderScenarios Reorder scenarios in an engagement.
+// (PUT /engagements/{engagementId}/scenarios/order)
+func (_ Unimplemented) ReorderScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteScenario Delete a scenario and cascade its children.
+// (DELETE /engagements/{engagementId}/scenarios/{scenarioId})
+func (_ Unimplemented) DeleteScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetScenario Return one scenario.
+// (GET /engagements/{engagementId}/scenarios/{scenarioId})
+func (_ Unimplemented) GetScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchScenario Patch scenario fields.
+// (PATCH /engagements/{engagementId}/scenarios/{scenarioId})
+func (_ Unimplemented) PatchScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8070,6 +8211,189 @@ func (siw *ServerInterfaceWrapper) PatchEngagementMember(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListScenarios operation middleware
+func (siw *ServerInterfaceWrapper) ListScenarios(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScenarios(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateScenario operation middleware
+func (siw *ServerInterfaceWrapper) CreateScenario(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateScenario(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderScenarios operation middleware
+func (siw *ServerInterfaceWrapper) ReorderScenarios(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderScenarios(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteScenario operation middleware
+func (siw *ServerInterfaceWrapper) DeleteScenario(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "scenarioId" -------------
+	var scenarioId ScenarioId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scenarioId", chi.URLParam(r, "scenarioId"), &scenarioId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scenarioId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteScenario(w, r, engagementId, scenarioId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScenario operation middleware
+func (siw *ServerInterfaceWrapper) GetScenario(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "scenarioId" -------------
+	var scenarioId ScenarioId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scenarioId", chi.URLParam(r, "scenarioId"), &scenarioId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scenarioId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScenario(w, r, engagementId, scenarioId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchScenario operation middleware
+func (siw *ServerInterfaceWrapper) PatchScenario(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "scenarioId" -------------
+	var scenarioId ScenarioId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scenarioId", chi.URLParam(r, "scenarioId"), &scenarioId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scenarioId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchScenario(w, r, engagementId, scenarioId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetEngagementStatus operation middleware
 func (siw *ServerInterfaceWrapper) SetEngagementStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -9020,6 +9344,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/engagements/{engagementId}/members/{userId}", wrapper.PatchEngagementMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/scenarios", wrapper.ListScenarios)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/scenarios", wrapper.CreateScenario)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}", wrapper.DeleteScenario)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}", wrapper.GetScenario)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}", wrapper.PatchScenario)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/engagements/{engagementId}/scenarios/order", wrapper.ReorderScenarios)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/sources", wrapper.ListContentSources)
@@ -16828,6 +17170,682 @@ func (response PatchEngagementMember500ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ListScenariosRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type ListScenariosResponseObject interface {
+	VisitListScenariosResponse(w http.ResponseWriter) error
+}
+
+type ListScenarios200JSONResponse ScenarioList
+
+func (response ListScenarios200JSONResponse) VisitListScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScenarios400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListScenarios400ApplicationProblemPlusJSONResponse) VisitListScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScenarios401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListScenarios401ApplicationProblemPlusJSONResponse) VisitListScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScenarios403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListScenarios403ApplicationProblemPlusJSONResponse) VisitListScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScenarios404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListScenarios404ApplicationProblemPlusJSONResponse) VisitListScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScenarios500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListScenarios500ApplicationProblemPlusJSONResponse) VisitListScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenarioRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Body         *CreateScenarioJSONRequestBody
+}
+
+type CreateScenarioResponseObject interface {
+	VisitCreateScenarioResponse(w http.ResponseWriter) error
+}
+
+type CreateScenario201JSONResponse Scenario
+
+func (response CreateScenario201JSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenario400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScenario400ApplicationProblemPlusJSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenario401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScenario401ApplicationProblemPlusJSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenario403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScenario403ApplicationProblemPlusJSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenario404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScenario404ApplicationProblemPlusJSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenario409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScenario409ApplicationProblemPlusJSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScenario500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScenario500ApplicationProblemPlusJSONResponse) VisitCreateScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenariosRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Body         *ReorderScenariosJSONRequestBody
+}
+
+type ReorderScenariosResponseObject interface {
+	VisitReorderScenariosResponse(w http.ResponseWriter) error
+}
+
+type ReorderScenarios200JSONResponse ScenarioList
+
+func (response ReorderScenarios200JSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenarios400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ReorderScenarios400ApplicationProblemPlusJSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenarios401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ReorderScenarios401ApplicationProblemPlusJSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenarios403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ReorderScenarios403ApplicationProblemPlusJSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenarios404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ReorderScenarios404ApplicationProblemPlusJSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenarios409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ReorderScenarios409ApplicationProblemPlusJSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderScenarios500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ReorderScenarios500ApplicationProblemPlusJSONResponse) VisitReorderScenariosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScenarioRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ScenarioId   ScenarioId   `json:"scenarioId"`
+}
+
+type DeleteScenarioResponseObject interface {
+	VisitDeleteScenarioResponse(w http.ResponseWriter) error
+}
+
+type DeleteScenario204Response struct {
+}
+
+func (response DeleteScenario204Response) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteScenario400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScenario400ApplicationProblemPlusJSONResponse) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScenario401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScenario401ApplicationProblemPlusJSONResponse) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScenario403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScenario403ApplicationProblemPlusJSONResponse) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScenario404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScenario404ApplicationProblemPlusJSONResponse) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScenario409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScenario409ApplicationProblemPlusJSONResponse) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScenario500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScenario500ApplicationProblemPlusJSONResponse) VisitDeleteScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScenarioRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ScenarioId   ScenarioId   `json:"scenarioId"`
+}
+
+type GetScenarioResponseObject interface {
+	VisitGetScenarioResponse(w http.ResponseWriter) error
+}
+
+type GetScenario200JSONResponse Scenario
+
+func (response GetScenario200JSONResponse) VisitGetScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScenario400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetScenario400ApplicationProblemPlusJSONResponse) VisitGetScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScenario401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetScenario401ApplicationProblemPlusJSONResponse) VisitGetScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScenario403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetScenario403ApplicationProblemPlusJSONResponse) VisitGetScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScenario404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetScenario404ApplicationProblemPlusJSONResponse) VisitGetScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScenario500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetScenario500ApplicationProblemPlusJSONResponse) VisitGetScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenarioRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ScenarioId   ScenarioId   `json:"scenarioId"`
+	Body         *PatchScenarioJSONRequestBody
+}
+
+type PatchScenarioResponseObject interface {
+	VisitPatchScenarioResponse(w http.ResponseWriter) error
+}
+
+type PatchScenario200JSONResponse Scenario
+
+func (response PatchScenario200JSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenario400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchScenario400ApplicationProblemPlusJSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenario401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchScenario401ApplicationProblemPlusJSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenario403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchScenario403ApplicationProblemPlusJSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenario404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchScenario404ApplicationProblemPlusJSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenario409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PatchScenario409ApplicationProblemPlusJSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchScenario500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchScenario500ApplicationProblemPlusJSONResponse) VisitPatchScenarioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetEngagementStatusRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	Body         *SetEngagementStatusJSONRequestBody
@@ -18679,6 +19697,24 @@ type StrictServerInterface interface {
 	// PatchEngagementMember Change a member's engagement role.
 	// (PATCH /engagements/{engagementId}/members/{userId})
 	PatchEngagementMember(ctx context.Context, request PatchEngagementMemberRequestObject) (PatchEngagementMemberResponseObject, error)
+	// ListScenarios List every scenario in an engagement.
+	// (GET /engagements/{engagementId}/scenarios)
+	ListScenarios(ctx context.Context, request ListScenariosRequestObject) (ListScenariosResponseObject, error)
+	// CreateScenario Create a new scenario in an engagement.
+	// (POST /engagements/{engagementId}/scenarios)
+	CreateScenario(ctx context.Context, request CreateScenarioRequestObject) (CreateScenarioResponseObject, error)
+	// ReorderScenarios Reorder scenarios in an engagement.
+	// (PUT /engagements/{engagementId}/scenarios/order)
+	ReorderScenarios(ctx context.Context, request ReorderScenariosRequestObject) (ReorderScenariosResponseObject, error)
+	// DeleteScenario Delete a scenario and cascade its children.
+	// (DELETE /engagements/{engagementId}/scenarios/{scenarioId})
+	DeleteScenario(ctx context.Context, request DeleteScenarioRequestObject) (DeleteScenarioResponseObject, error)
+	// GetScenario Return one scenario.
+	// (GET /engagements/{engagementId}/scenarios/{scenarioId})
+	GetScenario(ctx context.Context, request GetScenarioRequestObject) (GetScenarioResponseObject, error)
+	// PatchScenario Patch scenario fields.
+	// (PATCH /engagements/{engagementId}/scenarios/{scenarioId})
+	PatchScenario(ctx context.Context, request PatchScenarioRequestObject) (PatchScenarioResponseObject, error)
 	// SetEngagementStatus Transition the engagement to a new status.
 	// (POST /engagements/{engagementId}/status)
 	SetEngagementStatus(ctx context.Context, request SetEngagementStatusRequestObject) (SetEngagementStatusResponseObject, error)
@@ -21099,6 +22135,186 @@ func (sh *strictHandler) PatchEngagementMember(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PatchEngagementMemberResponseObject); ok {
 		if err := validResponse.VisitPatchEngagementMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListScenarios operation middleware
+func (sh *strictHandler) ListScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ListScenariosRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListScenarios(ctx, request.(ListScenariosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListScenarios")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListScenariosResponseObject); ok {
+		if err := validResponse.VisitListScenariosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateScenario operation middleware
+func (sh *strictHandler) CreateScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request CreateScenarioRequestObject
+
+	request.EngagementId = engagementId
+
+	var body CreateScenarioJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateScenario(ctx, request.(CreateScenarioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateScenario")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateScenarioResponseObject); ok {
+		if err := validResponse.VisitCreateScenarioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReorderScenarios operation middleware
+func (sh *strictHandler) ReorderScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ReorderScenariosRequestObject
+
+	request.EngagementId = engagementId
+
+	var body ReorderScenariosJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderScenarios(ctx, request.(ReorderScenariosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderScenarios")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderScenariosResponseObject); ok {
+		if err := validResponse.VisitReorderScenariosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteScenario operation middleware
+func (sh *strictHandler) DeleteScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	var request DeleteScenarioRequestObject
+
+	request.EngagementId = engagementId
+	request.ScenarioId = scenarioId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteScenario(ctx, request.(DeleteScenarioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteScenario")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteScenarioResponseObject); ok {
+		if err := validResponse.VisitDeleteScenarioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScenario operation middleware
+func (sh *strictHandler) GetScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	var request GetScenarioRequestObject
+
+	request.EngagementId = engagementId
+	request.ScenarioId = scenarioId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScenario(ctx, request.(GetScenarioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScenario")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScenarioResponseObject); ok {
+		if err := validResponse.VisitGetScenarioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchScenario operation middleware
+func (sh *strictHandler) PatchScenario(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	var request PatchScenarioRequestObject
+
+	request.EngagementId = engagementId
+	request.ScenarioId = scenarioId
+
+	var body PatchScenarioJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchScenario(ctx, request.(PatchScenarioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchScenario")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchScenarioResponseObject); ok {
+		if err := validResponse.VisitPatchScenarioResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

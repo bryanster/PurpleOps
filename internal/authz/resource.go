@@ -35,6 +35,8 @@ const (
 	ResourceComment    ResourceType = "comment"
 	ResourceFinding    ResourceType = "finding"
 	ResourceReport     ResourceType = "report"
+	ResourceScenario   ResourceType = "scenario"
+
 )
 
 // resourceOwners says who owns each resource type. A type absent from this map
@@ -52,6 +54,7 @@ var resourceOwners = map[ResourceType]owner{
 	ResourceComment:      ownedByEngagement,
 	ResourceFinding:      ownedByEngagement,
 	ResourceReport:       ownedByEngagement,
+	ResourceScenario:     ownedByEngagement,
 }
 
 // owner is whether a resource type belongs to the installation or to one

@@ -2357,6 +2357,225 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/scenarios:
+    get:
+      operationId: listScenarios
+      summary: List every scenario in an engagement.
+      description: |
+        Members and platform administrators. Ordered by ordinal ascending.
+      tags:
+        - scenarios
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The list of scenarios.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createScenario
+      summary: Create a new scenario in an engagement.
+      description: |
+        Lead, red and platform administrators. The ordinal is assigned as
+        the next dense position (1-based). Closed/archived engagements
+        return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScenario"
+      responses:
+        "201":
+          description: The created scenario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/scenarios/{scenarioId}:
+    get:
+      operationId: getScenario
+      summary: Return one scenario.
+      description: |
+        Members and platform administrators. A non-member receives 404.
+      tags:
+        - scenarios
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      responses:
+        "200":
+          description: The scenario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: patchScenario
+      summary: Patch scenario fields.
+      description: |
+        Lead, red and platform administrators. Every field is optional;
+        only the ones present are changed. Closed/archived engagements
+        return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchScenario"
+      responses:
+        "200":
+          description: The patched scenario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteScenario
+      summary: Delete a scenario and cascade its children.
+      description: |
+        Lead, red and platform administrators. Cascades: steps, executions,
+        comment revisions, comments, evidence links, finding_step links for
+        those steps. Closed/archived engagements return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      responses:
+        "204":
+          description: The scenario and its children are deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/scenarios/order:
+    put:
+      operationId: reorderScenarios
+      summary: Reorder scenarios in an engagement.
+      description: |
+        Lead, red and platform administrators. The body lists every scenario
+        id in the desired order. Ordinals are reassigned 1..N to match.
+        Closed/archived engagements return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderScenarios"
+      responses:
+        "200":
+          description: The reordered scenario list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /content/sources:
     get:
       operationId: listContentSources
@@ -4320,6 +4539,16 @@ components:
       in: path
       required: true
       description: The account being read or changed.
+      schema:
+        type: string
+        format: uuid
+
+
+    ScenarioId:
+      name: scenarioId
+      in: path
+      required: true
+      description: The scenario being read or changed.
       schema:
         type: string
         format: uuid
@@ -7672,3 +7901,119 @@ components:
         nextCursor:
           type: [string, "null"]
           description: Opaque cursor for the next page; null on the last.
+
+    ScenarioSource:
+      type: string
+      description: Provenance of a scenario. `manual` is authored here; `ctid` and
+        `imported` come from content.
+      enum: [manual, ctid, imported]
+
+    Scenario:
+      type: object
+      required:
+        - id
+        - engagementId
+        - ordinal
+        - name
+        - narrative
+        - source
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7.
+        engagementId:
+          type: string
+          format: uuid
+        ordinal:
+          type: integer
+          description: 1-based dense position; UI order.
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        narrative:
+          type: string
+          maxLength: 16384
+        source:
+          $ref: "#/components/schemas/ScenarioSource"
+        threatActor:
+          type: string
+          maxLength: 255
+        sourceRef:
+          type: string
+          maxLength: 255
+          description: External reference (CTID plan id, import key).
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ScenarioList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scenario"
+
+    CreateScenario:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        narrative:
+          type: string
+          maxLength: 16384
+          default: ""
+        threatActor:
+          type: string
+          maxLength: 255
+          default: ""
+        source:
+          $ref: "#/components/schemas/ScenarioSource"
+          default: manual
+        sourceRef:
+          type: string
+          maxLength: 255
+          default: ""
+
+    PatchScenario:
+      type: object
+      description: Every field is optional; only the ones present are changed.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        narrative:
+          type: string
+          maxLength: 16384
+        threatActor:
+          type: string
+          maxLength: 255
+
+    ReorderScenarios:
+      type: object
+      required:
+        - ids
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+          description: Ordered list of scenario ids. Every scenario in the engagement
+            must appear exactly once. Ordinals are reassigned 1..N to match this order.

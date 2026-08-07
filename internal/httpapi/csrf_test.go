@@ -526,6 +526,18 @@ var csrfCoverage = map[string]struct {
 		body: `{"role":"blue"}`,
 	},
 	"DELETE " + BasePath + "/engagements/{engagementId}/members/{userId}": {},
+
+	// Scenario CRUD (M3-004).
+	"POST " + BasePath + "/engagements/{engagementId}/scenarios": {
+		body: `{"name":"Walked"}`,
+	},
+	"PATCH " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}": {
+		body: `{"name":"Walked"}`,
+	},
+	"DELETE " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}": {},
+	"PUT " + BasePath + "/engagements/{engagementId}/scenarios/order": {
+		body: `{"ids":["00000000-0000-0000-0000-000000000001"]}`,
+	},
 }
 
 // The two media types the walks send.
