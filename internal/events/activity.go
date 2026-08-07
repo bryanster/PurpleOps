@@ -139,8 +139,12 @@ const (
 	// engagement_id names which engagement the evidence belongs to.
 	VerbEvidenceUploaded Verb = "evidence.uploaded"
 	VerbEvidenceDeleted  Verb = "evidence.deleted"
-)
 
+	// Comment lifecycle (M3-010). Object is the comment row;
+	// engagement_id names which engagement the execution belongs to.
+	VerbCommentCreated Verb = "comment.created"
+	VerbCommentEdited  Verb = "comment.edited"
+)
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
@@ -168,6 +172,8 @@ const (
 	ObjectScenario = "scenario"
 
 	ObjectStep = "step"
+
+	ObjectComment = "comment"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

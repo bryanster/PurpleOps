@@ -43,6 +43,7 @@ const PROBLEM_CODES: Record<ProblemCode, true> = {
   not_found: true,
   method_not_allowed: true,
   conflict: true,
+  payload_too_large: true,
   rate_limited: true,
   internal: true,
 }

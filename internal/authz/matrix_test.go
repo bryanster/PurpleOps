@@ -472,7 +472,22 @@ var matrix = []row{
 		},
 	},
 	{
-		// The one write an observer holds. Reading and commenting is the seat;
+		Action: authz.ActionCommentRead, Resource: authz.ResourceComment,
+		Scope: authz.TokenScopeEngagementsRead, Token: tokensMayHoldIt,
+		Standard: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindRevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindUnrevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+	},
+	{
 		// everything below draws the line under it.
 		Action: authz.ActionCommentWrite, Resource: authz.ResourceComment,
 		Scope: authz.TokenScopeEngagementsWrite, Token: tokensMayHoldIt,
@@ -556,7 +571,6 @@ var matrix = []row{
 			Member: bySeat{deny404, allow, allow, deny403, deny403},
 		},
 	},
-
 
 	{
 		// evidence.read (M3-009): all members can read evidence, with

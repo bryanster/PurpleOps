@@ -545,8 +545,8 @@ func TestCommentRoundTrip(t *testing.T) {
 	if comment.Body != "Updated notes" {
 		t.Errorf("Body = %q", comment.Body)
 	}
-	if rev.Body != "Updated notes" {
-		t.Errorf("revision Body = %q", rev.Body)
+	if rev.Body != "Initial detection notes" {
+		t.Errorf("revision Body = %q, want previous body %q", rev.Body, "Initial detection notes")
 	}
 
 	// Read revisions.

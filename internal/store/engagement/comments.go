@@ -88,12 +88,18 @@ func (r *Comments) ListByExecution(ctx context.Context, executionID string) ([]C
 	return out, rows.Err()
 }
 
-// Edit changes a comment's body, appending a revision row and updating edited_at.
-// Returns the comment as stored and the new revision.
+// Edit changes a comment's body, appending a revision row with the *previous*
+// body and updating edited_at. Returns the comment as stored and the new revision.
 func (r *Comments) Edit(ctx context.Context, commentID, editedBy, newBody string) (Comment, CommentRevision, error) {
 	var comment Comment
 	var rev CommentRevision
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		// Read the current body to store as the revision.
+		current, err := scanComment(tx.QueryRowContext(ctx, selectComment+`WHERE id = ?`, commentID))
+		if err != nil {
+			return err
+		}
+
 		revID, err := newID()
 		if err != nil {
 			return fmt.Errorf("comment: generate revision id: %w", err)
@@ -112,11 +118,11 @@ func (r *Comments) Edit(ctx context.Context, commentID, editedBy, newBody string
 			return err
 		}
 
-		// Append the revision.
+		// Append the revision with the *previous* body.
 		rev = CommentRevision{
 			ID:        revID,
 			CommentID: commentID,
-			Body:      newBody,
+			Body:      current.Body,
 			EditedBy:  editedBy,
 			EditedAt:  ts,
 		}

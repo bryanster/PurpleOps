@@ -567,6 +567,13 @@ var csrfCoverage = map[string]struct {
 		mediaType: "multipart/form-data; boundary=walk",
 	},
 	"DELETE " + BasePath + "/evidence/{evidenceId}": {},
+	// Comments (M3-010).
+	"POST " + BasePath + "/engagements/{engagementId}/executions/{executionId}/comments": {
+		body: `{"body":"test comment"}`,
+	},
+	"PATCH " + BasePath + "/engagements/{engagementId}/comments/{commentId}": {
+		body: `{"body":"edited comment"}`,
+	},
 }
 
 // The two media types the walks send.

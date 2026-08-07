@@ -42,7 +42,7 @@ var (
 	ErrConflict             = errors.New("conflict")
 	ErrRateLimited          = errors.New("rate limited")
 	ErrInternal             = errors.New("internal error")
-	ErrPayloadTooLarge = errors.New("payload too large")
+	ErrPayloadTooLarge      = errors.New("payload too large")
 )
 
 // codes is the whole code→(status, sentinel) table, and the reason it is one

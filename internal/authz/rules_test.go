@@ -161,7 +161,7 @@ func TestResourceOwnershipIsDeclaredForEveryRule(t *testing.T) {
 		authz.ResourceComment:    true,
 		authz.ResourceFinding:    true,
 		authz.ResourceScenario:   true,
-		authz.ResourceEvidence:  true,
+		authz.ResourceEvidence:   true,
 		authz.ResourceReport:     true,
 	}
 	platformOwned := map[authz.ResourceType]bool{

@@ -15,10 +15,10 @@ import (
 	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/evidence"
-	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/version"
 )
 
@@ -90,7 +90,7 @@ type handlers struct {
 
 	// blobRepo manages the evidence_blob rows for refcount GC (M3-009).
 	blobRepo *storengagement.EvidenceBlobRepo
-	users membershipUserStore
+	users    membershipUserStore
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit
 	// GET /events.

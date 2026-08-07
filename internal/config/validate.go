@@ -99,13 +99,13 @@ func (c *Config) validate() []error {
 	if c.Evidence.MaxUploadBytes < 1 {
 		errs = append(errs, &FieldError{
 			Name: envEvidenceMaxUpload, Value: c.Evidence.MaxUploadBytes.String(),
-			Msg:  "must be at least 1 byte",
+			Msg: "must be at least 1 byte",
 		})
 	}
 	if c.Evidence.MaxEngagementBytes < 1 {
 		errs = append(errs, &FieldError{
 			Name: envEvidenceMaxEngagement, Value: c.Evidence.MaxEngagementBytes.String(),
-			Msg:  "must be at least 1 byte",
+			Msg: "must be at least 1 byte",
 		})
 	}
 	if c.Evidence.MIMEAllowlist != "" {
@@ -117,7 +117,7 @@ func (c *Config) validate() []error {
 			if !strings.Contains(m, "/") || strings.HasPrefix(m, "/") || strings.HasSuffix(m, "/") {
 				errs = append(errs, &FieldError{
 					Name: envEvidenceMIMEAllowlist, Value: c.Evidence.MIMEAllowlist,
-					Msg:  fmt.Sprintf("invalid MIME type %q: must be type/subtype", m),
+					Msg: fmt.Sprintf("invalid MIME type %q: must be type/subtype", m),
 				})
 			}
 		}

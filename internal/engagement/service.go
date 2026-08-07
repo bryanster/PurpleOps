@@ -32,6 +32,7 @@ type Service struct {
 	scenarios   *storengagement.Scenarios
 	steps       *storengagement.Steps
 	executions  *storengagement.Executions
+	comments    *storengagement.Comments
 	users       UserStore
 }
 
@@ -44,8 +45,8 @@ type Deps struct {
 	Scenarios   *storengagement.Scenarios
 	Steps       *storengagement.Steps
 	Executions  *storengagement.Executions
+	Comments    *storengagement.Comments
 	Users       UserStore // optional; nil skips user validation on add
-
 }
 
 // New returns a Service over deps, or an error naming what is missing.
@@ -67,6 +68,7 @@ func New(deps Deps) (*Service, error) {
 		scenarios:   deps.Scenarios,
 		steps:       deps.Steps,
 		executions:  deps.Executions,
+		comments:    deps.Comments,
 	}, nil
 }
 

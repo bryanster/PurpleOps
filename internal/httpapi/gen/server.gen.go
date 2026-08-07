@@ -904,6 +904,33 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"newPassword"`
 }
 
+// Comment defines model for Comment.
+type Comment struct {
+	// AuthorId User id of the comment's author.
+	AuthorId string `json:"authorId"`
+
+	// Body Markdown or plain text. 16 KiB limit.
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// EditedAt Null when never edited; set on first edit and updated thereafter.
+	EditedAt    nullable.Nullable[time.Time] `json:"editedAt,omitempty"`
+	ExecutionId openapi_types.UUID           `json:"executionId"`
+	Id          openapi_types.UUID           `json:"id"`
+}
+
+// CommentRevision defines model for CommentRevision.
+type CommentRevision struct {
+	// Body The body before this edit was applied.
+	Body      string             `json:"body"`
+	CommentId openapi_types.UUID `json:"commentId"`
+	EditedAt  time.Time          `json:"editedAt"`
+
+	// EditedBy User id of the editor.
+	EditedBy string             `json:"editedBy"`
+	Id       openapi_types.UUID `json:"id"`
+}
+
 // ContentAttackVersion One installed ATT&CK release as the pin surface exposes it. The
 // `version` string is what engagements will store as `attack_version`
 // (M3) — opaque equality to `content_source_version.version`.
@@ -1610,6 +1637,12 @@ type ContentTechniqueList struct {
 	Items []ContentTechnique `json:"items"`
 }
 
+// CreateComment defines model for CreateComment.
+type CreateComment struct {
+	// Body Markdown or plain text. 16 KiB limit.
+	Body string `json:"body"`
+}
+
 // CreateCustomDetectionRuleRequest Body for creating a custom detection rule reference.
 type CreateCustomDetectionRuleRequest struct {
 	Description *string `json:"description,omitempty"`
@@ -2222,6 +2255,12 @@ type NewEvidenceRequest struct {
 
 	// Side Which side uploaded this evidence.
 	Side EvidenceSide `json:"side"`
+}
+
+// PatchComment defines model for PatchComment.
+type PatchComment struct {
+	// Body The replacement body. Prior body is saved as a revision.
+	Body string `json:"body"`
 }
 
 // PatchEngagement Every field is optional; only the ones present are changed.
@@ -2912,6 +2951,9 @@ type ActivityVerb = string
 
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
+
+// CommentId defines model for CommentId.
+type CommentId = openapi_types.UUID
 
 // ContentAttackExternalId defines model for ContentAttackExternalId.
 type ContentAttackExternalId = string
@@ -3981,6 +4023,25 @@ type ListEngagementActivityParams struct {
 	ObjectId *ActivityObjectId `form:"objectId,omitempty" json:"objectId,omitempty"`
 }
 
+// PatchCommentParams defines parameters for PatchComment.
+type PatchCommentParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // ListEngagementExecutionsParams defines parameters for ListEngagementExecutions.
 type ListEngagementExecutionsParams struct {
 	// ScenarioId Restrict to executions under this scenario.
@@ -3988,6 +4049,25 @@ type ListEngagementExecutionsParams struct {
 
 	// Status Restrict to executions in this red-side state.
 	Status *ExecutionStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// CreateCommentParams defines parameters for CreateComment.
+type CreateCommentParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
 // PatchBlueDetectionParams defines parameters for PatchBlueDetection.
@@ -4340,6 +4420,12 @@ type CreateEngagementJSONRequestBody = CreateEngagement
 // PatchEngagementJSONRequestBody defines body for PatchEngagement for application/json ContentType.
 type PatchEngagementJSONRequestBody = PatchEngagement
 
+// PatchCommentJSONRequestBody defines body for PatchComment for application/json ContentType.
+type PatchCommentJSONRequestBody = PatchComment
+
+// CreateCommentJSONRequestBody defines body for CreateComment for application/json ContentType.
+type CreateCommentJSONRequestBody = CreateComment
+
 // PatchBlueDetectionJSONRequestBody defines body for PatchBlueDetection for application/json ContentType.
 type PatchBlueDetectionJSONRequestBody = BlueDetectionPatch
 
@@ -4627,12 +4713,24 @@ type ServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
+	// PatchComment Edit a comment's body.
+	// (PATCH /engagements/{engagementId}/comments/{commentId})
+	PatchComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId, params PatchCommentParams)
+	// ListCommentRevisions List the edit history of a comment.
+	// (GET /engagements/{engagementId}/comments/{commentId}/revisions)
+	ListCommentRevisions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId)
 	// ListEngagementExecutions List executions in an engagement.
 	// (GET /engagements/{engagementId}/executions)
 	ListEngagementExecutions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementExecutionsParams)
 	// GetExecution Return one execution by id.
 	// (GET /engagements/{engagementId}/executions/{executionId})
 	GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId)
+	// ListComments List comments on an execution.
+	// (GET /engagements/{engagementId}/executions/{executionId}/comments)
+	ListComments(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId)
+	// CreateComment Post a comment on an execution.
+	// (POST /engagements/{engagementId}/executions/{executionId}/comments)
+	CreateComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params CreateCommentParams)
 	// PatchBlueDetection Write the blue (detection) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/detection)
 	PatchBlueDetection(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchBlueDetectionParams)
@@ -5239,6 +5337,18 @@ func (_ Unimplemented) ListEngagementActivity(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// PatchComment Edit a comment's body.
+// (PATCH /engagements/{engagementId}/comments/{commentId})
+func (_ Unimplemented) PatchComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId, params PatchCommentParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListCommentRevisions List the edit history of a comment.
+// (GET /engagements/{engagementId}/comments/{commentId}/revisions)
+func (_ Unimplemented) ListCommentRevisions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListEngagementExecutions List executions in an engagement.
 // (GET /engagements/{engagementId}/executions)
 func (_ Unimplemented) ListEngagementExecutions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementExecutionsParams) {
@@ -5248,6 +5358,18 @@ func (_ Unimplemented) ListEngagementExecutions(w http.ResponseWriter, r *http.R
 // GetExecution Return one execution by id.
 // (GET /engagements/{engagementId}/executions/{executionId})
 func (_ Unimplemented) GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListComments List comments on an execution.
+// (GET /engagements/{engagementId}/executions/{executionId}/comments)
+func (_ Unimplemented) ListComments(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateComment Post a comment on an execution.
+// (POST /engagements/{engagementId}/executions/{executionId}/comments)
+func (_ Unimplemented) CreateComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params CreateCommentParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8856,6 +8978,100 @@ func (siw *ServerInterfaceWrapper) ListEngagementActivity(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// PatchComment operation middleware
+func (siw *ServerInterfaceWrapper) PatchComment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "commentId" -------------
+	var commentId CommentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "commentId", chi.URLParam(r, "commentId"), &commentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "commentId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchCommentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchComment(w, r, engagementId, commentId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCommentRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListCommentRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "commentId" -------------
+	var commentId CommentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "commentId", chi.URLParam(r, "commentId"), &commentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "commentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCommentRevisions(w, r, engagementId, commentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListEngagementExecutions operation middleware
 func (siw *ServerInterfaceWrapper) ListEngagementExecutions(w http.ResponseWriter, r *http.Request) {
 
@@ -8937,6 +9153,100 @@ func (siw *ServerInterfaceWrapper) GetExecution(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetExecution(w, r, engagementId, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListComments operation middleware
+func (siw *ServerInterfaceWrapper) ListComments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListComments(w, r, engagementId, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateComment operation middleware
+func (siw *ServerInterfaceWrapper) CreateComment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCommentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateComment(w, r, engagementId, executionId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11026,6 +11336,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.SubscribeEvents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}/comments", wrapper.ListComments)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}/comments", wrapper.CreateComment)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/comments/{commentId}", wrapper.PatchComment)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/comments/{commentId}/revisions", wrapper.ListCommentRevisions)
 	})
 
 	return r
@@ -18229,6 +18551,182 @@ func (response ListEngagementActivity500ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type PatchCommentRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	CommentId    CommentId    `json:"commentId"`
+	Params       PatchCommentParams
+	Body         *PatchCommentJSONRequestBody
+}
+
+type PatchCommentResponseObject interface {
+	VisitPatchCommentResponse(w http.ResponseWriter) error
+}
+
+type PatchComment200JSONResponse Comment
+
+func (response PatchComment200JSONResponse) VisitPatchCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchComment401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchComment401ApplicationProblemPlusJSONResponse) VisitPatchCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchComment403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchComment403ApplicationProblemPlusJSONResponse) VisitPatchCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchComment404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchComment404ApplicationProblemPlusJSONResponse) VisitPatchCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchComment500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchComment500ApplicationProblemPlusJSONResponse) VisitPatchCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommentRevisionsRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	CommentId    CommentId    `json:"commentId"`
+}
+
+type ListCommentRevisionsResponseObject interface {
+	VisitListCommentRevisionsResponse(w http.ResponseWriter) error
+}
+
+type ListCommentRevisions200JSONResponse []CommentRevision
+
+func (response ListCommentRevisions200JSONResponse) VisitListCommentRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommentRevisions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCommentRevisions401ApplicationProblemPlusJSONResponse) VisitListCommentRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommentRevisions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListCommentRevisions403ApplicationProblemPlusJSONResponse) VisitListCommentRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommentRevisions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListCommentRevisions404ApplicationProblemPlusJSONResponse) VisitListCommentRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommentRevisions500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListCommentRevisions500ApplicationProblemPlusJSONResponse) VisitListCommentRevisionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListEngagementExecutionsRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	Params       ListEngagementExecutionsParams
@@ -18424,6 +18922,214 @@ type GetExecution500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetExecution500ApplicationProblemPlusJSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommentsRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ExecutionId  ExecutionId  `json:"executionId"`
+}
+
+type ListCommentsResponseObject interface {
+	VisitListCommentsResponse(w http.ResponseWriter) error
+}
+
+type ListComments200JSONResponse []Comment
+
+func (response ListComments200JSONResponse) VisitListCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListComments401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListComments401ApplicationProblemPlusJSONResponse) VisitListCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListComments403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListComments403ApplicationProblemPlusJSONResponse) VisitListCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListComments404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListComments404ApplicationProblemPlusJSONResponse) VisitListCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListComments500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListComments500ApplicationProblemPlusJSONResponse) VisitListCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommentRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ExecutionId  ExecutionId  `json:"executionId"`
+	Params       CreateCommentParams
+	Body         *CreateCommentJSONRequestBody
+}
+
+type CreateCommentResponseObject interface {
+	VisitCreateCommentResponse(w http.ResponseWriter) error
+}
+
+type CreateComment201JSONResponse Comment
+
+func (response CreateComment201JSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComment400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComment400ApplicationProblemPlusJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComment401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComment401ApplicationProblemPlusJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComment403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComment403ApplicationProblemPlusJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComment404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComment404ApplicationProblemPlusJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComment409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComment409ApplicationProblemPlusJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComment500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComment500ApplicationProblemPlusJSONResponse) VisitCreateCommentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -23031,12 +23737,24 @@ type StrictServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
+	// PatchComment Edit a comment's body.
+	// (PATCH /engagements/{engagementId}/comments/{commentId})
+	PatchComment(ctx context.Context, request PatchCommentRequestObject) (PatchCommentResponseObject, error)
+	// ListCommentRevisions List the edit history of a comment.
+	// (GET /engagements/{engagementId}/comments/{commentId}/revisions)
+	ListCommentRevisions(ctx context.Context, request ListCommentRevisionsRequestObject) (ListCommentRevisionsResponseObject, error)
 	// ListEngagementExecutions List executions in an engagement.
 	// (GET /engagements/{engagementId}/executions)
 	ListEngagementExecutions(ctx context.Context, request ListEngagementExecutionsRequestObject) (ListEngagementExecutionsResponseObject, error)
 	// GetExecution Return one execution by id.
 	// (GET /engagements/{engagementId}/executions/{executionId})
 	GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error)
+	// ListComments List comments on an execution.
+	// (GET /engagements/{engagementId}/executions/{executionId}/comments)
+	ListComments(ctx context.Context, request ListCommentsRequestObject) (ListCommentsResponseObject, error)
+	// CreateComment Post a comment on an execution.
+	// (POST /engagements/{engagementId}/executions/{executionId}/comments)
+	CreateComment(ctx context.Context, request CreateCommentRequestObject) (CreateCommentResponseObject, error)
 	// PatchBlueDetection Write the blue (detection) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/detection)
 	PatchBlueDetection(ctx context.Context, request PatchBlueDetectionRequestObject) (PatchBlueDetectionResponseObject, error)
@@ -25419,6 +26137,68 @@ func (sh *strictHandler) ListEngagementActivity(w http.ResponseWriter, r *http.R
 	}
 }
 
+// PatchComment operation middleware
+func (sh *strictHandler) PatchComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId, params PatchCommentParams) {
+	var request PatchCommentRequestObject
+
+	request.EngagementId = engagementId
+	request.CommentId = commentId
+	request.Params = params
+
+	var body PatchCommentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchComment(ctx, request.(PatchCommentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchComment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchCommentResponseObject); ok {
+		if err := validResponse.VisitPatchCommentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCommentRevisions operation middleware
+func (sh *strictHandler) ListCommentRevisions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId) {
+	var request ListCommentRevisionsRequestObject
+
+	request.EngagementId = engagementId
+	request.CommentId = commentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCommentRevisions(ctx, request.(ListCommentRevisionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCommentRevisions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCommentRevisionsResponseObject); ok {
+		if err := validResponse.VisitListCommentRevisionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListEngagementExecutions operation middleware
 func (sh *strictHandler) ListEngagementExecutions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementExecutionsParams) {
 	var request ListEngagementExecutionsRequestObject
@@ -25466,6 +26246,68 @@ func (sh *strictHandler) GetExecution(w http.ResponseWriter, r *http.Request, en
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetExecutionResponseObject); ok {
 		if err := validResponse.VisitGetExecutionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListComments operation middleware
+func (sh *strictHandler) ListComments(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId) {
+	var request ListCommentsRequestObject
+
+	request.EngagementId = engagementId
+	request.ExecutionId = executionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListComments(ctx, request.(ListCommentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListComments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCommentsResponseObject); ok {
+		if err := validResponse.VisitListCommentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateComment operation middleware
+func (sh *strictHandler) CreateComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params CreateCommentParams) {
+	var request CreateCommentRequestObject
+
+	request.EngagementId = engagementId
+	request.ExecutionId = executionId
+	request.Params = params
+
+	var body CreateCommentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateComment(ctx, request.(CreateCommentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateComment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCommentResponseObject); ok {
+		if err := validResponse.VisitCreateCommentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

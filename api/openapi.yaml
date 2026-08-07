@@ -5124,6 +5124,164 @@ paths:
 
 
 
+
+  /engagements/{engagementId}/executions/{executionId}/comments:
+    get:
+      operationId: listComments
+      summary: List comments on an execution.
+      description: |
+        Returns every comment on this execution, oldest first. Members of the
+        engagement may read comments. In blind mode, comments on an unrevealed
+        step are 404-concealed.
+      tags:
+        - executions
+        - collaboration
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+        param: executionId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ExecutionId"
+      responses:
+        "200":
+          description: Every comment on this execution, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createComment
+      summary: Post a comment on an execution.
+      description: |
+        Write one comment. The author is the authenticated caller. Observers hold
+        `comment.write` — it is their only write. Cannot comment on an unrevealed
+        execution in blind mode. Closed engagements still accept comments.
+      tags:
+        - executions
+        - collaboration
+      x-authz-action: comment.write
+      x-authz-resource:
+        type: comment
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ExecutionId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComment"
+      responses:
+        "201":
+          description: The comment as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/comments/{commentId}:
+    patch:
+      operationId: patchComment
+      summary: Edit a comment's body.
+      description: |
+        Only the comment's author, the engagement lead, or a platform
+        administrator may edit. The previous body is appended to the revision
+        history. No delete — history is append-only.
+      tags:
+        - collaboration
+      x-authz-action: comment.write
+      x-authz-resource:
+        type: comment
+        engagement: engagementId
+        param: commentId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CommentId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchComment"
+      responses:
+        "200":
+          description: The comment as stored after editing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/comments/{commentId}/revisions:
+    get:
+      operationId: listCommentRevisions
+      summary: List the edit history of a comment.
+      description: |
+        Returns every prior body of this comment, oldest first. The current
+        body is not included — it is on the comment itself. An edit appends
+        the previous body, so the list is complete from creation to the
+        penultimate edit.
+      tags:
+        - collaboration
+      x-authz-action: comment.read
+      x-authz-resource:
+        type: comment
+        engagement: engagementId
+        param: commentId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CommentId"
+      responses:
+        "200":
+          description: The revision history, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommentRevision"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     cookieSession:
@@ -5266,6 +5424,14 @@ components:
         type: string
         format: uuid
 
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      description: The comment being read or edited.
+      schema:
+        type: string
+        format: uuid
     UserStatusFilter:
       name: status
       in: query
@@ -9262,3 +9428,80 @@ components:
         side:
           $ref: "#/components/schemas/EvidenceSide"
       additionalProperties: false
+
+    Comment:
+      type: object
+      required:
+        - id
+        - executionId
+        - authorId
+        - body
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        executionId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          description: User id of the comment's author.
+        body:
+          type: string
+          maxLength: 16384
+          description: Markdown or plain text. 16 KiB limit.
+        createdAt:
+          type: string
+          format: date-time
+        editedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Null when never edited; set on first edit and updated thereafter.
+
+    CreateComment:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          maxLength: 16384
+          description: Markdown or plain text. 16 KiB limit.
+      additionalProperties: false
+
+    PatchComment:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          maxLength: 16384
+          description: The replacement body. Prior body is saved as a revision.
+      additionalProperties: false
+
+    CommentRevision:
+      type: object
+      required:
+        - id
+        - commentId
+        - body
+        - editedBy
+        - editedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        commentId:
+          type: string
+          format: uuid
+        body:
+          type: string
+          description: The body before this edit was applied.
+        editedBy:
+          type: string
+          description: User id of the editor.
+        editedAt:
+          type: string
+          format: date-time

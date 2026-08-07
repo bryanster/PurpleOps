@@ -73,6 +73,7 @@ a role held elsewhere grants nothing here. A non-member is refused with a 404.
 | `execution.write_blue` | ✓ | ✓ | · | ✓ | · | · | `engagements:write` | Write the detection side of an execution: what was seen, alerted and blocked. |
 | `evidence.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read evidence metadata and content. Same membership as execution.read, blind-mode guarded. |
 | `evidence.write` | ✓ | ✓ | ✓ | ✓ | · | · | `engagements:write` | Upload and delete evidence: screenshots, logs, packet captures. Lead, red and blue, not observer. |
+| `comment.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read comments and their revision history. |
 | `comment.write` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:write` | Comment. The one write an observer holds, because reading and commenting is the seat. |
 | `finding.write` | ✓ | ✓ | ✓ | ✓ | · | · | `engagements:write` | Raise and edit findings. |
 | `report.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `reports:read` | Read and export an engagement's reports. |

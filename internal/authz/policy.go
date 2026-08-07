@@ -258,6 +258,10 @@ var rules = []Rule{
 	{Action: ActionEvidenceWrite, Name: "evidence.write", Resource: ResourceEvidence,
 		Platform: admins, Engagement: writers, Token: TokenScopeEngagementsWrite,
 		Summary: "Upload and delete evidence: screenshots, logs, packet captures. Lead, red and blue, not observer."},
+	{Action: ActionCommentRead, Name: "comment.read", Resource: ResourceComment,
+		Platform: admins, Engagement: allMembers, Token: TokenScopeEngagementsRead,
+		Summary: "Read comments and their revision history."},
+
 	{Action: ActionCommentWrite, Name: "comment.write", Resource: ResourceComment,
 		Platform: admins, Engagement: allMembers, Token: TokenScopeEngagementsWrite,
 		Summary: "Comment. The one write an observer holds, because reading and commenting is the seat."},

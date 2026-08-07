@@ -141,10 +141,10 @@ func (h *handlers) UploadEvidence(ctx context.Context,
 	// Activity.
 	if h.activity != nil {
 		h.activity.RecordAlone(ctx, events.Entry{
-			ActorID:    actor.UserID,
-			Verb:       events.VerbEvidenceUploaded,
-			ObjectType: events.ObjectEvidence,
-			ObjectID:   ev.ID,
+			ActorID:      actor.UserID,
+			Verb:         events.VerbEvidenceUploaded,
+			ObjectType:   events.ObjectEvidence,
+			ObjectID:     ev.ID,
 			EngagementID: scenario.EngagementID,
 			Delta: events.Delta(map[string]any{
 				"sha256":   sha256[:12],
@@ -161,7 +161,6 @@ func (h *handlers) UploadEvidence(ctx context.Context,
 	}
 	return gen.UploadEvidence201JSONResponse(wire), nil
 }
-
 
 // ListEvidenceByExecution returns evidence linked to an execution, newest first.
 func (h *handlers) ListEvidenceByExecution(ctx context.Context,

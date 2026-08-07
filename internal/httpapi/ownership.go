@@ -6,8 +6,8 @@ import (
 
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
-	"github.com/bryanster/blacklight/internal/store/identity"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
+	"github.com/bryanster/blacklight/internal/store/identity"
 )
 
 // Memberships is the part of the identity store [membershipOwnership] needs.
@@ -139,4 +139,24 @@ func canDeleteEvidence(ctx context.Context, o Ownership, platformRole authz.Plat
 		return nil
 	}
 	return apierr.Forbidden("only the uploader, lead, or admin may delete evidence")
+}
+
+// canEditComment checks the finer-grained edit permission beyond what the
+// authz middleware enforces: only the author, engagement lead, or platform
+// admin may edit. The middleware already verified comment.write, which all
+// members hold — this narrows it further.
+func canEditComment(ctx context.Context, engagementID string) error {
+	authzCtx, ok := authorizationFrom(ctx)
+	if !ok {
+		return apierr.Forbidden("cannot verify authorization")
+	}
+	subject := authzCtx.Subject
+	if subject.PlatformRole == authz.PlatformRoleAdmin {
+		return nil
+	}
+	seat, _ := subject.MembershipIn(engagementID)
+	if seat == authz.EngagementRoleLead {
+		return nil
+	}
+	return apierr.Forbidden("only the author, lead, or admin may edit a comment")
 }
