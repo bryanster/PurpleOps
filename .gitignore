@@ -15,7 +15,7 @@
 
 # Test and coverage output
 *.out
-/coverage/
+*.test
 /e2e/test-results/
 /e2e/playwright-report/
 

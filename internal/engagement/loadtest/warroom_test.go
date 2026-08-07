@@ -133,11 +133,12 @@ type warRoomOpts struct {
 }
 
 type warRoomResult struct {
-	latencies   []time.Duration
-	maxLatency  time.Duration
-	totalWrites int64
-	conflicts   int64
-	lostUpdates int64
+	latencies    []time.Duration
+	maxLatency   time.Duration
+	totalWrites  int64
+	conflicts    int64
+	lostUpdates  int64
+	probeErrors  []error
 }
 
 // runWarRoom seeds one engagement with steps (each with an execution), spins up
@@ -201,8 +202,9 @@ func runWarRoom(t *testing.T, opts warRoomOpts) warRoomResult {
 	t.Cleanup(cancelProbe)
 
 	var (
-		mu        sync.Mutex
-		latencies []time.Duration
+		mu          sync.Mutex
+		latencies   []time.Duration
+		probeErrors []error
 	)
 	var probeWG sync.WaitGroup
 	probeWG.Add(1)
@@ -210,14 +212,13 @@ func runWarRoom(t *testing.T, opts warRoomOpts) warRoomResult {
 		defer probeWG.Done()
 		sessions := identity.NewSessions(db)
 		ticker := time.NewTicker(probeInterval)
-		defer ticker.Stop()
-		sampleProbe(probeCtx, db, sessions, sessionID, &mu, &latencies)
+		sampleProbe(probeCtx, db, sessions, sessionID, &mu, &latencies, &probeErrors)
 		for {
 			select {
 			case <-probeCtx.Done():
 				return
 			case <-ticker.C:
-				sampleProbe(probeCtx, db, sessions, sessionID, &mu, &latencies)
+				sampleProbe(probeCtx, db, sessions, sessionID, &mu, &latencies, &probeErrors)
 			}
 		}
 	}()
@@ -266,6 +267,7 @@ func runWarRoom(t *testing.T, opts warRoomOpts) warRoomResult {
 		totalWrites: totalWrites.Load(),
 		conflicts:   conflicts.Load(),
 		lostUpdates: lostUpdates.Load(),
+		probeErrors: probeErrors,
 	}
 }
 
@@ -573,8 +575,6 @@ func patchBlueNoVersion(ctx context.Context, db *store.DB, id string, changes en
 	})
 }
 
-// sampleProbe records the latency of a single interactive write (session touch)
-// followed by an execution read on the read pool.
 func sampleProbe(
 	ctx context.Context,
 	db *store.DB,
@@ -582,6 +582,7 @@ func sampleProbe(
 	sessionID string,
 	mu *sync.Mutex,
 	latencies *[]time.Duration,
+	probeErrors *[]error,
 ) {
 	if err := ctx.Err(); err != nil {
 		return
@@ -592,6 +593,9 @@ func sampleProbe(
 	if err != nil && ctx.Err() == nil {
 		// Surface via a huge latency so assertWarRoom fails loudly.
 		elapsed = writeMaxBudget + time.Second
+		mu.Lock()
+		*probeErrors = append(*probeErrors, err)
+		mu.Unlock()
 	}
 	// Read on the read pool — must stay unblocked by the serialized writer.
 	var n int
@@ -617,6 +621,10 @@ func assertWarRoom(t *testing.T, res warRoomResult) {
 	}
 	p95 := percentile(res.latencies, 95)
 	if p95 > writeP95Budget {
+		t.Logf("probe errors (%d total):", len(res.probeErrors))
+		for i, e := range res.probeErrors {
+			t.Logf("  [%d] %v", i, e)
+		}
 		t.Fatalf("interactive write p95 = %s, want ≤ %s (n=%d max=%s writes=%d conflicts=%d). "+
 			"Serialized writer is overloaded — shrink worker count or check store.Write for held locks",
 			p95, writeP95Budget, len(res.latencies), res.maxLatency, res.totalWrites, res.conflicts)

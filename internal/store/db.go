@@ -58,10 +58,6 @@ type DB struct {
 	// closes the underlying DuckDB instance.
 	read *sql.DB
 
-	// writeConn is checked out of read's pool for the lifetime of the process
-	// and is only ever used by the goroutine holding writeLock.
-	writeConn *sql.Conn
-
 	// writeLock is a one-slot semaphore: send to acquire, receive to release.
 	// It is a channel rather than a sync.Mutex so that a caller can give up
 	// while queued — see the package comment.
@@ -100,18 +96,11 @@ func Open(ctx context.Context, cfg config.Database) (*DB, error) {
 		return nil, errors.Join(openError(cfg.Path, err), sqlDB.Close())
 	}
 
-	// Reserving the write connection at startup rather than per write means a
-	// writer never waits for the pool, and the single-writer rule cannot be
-	// broken by a pool that decided to hand out a second connection.
-	writeConn, err := sqlDB.Conn(ctx)
-	if err != nil {
-		return nil, errors.Join(openError(cfg.Path, err), sqlDB.Close())
-	}
-
+	// No connection is reserved at startup — Write checks one out per
+	// transaction. The write lock is what serializes, not the connection.
 	return &DB{
 		path:      cfg.Path,
 		read:      sqlDB,
-		writeConn: writeConn,
 		writeLock: make(chan struct{}, 1),
 		closing:   make(chan struct{}),
 	}, nil
@@ -121,9 +110,9 @@ func Open(ctx context.Context, cfg config.Database) (*DB, error) {
 // cannot write: see [Reader] and the package comment.
 func (db *DB) Read() Reader { return db.read }
 
-// Write runs fn inside a transaction on the single write connection, one caller
-// at a time. Returning an error from fn rolls back and returns that error;
-// returning nil commits.
+// Write runs fn inside a transaction on a dedicated write connection, one
+// caller at a time. Returning an error from fn rolls back and returns that
+// error; returning nil commits.
 //
 // While queued, Write honours ctx: a caller whose request was cancelled returns
 // ctx.Err() and its mutation is never applied. After [DB.Close] it returns
@@ -144,7 +133,16 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	}
 	defer release()
 
-	tx, err := db.writeConn.BeginTx(ctx, nil)
+	// Check out a fresh connection for every write. database/sql handles
+	// driver.ErrBadConn by opening a replacement, so a single bad connection
+	// cannot permanently stall the serialized writer.
+	conn, err := db.read.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("store: checkout write connection: %w", err)
+	}
+	defer conn.Close()
+
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store: begin write transaction: %w", err)
 	}
@@ -199,6 +197,7 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	return nil
 }
 
+
 // Health reports whether the database is answering, for /healthz.
 //
 // It exercises the read pool only. A check that took the write lock would queue
@@ -221,7 +220,6 @@ func (db *DB) Health(ctx context.Context) error {
 	}
 	return nil
 }
-
 // Close stops accepting writes, waits for the in-flight write (there is at most
 // one) to commit or roll back, and closes the connections. It is safe to call
 // from any number of goroutines and any number of times; every call returns the
@@ -236,11 +234,8 @@ func (db *DB) Close() error {
 		close(db.closing)
 		db.writeLock <- struct{}{}
 
-		// The write connection is checked out of the pool, and sql.DB.Close
-		// does not close a connection that is still checked out, so it goes
-		// first. Closing read closes the connector, and with it the DuckDB
-		// instance.
-		db.closeErr = errors.Join(db.writeConn.Close(), db.read.Close())
+		// Closing read closes the connector, and with it the DuckDB instance.
+		db.closeErr = db.read.Close()
 	})
 	return db.closeErr
 }

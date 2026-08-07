@@ -13,7 +13,8 @@
     // the host's layer cache instead of starting cold in a nested one.
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "moby": false
-    }
+    },
+    "ghcr.io/devcontainers/features/github-cli":1
   },
   // Installs the pinned generators and linter into ./bin and runs `npm ci`.
   // The one command in the Makefile that needs the network.
