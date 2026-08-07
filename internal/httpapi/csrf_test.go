@@ -556,6 +556,11 @@ var csrfCoverage = map[string]struct {
 	"PATCH " + BasePath + "/engagements/{engagementId}/executions/{executionId}/execution": {
 		body: `{"version":1,"status":"running"}`,
 	},
+
+	// Execution blue detection PATCH (M3-007).
+	"PATCH " + BasePath + "/engagements/{engagementId}/executions/{executionId}/detection": {
+		body: `{"version":1}`,
+	},
 }
 
 // The two media types the walks send.

@@ -132,7 +132,8 @@ const (
 
 	// Workbook execution lifecycle (M3-006). Object is the execution row;
 	// engagement_id names which engagement the execution belongs to.
-	VerbExecutionRedUpdated Verb = "execution.red_updated"
+	VerbExecutionRedUpdated  Verb = "execution.red_updated"
+	VerbExecutionBlueUpdated Verb = "execution.blue_updated"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a

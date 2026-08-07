@@ -80,19 +80,8 @@ components:
       in: header
       required: false
       schema: {type: string}
-paths:
-  /engagements/{engagementId}/executions/{executionId}/blue:
-    parameters:
-      - {name: engagementId, in: path, required: true, schema: {type: string}}
-      - {name: executionId, in: path, required: true, schema: {type: string}}
-    put:
-      operationId: sweepWriteBlueField
-      summary: Write the detection side of one execution.
-      x-authz-action: execution.write_blue
-      x-authz-resource: {type: execution, param: executionId, engagement: engagementId}
-      parameters:
-        - $ref: "#/components/parameters/CSRF"
-      responses: {"200": {description: ok}}
+
+paths: {}
 `
 
 // statuses is one operation's answer to each caller, in the order [sweepCallers]
@@ -160,9 +149,11 @@ var sweepOperations = []sweepOp{
 		Want:  statuses{404, 404, 404, 403, 403, 404},
 	},
 	{
-		Name: "write a blue field", Method: http.MethodPut,
-		Route: "/engagements/{engagementId}/executions/{executionId}/blue",
-		Want:  statuses{200, 200, 403, 200, 403, 404},
+		Name: "write a blue field", Method: http.MethodPatch,
+		Route: "/engagements/{engagementId}/executions/{executionId}/detection",
+		Real:  true,
+		Body:  `{"version":1}`,
+		Want:  statuses{404, 404, 403, 404, 403, 404},
 	},
 	{
 		// Admin/lead pass authorization but the user does not exist → 404.

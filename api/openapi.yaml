@@ -3028,6 +3028,63 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/executions/{executionId}/detection:
+    patch:
+      operationId: patchBlueDetection
+      summary: Write the blue (detection) side of one execution.
+      description: |
+        Lead, blue and platform administrators. The PATCH body only accepts
+        detection fields — category, modifiers, protection, timestamps,
+        source/rule ref, severity and notes — so a red client cannot send
+        fields it does not own. Optimistic locking: `version` is required
+        and must match; mismatch → 409.
+
+        `detected_at` before `started_at` (when both are set) → 400.
+        Unreported fields are left unchanged. Unknown modifier or category
+        → 400.
+
+        A closed engagement returns 409. `scored_by` and `scored_at` are
+        set when detection category or protection changes (on any successful
+        patch).
+
+        Activity: `execution.blue_updated`.
+      tags:
+        - executions
+      x-authz-action: execution.write_blue
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+        param: executionId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ExecutionId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlueDetectionPatch"
+      responses:
+        "200":
+          description: The patched execution, including derived outcome and MTTD.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Execution"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /content/sources:
     get:
       operationId: listContentSources
@@ -8787,6 +8844,17 @@ components:
         updatedAt:
           type: string
           format: date-time
+        outcome:
+          type: [string, "null"]
+          enum:
+            - prevented
+            - detected
+            - not_detected
+            - not_applicable
+          description: Derived detection outcome from category × protection. Never stored; computed on read.
+        mttdSeconds:
+          type: [integer, "null"]
+          description: Mean time to detect in seconds (detected_at − started_at). Computed on read; null when either timestamp is missing.
 
     ExecutionList:
       type: object
@@ -8833,3 +8901,84 @@ components:
         redNotes:
           type: string
           maxLength: 4096
+
+    BlueDetectionPatch:
+      type: object
+      description: |
+        Blue-side only PATCH body for an execution. `version` is the
+        optimistic-lock field and is required on every call. Red fields
+        are not present — red writes through a separate endpoint with
+        its own type.
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          minimum: 1
+          description: The version the caller read. Mismatch → 409.
+        detectionCategory:
+          $ref: "#/components/schemas/DetectionCategory"
+        detectionModifiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DetectionModifier"
+          description: Qualifiers on the detection category. Multi-select; empty array allowed.
+        protection:
+          $ref: "#/components/schemas/Protection"
+        detectedAt:
+          type: string
+          format: date-time
+          description: When the first detection fired (UTC).
+        detectingSource:
+          type: string
+          maxLength: 255
+          description: Source of detection (e.g. "Splunk", "Sentinel").
+        detectingRuleRef:
+          type: string
+          maxLength: 255
+          description: Reference to the detection rule that fired.
+        alertSeverity:
+          $ref: "#/components/schemas/AlertSeverity"
+        blueNotes:
+          type: string
+          maxLength: 4096
+          description: Free-form notes from the blue operator.
+
+    DetectionCategory:
+      type: string
+      enum:
+        - none
+        - telemetry
+        - general
+        - tactic
+        - technique
+      description: Blue-side detection rating, ordinal 0–4.
+
+    DetectionModifier:
+      type: string
+      enum:
+        - alert
+        - correlated
+        - delayed
+        - config_change
+        - residual_artifact
+      description: Descriptive flag qualifying a detection without changing its ordinal.
+
+    Protection:
+      type: string
+      enum:
+        - blocked
+        - partial
+        - not_blocked
+        - "n/a"
+      description: Blue-side prevention rating.
+
+    AlertSeverity:
+      type: string
+      enum:
+        - info
+        - low
+        - medium
+        - high
+        - critical
+      description: Alert severity level.

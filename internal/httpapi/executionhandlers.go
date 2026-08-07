@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/bryanster/blacklight/internal/domain/scoring"
+
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/bryanster/blacklight/internal/authn"
@@ -142,6 +144,64 @@ func (h *handlers) PatchRedExecution(ctx context.Context,
 	return gen.PatchRedExecution200JSONResponse(wire), nil
 }
 
+// PatchBlueDetection writes the blue side of an execution. Optimistic locking,
+// validation and activity are handled by the domain layer.
+func (h *handlers) PatchBlueDetection(ctx context.Context,
+	request gen.PatchBlueDetectionRequestObject) (gen.PatchBlueDetectionResponseObject, error) {
+
+	actor, ok := authn.SubjectFrom(ctx)
+	if !ok {
+		return nil, apierr.Unauthenticated("no subject")
+	}
+
+	in := engagement.PatchBlueDetectionInput{
+		Version: request.Body.Version,
+	}
+
+	if request.Body.DetectionCategory != nil {
+		dc := storengagement.DetectionCategory(string(*request.Body.DetectionCategory))
+		in.DetectionCategory = &dc
+	}
+	if request.Body.DetectionModifiers != nil {
+		mods := make([]string, len(*request.Body.DetectionModifiers))
+		for i, m := range *request.Body.DetectionModifiers {
+			mods[i] = string(m)
+		}
+		in.DetectionModifiers = &mods
+	}
+	if request.Body.Protection != nil {
+		p := storengagement.Protection(string(*request.Body.Protection))
+		in.Protection = &p
+	}
+	if request.Body.DetectedAt != nil {
+		in.DetectedAt = request.Body.DetectedAt
+	}
+	if request.Body.DetectingSource != nil {
+		in.DetectingSource = request.Body.DetectingSource
+	}
+	if request.Body.DetectingRuleRef != nil {
+		in.DetectingRuleRef = request.Body.DetectingRuleRef
+	}
+	if request.Body.AlertSeverity != nil {
+		s := string(*request.Body.AlertSeverity)
+		in.AlertSeverity = &s
+	}
+	if request.Body.BlueNotes != nil {
+		in.BlueNotes = request.Body.BlueNotes
+	}
+
+	exec, err := h.engagements.PatchBlueDetection(ctx, actor, request.ExecutionId.String(), in)
+	if err != nil {
+		return nil, err
+	}
+
+	wire, err := executionToWire(exec)
+	if err != nil {
+		return nil, err
+	}
+	return gen.PatchBlueDetection200JSONResponse(wire), nil
+}
+
 // executionToWire converts a store execution to its OpenAPI representation.
 func executionToWire(e storengagement.Execution) (gen.Execution, error) {
 	mods := make([]string, 0)
@@ -199,5 +259,19 @@ func executionToWire(e storengagement.Execution) (gen.Execution, error) {
 		wire.ScoredAt = e.ScoredAt
 	}
 
+	// Derived outcome from category × protection.
+	if e.DetectionCategory != nil && e.Protection != nil {
+		cat := scoring.Category(string(*e.DetectionCategory))
+		prot := scoring.Protection(string(*e.Protection))
+		if outcome, err := scoring.DeriveOutcome(cat, prot); err == nil {
+			wire.Outcome = nullable.NewNullableWithValue(gen.ExecutionOutcome(string(outcome)))
+		}
+	}
+
+	// Derived MTTD in whole seconds.
+	if mttd, ok, err := scoring.MTTD(e.StartedAt, e.DetectedAt); err == nil && ok {
+		secs := int(mttd.Seconds())
+		wire.MttdSeconds = nullable.NewNullableWithValue(secs)
+	}
 	return wire, nil
 }

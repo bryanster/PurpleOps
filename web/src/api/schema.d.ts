@@ -1616,6 +1616,40 @@ export interface paths {
         patch: operations["patchRedExecution"];
         trace?: never;
     };
+    "/engagements/{engagementId}/executions/{executionId}/detection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Write the blue (detection) side of one execution.
+         * @description Lead, blue and platform administrators. The PATCH body only accepts
+         *     detection fields — category, modifiers, protection, timestamps,
+         *     source/rule ref, severity and notes — so a red client cannot send
+         *     fields it does not own. Optimistic locking: `version` is required
+         *     and must match; mismatch → 409.
+         *
+         *     `detected_at` before `started_at` (when both are set) → 400.
+         *     Unreported fields are left unchanged. Unknown modifier or category
+         *     → 400.
+         *
+         *     A closed engagement returns 409. `scored_by` and `scored_at` are
+         *     set when detection category or protection changes (on any successful
+         *     patch).
+         *
+         *     Activity: `execution.blue_updated`.
+         */
+        patch: operations["patchBlueDetection"];
+        trace?: never;
+    };
     "/content/sources": {
         parameters: {
             query?: never;
@@ -4485,6 +4519,13 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * @description Derived detection outcome from category × protection. Never stored; computed on read.
+             * @enum {string|null}
+             */
+            outcome?: "prevented" | "detected" | "not_detected" | "not_applicable" | null;
+            /** @description Mean time to detect in seconds (detected_at − started_at). Computed on read; null when either timestamp is missing. */
+            mttdSeconds?: number | null;
         };
         ExecutionList: {
             items: components["schemas"]["Execution"][];
@@ -4511,6 +4552,52 @@ export interface components {
             targetHost?: string;
             redNotes?: string;
         };
+        /**
+         * @description Blue-side only PATCH body for an execution. `version` is the
+         *     optimistic-lock field and is required on every call. Red fields
+         *     are not present — red writes through a separate endpoint with
+         *     its own type.
+         */
+        BlueDetectionPatch: {
+            /** @description The version the caller read. Mismatch → 409. */
+            version: number;
+            detectionCategory?: components["schemas"]["DetectionCategory"];
+            /** @description Qualifiers on the detection category. Multi-select; empty array allowed. */
+            detectionModifiers?: components["schemas"]["DetectionModifier"][];
+            protection?: components["schemas"]["Protection"];
+            /**
+             * Format: date-time
+             * @description When the first detection fired (UTC).
+             */
+            detectedAt?: string;
+            /** @description Source of detection (e.g. "Splunk", "Sentinel"). */
+            detectingSource?: string;
+            /** @description Reference to the detection rule that fired. */
+            detectingRuleRef?: string;
+            alertSeverity?: components["schemas"]["AlertSeverity"];
+            /** @description Free-form notes from the blue operator. */
+            blueNotes?: string;
+        };
+        /**
+         * @description Blue-side detection rating, ordinal 0–4.
+         * @enum {string}
+         */
+        DetectionCategory: "none" | "telemetry" | "general" | "tactic" | "technique";
+        /**
+         * @description Descriptive flag qualifying a detection without changing its ordinal.
+         * @enum {string}
+         */
+        DetectionModifier: "alert" | "correlated" | "delayed" | "config_change" | "residual_artifact";
+        /**
+         * @description Blue-side prevention rating.
+         * @enum {string}
+         */
+        Protection: "blocked" | "partial" | "not_blocked" | "n/a";
+        /**
+         * @description Alert severity level.
+         * @enum {string}
+         */
+        AlertSeverity: "info" | "low" | "medium" | "high" | "critical";
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -7200,6 +7287,59 @@ export interface operations {
         };
         responses: {
             /** @description The patched execution. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Execution"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchBlueDetection: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The execution being read or changed. */
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlueDetectionPatch"];
+            };
+        };
+        responses: {
+            /** @description The patched execution, including derived outcome and MTTD. */
             200: {
                 headers: {
                     [name: string]: unknown;

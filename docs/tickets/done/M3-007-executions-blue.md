@@ -39,11 +39,33 @@ same `execution.version` column (shared with red — any side update bumps versi
 
 ## Acceptance criteria
 
-- [ ] Red session cannot write_blue; blue cannot write_red.
-- [ ] Invalid modifier / category → 400 problem.
-- [ ] Stale version → 409.
-- [ ] GET execution after score shows derived outcome matching `M3-008` fixtures.
-- [ ] Blue cannot score unrevealed blind step (404 conceal).
+- [x] Red session cannot write_blue; blue cannot write_red.
+- [x] Invalid modifier / category → 400 problem.
+- [x] Stale version → 409.
+- [x] GET execution after score shows derived outcome matching `M3-008` fixtures.
+- [x] Blue cannot score unrevealed blind step (404 conceal).
+
+## Implementation notes
+
+- Route: `PATCH /engagements/{engagementId}/executions/{executionId}/detection`
+  (follows M3-006 pattern of including `engagementId` as a path parameter for
+  authz middleware).
+- `alertSeverity`: chosen as a small enum (`info`|`low`|`medium`|`high`|`critical`)
+  in the BlueDetectionPatch schema. The Execution response schema retains free-text
+  for backward compatibility with existing stored values.
+- Scoring domain package (`M3-008`, `internal/domain/scoring`) provides:
+  modifier validation (`ValidateModifiers`), category/protection enums, derived
+  `outcome` and `mttdSeconds` computed in `executionToWire`.
+- `scored_by`/`scored_at` set when detection category or protection changes on
+  any successful patch.
+- `detected_at` before `started_at` → 400 (validated in domain layer).
+- Blue-side fields written through `BluePatchChanges` + `PatchBlue` store method
+  with same optimistic-locking pattern as `PatchRed`.
+- Authz sweep test updated: blue detection endpoint is now driven as a real
+  endpoint (was a stub). Admin/lead/blue get 404 (pass authz, no execution),
+  red/observer get 403, outsider gets 404.
+- CSRF coverage added for the new route.
+- `VerbExecutionBlueUpdated` added to events package for activity logging.
 
 ## Tests
 

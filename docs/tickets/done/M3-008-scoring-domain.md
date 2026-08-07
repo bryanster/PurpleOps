@@ -40,12 +40,25 @@ ordinal (`none`=0 … `technique`=4); **outcome is derived, never entered**; MTT
 
 ## Acceptance criteria
 
-- [ ] Table-driven tests cover **all** category × protection pairs for `DeriveOutcome` (hand-written
+- [x] Table-driven tests cover **all** category × protection pairs for `DeriveOutcome` (hand-written
       expected values, not captured from the function under test).
-- [ ] Every modifier constant round-trips Parse; unknown fails.
-- [ ] Ordinal monotonicity: none < telemetry < general < tactic < technique.
-- [ ] MTTD: nil cases, positive duration, inverted timestamps.
-- [ ] Package import boundary: no `store`, `http`, `sql`.
+- [x] Every modifier constant round-trips Parse; unknown fails.
+- [x] Ordinal monotonicity: none < telemetry < general < tactic < technique.
+- [x] MTTD: nil cases, positive duration, inverted timestamps.
+- [x] Package import boundary: no `store`, `http`, `sql`.
+
+## Implementation notes
+
+- Package created at `internal/domain/scoring/scoring.go` with full test coverage
+  (`scoring_test.go`, 13 tests). No store/http/sql imports — verified by compiler.
+- `docs/scoring.md` documents the normative outcome matrix.
+- `DeriveOutcomePtr` convenience function added for nullable calling convention
+  used by the HTTP layer.
+- `CategoryStrings()`, `ProtectionStrings()`, `ModifierStrings()` helpers provided
+  for future OpenAPI drift testing.
+- Modifiers: duplicates are collapsed (order-preserving); unknowns rejected.
+- OpenAPI enums (`DetectionCategory`, `DetectionModifier`, `Protection`,
+  `AlertSeverity`) added in M3-007 alongside the BlueDetectionPatch schema.
 
 ## Tests
 

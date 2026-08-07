@@ -2,8 +2,12 @@ package engagement
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
 	"time"
+
+	"github.com/bryanster/blacklight/internal/domain/scoring"
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/events"
@@ -163,6 +167,136 @@ func redDelta(in PatchRedExecutionInput, before, after storengagement.Execution)
 	}
 	if in.RedNotes != nil {
 		d["redNotes"] = true
+	}
+	return d
+}
+
+// PatchBlueDetectionInput is the caller's half of patching a blue execution.
+type PatchBlueDetectionInput struct {
+	Version            int
+	DetectionCategory  *storengagement.DetectionCategory
+	DetectionModifiers *[]string
+	Protection         *storengagement.Protection
+	DetectedAt         *time.Time
+	DetectingSource    *string
+	DetectingRuleRef   *string
+	AlertSeverity      *string
+	BlueNotes          *string
+}
+
+// PatchBlueDetection applies blue-side changes to an execution with optimistic
+// locking, validation, and activity logging.
+func (s *Service) PatchBlueDetection(ctx context.Context, actor authn.Subject, id string, in PatchBlueDetectionInput) (storengagement.Execution, error) {
+	exec, err := s.executions.ByID(ctx, id)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+
+	step, err := s.steps.ByID(ctx, exec.StepID)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+
+	scenario, err := s.scenarios.ByID(ctx, step.ScenarioID)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+
+	eng, err := s.engagements.ByID(ctx, scenario.EngagementID)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+
+	// Closed/archived engagements refuse all writes.
+	if eng.Status == storengagement.EngagementStatusClosed || eng.Status == storengagement.EngagementStatusArchived {
+		return storengagement.Execution{}, apierr.Conflict(fmt.Sprintf("engagement is %s", eng.Status))
+	}
+
+	// Build store changes.
+	changes := storengagement.BluePatchChanges{
+		DetectionCategory: in.DetectionCategory,
+		Protection:        in.Protection,
+		DetectedAt:        in.DetectedAt,
+		DetectingSource:   in.DetectingSource,
+		DetectingRuleRef:  in.DetectingRuleRef,
+		AlertSeverity:     in.AlertSeverity,
+		BlueNotes:         in.BlueNotes,
+	}
+
+	// Validate modifiers. An explicit empty array is valid (clears modifiers).
+	if in.DetectionModifiers != nil {
+		deduped, err := scoring.ValidateModifiers(*in.DetectionModifiers)
+		if err != nil {
+			return storengagement.Execution{}, apierr.Validation(apierr.Field("detectionModifiers", err.Error()))
+		}
+		var modifierJSON []byte
+		if len(deduped) == 0 {
+			modifierJSON = []byte("[]")
+		} else {
+			var err error
+			modifierJSON, err = json.Marshal(deduped)
+			if err != nil {
+				return storengagement.Execution{}, fmt.Errorf("execution: marshal detection_modifiers: %w", err)
+			}
+		}
+		changes.DetectionModifiers = modifierJSON
+	}
+
+	// detected_at before started_at → 400
+	if in.DetectedAt != nil && exec.StartedAt != nil {
+		if in.DetectedAt.Before(*exec.StartedAt) {
+			return storengagement.Execution{}, apierr.Validation(apierr.Field("detectedAt", "must not precede started_at"))
+		}
+	}
+
+	// Set scored_by / scored_at when category or protection changes.
+	if in.DetectionCategory != nil || in.Protection != nil {
+		now := time.Now()
+		scoredBy := actor.UserID
+		changes.ScoredBy = &scoredBy
+		changes.ScoredAt = &now
+	}
+
+	// Apply the patch with optimistic locking.
+	patched, err := s.executions.PatchBlue(ctx, id, in.Version, changes)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+
+	// Record activity.
+	recordActivityExecution(ctx, s.activity, actor.UserID, scenario.EngagementID,
+		events.VerbExecutionBlueUpdated, id, blueDelta(in, exec, patched),
+	)
+
+	return patched, nil
+}
+
+// blueDelta builds a delta map of what changed in this blue PATCH.
+func blueDelta(in PatchBlueDetectionInput, before, after storengagement.Execution) map[string]any {
+	d := map[string]any{}
+	if in.DetectionCategory != nil {
+		d["detectionCategory"] = true
+	}
+	if in.DetectionModifiers != nil {
+		d["detectionModifiers"] = true
+	}
+	if in.Protection != nil {
+		d["protection"] = true
+	}
+	if in.DetectedAt != nil {
+		d["detectedAt"] = true
+	}
+	if in.DetectingSource != nil {
+		d["detectingSource"] = true
+	}
+	if in.DetectingRuleRef != nil {
+		d["detectingRuleRef"] = true
+	}
+	if in.AlertSeverity != nil {
+		d["alertSeverity"] = true
+	}
+	if in.BlueNotes != nil {
+		d["blueNotes"] = true
 	}
 	return d
 }

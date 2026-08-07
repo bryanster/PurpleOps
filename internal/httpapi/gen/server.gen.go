@@ -20,6 +20,33 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AlertSeverity.
+const (
+	AlertSeverityCritical AlertSeverity = "critical"
+	AlertSeverityHigh     AlertSeverity = "high"
+	AlertSeverityInfo     AlertSeverity = "info"
+	AlertSeverityLow      AlertSeverity = "low"
+	AlertSeverityMedium   AlertSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the AlertSeverity enum.
+func (e AlertSeverity) Valid() bool {
+	switch e {
+	case AlertSeverityCritical:
+		return true
+	case AlertSeverityHigh:
+		return true
+	case AlertSeverityInfo:
+		return true
+	case AlertSeverityLow:
+		return true
+	case AlertSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContentSoftwareType.
 const (
 	ContentSoftwareTypeMalware ContentSoftwareType = "malware"
@@ -182,6 +209,60 @@ func (e CreateUserRequestStatus) Valid() bool {
 	}
 }
 
+// Defines values for DetectionCategory.
+const (
+	DetectionCategoryGeneral   DetectionCategory = "general"
+	DetectionCategoryNone      DetectionCategory = "none"
+	DetectionCategoryTactic    DetectionCategory = "tactic"
+	DetectionCategoryTechnique DetectionCategory = "technique"
+	DetectionCategoryTelemetry DetectionCategory = "telemetry"
+)
+
+// Valid indicates whether the value is a known member of the DetectionCategory enum.
+func (e DetectionCategory) Valid() bool {
+	switch e {
+	case DetectionCategoryGeneral:
+		return true
+	case DetectionCategoryNone:
+		return true
+	case DetectionCategoryTactic:
+		return true
+	case DetectionCategoryTechnique:
+		return true
+	case DetectionCategoryTelemetry:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DetectionModifier.
+const (
+	DetectionModifierAlert            DetectionModifier = "alert"
+	DetectionModifierConfigChange     DetectionModifier = "config_change"
+	DetectionModifierCorrelated       DetectionModifier = "correlated"
+	DetectionModifierDelayed          DetectionModifier = "delayed"
+	DetectionModifierResidualArtifact DetectionModifier = "residual_artifact"
+)
+
+// Valid indicates whether the value is a known member of the DetectionModifier enum.
+func (e DetectionModifier) Valid() bool {
+	switch e {
+	case DetectionModifierAlert:
+		return true
+	case DetectionModifierConfigChange:
+		return true
+	case DetectionModifierCorrelated:
+		return true
+	case DetectionModifierDelayed:
+		return true
+	case DetectionModifierResidualArtifact:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EngagementMode.
 const (
 	EngagementModeBlind    EngagementMode = "blind"
@@ -269,6 +350,30 @@ func (e ExecutionDetectionCategory) Valid() bool {
 	case ExecutionDetectionCategoryTechnique:
 		return true
 	case ExecutionDetectionCategoryTelemetry:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExecutionOutcome.
+const (
+	ExecutionOutcomeDetected      ExecutionOutcome = "detected"
+	ExecutionOutcomeNotApplicable ExecutionOutcome = "not_applicable"
+	ExecutionOutcomeNotDetected   ExecutionOutcome = "not_detected"
+	ExecutionOutcomePrevented     ExecutionOutcome = "prevented"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionOutcome enum.
+func (e ExecutionOutcome) Valid() bool {
+	switch e {
+	case ExecutionOutcomeDetected:
+		return true
+	case ExecutionOutcomeNotApplicable:
+		return true
+	case ExecutionOutcomeNotDetected:
+		return true
+	case ExecutionOutcomePrevented:
 		return true
 	default:
 		return false
@@ -440,6 +545,30 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeUnauthenticated:
 		return true
 	case ProblemCodeValidationFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Protection.
+const (
+	ProtectionBlocked    Protection = "blocked"
+	ProtectionNa         Protection = "n/a"
+	ProtectionNotBlocked Protection = "not_blocked"
+	ProtectionPartial    Protection = "partial"
+)
+
+// Valid indicates whether the value is a known member of the Protection enum.
+func (e Protection) Valid() bool {
+	switch e {
+	case ProtectionBlocked:
+		return true
+	case ProtectionNa:
+		return true
+	case ProtectionNotBlocked:
+		return true
+	case ProtectionPartial:
 		return true
 	default:
 		return false
@@ -689,6 +818,9 @@ type AddMember struct {
 	UserId string `json:"userId"`
 }
 
+// AlertSeverity Alert severity level.
+type AlertSeverity string
+
 // AuthProviders What the login page may offer. It is deliberately a list rather than a
 // set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
 // renders this array needed no change when it arrived.
@@ -702,6 +834,39 @@ type AuthProviders struct {
 	// right now. A configured provider that cannot be discovered is absent
 	// rather than listed-and-broken.
 	Sso []SSOProvider `json:"sso"`
+}
+
+// BlueDetectionPatch Blue-side only PATCH body for an execution. `version` is the
+// optimistic-lock field and is required on every call. Red fields
+// are not present — red writes through a separate endpoint with
+// its own type.
+type BlueDetectionPatch struct {
+	// AlertSeverity Alert severity level.
+	AlertSeverity *AlertSeverity `json:"alertSeverity,omitempty"`
+
+	// BlueNotes Free-form notes from the blue operator.
+	BlueNotes *string `json:"blueNotes,omitempty"`
+
+	// DetectedAt When the first detection fired (UTC).
+	DetectedAt *time.Time `json:"detectedAt,omitempty"`
+
+	// DetectingRuleRef Reference to the detection rule that fired.
+	DetectingRuleRef *string `json:"detectingRuleRef,omitempty"`
+
+	// DetectingSource Source of detection (e.g. "Splunk", "Sentinel").
+	DetectingSource *string `json:"detectingSource,omitempty"`
+
+	// DetectionCategory Blue-side detection rating, ordinal 0–4.
+	DetectionCategory *DetectionCategory `json:"detectionCategory,omitempty"`
+
+	// DetectionModifiers Qualifiers on the detection category. Multi-select; empty array allowed.
+	DetectionModifiers *[]DetectionModifier `json:"detectionModifiers,omitempty"`
+
+	// Protection Blue-side prevention rating.
+	Protection *Protection `json:"protection,omitempty"`
+
+	// Version The version the caller read. Mismatch → 409.
+	Version int `json:"version"`
 }
 
 // ChangePasswordRequest Body of `POST /auth/password`. The current password is required even
@@ -1670,6 +1835,12 @@ type CurrentUser struct {
 	PlatformRole PlatformRole `json:"platformRole"`
 }
 
+// DetectionCategory Blue-side detection rating, ordinal 0–4.
+type DetectionCategory string
+
+// DetectionModifier Descriptive flag qualifying a detection without changing its ordinal.
+type DetectionModifier string
+
 // DisableTOTPRequest Body of `DELETE /auth/mfa/totp`. The current password is required for the
 // same reason `ChangePasswordRequest` asks for it.
 type DisableTOTPRequest struct {
@@ -1783,7 +1954,13 @@ type Execution struct {
 	ExecutedBy string `json:"executedBy"`
 
 	// Id UUIDv7.
-	Id         openapi_types.UUID                     `json:"id"`
+	Id openapi_types.UUID `json:"id"`
+
+	// MttdSeconds Mean time to detect in seconds (detected_at − started_at). Computed on read; null when either timestamp is missing.
+	MttdSeconds nullable.Nullable[int] `json:"mttdSeconds,omitempty"`
+
+	// Outcome Derived detection outcome from category × protection. Never stored; computed on read.
+	Outcome    nullable.Nullable[ExecutionOutcome]    `json:"outcome,omitempty"`
 	Protection nullable.Nullable[ExecutionProtection] `json:"protection,omitempty"`
 
 	// RedNotes Free-form notes from the red operator.
@@ -1811,6 +1988,9 @@ type Execution struct {
 
 // ExecutionDetectionCategory defines model for Execution.DetectionCategory.
 type ExecutionDetectionCategory string
+
+// ExecutionOutcome Derived detection outcome from category × protection. Never stored; computed on read.
+type ExecutionOutcome string
 
 // ExecutionProtection defines model for Execution.Protection.
 type ExecutionProtection string
@@ -2095,6 +2275,9 @@ type Problem struct {
 // always fall back to the code it refines, and internal/httpapi/apierr
 // holds the refinement table that says which that is.
 type ProblemCode string
+
+// Protection Blue-side prevention rating.
+type Protection string
 
 // RecoveryCodeRequest Body of `POST /auth/mfa/recovery/verify`: one recovery code, as the
 // person has it written down.
@@ -3733,6 +3916,25 @@ type ListEngagementExecutionsParams struct {
 	Status *ExecutionStatus `form:"status,omitempty" json:"status,omitempty"`
 }
 
+// PatchBlueDetectionParams defines parameters for PatchBlueDetection.
+type PatchBlueDetectionParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // PatchRedExecutionParams defines parameters for PatchRedExecution.
 type PatchRedExecutionParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -4026,6 +4228,9 @@ type CreateEngagementJSONRequestBody = CreateEngagement
 // PatchEngagementJSONRequestBody defines body for PatchEngagement for application/json ContentType.
 type PatchEngagementJSONRequestBody = PatchEngagement
 
+// PatchBlueDetectionJSONRequestBody defines body for PatchBlueDetection for application/json ContentType.
+type PatchBlueDetectionJSONRequestBody = BlueDetectionPatch
+
 // PatchRedExecutionJSONRequestBody defines body for PatchRedExecution for application/json ContentType.
 type PatchRedExecutionJSONRequestBody = RedExecutionPatch
 
@@ -4313,6 +4518,9 @@ type ServerInterface interface {
 	// GetExecution Return one execution by id.
 	// (GET /engagements/{engagementId}/executions/{executionId})
 	GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId)
+	// PatchBlueDetection Write the blue (detection) side of one execution.
+	// (PATCH /engagements/{engagementId}/executions/{executionId}/detection)
+	PatchBlueDetection(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchBlueDetectionParams)
 	// PatchRedExecution Write the red (attack) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 	PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams)
@@ -4910,6 +5118,12 @@ func (_ Unimplemented) ListEngagementExecutions(w http.ResponseWriter, r *http.R
 // GetExecution Return one execution by id.
 // (GET /engagements/{engagementId}/executions/{executionId})
 func (_ Unimplemented) GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchBlueDetection Write the blue (detection) side of one execution.
+// (PATCH /engagements/{engagementId}/executions/{executionId}/detection)
+func (_ Unimplemented) PatchBlueDetection(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchBlueDetectionParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8572,6 +8786,65 @@ func (siw *ServerInterfaceWrapper) GetExecution(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// PatchBlueDetection operation middleware
+func (siw *ServerInterfaceWrapper) PatchBlueDetection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchBlueDetectionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchBlueDetection(w, r, engagementId, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PatchRedExecution operation middleware
 func (siw *ServerInterfaceWrapper) PatchRedExecution(w http.ResponseWriter, r *http.Request) {
 
@@ -10244,6 +10517,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}/execution", wrapper.PatchRedExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}/detection", wrapper.PatchBlueDetection)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/sources", wrapper.ListContentSources)
@@ -17804,6 +18080,127 @@ func (response GetExecution500ApplicationProblemPlusJSONResponse) VisitGetExecut
 	return err
 }
 
+type PatchBlueDetectionRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ExecutionId  ExecutionId  `json:"executionId"`
+	Params       PatchBlueDetectionParams
+	Body         *PatchBlueDetectionJSONRequestBody
+}
+
+type PatchBlueDetectionResponseObject interface {
+	VisitPatchBlueDetectionResponse(w http.ResponseWriter) error
+}
+
+type PatchBlueDetection200JSONResponse Execution
+
+func (response PatchBlueDetection200JSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchBlueDetection400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchBlueDetection400ApplicationProblemPlusJSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchBlueDetection401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchBlueDetection401ApplicationProblemPlusJSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchBlueDetection403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchBlueDetection403ApplicationProblemPlusJSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchBlueDetection404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchBlueDetection404ApplicationProblemPlusJSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchBlueDetection409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PatchBlueDetection409ApplicationProblemPlusJSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchBlueDetection500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchBlueDetection500ApplicationProblemPlusJSONResponse) VisitPatchBlueDetectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PatchRedExecutionRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	ExecutionId  ExecutionId  `json:"executionId"`
@@ -21804,6 +22201,9 @@ type StrictServerInterface interface {
 	// GetExecution Return one execution by id.
 	// (GET /engagements/{engagementId}/executions/{executionId})
 	GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error)
+	// PatchBlueDetection Write the blue (detection) side of one execution.
+	// (PATCH /engagements/{engagementId}/executions/{executionId}/detection)
+	PatchBlueDetection(ctx context.Context, request PatchBlueDetectionRequestObject) (PatchBlueDetectionResponseObject, error)
 	// PatchRedExecution Write the red (attack) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 	PatchRedExecution(ctx context.Context, request PatchRedExecutionRequestObject) (PatchRedExecutionResponseObject, error)
@@ -24215,6 +24615,41 @@ func (sh *strictHandler) GetExecution(w http.ResponseWriter, r *http.Request, en
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetExecutionResponseObject); ok {
 		if err := validResponse.VisitGetExecutionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchBlueDetection operation middleware
+func (sh *strictHandler) PatchBlueDetection(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchBlueDetectionParams) {
+	var request PatchBlueDetectionRequestObject
+
+	request.EngagementId = engagementId
+	request.ExecutionId = executionId
+	request.Params = params
+
+	var body PatchBlueDetectionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchBlueDetection(ctx, request.(PatchBlueDetectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchBlueDetection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchBlueDetectionResponseObject); ok {
+		if err := validResponse.VisitPatchBlueDetectionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

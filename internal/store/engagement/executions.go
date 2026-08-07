@@ -3,6 +3,7 @@ package engagement
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -227,6 +228,117 @@ func (r *Executions) PatchRed(ctx context.Context, id string, expectedVersion in
 		}
 
 		// Re-read to return the updated row.
+		var scanErr error
+		e, scanErr = scanExecution(tx.QueryRowContext(ctx, selectExecution+`WHERE id = ?`, id))
+		if scanErr != nil {
+			return scanErr
+		}
+
+		ctx := WithAfterEntity(ctx, e.ID)
+		return runAfter(ctx, tx, after)
+	})
+	if err != nil {
+		var vc *versionConflictError
+		if errors.As(err, &vc) {
+			return Execution{}, fmt.Errorf("execution %s: version conflict: expected %d, current %d: %w",
+				id, expectedVersion, vc.current.Version, err)
+		}
+		return Execution{}, err
+	}
+	return e, nil
+}
+
+// BluePatchChanges describes the blue-side fields to patch on an execution.
+// All fields are optional; only non-nil fields are written.
+type BluePatchChanges struct {
+	DetectionCategory  *DetectionCategory
+	DetectionModifiers json.RawMessage
+	Protection         *Protection
+	DetectedAt         *time.Time
+	DetectingSource    *string
+	DetectingRuleRef   *string
+	AlertSeverity      *string
+	BlueNotes          *string
+	ScoredBy           *string
+	ScoredAt           *time.Time
+}
+
+// PatchBlue atomically updates blue-side fields on an execution with
+// optimistic locking. The caller must supply the version they read;
+// a mismatch returns an error wrapping [versionConflictError].
+// Non-nil fields in changes are written; the version is incremented
+// and updated_at is set to now on success.
+func (r *Executions) PatchBlue(ctx context.Context, id string, expectedVersion int, changes BluePatchChanges, after ...After) (Execution, error) {
+	var e Execution
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		var sets []string
+		var args []any
+
+		if changes.DetectionCategory != nil {
+			sets = append(sets, "detection_category = ?")
+			args = append(args, string(*changes.DetectionCategory))
+		}
+		// detection_modifiers is JSON — always write when provided (even empty array).
+		if changes.DetectionModifiers != nil {
+			sets = append(sets, "detection_modifiers = ?")
+			args = append(args, bindJSON(changes.DetectionModifiers))
+		}
+		if changes.Protection != nil {
+			sets = append(sets, "protection = ?")
+			args = append(args, string(*changes.Protection))
+		}
+		if changes.DetectedAt != nil {
+			sets = append(sets, "detected_at = ?")
+			args = append(args, toStorage(*changes.DetectedAt))
+		}
+		if changes.DetectingSource != nil {
+			sets = append(sets, "detecting_source = ?")
+			args = append(args, *changes.DetectingSource)
+		}
+		if changes.DetectingRuleRef != nil {
+			sets = append(sets, "detecting_rule_ref = ?")
+			args = append(args, *changes.DetectingRuleRef)
+		}
+		if changes.AlertSeverity != nil {
+			sets = append(sets, "alert_severity = ?")
+			args = append(args, *changes.AlertSeverity)
+		}
+		if changes.BlueNotes != nil {
+			sets = append(sets, "blue_notes = ?")
+			args = append(args, *changes.BlueNotes)
+		}
+		if changes.ScoredBy != nil {
+			sets = append(sets, "scored_by = ?")
+			args = append(args, *changes.ScoredBy)
+		}
+		if changes.ScoredAt != nil {
+			sets = append(sets, "scored_at = ?")
+			args = append(args, toStorage(*changes.ScoredAt))
+		}
+
+		sets = append(sets, "version = version + 1", "updated_at = ?")
+		args = append(args, now())
+
+		args = append(args, id, expectedVersion)
+
+		query := "UPDATE app.execution SET " + strings.Join(sets, ", ") + " WHERE id = ? AND version = ?" //nolint:gosec // sets built from hardcoded column names, not user input
+
+		result, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("execution: patch blue %q: %w", id, err)
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			current, err := scanExecution(tx.QueryRowContext(ctx, selectExecution+`WHERE id = ?`, id))
+			if err != nil {
+				return err
+			}
+			return &versionConflictError{current: current}
+		}
+
 		var scanErr error
 		e, scanErr = scanExecution(tx.QueryRowContext(ctx, selectExecution+`WHERE id = ?`, id))
 		if scanErr != nil {
