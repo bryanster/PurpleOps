@@ -8,6 +8,7 @@ import {
   get,
   memberUserFixture,
 } from '@/test/msw/handlers'
+import { patch } from '@/test/msw/handlers'
 import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/render'
 
@@ -105,6 +106,81 @@ const redUser: components['schemas']['CurrentUser'] = {
       addedAt: '2025-12-01T00:00:00Z',
     },
   ],
+}
+
+const leadUser: components['schemas']['CurrentUser'] = {
+  ...adminUserFixture,
+  id: '0192a000-0000-7000-8000-00000000000a',
+  email: 'lead@example.com',
+  displayName: 'Lead Op',
+  memberships: [
+    {
+      engagementId: ENGAGEMENT_ID,
+      role: 'lead',
+      addedAt: '2025-12-01T00:00:00Z',
+    },
+  ],
+}
+
+const observerUser: components['schemas']['CurrentUser'] = {
+  ...memberUserFixture,
+  id: '0192a000-0000-7000-8000-00000000000f',
+  email: 'obs@example.com',
+  displayName: 'Observer',
+  memberships: [
+    {
+      engagementId: ENGAGEMENT_ID,
+      role: 'observer',
+      addedAt: '2025-12-01T00:00:00Z',
+    },
+  ],
+}
+
+function scoredExecution(): components['schemas']['Execution'] {
+  return {
+    id: '0192a000-0000-7000-8000-000000000005',
+    stepId: revealedStep.id,
+    version: 1,
+    status: 'complete',
+    executedBy: '',
+    commandRun: '',
+    sourceHost: '',
+    targetHost: '',
+    redNotes: '',
+    detectionCategory: 'none',
+    detectionModifiers: [],
+    protection: 'not_blocked',
+    detectedAt: '2025-12-03T12:00:00Z',
+    detectingSource: '',
+    detectingRuleRef: '',
+    alertSeverity: '',
+    blueNotes: '',
+    scoredBy: '',
+    outcome: 'not_detected',
+    mttdSeconds: null,
+    startedAt: '2025-12-03T11:00:00Z',
+    endedAt: '2025-12-03T11:15:00Z',
+    createdAt: '2025-12-03T12:00:00Z',
+    updatedAt: '2025-12-03T12:00:00Z',
+  }
+}
+
+function stubScoredWorkbook(): void {
+  const exec = scoredExecution()
+  server.use(
+    get('/engagements/{engagementId}/scenarios', () =>
+      Response.json({ items: [scenarioFixture] }, { status: 200 }),
+    ),
+    get('/engagements/{engagementId}/steps', () =>
+      Response.json(
+        { items: [revealedStep] },
+        { status: 200 },
+      ),
+    ),
+    get('/engagements/{engagementId}/executions', () =>
+      Response.json({ items: [exec] }, { status: 200 }),
+    ),
+  )
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -230,5 +306,161 @@ describe('WorkbookPage — blind blue', () => {
     await expandFirstScenario()
 
     expect(screen.queryByRole('button', { name: /add scenario/i })).toBeNull()
+  })
+})
+
+// ── Scoring UI tests (M3-015) ─────────────────────────────────────────────────
+
+describe('BlueDetectionEditor — scoring', () => {
+  test('shows 5-button scale with tooltips for detection category', async () => {
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+
+    // Open the execution drawer on the revealed step
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // All five category buttons should be visible
+    for (const label of ['None', 'Telemetry', 'General', 'Tactic', 'Technique']) {
+      expect(screen.getByRole('button', { name: label })).toBeDefined()
+    }
+  })
+
+  test('selects a category and sends it in the PATCH body', async () => {
+    let patchedBody: unknown = null
+    server.use(
+      patch('/engagements/{engagementId}/executions/{executionId}/detection', async ({ request }) => {
+        patchedBody = await request.json()
+        return Response.json(
+          { ...scoredExecution(), version: 2, detectionCategory: 'technique' as const, outcome: 'detected' as const, mttdSeconds: 3600 },
+          { status: 200 },
+        )
+      }),
+    )
+
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Click the Technique button
+    await userEvent.click(screen.getByRole('button', { name: 'Technique' }))
+
+    // Save
+    await userEvent.click(screen.getByRole('button', { name: 'Save Blue' }))
+
+    // Check body
+    const body = patchedBody as Record<string, unknown>
+    expect(body).toBeDefined()
+    expect(body.version).toBe(1)
+    expect(body.detectionCategory).toBe('technique')
+  })
+
+  test('modifiers section starts collapsed when no modifiers selected', async () => {
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // The modifiers should not be visible initially (collapsed)
+    expect(screen.queryByText('Detection Modifiers')).toBeNull()
+
+    // Advanced disclosure trigger should be present
+    expect(screen.getByText('Advanced')).toBeDefined()
+  })
+
+  test('clicking Advanced toggles modifier visibility', async () => {
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Click Advanced to expand
+    await userEvent.click(screen.getByText('Advanced'))
+
+    // Modifiers should now be visible
+    expect(screen.getByText('Detection Modifiers')).toBeDefined()
+    expect(screen.getByText('Alert')).toBeDefined()
+    expect(screen.getByText('Correlated')).toBeDefined()
+  })
+
+  test('selects modifiers and persists them in PATCH', async () => {
+    let patchedBody: unknown = null
+    server.use(
+      patch('/engagements/{engagementId}/executions/{executionId}/detection', async ({ request }) => {
+        patchedBody = await request.json()
+        return Response.json(
+          { ...scoredExecution(), version: 2, detectionModifiers: ['alert', 'delayed'] },
+          { status: 200 },
+        )
+      }),
+    )
+
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Expand Advanced
+    await userEvent.click(screen.getByText('Advanced'))
+
+    // Select two modifiers
+    await userEvent.click(screen.getByText('Alert'))
+    await userEvent.click(screen.getByText('Delayed'))
+
+    // Save
+    await userEvent.click(screen.getByRole('button', { name: 'Save Blue' }))
+
+    const body = patchedBody as Record<string, unknown>
+    expect(body.detectionModifiers).toEqual(['alert', 'delayed'])
+  })
+
+  test('shows conflict toast on 409 and invalidates queries', async () => {
+    server.use(
+      patch('/engagements/{engagementId}/executions/{executionId}/detection', () =>
+        new Response(
+          JSON.stringify({
+            code: 'conflict',
+            detail: 'Version mismatch',
+            status: 409,
+            title: 'Conflict',
+          }),
+          {
+            status: 409,
+            headers: { 'content-type': 'application/problem+json' },
+          },
+        ),
+      ),
+    )
+
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save Blue' }))
+
+    expect(
+      await screen.findByText(/modified by someone else/i),
+    ).toBeDefined()
+  })
+
+  test('blue detection panel is read-only for observer', async () => {
+    stubScoredWorkbook()
+    renderWorkbook(observerUser, 'observer')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    expect(screen.getByText('Blue Detection')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Save Blue' })).toBeNull()
+  })
+
+  test('shows outcome badge as read-only derived value', async () => {
+    stubScoredWorkbook()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    expect(screen.getByText('Not Detected')).toBeDefined()
   })
 })

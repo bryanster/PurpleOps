@@ -6,6 +6,7 @@ import { QueryProvider } from '@/api/query-provider'
 import { ErrorBoundary } from '@/app/error/error-boundary'
 import { AppRoutes } from '@/app/routes/app-routes'
 import { applyTheme, readStoredPreference, resolveTheme } from '@/app/theme/theme'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from '@/app/theme/theme-provider'
 
 import './index.css'
@@ -23,19 +24,21 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    {/* Outside the router and the shell, so that a failure in either of those
-        still renders something rather than a blank document. */}
-    <ErrorBoundary>
-      <ThemeProvider>
-        {/* Above the router and the shell: the query cache outlives every
-            navigation, and a screen unmounting mid-request does not take it
-            with it. */}
-        <QueryProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </QueryProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <TooltipProvider>
+      {/* Outside the router and the shell, so that a failure in either of those
+          still renders something rather than a blank document. */}
+      <ErrorBoundary>
+        <ThemeProvider>
+          {/* Above the router and the shell: the query cache outlives every
+              navigation, and a screen unmounting mid-request does not take it
+              with it. */}
+          <QueryProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </QueryProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </TooltipProvider>
   </StrictMode>,
 )

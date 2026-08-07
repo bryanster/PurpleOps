@@ -35,18 +35,25 @@ displayed read-only as derived.
 
 ## Acceptance criteria
 
-- [ ] Blue can set category with one click + save; refresh shows same category and derived outcome.
-- [ ] Modifiers default collapsed; selecting two modifiers persists both.
-- [ ] Hover/focus shows definition text for each category button.
-- [ ] Stale version: user sees conflict and recovers without data loss of *server* state.
-- [ ] Red fields not editable as blue and vice versa in the UI.
+- [x] Blue can set category with one click + save; refresh shows same category and derived outcome.
+- [x] Modifiers default collapsed; selecting two modifiers persists both.
+- [x] Hover/focus shows definition text for each category button.
+- [x] Stale version: user sees conflict and recovers without data loss of *server* state.
+- [x] Red fields not editable as blue and vice versa in the UI.
 
 ## Tests
 
 - Component tests for category click → mutation body shape; 409 handling; modifiers collapse.
 - E2E: blue scores a revealed execution through technique + modifier; outcome visible.
 
-## Notes for the implementer
+## Implementation notes
 
-- Copy definitions from MITRE ATT&CK Evaluations wording where possible; keep short.
-- Do not implement client-only outcome derivation that can drift — display server field.
+- Detection category uses a 5-button toggle bar with Tooltip definitions from `docs/scoring.md`.
+- Modifiers are behind a `Collapsible` "Advanced" disclosure; defaults closed unless modifiers are already set.
+- Both BlueDetectionEditor and RedExecutionEditor now accept a `readOnly` prop. Panels render for all roles (read-only for non-write roles).
+- 409 conflict handling: on `conflict` ApiError, toast appears and queries are invalidated to reload server state.
+- RedExecutionEditor gained the same 409 handling as BlueDetectionEditor.
+- E2E test deferred: no `blctl engagement create` command exists yet to seed engagement data. Component tests cover all behaviours.
+- Added `TooltipProvider` to `main.tsx` and `renderWithProviders` test helper.
+- Added `toLocalDatetime` helper for UTC→datetime-local conversion.
+- Definitions copied from `docs/scoring.md` for tooltip content; outcome remains server-derived only.

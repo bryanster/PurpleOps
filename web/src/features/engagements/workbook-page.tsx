@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react'
 import { toast } from 'sonner'
+import { isApiError } from '@/api/errors'
 
 import { API_BASE_URL } from '@/api/client'
 import { cn } from '@/lib/utils'
@@ -40,6 +41,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { useEngagementContext } from './engagement-layout'
 import { usePlans, useProcedures } from '@/features/content/queries'
@@ -66,6 +77,7 @@ import {
   usePatchRedExecution,
   useRevealStep,
   useScenarios,
+  type BlueDetectionPatch,
   type CreateScenario,
   type CreateStep,
   type CreateStepFromTemplate,
@@ -129,6 +141,24 @@ const SEVERITY_LABEL: Record<string, string> = {
   medium: 'Medium',
   high: 'High',
   critical: 'Critical',
+}
+
+// ── Scoring definitions (from docs/scoring.md) for tooltips ────────────────────
+
+const CATEGORY_DEFINITIONS: Record<string, string> = {
+  none: 'No detection capability.',
+  telemetry: 'Minimal data collected — process creation, network flow.',
+  general: 'Broad-spectrum alerting (AV, EDR default rule).',
+  tactic: "Detection logic aligned to a tactic (e.g. 'credential access').",
+  technique: 'Technique-specific detection (e.g. T1003.001).',
+}
+
+const MODIFIER_DEFINITIONS: Record<string, string> = {
+  alert: 'Generated an alert.',
+  correlated: 'Correlated with other events.',
+  delayed: 'Detected after a lag (batch, analyst review).',
+  config_change: 'Detected via a configuration change (new rule, tuning).',
+  residual_artifact: 'Detected via post-execution artifacts (logs, forensic).',
 }
 
 const MODIFIER_LABEL: Record<string, string> = {
@@ -556,37 +586,36 @@ function ExecutionDrawer({
         <Separator />
 
         {/* Red section */}
-        {canWriteRed(role) && execution && (
+        {execution && (
           <RedExecutionEditor
             engagementId={engagementId}
             execution={execution}
             closed={closed}
+            readOnly={!canWriteRed(role)}
           />
         )}
 
         {/* Blue section */}
-        {canWriteBlue(role) && execution && (
+        {execution && (
           <BlueDetectionEditor
             engagementId={engagementId}
             execution={execution}
             closed={closed}
+            readOnly={!canWriteBlue(role)}
           />
         )}
 
-        {/* Outcome (read-only) */}
+        {/* Outcome (read-only, server-derived) */}
         {execution && (
-          <div className="space-y-1">
+          <div className="flex items-center gap-2">
             <Label className="text-xs">Outcome</Label>
-            <p className="text-sm">
-              {execution.outcome
-                ? OUTCOME_LABEL[execution.outcome] ?? execution.outcome
-                : '—'}
-              {execution.mttdSeconds != null && (
-                <span className="text-xs text-muted-foreground ml-2">
-                  (MTTD: {execution.mttdSeconds}s)
-                </span>
-              )}
-            </p>
+            {execution.outcome ? (
+              <Badge variant="outline">
+                {OUTCOME_LABEL[execution.outcome] ?? execution.outcome}
+              </Badge>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
           </div>
         )}
 
@@ -640,17 +669,18 @@ function RevealButton({
   )
 }
 
-// ── Red Execution Editor ──────────────────────────────────────────────────────
-
 function RedExecutionEditor({
   engagementId,
   execution,
   closed,
+  readOnly,
 }: {
   engagementId: string
   execution: Execution
   closed: boolean
+  readOnly: boolean
 }) {
+  const qc = useQueryClient()
   const patchRed = usePatchRedExecution()
 
   const [status, setStatus] = useState(execution.status)
@@ -658,6 +688,8 @@ function RedExecutionEditor({
   const [sourceHost, setSourceHost] = useState(execution.sourceHost ?? '')
   const [targetHost, setTargetHost] = useState(execution.targetHost ?? '')
   const [redNotes, setRedNotes] = useState(execution.redNotes ?? '')
+
+  const disabled = closed || readOnly
 
   const handleSave = () => {
     patchRed.mutate(
@@ -675,7 +707,21 @@ function RedExecutionEditor({
       },
       {
         onSuccess: () => toast.success('Red execution saved'),
-        onError: (err) => toast.error(err?.message ?? 'Failed to save'),
+        onError: (err) => {
+          if (isApiError(err, 'conflict')) {
+            toast.error(
+              'This execution was modified by someone else. Reloading current state.',
+            )
+            void qc.invalidateQueries({
+              queryKey: engagementKeys.executions(engagementId),
+            })
+            void qc.invalidateQueries({
+              queryKey: engagementKeys.execution(engagementId, execution.id),
+            })
+          } else {
+            toast.error(err?.message ?? 'Failed to save')
+          }
+        },
       },
     )
   }
@@ -689,7 +735,7 @@ function RedExecutionEditor({
           <Select
             value={status}
             onValueChange={(v) => setStatus(v as Execution['status'])}
-            disabled={closed}
+            disabled={disabled}
           >
             <SelectTrigger>
               <SelectValue />
@@ -708,7 +754,7 @@ function RedExecutionEditor({
           <Input
             value={sourceHost}
             onChange={(e) => setSourceHost(e.target.value)}
-            disabled={closed}
+            disabled={disabled}
           />
         </div>
         <div className="space-y-1">
@@ -716,7 +762,7 @@ function RedExecutionEditor({
           <Input
             value={targetHost}
             onChange={(e) => setTargetHost(e.target.value)}
-            disabled={closed}
+            disabled={disabled}
           />
         </div>
         <div className="space-y-1">
@@ -724,7 +770,7 @@ function RedExecutionEditor({
           <Input
             value={commandRun}
             onChange={(e) => setCommandRun(e.target.value)}
-            disabled={closed}
+            disabled={disabled}
           />
         </div>
       </div>
@@ -734,10 +780,10 @@ function RedExecutionEditor({
           rows={3}
           value={redNotes}
           onChange={(e) => setRedNotes(e.target.value)}
-          disabled={closed}
+          disabled={disabled}
         />
       </div>
-      {!closed && (
+      {!disabled && (
         <Button
           size="sm"
           onClick={handleSave}
@@ -750,17 +796,18 @@ function RedExecutionEditor({
   )
 }
 
-// ── Blue Detection Editor ─────────────────────────────────────────────────────
-
 function BlueDetectionEditor({
   engagementId,
   execution,
   closed,
+  readOnly,
 }: {
   engagementId: string
   execution: Execution
   closed: boolean
+  readOnly: boolean
 }) {
+  const qc = useQueryClient()
   const patchBlue = usePatchBlueDetection()
 
   const [detectionCategory, setDetectionCategory] = useState(
@@ -770,6 +817,9 @@ function BlueDetectionEditor({
     execution.detectionModifiers ?? [],
   )
   const [protection, setProtection] = useState(execution.protection ?? '')
+  const [detectedAt, setDetectedAt] = useState(
+    execution.detectedAt ? toLocalDatetime(execution.detectedAt) : '',
+  )
   const [detectingSource, setDetectingSource] = useState(
     execution.detectingSource ?? '',
   )
@@ -778,6 +828,11 @@ function BlueDetectionEditor({
   )
   const [alertSeverity, setAlertSeverity] = useState(execution.alertSeverity ?? '')
   const [blueNotes, setBlueNotes] = useState(execution.blueNotes ?? '')
+  const [advancedOpen, setAdvancedOpen] = useState(
+    (execution.detectionModifiers ?? []).length > 0,
+  )
+
+  const disabled = closed || readOnly
 
   const toggleModifier = (mod: string) => {
     setSelectedModifiers((prev) =>
@@ -793,19 +848,44 @@ function BlueDetectionEditor({
         body: {
           version: execution.version,
           detectionCategory:
-            detectionCategory === '' ? undefined : (detectionCategory as Execution['detectionCategory']),
-          detectionModifiers: selectedModifiers.length > 0 ? selectedModifiers : undefined,
+            detectionCategory === ''
+              ? undefined
+              : (detectionCategory as BlueDetectionPatch['detectionCategory']),
+          detectionModifiers:
+            selectedModifiers.length > 0
+              ? (selectedModifiers as BlueDetectionPatch['detectionModifiers'])
+              : undefined,
           protection:
-            protection === '' ? undefined : (protection as Execution['protection']),
+            protection === ''
+              ? undefined
+              : (protection as BlueDetectionPatch['protection']),
+          detectedAt: detectedAt ? new Date(detectedAt).toISOString() : undefined,
           detectingSource: detectingSource || undefined,
           detectingRuleRef: detectingRuleRef || undefined,
-          alertSeverity: alertSeverity || undefined,
+          alertSeverity:
+            alertSeverity === ''
+              ? undefined
+              : (alertSeverity as BlueDetectionPatch['alertSeverity']),
           blueNotes: blueNotes || undefined,
         },
       },
       {
         onSuccess: () => toast.success('Blue detection saved'),
-        onError: (err) => toast.error(err?.message ?? 'Failed to save'),
+        onError: (err) => {
+          if (isApiError(err, 'conflict')) {
+            toast.error(
+              'This execution was modified by someone else. Reloading current state.',
+            )
+            void qc.invalidateQueries({
+              queryKey: engagementKeys.executions(engagementId),
+            })
+            void qc.invalidateQueries({
+              queryKey: engagementKeys.execution(engagementId, execution.id),
+            })
+          } else {
+            toast.error(err?.message ?? 'Failed to save')
+          }
+        },
       },
     )
   }
@@ -814,36 +894,60 @@ function BlueDetectionEditor({
   const protectionOptions = Object.entries(PROTECTION_LABEL)
   const severityOptions = Object.entries(SEVERITY_LABEL)
 
+  const categories = [
+    { key: 'none' as const, label: 'None', def: CATEGORY_DEFINITIONS['none']! },
+    { key: 'telemetry' as const, label: 'Telemetry', def: CATEGORY_DEFINITIONS['telemetry']! },
+    { key: 'general' as const, label: 'General', def: CATEGORY_DEFINITIONS['general']! },
+    { key: 'tactic' as const, label: 'Tactic', def: CATEGORY_DEFINITIONS['tactic']! },
+    { key: 'technique' as const, label: 'Technique', def: CATEGORY_DEFINITIONS['technique']! },
+  ]
+
   return (
     <div className="space-y-3">
       <h4 className="text-sm font-semibold">Blue Detection</h4>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Detection Category</Label>
-          <Select
-            value={detectionCategory}
-            onValueChange={setDetectionCategory}
-            disabled={closed}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">—</SelectItem>
-              {Object.entries(DETECTION_LABEL).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+      {/* Detection category — 5-button scale */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Detection Category</Label>
+        <div className="flex gap-1">
+          {categories.map((cat) => {
+            const selected = detectionCategory === cat.key
+            return (
+              <Tooltip key={cat.key}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setDetectionCategory(cat.key)}
+                    className={cn(
+                      'flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      disabled && 'cursor-not-allowed opacity-60',
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input bg-background hover:bg-accent hover:text-accent-foreground',
+                    )}
+                  >
+                    {cat.label}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[240px] text-xs">
+                  {cat.def}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
         </div>
+      </div>
+
+      {/* Protection */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Protection</Label>
           <Select
             value={protection}
             onValueChange={setProtection}
-            disabled={closed}
+            disabled={disabled}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select..." />
@@ -858,12 +962,31 @@ function BlueDetectionEditor({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Detected At + MTTD */}
+        <div className="space-y-1">
+          <Label className="text-xs">Detected At</Label>
+          <Input
+            type="datetime-local"
+            value={detectedAt}
+            onChange={(e) => setDetectedAt(e.target.value)}
+            disabled={disabled}
+          />
+          {execution.mttdSeconds != null && (
+            <p className="text-xs text-muted-foreground">
+              MTTD: {execution.mttdSeconds}s
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Detecting Source</Label>
           <Input
             value={detectingSource}
             onChange={(e) => setDetectingSource(e.target.value)}
-            disabled={closed}
+            disabled={disabled}
           />
         </div>
         <div className="space-y-1">
@@ -871,7 +994,7 @@ function BlueDetectionEditor({
           <Input
             value={detectingRuleRef}
             onChange={(e) => setDetectingRuleRef(e.target.value)}
-            disabled={closed}
+            disabled={disabled}
           />
         </div>
         <div className="space-y-1">
@@ -879,7 +1002,7 @@ function BlueDetectionEditor({
           <Select
             value={alertSeverity}
             onValueChange={setAlertSeverity}
-            disabled={closed}
+            disabled={disabled}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select..." />
@@ -896,22 +1019,46 @@ function BlueDetectionEditor({
         </div>
       </div>
 
-      {/* Detection Modifiers */}
-      <div className="space-y-1">
-        <Label className="text-xs">Detection Modifiers</Label>
-        <div className="flex flex-wrap gap-2">
-          {modifierOptions.map(([value, label]) => (
-            <Badge
-              key={value}
-              variant={selectedModifiers.includes(value) ? 'default' : 'outline'}
-              className="cursor-pointer select-none"
-              onClick={() => { if (!closed) toggleModifier(value) }}
-            >
-              {label}
-            </Badge>
-          ))}
-        </div>
-      </div>
+      {/* Advanced — modifiers */}
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <span>Advanced</span>
+          <span className={cn('transition-transform', advancedOpen && 'rotate-90')}>
+            ▸
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2 space-y-1">
+          <Label className="text-xs">Detection Modifiers</Label>
+          <div className="flex flex-wrap gap-2">
+            {modifierOptions.map(([value, label]) => {
+              const active = selectedModifiers.includes(value)
+              return (
+                <Tooltip key={value}>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant={active ? 'default' : 'outline'}
+                      className={cn(
+                        'select-none',
+                        disabled
+                          ? 'cursor-not-allowed opacity-60'
+                          : 'cursor-pointer',
+                      )}
+                      onClick={() => {
+                        if (!disabled) toggleModifier(value)
+                      }}
+                    >
+                      {label}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[240px] text-xs">
+                    {MODIFIER_DEFINITIONS[value] ?? value}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="space-y-1">
         <Label className="text-xs">Blue Notes</Label>
@@ -919,11 +1066,11 @@ function BlueDetectionEditor({
           rows={3}
           value={blueNotes}
           onChange={(e) => setBlueNotes(e.target.value)}
-          disabled={closed}
+          disabled={disabled}
         />
       </div>
 
-      {!closed && (
+      {!disabled && (
         <Button
           size="sm"
           onClick={handleSave}
@@ -1673,4 +1820,12 @@ function formatBytes(bytes: number): string {
 function getCsrfToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)bl_csrf=([^;]*)/)
   return match ? match[1] : ''
+}
+
+/** Convert an ISO 8601 UTC string to a datetime-local value (no timezone suffix). */
+function toLocalDatetime(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
