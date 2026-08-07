@@ -539,6 +539,11 @@ var csrfCoverage = map[string]struct {
 		body: `{"ids":["00000000-0000-0000-0000-000000000001"]}`,
 	},
 
+	// CTID plan import (M3-012).
+	"POST " + BasePath + "/engagements/{engagementId}/import-plan": {
+		body: `{"planId":"0192f1a0-0000-7000-8000-00000000e002"}`,
+	},
+
 	// Step CRUD (M3-005).
 	"POST " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps": {
 		body: `{"name":"Walked"}`,

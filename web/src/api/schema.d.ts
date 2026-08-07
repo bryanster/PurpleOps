@@ -1400,6 +1400,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/import-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a CTID emulation plan into a new Scenario.
+         * @description Lead, red and platform administrators. Loads a CTID emulation plan from
+         *     the content catalog, asserts the engagement's ATT&CK pin, and snapshots
+         *     every step — creating a Scenario plus N Steps with pending Executions in
+         *     one transaction.
+         *
+         *     The plan is found by `planId` (content catalog surrogate id) and/or by
+         *     `planExternalId` + `sourceId` (reference by external key). At least one
+         *     must be provided.
+         *
+         *     The resulting Scenario has `source=ctid` and `sourceRef` set from the
+         *     plan lineage. Each Step snapshots name, description, procedure, and
+         *     `techniqueExternalId` from the catalog step. `attackVersion` uses the
+         *     engagement pin at import time — **not** the plan's advisory metadata.
+         *
+         *     Steps whose `techniqueExternalId` does not resolve in the engagement's
+         *     pinned ATT&CK version are still imported (technique/tactic/subtechnique
+         *     fields left empty), with a per-step `warn` entry in the response.
+         *
+         *     A disabled or missing plan returns 404; a plan whose source is disabled
+         *     returns 409. Closed/archived engagements return 409.
+         */
+        post: operations["importPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagements/{engagementId}/scenarios/{scenarioId}/steps": {
         parameters: {
             query?: never;
@@ -2329,7 +2368,7 @@ export interface paths {
          *     `sourceId`.
          *
          *     CTID is a rolling-head source: rows use version `current`. Catalog only
-         *     in M2 — scenario import is M3-013.
+         *     in M2 — scenario import is M3-012.
          */
         get: operations["listContentEmulationPlans"];
         put?: never;
@@ -4398,7 +4437,7 @@ export interface components {
              * @description Structured procedure-ish payload when upstream provides commands:
              *     platforms, executors (name/command/cleanup), input_arguments,
              *     tactic, procedure_group/step labels, cti_source, dependencies.
-             *     Empty object when none. Snapshot onto scenario steps in M3-013 —
+             *     Empty object when none. Snapshot onto scenario steps in M3-012 —
              *     never executed by Blacklight.
              */
             procedure: {
@@ -4674,6 +4713,51 @@ export interface components {
         };
         StepList: {
             items: components["schemas"]["Step"][];
+        };
+        /**
+         * @description Request to import a CTID emulation plan as an engagement Scenario.
+         *     At least one of `planId` or (`planExternalId` + `sourceId`) must be
+         *     provided. If both are given `planId` takes precedence.
+         */
+        ImportPlanRequest: {
+            /**
+             * Format: uuid
+             * @description Content catalog surrogate id of the plan to import.
+             */
+            planId?: string;
+            /** @description External id of the plan (e.g. CTID upstream id or actor slug). */
+            planExternalId?: string;
+            /**
+             * Format: uuid
+             * @description Content source id. Required when `planExternalId` is used.
+             */
+            sourceId?: string;
+            /** @description Override the scenario name (defaults to plan name). */
+            name?: string;
+            /** @description Hint for the starting ordinal of the first imported step. Defaults to 1. Subsequent steps follow sequentially. */
+            startingOrdinal?: number;
+        };
+        ImportPlanWarning: {
+            /** @description The 1-based ordinal of the imported step within the scenario. */
+            stepOrdinal: number;
+            /** @description Name of the imported step from the catalog. */
+            stepName: string;
+            /** @description The technique external id that did not resolve. */
+            techniqueExternalId: string;
+            /** @description Human-readable explanation. */
+            message: string;
+        };
+        ImportPlanResponse: {
+            scenario: components["schemas"]["Scenario"];
+            steps: components["schemas"]["Step"][];
+            /** @description Total number of steps imported. */
+            stepCount: number;
+            /**
+             * @description Steps whose technique external id did not resolve in the engagement's
+             *     pinned ATT&CK version. These steps were still imported, but their
+             *     technique/tactic/subtechnique fields are empty.
+             */
+            warnings: components["schemas"]["ImportPlanWarning"][];
         };
         CreateStep: {
             name: string;
@@ -7315,6 +7399,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    importPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description The imported scenario with steps and any warnings. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPlanResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

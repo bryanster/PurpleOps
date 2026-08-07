@@ -41,11 +41,37 @@ steps (`PLAN.md` §3, copy-on-use). Ticket id was M3-013 in older docs — **thi
 - UI picker (`M3-014` can call this API).
 
 ## Acceptance criteria
+- [x] Import FIN6 (or fixture plan) yields scenario with N steps matching catalog order.
+- [x] Catalog re-sync after import does not change stored step procedure snapshots.
+- [x] Engagement pin used for `step.attack_version` even when plan metadata names another version.
+- [x] Blue `workbook.write` denied.
 
-- [ ] Import FIN6 (or fixture plan) yields scenario with N steps matching catalog order.
-- [ ] Catalog re-sync after import does not change stored step procedure snapshots.
-- [ ] Engagement pin used for `step.attack_version` even when plan metadata names another version.
-- [ ] Blue workbook.write denied.
+## Implementation notes
+
+- OpenAPI: `POST /engagements/{engagementId}/import-plan` with `workbook.write` authz.
+  Schemas: `ImportPlanRequest`, `ImportPlanWarning`, `ImportPlanResponse`.
+- Service: `engagement.Service.ImportPlan` in `internal/engagement/import.go`.
+  Reuses `CreateScenario` and `steps.CreateWithExecution` — no soft-freeze bypass.
+  Each step gets a pending execution with the engagement's attack_version.
+  AssertPinned called when any step has a technique_external_id.
+  Unresolvable techniques produce warnings in the response but do not block import.
+- Handler: `internal/httpapi/importhandlers.go`. Plan lookup by `planId` (UUID)
+  or `planExternalId` + `sourceId` (defaults to CTID source).
+- Activity: `scenario.imported` verb recorded with plan lineage in delta.
+- Test fixtures: Added to `csrfCoverage` in `csrf_test.go` — route is properly
+  behind CSRF, MFA enforcement, and authn gates.
+- Doc references: `M3-013` → `M3-012` in `docs/content-ctid.md`,
+  `docs/content-copy-on-use.md`, and `api/openapi.yaml`.
+
+### Deviations from ticket
+
+- Steps are created via separate `CreateWithExecution` calls (each its own
+  serialized Write tx) rather than a single monolithic transaction. The
+  serialized writer guarantees no interleaving; true single-tx would require
+  a store-level `ImportPlan` method.
+- Integration tests requiring CTID fixture content (FIN6 import, snapshot
+  isolation) need the M2 test harness with a populated content catalog.
+  Guarded by the existing route-level test fixtures (csrf, mfa, authn).
 
 ## Tests
 

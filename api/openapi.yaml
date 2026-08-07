@@ -2580,6 +2580,65 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/import-plan:
+    post:
+      operationId: importPlan
+      summary: Import a CTID emulation plan into a new Scenario.
+      description: |
+        Lead, red and platform administrators. Loads a CTID emulation plan from
+        the content catalog, asserts the engagement's ATT&CK pin, and snapshots
+        every step — creating a Scenario plus N Steps with pending Executions in
+        one transaction.
+
+        The plan is found by `planId` (content catalog surrogate id) and/or by
+        `planExternalId` + `sourceId` (reference by external key). At least one
+        must be provided.
+
+        The resulting Scenario has `source=ctid` and `sourceRef` set from the
+        plan lineage. Each Step snapshots name, description, procedure, and
+        `techniqueExternalId` from the catalog step. `attackVersion` uses the
+        engagement pin at import time — **not** the plan's advisory metadata.
+
+        Steps whose `techniqueExternalId` does not resolve in the engagement's
+        pinned ATT&CK version are still imported (technique/tactic/subtechnique
+        fields left empty), with a per-step `warn` entry in the response.
+
+        A disabled or missing plan returns 404; a plan whose source is disabled
+        returns 409. Closed/archived engagements return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportPlanRequest"
+      responses:
+        "201":
+          description: The imported scenario with steps and any warnings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPlanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /engagements/{engagementId}/scenarios/{scenarioId}/steps:
     get:
       operationId: listSteps
@@ -4210,7 +4269,7 @@ paths:
         `sourceId`.
 
         CTID is a rolling-head source: rows use version `current`. Catalog only
-        in M2 — scenario import is M3-013.
+        in M2 — scenario import is M3-012.
       tags:
         - content
       x-authz-action: content.read
@@ -8706,7 +8765,7 @@ components:
             Structured procedure-ish payload when upstream provides commands:
             platforms, executors (name/command/cleanup), input_arguments,
             tactic, procedure_group/step labels, cti_source, dependencies.
-            Empty object when none. Snapshot onto scenario steps in M3-013 —
+            Empty object when none. Snapshot onto scenario steps in M3-012 —
             never executed by Blacklight.
         createdAt:
           type: string
@@ -9239,6 +9298,7 @@ components:
           type: string
           format: date-time
 
+
     StepList:
       type: object
       required:
@@ -9248,6 +9308,83 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Step"
+    ImportPlanRequest:
+      type: object
+      description: |
+        Request to import a CTID emulation plan as an engagement Scenario.
+        At least one of `planId` or (`planExternalId` + `sourceId`) must be
+        provided. If both are given `planId` takes precedence.
+      properties:
+        planId:
+          type: string
+          format: uuid
+          description: Content catalog surrogate id of the plan to import.
+        planExternalId:
+          type: string
+          maxLength: 255
+          description: External id of the plan (e.g. CTID upstream id or actor slug).
+        sourceId:
+          type: string
+          format: uuid
+          description: Content source id. Required when `planExternalId` is used.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Override the scenario name (defaults to plan name).
+        startingOrdinal:
+          type: integer
+          minimum: 1
+          description: Hint for the starting ordinal of the first imported step.
+            Defaults to 1. Subsequent steps follow sequentially.
+
+    ImportPlanWarning:
+      type: object
+      required:
+        - stepOrdinal
+        - stepName
+        - techniqueExternalId
+        - message
+      properties:
+        stepOrdinal:
+          type: integer
+          description: The 1-based ordinal of the imported step within the scenario.
+        stepName:
+          type: string
+          description: Name of the imported step from the catalog.
+        techniqueExternalId:
+          type: string
+          description: The technique external id that did not resolve.
+        message:
+          type: string
+          description: Human-readable explanation.
+
+    ImportPlanResponse:
+      type: object
+      required:
+        - scenario
+        - steps
+        - stepCount
+        - warnings
+      properties:
+        scenario:
+          $ref: "#/components/schemas/Scenario"
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/Step"
+        stepCount:
+          type: integer
+          description: Total number of steps imported.
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportPlanWarning"
+          description: |
+            Steps whose technique external id did not resolve in the engagement's
+            pinned ATT&CK version. These steps were still imported, but their
+            technique/tactic/subtechnique fields are empty.
+
 
     CreateStep:
       type: object

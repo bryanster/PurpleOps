@@ -1214,7 +1214,7 @@ type ContentEmulationPlanStep struct {
 	// Procedure Structured procedure-ish payload when upstream provides commands:
 	// platforms, executors (name/command/cleanup), input_arguments,
 	// tactic, procedure_group/step labels, cti_source, dependencies.
-	// Empty object when none. Snapshot onto scenario steps in M3-013 —
+	// Empty object when none. Snapshot onto scenario steps in M3-012 —
 	// never executed by Blacklight.
 	Procedure map[string]interface{} `json:"procedure"`
 	SourceId  openapi_types.UUID     `json:"sourceId"`
@@ -2227,6 +2227,55 @@ type ImportCustomContentRequest struct {
 
 // ImportCustomContentRequestFormat Parser selection. Defaults to `auto`.
 type ImportCustomContentRequestFormat string
+
+// ImportPlanRequest Request to import a CTID emulation plan as an engagement Scenario.
+// At least one of `planId` or (`planExternalId` + `sourceId`) must be
+// provided. If both are given `planId` takes precedence.
+type ImportPlanRequest struct {
+	// Name Override the scenario name (defaults to plan name).
+	Name *string `json:"name,omitempty"`
+
+	// PlanExternalId External id of the plan (e.g. CTID upstream id or actor slug).
+	PlanExternalId *string `json:"planExternalId,omitempty"`
+
+	// PlanId Content catalog surrogate id of the plan to import.
+	PlanId *openapi_types.UUID `json:"planId,omitempty"`
+
+	// SourceId Content source id. Required when `planExternalId` is used.
+	SourceId *openapi_types.UUID `json:"sourceId,omitempty"`
+
+	// StartingOrdinal Hint for the starting ordinal of the first imported step. Defaults to 1. Subsequent steps follow sequentially.
+	StartingOrdinal *int `json:"startingOrdinal,omitempty"`
+}
+
+// ImportPlanResponse defines model for ImportPlanResponse.
+type ImportPlanResponse struct {
+	Scenario Scenario `json:"scenario"`
+
+	// StepCount Total number of steps imported.
+	StepCount int    `json:"stepCount"`
+	Steps     []Step `json:"steps"`
+
+	// Warnings Steps whose technique external id did not resolve in the engagement's
+	// pinned ATT&CK version. These steps were still imported, but their
+	// technique/tactic/subtechnique fields are empty.
+	Warnings []ImportPlanWarning `json:"warnings"`
+}
+
+// ImportPlanWarning defines model for ImportPlanWarning.
+type ImportPlanWarning struct {
+	// Message Human-readable explanation.
+	Message string `json:"message"`
+
+	// StepName Name of the imported step from the catalog.
+	StepName string `json:"stepName"`
+
+	// StepOrdinal The 1-based ordinal of the imported step within the scenario.
+	StepOrdinal int `json:"stepOrdinal"`
+
+	// TechniqueExternalId The technique external id that did not resolve.
+	TechniqueExternalId string `json:"techniqueExternalId"`
+}
 
 // LoginRequest Credentials for `POST /auth/login`.
 type LoginRequest struct {
@@ -4647,6 +4696,9 @@ type PatchRedExecutionJSONRequestBody = RedExecutionPatch
 // CreateFindingJSONRequestBody defines body for CreateFinding for application/json ContentType.
 type CreateFindingJSONRequestBody = NewFinding
 
+// ImportPlanJSONRequestBody defines body for ImportPlan for application/json ContentType.
+type ImportPlanJSONRequestBody = ImportPlanRequest
+
 // AddEngagementMemberJSONRequestBody defines body for AddEngagementMember for application/json ContentType.
 type AddEngagementMemberJSONRequestBody = AddMember
 
@@ -4964,6 +5016,9 @@ type ServerInterface interface {
 	// CreateFinding Raise a new finding in this engagement.
 	// (POST /engagements/{engagementId}/findings)
 	CreateFinding(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateFindingParams)
+	// ImportPlan Import a CTID emulation plan into a new Scenario.
+	// (POST /engagements/{engagementId}/import-plan)
+	ImportPlan(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
 	// ListEngagementMembers List the members of an engagement.
 	// (GET /engagements/{engagementId}/members)
 	ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -5633,6 +5688,12 @@ func (_ Unimplemented) ListFindings(w http.ResponseWriter, r *http.Request, enga
 // CreateFinding Raise a new finding in this engagement.
 // (POST /engagements/{engagementId}/findings)
 func (_ Unimplemented) CreateFinding(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateFindingParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ImportPlan Import a CTID emulation plan into a new Scenario.
+// (POST /engagements/{engagementId}/import-plan)
+func (_ Unimplemented) ImportPlan(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9767,6 +9828,32 @@ func (siw *ServerInterfaceWrapper) CreateFinding(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ImportPlan operation middleware
+func (siw *ServerInterfaceWrapper) ImportPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportPlan(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListEngagementMembers operation middleware
 func (siw *ServerInterfaceWrapper) ListEngagementMembers(w http.ResponseWriter, r *http.Request) {
 
@@ -11701,6 +11788,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/engagements/{engagementId}/scenarios/order", wrapper.ReorderScenarios)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/import-plan", wrapper.ImportPlan)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}/steps", wrapper.ListSteps)
@@ -20193,6 +20283,125 @@ func (response CreateFinding500ApplicationProblemPlusJSONResponse) VisitCreateFi
 	return err
 }
 
+type ImportPlanRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Body         *ImportPlanJSONRequestBody
+}
+
+type ImportPlanResponseObject interface {
+	VisitImportPlanResponse(w http.ResponseWriter) error
+}
+
+type ImportPlan201JSONResponse ImportPlanResponse
+
+func (response ImportPlan201JSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportPlan400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ImportPlan400ApplicationProblemPlusJSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportPlan401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ImportPlan401ApplicationProblemPlusJSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportPlan403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ImportPlan403ApplicationProblemPlusJSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportPlan404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ImportPlan404ApplicationProblemPlusJSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportPlan409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ImportPlan409ApplicationProblemPlusJSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportPlan500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ImportPlan500ApplicationProblemPlusJSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListEngagementMembersRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -24962,6 +25171,9 @@ type StrictServerInterface interface {
 	// CreateFinding Raise a new finding in this engagement.
 	// (POST /engagements/{engagementId}/findings)
 	CreateFinding(ctx context.Context, request CreateFindingRequestObject) (CreateFindingResponseObject, error)
+	// ImportPlan Import a CTID emulation plan into a new Scenario.
+	// (POST /engagements/{engagementId}/import-plan)
+	ImportPlan(ctx context.Context, request ImportPlanRequestObject) (ImportPlanResponseObject, error)
 	// ListEngagementMembers List the members of an engagement.
 	// (GET /engagements/{engagementId}/members)
 	ListEngagementMembers(ctx context.Context, request ListEngagementMembersRequestObject) (ListEngagementMembersResponseObject, error)
@@ -27652,6 +27864,39 @@ func (sh *strictHandler) CreateFinding(w http.ResponseWriter, r *http.Request, e
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateFindingResponseObject); ok {
 		if err := validResponse.VisitCreateFindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportPlan operation middleware
+func (sh *strictHandler) ImportPlan(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ImportPlanRequestObject
+
+	request.EngagementId = engagementId
+
+	var body ImportPlanJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportPlan(ctx, request.(ImportPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportPlanResponseObject); ok {
+		if err := validResponse.VisitImportPlanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

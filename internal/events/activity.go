@@ -121,6 +121,7 @@ const (
 	VerbScenarioUpdated   Verb = "scenario.updated"
 	VerbScenarioDeleted   Verb = "scenario.deleted"
 	VerbScenarioReordered Verb = "scenario.reordered"
+	VerbScenarioImported  Verb = "scenario.imported"
 
 	// Workbook step lifecycle (M3-005). Object is the step row;
 	// engagement_id names which engagement and scenario the step belongs to.
