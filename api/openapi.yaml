@@ -5146,20 +5146,22 @@ paths:
         content sync job progress; M4 extends the same hub with engagement
         topics.
 
-        **Session cookie only.** Service tokens are refused even when they hold
-        `content:sync` — EventSource cannot attach an Authorization header, and
-        a long-lived token-authenticated stream is not a browser subscription.
-        Documented and enforced: the operation's `security` lists only
-        `cookieSession`, and the authorization middleware refuses
-        `MethodServiceToken`.
+        **Session cookie only.** Service tokens are refused — EventSource
+        cannot attach an Authorization header, and a long-lived
+        token-authenticated stream is not a browser subscription. The
+        operation's `security` lists only `cookieSession`, and the
+        authorization middleware refuses `MethodServiceToken`.
 
-        Query `topics` is repeatable. The server intersects the list with what
-        the subject may see; unknown topic names are `400` (never silently
-        widened). M2 topics:
+        Query `topics` is repeatable. Per-topic authorization is enforced in
+        the SSE handler (not in the middleware — this endpoint maps to a
+        self-service operation so any authenticated session may subscribe,
+        then TopicAuthz filters per topic). Unknown topic names are `400`
+        (never silently widened). Topics:
 
-        - `content.jobs` — every content job progress tick (requires
-          `content.sync`, administrators)
-        - `content.jobs.{jobId}` — one job
+        - `content.jobs` / `content.jobs.{jobId}` — requires
+          `content.sync` (administrators)
+        - `engagement.{engagementId}` — requires `engagement.read`
+          (members and administrators of that engagement)
 
         Event `type` values are stable: `content.job.progress` while a job runs,
         `content.job.terminal` once when it ends. Each frame carries `id`
@@ -5176,9 +5178,8 @@ paths:
         - collaboration
       security:
         - cookieSession: []
-      x-authz-action: content.sync
-      x-authz-resource:
-        type: content
+      x-authz-self: true
+      x-authz-because: any authenticated session may subscribe; per-topic authorization is enforced in the handler
       parameters:
         - name: topics
           in: query

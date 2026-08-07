@@ -17,12 +17,23 @@ import (
 const (
 	// TopicContentJobs carries every content job progress tick (admin).
 	TopicContentJobs = "content.jobs"
+
+	// TopicEngagementPrefix is the prefix for engagement-scoped topics:
+	// "engagement.{engagementId}". No per-kind subtopics in M4.
+	TopicEngagementPrefix = "engagement."
 )
 
 // TopicContentJob is the per-job topic for one content sync job.
 func TopicContentJob(jobID string) string {
 	return TopicContentJobs + "." + jobID
 }
+
+// EngagementTopic returns the topic name for one engagement's live stream.
+func EngagementTopic(engagementID string) string {
+	return TopicEngagementPrefix + engagementID
+}
+
+
 
 // Stable event type values on the wire. Progress ticks while a job runs;
 // terminal fires once when the job reaches a final status.
@@ -44,9 +55,15 @@ type Event struct {
 // Subscription is what a caller asks the hub for. Topics are filtered through
 // [Options.TopicAuthz] (when set) before the subscription is armed — never
 // silently widened.
+//
+// Allow is a per-subscriber delivery filter: events that pass topic matching
+// are still dropped for this subscriber when Allow returns false. Publish is
+// unaffected. M4 uses this for blind-mode per-seat filtering.
 type Subscription struct {
 	Topics []string
+	Allow  func(Event) bool
 }
+
 
 // Options bounds hub memory and plugs M4 extension points.
 type Options struct {
@@ -86,6 +103,7 @@ type Hub struct {
 type subscriber struct {
 	hub    *Hub
 	topics map[string]struct{}
+	allow  func(Event) bool
 	ch     chan Event
 	stop   chan struct{}
 
@@ -162,6 +180,7 @@ func (h *Hub) Subscribe(ctx context.Context, sub Subscription) (<-chan Event, fu
 	s := &subscriber{
 		hub:    h,
 		topics: allowed,
+		allow:  sub.Allow,
 		ch:     make(chan Event, h.buffer),
 		stop:   make(chan struct{}),
 	}
@@ -189,7 +208,8 @@ func (h *Hub) Subscribe(ctx context.Context, sub Subscription) (<-chan Event, fu
 	return s.ch, s.detach, nil
 }
 
-// Publish fans evt out to every subscriber of topic. Missing ID/At/Topic are
+// Publish fans evt out to every subscriber of topic, then each subscriber's
+// [Subscription.Allow] (when set) may skip delivery. Missing ID/At/Topic are
 // filled in. Never blocks: a slow subscriber is dropped.
 func (h *Hub) Publish(topic string, evt Event) {
 	if topic == "" {
@@ -226,7 +246,9 @@ func (h *Hub) Publish(topic string, evt Event) {
 	h.mu.Unlock()
 
 	for _, s := range targets {
-		s.trySend(evt)
+		if s.allow == nil || s.allow(evt) {
+			s.trySend(evt)
+		}
 	}
 }
 
@@ -286,6 +308,14 @@ func knownTopic(topic string) bool {
 	if topic == TopicContentJobs {
 		return true
 	}
-	prefix := TopicContentJobs + "."
-	return strings.HasPrefix(topic, prefix) && len(topic) > len(prefix)
+	if prefix := TopicContentJobs + "."; strings.HasPrefix(topic, prefix) && len(topic) > len(prefix) {
+		return true
+	}
+	// engagement.{engagementId}: a UUIDv7 after the prefix.
+	if rest, ok := strings.CutPrefix(topic, TopicEngagementPrefix); ok {
+		if _, err := uuid.Parse(rest); err == nil {
+			return true
+		}
+	}
+	return false
 }

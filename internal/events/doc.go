@@ -32,13 +32,14 @@
 //
 // Keep changes additive; M4 should extend, not move, this package:
 //
-//   - Topic prefix: add engagement-scoped names (for example
-//     `engagement.{id}.steps`) beside the M2 content.jobs* constants. Teach
-//     [knownTopic] the new prefix.
+//   - Topic prefix: engagement-scoped names via [EngagementTopic] (one
+//     `engagement.{engagementId}`; no per-kind subtopics in M4). [knownTopic]
+//     accepts the UUIDv7 suffix.
 //   - Authz callback: set [Options.TopicAuthz] so Subscribe intersects the
-//     requested topics with what the subject may see (membership, blind mode).
-//     The HTTP layer already refuses the connection when the caller cannot
-//     hold any requested topic; TopicAuthz is the per-topic half.
+//     requested topics with what the subject may see (content.sync for
+//     content.jobs; engagement membership for engagement topics).
+//     TopicAuthz is the per-topic half; [Subscription.Allow] is the
+//     per-event half used by blind mode (M4-004).
 //   - Catch-up: accept Last-Event-ID and replay from the activity log. M2
 //     accepts the header and ignores it (best-effort live tail only).
 //   - Presence: a separate in-memory registry can live alongside [Hub]; do not

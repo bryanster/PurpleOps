@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -18,13 +20,16 @@ import (
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 )
 
-// SubscribeEvents opens a text/event-stream over the shared hub (M2-004).
+// SubscribeEvents opens a text/event-stream over the shared hub (M2-004,
+// extended in M4-001).
 //
-// Authz (content.sync + session-only) is decided by the middleware before this
-// runs. This method only validates topics, arms the subscription, and writes
-// frames until the client disconnects or is evicted for falling behind.
+// The middleware gates on "authenticated session + no service token"
+// (x-authz-self, security cookieSession). This handler then filters topics by
+// caller permission: content.jobs* requires admin; engagement.{id} requires
+// membership or admin via [handlers.topicAllowed].
 //
 // Last-Event-ID is accepted and ignored in M2 — no activity-log catch-up yet.
+// M4-004 owns guaranteed catch-up against the activity log.
 func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEventsRequestObject) (gen.SubscribeEventsResponseObject, error) {
 	if h.hub == nil {
 		return nil, apierr.Internal(errors.New("events hub is not configured"))
@@ -34,9 +39,20 @@ func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEve
 	// replay. M4 owns guaranteed catch-up against the activity log.
 	_ = request.Params.LastEventID
 
-	var topics []string
+	var requestedTopics []string
 	if request.Params.Topics != nil {
-		topics = *request.Params.Topics
+		requestedTopics = *request.Params.Topics
+	}
+
+	// Per-topic authorization: the middleware only checks that the caller is
+	// an authenticated session. This handler decides which topics they may see.
+	// Admin sees all; members see engagements they belong to.
+	caller, _ := authn.SubjectFrom(ctx)
+	var topics []string
+	for _, topic := range requestedTopics {
+		if h.topicAllowed(ctx, caller, topic) {
+			topics = append(topics, topic)
+		}
 	}
 
 	ch, unsub, err := h.hub.Subscribe(ctx, events.Subscription{Topics: topics})
@@ -69,6 +85,34 @@ func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEve
 			ContentType:  &contentType,
 		},
 	}, nil
+}
+
+// topicAllowed reports whether caller may subscribe to a single topic.
+// Admin sees everything. Content jobs require admin. Engagement topics
+// require membership or admin.
+func (h *handlers) topicAllowed(ctx context.Context, caller authn.Subject, topic string) bool {
+	if caller.PlatformRole == authz.PlatformRoleAdmin {
+		return true
+	}
+
+	if topic == events.TopicContentJobs {
+		return false
+	}
+	if strings.HasPrefix(topic, events.TopicContentJobs+".") {
+		return false
+	}
+
+	// Engagement topics: require membership.
+	if rest, ok := strings.CutPrefix(topic, events.TopicEngagementPrefix); ok {
+		_, isMember, err := h.ownership.Seat(ctx, rest, caller.UserID)
+		if err != nil || !isMember {
+			return false
+		}
+		return true
+	}
+
+	// Pass unknown topics through; hub's knownTopic returns 400.
+	return true
 }
 
 // streamEvents writes SSE frames until ctx ends, the hub closes ch, or a write

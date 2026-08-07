@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	"github.com/bryanster/blacklight/internal/store/identity"
 )
@@ -175,7 +177,7 @@ func TestSSEHeadersAndProgressEndToEnd(t *testing.T) {
 	cancel()
 }
 
-func TestMemberSubscribingToContentJobsIsForbidden(t *testing.T) {
+func TestSubscribingToContentJobsIsFilteredForMembers(t *testing.T) {
 	t.Parallel()
 	server := newAuthServer(t)
 	server.seedUser(t, func(u *identity.NewUser) {
@@ -185,8 +187,8 @@ func TestMemberSubscribingToContentJobsIsForbidden(t *testing.T) {
 	cookie := sessionCookie(t, server.login("member@example.com", testPassword))
 
 	rec := server.get(eventsPathTest+"?topics="+events.TopicContentJobs, cookie)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("member SSE = %d, want 403\n%s", rec.Code, rec.Body)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("member SSE = %d, want 400\n%s", rec.Code, rec.Body)
 	}
 }
 
@@ -198,7 +200,7 @@ func TestServiceTokenCannotSubscribeToEvents(t *testing.T) {
 	tok := server.createToken(t, admin, authz.TokenScopeContentSync)
 
 	rec := server.withToken(http.MethodGet, eventsPathTest+"?topics="+events.TopicContentJobs, tok.Token)
-	if rec.Code != http.StatusForbidden {
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("token SSE = %d, want 403\n%s", rec.Code, rec.Body)
 	}
 }
@@ -220,5 +222,125 @@ func TestUnauthenticatedSSEIs401(t *testing.T) {
 	rec := server.get(eventsPathTest + "?topics=" + events.TopicContentJobs)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("anon SSE = %d, want 401\n%s", rec.Code, rec.Body)
+	}
+}
+
+// TestMemberCanSubscribeToEngagementTopic verifies that a member of an
+// engagement can subscribe to engagement.{id} (M4-001).
+func TestMemberCanSubscribeToEngagementTopic(t *testing.T) {
+	t.Parallel()
+	server := newAuthServer(t)
+	server.seedUser(t, func(u *identity.NewUser) {
+		u.PlatformRole = authz.PlatformRoleMember
+		u.Email = "purple@example.com"
+		u.DisplayName = "Purple Member"
+	})
+	user, err := identity.NewUsers(server.db).ByEmail(t.Context(), "purple@example.com")
+	if err != nil {
+		t.Fatalf("lookup seeded user: %v", err)
+	}
+	cookie := sessionCookie(t, server.login("purple@example.com", testPassword))
+
+	engID := "019385a2-0000-7000-8cf0-ef0123456789"
+	seedEngagementPlumbing(t, server.db, engID, user.ID, "blue")
+
+	assertSSEConnects(t, server, events.EngagementTopic(engID), cookie, http.StatusOK)
+}
+
+// TestNonMemberCannotSubscribeToEngagementTopic verifies topic filtering
+// removes an engagement topic when the caller is not a member (M4-001).
+func TestNonMemberCannotSubscribeToEngagementTopic(t *testing.T) {
+	t.Parallel()
+	server := newAuthServer(t)
+	server.seedUser(t, func(u *identity.NewUser) {
+		u.PlatformRole = authz.PlatformRoleMember
+		u.Email = "outsider@example.com"
+	})
+	outsiderCookie := sessionCookie(t, server.login("outsider@example.com", testPassword))
+
+	engID := "019385a2-1111-7000-8cf0-ef0123456789"
+	seedEngagementOnly(t, server.db, engID)
+
+	assertSSEConnects(t, server, events.EngagementTopic(engID), outsiderCookie, http.StatusBadRequest)
+}
+
+// TestAdminCanSubscribeToAnyEngagementTopic verifies the admin bypass in
+// topicAllowed (M4-001).
+func TestAdminCanSubscribeToAnyEngagementTopic(t *testing.T) {
+	t.Parallel()
+	server := newAuthServer(t)
+	server.seedUser(t)
+	adminCookie := server.signIn(t)
+	engID := "019385a2-3333-7000-8cf0-ef0123456789"
+	seedEngagementOnly(t, server.db, engID)
+
+	assertSSEConnects(t, server, events.EngagementTopic(engID), adminCookie, http.StatusOK)
+}
+
+// assertSSEConnects verifies the SSE handshake returns the expected status.
+// For 200 (stream open) it cancels the context after reading headers so the
+// goroutine does not leak. For non-200 it reads the full error body.
+func assertSSEConnects(t *testing.T, server *authServer, topic string, cookie *http.Cookie, wantStatus int) {
+	t.Helper()
+
+	ts := httptest.NewServer(server.handler)
+	t.Cleanup(ts.Close)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		ts.URL+eventsPathTest+"?topics="+topic, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		// Client timeout on a 200 SSE stream is expected (stream stays open).
+		if wantStatus == http.StatusOK && ctx.Err() != nil {
+			return
+		}
+		t.Fatalf("SSE connect: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != wantStatus {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		t.Fatalf("SSE status = %d, want %d\n%s", resp.StatusCode, wantStatus, body)
+	}
+}
+
+func seedEngagementPlumbing(t *testing.T, db *store.DB, engID, userID, role string) {
+	t.Helper()
+	seedEngagementOnly(t, db, engID)
+	if err := db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(),
+			`INSERT INTO app.engagement_member (engagement_id, user_id, role, added_at)
+			 VALUES ($1, $2, $3, NOW())`,
+			engID, userID, role)
+		return err
+	}); err != nil {
+		t.Fatalf("seed membership: %v", err)
+	}
+}
+
+func seedEngagementOnly(t *testing.T, db *store.DB, engID string) {
+	t.Helper()
+	if err := db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(),
+			`INSERT INTO app.engagement (id, name, client, description, status,
+			 starts_on, ends_on, attack_version, mode, auto_reveal_on_start,
+			 created_by, created_at, updated_at)
+			 VALUES ($1, 'Test Eng', 'Client Co', '', 'active',
+			 '2025-01-01', '2025-12-31', '16.1', 'standard', false,
+			 $1, NOW(), NOW())`,
+			engID)
+		return err
+	}); err != nil {
+		t.Fatalf("seed engagement: %v", err)
 	}
 }

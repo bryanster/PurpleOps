@@ -49,17 +49,17 @@ later blind) enforced at subscribe time — not a second streaming stack.
 
 ## Acceptance criteria
 
-- [ ] A member can subscribe to `engagement.{theirEngagementId}` and receive a
+- [x] A member can subscribe to `engagement.{theirEngagementId}` and receive a
       heartbeat (and later publishes) without polling.
-- [ ] A non-member subscribing to that topic is denied (403 or filtered to no
+- [x] A non-member subscribing to that topic is denied (403 or filtered to no
       topics — same policy as content); never silently subscribed.
-- [ ] Admin may subscribe to any engagement topic (platform admin
+- [x] Admin may subscribe to any engagement topic (platform admin
       `engagement.read` behaviour matches REST).
-- [ ] Content job topics still work; regression test green.
-- [ ] Per-subscriber `Allow` can drop events for one client without affecting
+- [x] Content job topics still work; regression test green.
+- [x] Per-subscriber `Allow` can drop events for one client without affecting
       another on the same topic; Publish does not block.
-- [ ] `go test -race ./internal/events/` clean.
-- [ ] Package doc lists M4 topic scheme, `Allow`, and remaining extension points
+- [x] `go test -race ./internal/events/` clean.
+- [x] Package doc lists M4 topic scheme, `Allow`, and remaining extension points
       (catch-up, presence registry).
 
 ## Tests
@@ -75,3 +75,49 @@ later blind) enforced at subscribe time — not a second streaming stack.
 - TopicAuthz = may subscribe to topic. `Allow` = may see this event. Do not
   collapse them. Blind object filtering installs `Allow` in `M4-004`.
 - Prefer parsing `engagement.` + validated UUID over open-ended string topics.
+
+
+## Implementation notes
+
+- **Engagement topic:** `events.EngagementTopic(engagementID)` returns
+  `"engagement.<UUIDv7>"`. `knownTopic` validates the UUID suffix so
+  `engagement.nope` gets 400.
+- **Per-subscriber Allow:** `Subscription.Allow func(Event) bool` — evaluated
+  in `Publish` after topic matching; drops events for one subscriber without
+  affecting others or blocking Publish. Nil means allow all.
+- **Authz strategy:** OpenAPI `/events` changed from `x-authz-action:
+  content.sync` to `x-authz-self: true` so any authenticated session reaches
+  the handler. The middleware's `decide()` now checks `SessionOnly` before the
+  Self short-circuit (old code checked it after, which meant Self ops with
+  SessionOnly would not enforce it). Per-topic authz (`content.sync` for
+  content jobs, engagement membership for engagement topics) is enforced in
+  the handler via `handlers.topicAllowed`, which uses `ownership.Seat` for
+  engagement membership checks.
+- **Handler behavior:** non-member requesting only unauthorized topics gets
+  empty topic list → hub `ErrNoTopics` → 400 (matches M2 content.jobs policy).
+  Admin bypass in `topicAllowed` skips membership check.
+- **Tests:** engagement tests seed engagements + memberships via direct DB
+  INSERT. SSE handshake tests use `httptest.NewServer` + `http.Client` with
+  context timeout to avoid hanging on the long-lived stream.
+- `make generate` clean. `go build ./...` passes. All events + httpapi tests
+  pass with `-race`.
+
+### Files changed
+
+- `internal/events/hub.go` — `TopicEngagementPrefix`, `EngagementTopic()`,
+  `Subscription.Allow`, subscriber `allow` field, `knownTopic` UUID validation
+- `internal/events/hub_test.go` — `TestAllowFilterDropsEventsForOneSubscriberOnly`,
+  `TestEngagementTopicIsKnown`, `TestEngagementTopicRejectsNonUUID`,
+  `TestUnknownTopicWithEngagementLikePrefix`
+- `internal/events/doc.go` — updated M4 extension points
+- `api/openapi.yaml` — `/events` → `x-authz-self` + `x-authz-because`;
+  updated description with engagement topics
+- `internal/httpapi/authorize.go` — `decide()`: SessionOnly check before Self
+  short-circuit
+- `internal/httpapi/events.go` — `handlers.topicAllowed()` method; per-topic
+  authz in `SubscribeEvents`
+- `internal/httpapi/events_test.go` — `TestSubscribingToContentJobsIsFilteredForMembers`
+  (was 403, now 400), `TestMemberCanSubscribeToEngagementTopic`,
+  `TestNonMemberCannotSubscribeToEngagementTopic`,
+  `TestAdminCanSubscribeToAnyEngagementTopic`, seed helpers
+- `web/src/api/schema.d.ts` — regenerated from updated OpenAPI

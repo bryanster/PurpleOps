@@ -261,6 +261,101 @@ func TestPublishConcurrentWithSubscribe(t *testing.T) {
 	subs.Wait()
 }
 
+func TestAllowFilterDropsEventsForOneSubscriberOnly(t *testing.T) {
+	t.Parallel()
+	hub := events.NewHub(events.Options{})
+
+	// Subscriber A: passes all events.
+	a, unsubA, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.TopicContentJobs},
+	})
+	if err != nil {
+		t.Fatalf("subscribe A: %v", err)
+	}
+	defer unsubA()
+
+	// Subscriber B: drops events whose data says "skip".
+	deny := json.RawMessage(`"skip"`)
+	b, unsubB, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.TopicContentJobs},
+		Allow:  func(ev events.Event) bool { return string(ev.Data) != string(deny) },
+	})
+	if err != nil {
+		t.Fatalf("subscribe B: %v", err)
+	}
+	defer unsubB()
+
+	hub.Publish(events.TopicContentJobs, events.Event{
+		Type: events.TypeContentJobProgress,
+		Data: json.RawMessage(`"skip"`),
+	})
+	hub.Publish(events.TopicContentJobs, events.Event{
+		Type: events.TypeContentJobProgress,
+		Data: json.RawMessage(`"ok"`),
+	})
+
+	// A gets both.
+	gotA := recvN(t, a, 2)
+	if string(gotA[0].Data) != `"skip"` {
+		t.Fatalf("A[0] = %s", string(gotA[0].Data))
+	}
+	if string(gotA[1].Data) != `"ok"` {
+		t.Fatalf("A[1] = %s", string(gotA[1].Data))
+	}
+
+	// B gets only "ok".
+	gotB := recvN(t, b, 1)
+	if string(gotB[0].Data) != `"ok"` {
+		t.Fatalf("B[0] = %s", string(gotB[0].Data))
+	}
+	select {
+	case ev := <-b:
+		t.Fatalf("unexpected event on B: %+v", ev)
+	default:
+	}
+}
+
+func TestEngagementTopicIsKnown(t *testing.T) {
+	t.Parallel()
+	hub := events.NewHub(events.Options{})
+	topic := events.EngagementTopic("019385a2-1234-7890-abcd-ef0123456789")
+	ch, unsub, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{topic},
+	})
+	if err != nil {
+		t.Fatalf("subscribe engagement: %v", err)
+	}
+	defer unsub()
+
+	hub.Publish(topic, events.Event{Type: "test.ping"})
+	got := recvN(t, ch, 1)
+	if got[0].Topic != topic {
+		t.Fatalf("topic = %q, want %q", got[0].Topic, topic)
+	}
+}
+
+func TestEngagementTopicRejectsNonUUID(t *testing.T) {
+	t.Parallel()
+	hub := events.NewHub(events.Options{})
+	_, _, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{"engagement.bad-id"},
+	})
+	if !errors.Is(err, events.ErrUnknownTopic) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestUnknownTopicWithEngagementLikePrefix(t *testing.T) {
+	t.Parallel()
+	hub := events.NewHub(events.Options{})
+	_, _, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{"engagement."},
+	})
+	if !errors.Is(err, events.ErrUnknownTopic) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func recvN(t *testing.T, ch <-chan events.Event, n int) []events.Event {
 	t.Helper()
 	out := make([]events.Event, 0, n)

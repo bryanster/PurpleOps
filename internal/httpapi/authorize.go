@@ -290,6 +290,21 @@ func decide(ctx context.Context, requirement api.Requirement, route specRoute, o
 			fmt.Sprintf("%s requires a caller and the request carries no usable session", requirement.OperationID))
 	}
 
+	// Cookie-only operations: refuse a service token before any role check,
+	// whether this is a Self operation or a named action. Distinct from
+	// GuardSessionOnly on the rule table: content.sync stays token-reachable
+	// for REST start/cancel; only the stream is cookie-bound.
+	if requirement.SessionOnly && caller.Method == authz.MethodServiceToken {
+		authorization.Subject = subjectOf(caller, "", "", false)
+		authorization.Action = requirement.Action
+		authorization.Allowed = false
+		authorization.Reason = "this operation accepts a session cookie only, not a service token"
+		return decided{
+			authorization: authorization,
+			refusal:       apierr.Forbidden("subscribe to events with a service token"),
+		}, nil
+	}
+
 	if requirement.Self {
 		authorization.Subject = subjectOf(caller, "", "", false)
 		authorization.Allowed = true
@@ -302,9 +317,7 @@ func decide(ctx context.Context, requirement api.Requirement, route specRoute, o
 		return decided{}, err
 	}
 
-	// Cookie-only operations (SSE): refuse a service token before asking the
-	// policy, so content.sync stays token-reachable for REST while the stream
-	// stays session-bound. Distinct from GuardSessionOnly on the rule table.
+	// SessionOnly for regular (non-Self) operations — token refusal.
 	if requirement.SessionOnly && subject.Method == authz.MethodServiceToken {
 		authorization.Subject = subject
 		authorization.Action = requirement.Action
@@ -330,6 +343,7 @@ func decide(ctx context.Context, requirement api.Requirement, route specRoute, o
 	}
 	return decided{authorization: authorization, refusal: refuse(requirement, resource, decision)}, nil
 }
+
 
 // refuse turns a denial into the answer the caller gets: 404 where admitting the
 // resource exists is itself the leak, and 403 everywhere else. Neither carries
