@@ -32,6 +32,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content/sigma"
 	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
+	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -92,6 +93,10 @@ type Deps struct {
 	// that substitute a non-functional store (panickyStore) set this so
 	// construction does not touch the database.
 	DisableContentRunner bool
+
+	// Presence is the in-memory presence registry (M4-006). Nil for tests
+	// that don't need presence.
+	Presence *presence.Registry
 }
 
 // NewServer builds the HTTP handler: the middleware chain, the routes
@@ -676,6 +681,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		users:           users,
 		engagements:     engSvc,
 		hub:             hub,
+		presence:        deps.Presence,
 		eventsMaxReplay: deps.Config.Events.MaxReplayEvents,
 		eventsHeartbeat: deps.Config.Events.Heartbeat,
 		signInURL:       signInURL(deps.Config),

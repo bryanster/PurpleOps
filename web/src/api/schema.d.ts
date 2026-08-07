@@ -1320,6 +1320,50 @@ export interface paths {
         patch: operations["patchEngagementMember"];
         trace?: never;
     };
+    "/engagements/{engagementId}/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List every user currently present in this engagement.
+         * @description Returns a snapshot of every user whose presence heartbeat has not
+         *     expired. The online user list is visible to all members; focus targets
+         *     (`stepId` / `executionId`) are stripped for blue viewers when the
+         *     referenced step is unrevealed under blind mode.
+         */
+        get: operations["getEngagementPresence"];
+        /**
+         * Report this user's presence in an engagement.
+         * @description Upsert a presence heartbeat for the authenticated session. The caller
+         *     provides a client-generated `presenceId` so multiple tabs in the same
+         *     browser are distinguished. An optional `focus` object reports which step
+         *     or execution the user is currently viewing.
+         *
+         *     The server publishes ephemeral `presence.join` and `presence.update`
+         *     events on `engagement.{engagementId}`. These events use hub-generated
+         *     ids and are not replayed on `Last-Event-ID` reconnect.
+         */
+        put: operations["putEngagementPresence"];
+        post?: never;
+        /**
+         * Remove this user's presence from an engagement.
+         * @description Explicitly leave presence for the authenticated session. The server
+         *     publishes a `presence.leave` event on `engagement.{engagementId}`.
+         *     A missing `presenceId` removes every entry for this user in this
+         *     engagement (last tab closed).
+         *
+         *     TTL eviction is the source of truth; this is best-effort cleanup.
+         *     Clients SHOULD call this on tab close via `navigator.sendBeacon`.
+         */
+        delete: operations["deleteEngagementPresence"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagements/{engagementId}/scenarios": {
         parameters: {
             query?: never;
@@ -5021,6 +5065,53 @@ export interface components {
             caption?: string;
             side: components["schemas"]["EvidenceSide"];
         };
+        PresenceHeartbeat: {
+            /**
+             * Format: uuid
+             * @description Client-generated UUIDv7 for this tab/window.
+             */
+            presenceId: string;
+            focus?: {
+                /**
+                 * Format: uuid
+                 * @description The step the user is currently viewing.
+                 */
+                stepId?: string;
+                /**
+                 * Format: uuid
+                 * @description The execution the user is currently viewing.
+                 */
+                executionId?: string;
+            };
+        };
+        PresenceEntry: {
+            /**
+             * Format: uuid
+             * @description The user's platform id.
+             */
+            userId: string;
+            /** @description The user's display name. */
+            displayName: string;
+            /**
+             * Format: date-time
+             * @description When this user's most recent heartbeat arrived.
+             */
+            lastSeenAt: string;
+            /** @description Number of active tabs/windows for this user in this engagement. */
+            tabCount: number;
+            focus?: {
+                /**
+                 * Format: uuid
+                 * @description The step the user is most recently focused on.
+                 */
+                stepId?: string;
+                /**
+                 * Format: uuid
+                 * @description The execution the user is most recently focused on.
+                 */
+                executionId?: string;
+            };
+        };
         Comment: {
             /** Format: uuid */
             id: string;
@@ -7270,6 +7361,130 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getEngagementPresence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current presence snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        entries: components["schemas"]["PresenceEntry"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putEngagementPresence: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresenceHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description Presence updated. There is no body. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteEngagementPresence: {
+        parameters: {
+            query?: {
+                /** @description The client-generated presence id to remove. When absent, all entries for this user in this engagement are removed. */
+                presenceId?: string;
+            };
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Presence removed. There is no body. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

@@ -2498,6 +2498,42 @@ type PatchStep struct {
 // deliberately not the same vocabulary.
 type PlatformRole string
 
+// PresenceEntry defines model for PresenceEntry.
+type PresenceEntry struct {
+	// DisplayName The user's display name.
+	DisplayName string `json:"displayName"`
+	Focus       *struct {
+		// ExecutionId The execution the user is most recently focused on.
+		ExecutionId *openapi_types.UUID `json:"executionId,omitempty"`
+
+		// StepId The step the user is most recently focused on.
+		StepId *openapi_types.UUID `json:"stepId,omitempty"`
+	} `json:"focus,omitempty"`
+
+	// LastSeenAt When this user's most recent heartbeat arrived.
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// TabCount Number of active tabs/windows for this user in this engagement.
+	TabCount int `json:"tabCount"`
+
+	// UserId The user's platform id.
+	UserId openapi_types.UUID `json:"userId"`
+}
+
+// PresenceHeartbeat defines model for PresenceHeartbeat.
+type PresenceHeartbeat struct {
+	Focus *struct {
+		// ExecutionId The execution the user is currently viewing.
+		ExecutionId *openapi_types.UUID `json:"executionId,omitempty"`
+
+		// StepId The step the user is currently viewing.
+		StepId *openapi_types.UUID `json:"stepId,omitempty"`
+	} `json:"focus,omitempty"`
+
+	// PresenceId Client-generated UUIDv7 for this tab/window.
+	PresenceId openapi_types.UUID `json:"presenceId"`
+}
+
 // Problem RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
 //
@@ -4332,6 +4368,47 @@ type CreateFindingParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// DeleteEngagementPresenceParams defines parameters for DeleteEngagementPresence.
+type DeleteEngagementPresenceParams struct {
+	// PresenceId The client-generated presence id to remove. When absent, all entries for this user in this engagement are removed.
+	PresenceId *openapi_types.UUID `form:"presenceId,omitempty" json:"presenceId,omitempty"`
+
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// PutEngagementPresenceParams defines parameters for PutEngagementPresence.
+type PutEngagementPresenceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SubscribeEventsParams defines parameters for SubscribeEvents.
 type SubscribeEventsParams struct {
 	// Topics One or more topic names to subscribe to. Repeat the parameter
@@ -4731,6 +4808,9 @@ type AddEngagementMemberJSONRequestBody = AddMember
 // PatchEngagementMemberJSONRequestBody defines body for PatchEngagementMember for application/json ContentType.
 type PatchEngagementMemberJSONRequestBody = PatchMember
 
+// PutEngagementPresenceJSONRequestBody defines body for PutEngagementPresence for application/json ContentType.
+type PutEngagementPresenceJSONRequestBody = PresenceHeartbeat
+
 // CreateScenarioJSONRequestBody defines body for CreateScenario for application/json ContentType.
 type CreateScenarioJSONRequestBody = CreateScenario
 
@@ -5060,6 +5140,15 @@ type ServerInterface interface {
 	// PatchEngagementMember Change a member's engagement role.
 	// (PATCH /engagements/{engagementId}/members/{userId})
 	PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string)
+	// DeleteEngagementPresence Remove this user's presence from an engagement.
+	// (DELETE /engagements/{engagementId}/presence)
+	DeleteEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params DeleteEngagementPresenceParams)
+	// GetEngagementPresence List every user currently present in this engagement.
+	// (GET /engagements/{engagementId}/presence)
+	GetEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// PutEngagementPresence Report this user's presence in an engagement.
+	// (PUT /engagements/{engagementId}/presence)
+	PutEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params PutEngagementPresenceParams)
 	// ListScenarios List every scenario in an engagement.
 	// (GET /engagements/{engagementId}/scenarios)
 	ListScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -5750,6 +5839,24 @@ func (_ Unimplemented) RemoveEngagementMember(w http.ResponseWriter, r *http.Req
 // PatchEngagementMember Change a member's engagement role.
 // (PATCH /engagements/{engagementId}/members/{userId})
 func (_ Unimplemented) PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteEngagementPresence Remove this user's presence from an engagement.
+// (DELETE /engagements/{engagementId}/presence)
+func (_ Unimplemented) DeleteEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params DeleteEngagementPresenceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetEngagementPresence List every user currently present in this engagement.
+// (GET /engagements/{engagementId}/presence)
+func (_ Unimplemented) GetEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutEngagementPresence Report this user's presence in an engagement.
+// (PUT /engagements/{engagementId}/presence)
+func (_ Unimplemented) PutEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params PutEngagementPresenceParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10014,6 +10121,145 @@ func (siw *ServerInterfaceWrapper) PatchEngagementMember(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteEngagementPresence operation middleware
+func (siw *ServerInterfaceWrapper) DeleteEngagementPresence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteEngagementPresenceParams
+
+	// ------------- Optional query parameter "presenceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "presenceId", r.URL.Query(), &params.PresenceId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "presenceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "presenceId", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteEngagementPresence(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEngagementPresence operation middleware
+func (siw *ServerInterfaceWrapper) GetEngagementPresence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEngagementPresence(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutEngagementPresence operation middleware
+func (siw *ServerInterfaceWrapper) PutEngagementPresence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutEngagementPresenceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutEngagementPresence(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListScenarios operation middleware
 func (siw *ServerInterfaceWrapper) ListScenarios(w http.ResponseWriter, r *http.Request) {
 
@@ -11856,6 +12102,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/engagements/{engagementId}/members/{userId}", wrapper.PatchEngagementMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/engagements/{engagementId}/presence", wrapper.DeleteEngagementPresence)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/presence", wrapper.GetEngagementPresence)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/engagements/{engagementId}/presence", wrapper.PutEngagementPresence)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/scenarios", wrapper.ListScenarios)
@@ -20945,6 +21200,289 @@ func (response PatchEngagementMember500ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type DeleteEngagementPresenceRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       DeleteEngagementPresenceParams
+}
+
+type DeleteEngagementPresenceResponseObject interface {
+	VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error
+}
+
+type DeleteEngagementPresence204Response struct {
+}
+
+func (response DeleteEngagementPresence204Response) VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteEngagementPresence400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEngagementPresence400ApplicationProblemPlusJSONResponse) VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEngagementPresence401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEngagementPresence401ApplicationProblemPlusJSONResponse) VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEngagementPresence403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEngagementPresence403ApplicationProblemPlusJSONResponse) VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEngagementPresence404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEngagementPresence404ApplicationProblemPlusJSONResponse) VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEngagementPresence500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEngagementPresence500ApplicationProblemPlusJSONResponse) VisitDeleteEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEngagementPresenceRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type GetEngagementPresenceResponseObject interface {
+	VisitGetEngagementPresenceResponse(w http.ResponseWriter) error
+}
+
+type GetEngagementPresence200JSONResponse struct {
+	Entries []PresenceEntry `json:"entries"`
+}
+
+func (response GetEngagementPresence200JSONResponse) VisitGetEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEngagementPresence401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetEngagementPresence401ApplicationProblemPlusJSONResponse) VisitGetEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEngagementPresence403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetEngagementPresence403ApplicationProblemPlusJSONResponse) VisitGetEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEngagementPresence404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetEngagementPresence404ApplicationProblemPlusJSONResponse) VisitGetEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEngagementPresence500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetEngagementPresence500ApplicationProblemPlusJSONResponse) VisitGetEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutEngagementPresenceRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       PutEngagementPresenceParams
+	Body         *PutEngagementPresenceJSONRequestBody
+}
+
+type PutEngagementPresenceResponseObject interface {
+	VisitPutEngagementPresenceResponse(w http.ResponseWriter) error
+}
+
+type PutEngagementPresence204Response struct {
+}
+
+func (response PutEngagementPresence204Response) VisitPutEngagementPresenceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PutEngagementPresence400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PutEngagementPresence400ApplicationProblemPlusJSONResponse) VisitPutEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutEngagementPresence401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PutEngagementPresence401ApplicationProblemPlusJSONResponse) VisitPutEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutEngagementPresence403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PutEngagementPresence403ApplicationProblemPlusJSONResponse) VisitPutEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutEngagementPresence404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PutEngagementPresence404ApplicationProblemPlusJSONResponse) VisitPutEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutEngagementPresence500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PutEngagementPresence500ApplicationProblemPlusJSONResponse) VisitPutEngagementPresenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListScenariosRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -25395,6 +25933,15 @@ type StrictServerInterface interface {
 	// PatchEngagementMember Change a member's engagement role.
 	// (PATCH /engagements/{engagementId}/members/{userId})
 	PatchEngagementMember(ctx context.Context, request PatchEngagementMemberRequestObject) (PatchEngagementMemberResponseObject, error)
+	// DeleteEngagementPresence Remove this user's presence from an engagement.
+	// (DELETE /engagements/{engagementId}/presence)
+	DeleteEngagementPresence(ctx context.Context, request DeleteEngagementPresenceRequestObject) (DeleteEngagementPresenceResponseObject, error)
+	// GetEngagementPresence List every user currently present in this engagement.
+	// (GET /engagements/{engagementId}/presence)
+	GetEngagementPresence(ctx context.Context, request GetEngagementPresenceRequestObject) (GetEngagementPresenceResponseObject, error)
+	// PutEngagementPresence Report this user's presence in an engagement.
+	// (PUT /engagements/{engagementId}/presence)
+	PutEngagementPresence(ctx context.Context, request PutEngagementPresenceRequestObject) (PutEngagementPresenceResponseObject, error)
 	// ListScenarios List every scenario in an engagement.
 	// (GET /engagements/{engagementId}/scenarios)
 	ListScenarios(ctx context.Context, request ListScenariosRequestObject) (ListScenariosResponseObject, error)
@@ -28229,6 +28776,93 @@ func (sh *strictHandler) PatchEngagementMember(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PatchEngagementMemberResponseObject); ok {
 		if err := validResponse.VisitPatchEngagementMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteEngagementPresence operation middleware
+func (sh *strictHandler) DeleteEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params DeleteEngagementPresenceParams) {
+	var request DeleteEngagementPresenceRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteEngagementPresence(ctx, request.(DeleteEngagementPresenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteEngagementPresence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteEngagementPresenceResponseObject); ok {
+		if err := validResponse.VisitDeleteEngagementPresenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEngagementPresence operation middleware
+func (sh *strictHandler) GetEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request GetEngagementPresenceRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEngagementPresence(ctx, request.(GetEngagementPresenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEngagementPresence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEngagementPresenceResponseObject); ok {
+		if err := validResponse.VisitGetEngagementPresenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutEngagementPresence operation middleware
+func (sh *strictHandler) PutEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params PutEngagementPresenceParams) {
+	var request PutEngagementPresenceRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	var body PutEngagementPresenceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutEngagementPresence(ctx, request.(PutEngagementPresenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutEngagementPresence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutEngagementPresenceResponseObject); ok {
+		if err := validResponse.VisitPutEngagementPresenceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

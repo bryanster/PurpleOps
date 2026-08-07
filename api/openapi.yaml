@@ -2361,6 +2361,129 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/presence:
+    put:
+      operationId: putEngagementPresence
+      summary: Report this user's presence in an engagement.
+      description: |
+        Upsert a presence heartbeat for the authenticated session. The caller
+        provides a client-generated `presenceId` so multiple tabs in the same
+        browser are distinguished. An optional `focus` object reports which step
+        or execution the user is currently viewing.
+
+        The server publishes ephemeral `presence.join` and `presence.update`
+        events on `engagement.{engagementId}`. These events use hub-generated
+        ids and are not replayed on `Last-Event-ID` reconnect.
+      tags:
+        - collaboration
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      x-authz-because: anyone who may read the engagement may signal that they are present.
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresenceHeartbeat"
+      responses:
+        "204":
+          description: Presence updated. There is no body.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteEngagementPresence
+      summary: Remove this user's presence from an engagement.
+      description: |
+        Explicitly leave presence for the authenticated session. The server
+        publishes a `presence.leave` event on `engagement.{engagementId}`.
+        A missing `presenceId` removes every entry for this user in this
+        engagement (last tab closed).
+
+        TTL eviction is the source of truth; this is best-effort cleanup.
+        Clients SHOULD call this on tab close via `navigator.sendBeacon`.
+      tags:
+        - collaboration
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      x-authz-because: anyone who may read the engagement may withdraw their presence.
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: presenceId
+          in: query
+          required: false
+          description: The client-generated presence id to remove. When absent, all entries for this user in this engagement are removed.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Presence removed. There is no body.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: getEngagementPresence
+      summary: List every user currently present in this engagement.
+      description: |
+        Returns a snapshot of every user whose presence heartbeat has not
+        expired. The online user list is visible to all members; focus targets
+        (`stepId` / `executionId`) are stripped for blue viewers when the
+        referenced step is unrevealed under blind mode.
+      tags:
+        - collaboration
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      x-authz-because: anyone who may read the engagement may see who else is present.
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The current presence snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - entries
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PresenceEntry"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /engagements/{engagementId}/scenarios:
     get:
       operationId: listScenarios
@@ -9904,6 +10027,66 @@ components:
           description: Optional caption for the evidence.
         side:
           $ref: "#/components/schemas/EvidenceSide"
+      additionalProperties: false
+
+    PresenceHeartbeat:
+      type: object
+      required:
+        - presenceId
+      properties:
+        presenceId:
+          type: string
+          format: uuid
+          description: Client-generated UUIDv7 for this tab/window.
+        focus:
+          type: object
+          properties:
+            stepId:
+              type: string
+              format: uuid
+              description: The step the user is currently viewing.
+            executionId:
+              type: string
+              format: uuid
+              description: The execution the user is currently viewing.
+          additionalProperties: false
+      additionalProperties: false
+
+    PresenceEntry:
+      type: object
+      required:
+        - userId
+        - displayName
+        - lastSeenAt
+        - tabCount
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: The user's platform id.
+        displayName:
+          type: string
+          description: The user's display name.
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: When this user's most recent heartbeat arrived.
+        tabCount:
+          type: integer
+          minimum: 1
+          description: Number of active tabs/windows for this user in this engagement.
+        focus:
+          type: object
+          properties:
+            stepId:
+              type: string
+              format: uuid
+              description: The step the user is most recently focused on.
+            executionId:
+              type: string
+              format: uuid
+              description: The execution the user is most recently focused on.
+          additionalProperties: false
       additionalProperties: false
 
     Comment:

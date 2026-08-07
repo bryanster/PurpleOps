@@ -14,6 +14,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content/attackpin"
 	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
+	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
@@ -110,6 +111,9 @@ type handlers struct {
 	// Host header — a link derived from a header is a link an attacker can
 	// choose.
 	signInURL string
+
+	// presence is the in-memory presence registry (M4-006).
+	presence *presence.Registry
 
 	log *slog.Logger
 }

@@ -42,6 +42,14 @@ const (
 	TypeSyncRequired       = "sync.required"
 )
 
+// Presence event types (M4-006). Ephemeral: never persisted, never replayed
+// on Last-Event-ID reconnect. Hub-generated ids only.
+const (
+	TypePresenceJoin   = "presence.join"
+	TypePresenceLeave  = "presence.leave"
+	TypePresenceUpdate = "presence.update"
+)
+
 // Event is one fan-out message. ID is a UUIDv7 so Last-Event-ID ordering is
 // stable even though M2 does not replay against the activity log.
 type Event struct {
