@@ -579,6 +579,17 @@ type ActivityPage struct {
 	NextCursor nullable.Nullable[string] `json:"nextCursor,omitempty"`
 }
 
+// AddMember Request to seat a user in an engagement.
+type AddMember struct {
+	// Role What somebody may do inside one engagement. Red and blue are separate so
+	// that blind mode and the split write endpoints have something to decide
+	// on.
+	Role EngagementRole `json:"role"`
+
+	// UserId The user to add.
+	UserId string `json:"userId"`
+}
+
 // AuthProviders What the login page may offer. It is deliberately a list rather than a
 // set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
 // renders this array needed no change when it arrived.
@@ -1564,6 +1575,25 @@ type Engagement struct {
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
+// EngagementMember One person seated in one engagement, with user display fields.
+type EngagementMember struct {
+	AddedAt time.Time `json:"addedAt"`
+
+	// DisplayName The name to show for this person.
+	DisplayName string `json:"displayName"`
+
+	// Email Their email address.
+	Email string `json:"email"`
+
+	// Id The user's identifier.
+	Id string `json:"id"`
+
+	// Role What somebody may do inside one engagement. Red and blue are separate so
+	// that blind mode and the split write endpoints have something to decide
+	// on.
+	Role EngagementRole `json:"role"`
+}
+
 // EngagementMembership One person's place in one engagement.
 type EngagementMembership struct {
 	AddedAt      time.Time `json:"addedAt"`
@@ -1766,6 +1796,14 @@ type PatchEngagement struct {
 	Mode     *EngagementMode     `json:"mode,omitempty"`
 	Name     *string             `json:"name,omitempty"`
 	StartsOn *openapi_types.Date `json:"startsOn,omitempty"`
+}
+
+// PatchMember Change a member's engagement role.
+type PatchMember struct {
+	// Role What somebody may do inside one engagement. Red and blue are separate so
+	// that blind mode and the split write endpoints have something to decide
+	// on.
+	Role EngagementRole `json:"role"`
 }
 
 // PlatformRole What somebody may do to this installation: `admin` manages users, content
@@ -3628,6 +3666,12 @@ type CreateEngagementJSONRequestBody = CreateEngagement
 // PatchEngagementJSONRequestBody defines body for PatchEngagement for application/json ContentType.
 type PatchEngagementJSONRequestBody = PatchEngagement
 
+// AddEngagementMemberJSONRequestBody defines body for AddEngagementMember for application/json ContentType.
+type AddEngagementMemberJSONRequestBody = AddMember
+
+// PatchEngagementMemberJSONRequestBody defines body for PatchEngagementMember for application/json ContentType.
+type PatchEngagementMemberJSONRequestBody = PatchMember
+
 // SetEngagementStatusJSONRequestBody defines body for SetEngagementStatus for application/json ContentType.
 type SetEngagementStatusJSONRequestBody = SetEngagementStatus
 
@@ -3882,6 +3926,18 @@ type ServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
+	// ListEngagementMembers List the members of an engagement.
+	// (GET /engagements/{engagementId}/members)
+	ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// AddEngagementMember Add a user to an engagement.
+	// (POST /engagements/{engagementId}/members)
+	AddEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// RemoveEngagementMember Remove a user from an engagement.
+	// (DELETE /engagements/{engagementId}/members/{userId})
+	RemoveEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string)
+	// PatchEngagementMember Change a member's engagement role.
+	// (PATCH /engagements/{engagementId}/members/{userId})
+	PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string)
 	// SetEngagementStatus Transition the engagement to a new status.
 	// (POST /engagements/{engagementId}/status)
 	SetEngagementStatus(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -4410,6 +4466,30 @@ func (_ Unimplemented) PatchEngagement(w http.ResponseWriter, r *http.Request, e
 // ListEngagementActivity List one engagement's activity log.
 // (GET /engagements/{engagementId}/activity)
 func (_ Unimplemented) ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListEngagementMembers List the members of an engagement.
+// (GET /engagements/{engagementId}/members)
+func (_ Unimplemented) ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AddEngagementMember Add a user to an engagement.
+// (POST /engagements/{engagementId}/members)
+func (_ Unimplemented) AddEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RemoveEngagementMember Remove a user from an engagement.
+// (DELETE /engagements/{engagementId}/members/{userId})
+func (_ Unimplemented) RemoveEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchEngagementMember Change a member's engagement role.
+// (PATCH /engagements/{engagementId}/members/{userId})
+func (_ Unimplemented) PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7868,6 +7948,128 @@ func (siw *ServerInterfaceWrapper) ListEngagementActivity(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListEngagementMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListEngagementMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEngagementMembers(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddEngagementMember operation middleware
+func (siw *ServerInterfaceWrapper) AddEngagementMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddEngagementMember(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveEngagementMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveEngagementMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveEngagementMember(w, r, engagementId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchEngagementMember operation middleware
+func (siw *ServerInterfaceWrapper) PatchEngagementMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchEngagementMember(w, r, engagementId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetEngagementStatus operation middleware
 func (siw *ServerInterfaceWrapper) SetEngagementStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -8806,6 +9008,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/activity", wrapper.ListEngagementActivity)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/members", wrapper.ListEngagementMembers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/members", wrapper.AddEngagementMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/engagements/{engagementId}/members/{userId}", wrapper.RemoveEngagementMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/members/{userId}", wrapper.PatchEngagementMember)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/sources", wrapper.ListContentSources)
@@ -16160,6 +16374,460 @@ func (response ListEngagementActivity500ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type ListEngagementMembersRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type ListEngagementMembersResponseObject interface {
+	VisitListEngagementMembersResponse(w http.ResponseWriter) error
+}
+
+type ListEngagementMembers200JSONResponse []EngagementMember
+
+func (response ListEngagementMembers200JSONResponse) VisitListEngagementMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementMembers400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementMembers400ApplicationProblemPlusJSONResponse) VisitListEngagementMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementMembers401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementMembers401ApplicationProblemPlusJSONResponse) VisitListEngagementMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementMembers403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementMembers403ApplicationProblemPlusJSONResponse) VisitListEngagementMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementMembers404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementMembers404ApplicationProblemPlusJSONResponse) VisitListEngagementMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementMembers500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementMembers500ApplicationProblemPlusJSONResponse) VisitListEngagementMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMemberRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Body         *AddEngagementMemberJSONRequestBody
+}
+
+type AddEngagementMemberResponseObject interface {
+	VisitAddEngagementMemberResponse(w http.ResponseWriter) error
+}
+
+type AddEngagementMember201JSONResponse EngagementMember
+
+func (response AddEngagementMember201JSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMember400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response AddEngagementMember400ApplicationProblemPlusJSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMember401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response AddEngagementMember401ApplicationProblemPlusJSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMember403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AddEngagementMember403ApplicationProblemPlusJSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMember404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response AddEngagementMember404ApplicationProblemPlusJSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMember409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response AddEngagementMember409ApplicationProblemPlusJSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEngagementMember500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response AddEngagementMember500ApplicationProblemPlusJSONResponse) VisitAddEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEngagementMemberRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	UserId       string       `json:"userId"`
+}
+
+type RemoveEngagementMemberResponseObject interface {
+	VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error
+}
+
+type RemoveEngagementMember204Response struct {
+}
+
+func (response RemoveEngagementMember204Response) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveEngagementMember400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveEngagementMember400ApplicationProblemPlusJSONResponse) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEngagementMember401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveEngagementMember401ApplicationProblemPlusJSONResponse) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEngagementMember403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveEngagementMember403ApplicationProblemPlusJSONResponse) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEngagementMember404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveEngagementMember404ApplicationProblemPlusJSONResponse) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEngagementMember409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveEngagementMember409ApplicationProblemPlusJSONResponse) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEngagementMember500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveEngagementMember500ApplicationProblemPlusJSONResponse) VisitRemoveEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMemberRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	UserId       string       `json:"userId"`
+	Body         *PatchEngagementMemberJSONRequestBody
+}
+
+type PatchEngagementMemberResponseObject interface {
+	VisitPatchEngagementMemberResponse(w http.ResponseWriter) error
+}
+
+type PatchEngagementMember200JSONResponse EngagementMember
+
+func (response PatchEngagementMember200JSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMember400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchEngagementMember400ApplicationProblemPlusJSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMember401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchEngagementMember401ApplicationProblemPlusJSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMember403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchEngagementMember403ApplicationProblemPlusJSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMember404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchEngagementMember404ApplicationProblemPlusJSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMember409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PatchEngagementMember409ApplicationProblemPlusJSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchEngagementMember500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchEngagementMember500ApplicationProblemPlusJSONResponse) VisitPatchEngagementMemberResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetEngagementStatusRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	Body         *SetEngagementStatusJSONRequestBody
@@ -17999,6 +18667,18 @@ type StrictServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
+	// ListEngagementMembers List the members of an engagement.
+	// (GET /engagements/{engagementId}/members)
+	ListEngagementMembers(ctx context.Context, request ListEngagementMembersRequestObject) (ListEngagementMembersResponseObject, error)
+	// AddEngagementMember Add a user to an engagement.
+	// (POST /engagements/{engagementId}/members)
+	AddEngagementMember(ctx context.Context, request AddEngagementMemberRequestObject) (AddEngagementMemberResponseObject, error)
+	// RemoveEngagementMember Remove a user from an engagement.
+	// (DELETE /engagements/{engagementId}/members/{userId})
+	RemoveEngagementMember(ctx context.Context, request RemoveEngagementMemberRequestObject) (RemoveEngagementMemberResponseObject, error)
+	// PatchEngagementMember Change a member's engagement role.
+	// (PATCH /engagements/{engagementId}/members/{userId})
+	PatchEngagementMember(ctx context.Context, request PatchEngagementMemberRequestObject) (PatchEngagementMemberResponseObject, error)
 	// SetEngagementStatus Transition the engagement to a new status.
 	// (POST /engagements/{engagementId}/status)
 	SetEngagementStatus(ctx context.Context, request SetEngagementStatusRequestObject) (SetEngagementStatusResponseObject, error)
@@ -20299,6 +20979,126 @@ func (sh *strictHandler) ListEngagementActivity(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListEngagementActivityResponseObject); ok {
 		if err := validResponse.VisitListEngagementActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEngagementMembers operation middleware
+func (sh *strictHandler) ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ListEngagementMembersRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEngagementMembers(ctx, request.(ListEngagementMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEngagementMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEngagementMembersResponseObject); ok {
+		if err := validResponse.VisitListEngagementMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddEngagementMember operation middleware
+func (sh *strictHandler) AddEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request AddEngagementMemberRequestObject
+
+	request.EngagementId = engagementId
+
+	var body AddEngagementMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddEngagementMember(ctx, request.(AddEngagementMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddEngagementMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddEngagementMemberResponseObject); ok {
+		if err := validResponse.VisitAddEngagementMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveEngagementMember operation middleware
+func (sh *strictHandler) RemoveEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string) {
+	var request RemoveEngagementMemberRequestObject
+
+	request.EngagementId = engagementId
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveEngagementMember(ctx, request.(RemoveEngagementMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveEngagementMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveEngagementMemberResponseObject); ok {
+		if err := validResponse.VisitRemoveEngagementMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchEngagementMember operation middleware
+func (sh *strictHandler) PatchEngagementMember(w http.ResponseWriter, r *http.Request, engagementId EngagementId, userId string) {
+	var request PatchEngagementMemberRequestObject
+
+	request.EngagementId = engagementId
+	request.UserId = userId
+
+	var body PatchEngagementMemberJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchEngagementMember(ctx, request.(PatchEngagementMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchEngagementMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchEngagementMemberResponseObject); ok {
+		if err := validResponse.VisitPatchEngagementMemberResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

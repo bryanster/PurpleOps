@@ -517,6 +517,15 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/engagements/{engagementId}/status": {
 		body: `{"status":"active"}`,
 	},
+
+	// Membership management (M3-003).
+	"POST " + BasePath + "/engagements/{engagementId}/members": {
+		body: `{"userId":"00000000-0000-0000-0000-000000000001","role":"red"}`,
+	},
+	"PATCH " + BasePath + "/engagements/{engagementId}/members/{userId}": {
+		body: `{"role":"blue"}`,
+	},
+	"DELETE " + BasePath + "/engagements/{engagementId}/members/{userId}": {},
 }
 
 // The two media types the walks send.

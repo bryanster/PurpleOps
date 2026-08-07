@@ -102,6 +102,7 @@ var justifiedLiterals = map[string]string{
 	"internal/cli/user.go:admin":                   "the name of the --admin flag, not the role it sets",
 	"internal/store/engagement/engagement.go:red":  "EvidenceSide value, not an engagement role",
 	"internal/store/engagement/engagement.go:blue": "EvidenceSide value, not an engagement role",
+	"internal/events/activity.go:member":           "object type constant ObjectMember, not an engagement role",
 }
 
 // TestRoleLiteralsLiveOnlyInThisPackage is M1-012's fourth acceptance criterion.

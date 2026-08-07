@@ -103,18 +103,6 @@ paths:
       parameters:
         - $ref: "#/components/parameters/CSRF"
       responses: {"200": {description: ok}}
-  /engagements/{engagementId}/members:
-    parameters:
-      - {name: engagementId, in: path, required: true, schema: {type: string}}
-    post:
-      operationId: sweepManageMembers
-      summary: Add somebody to one engagement.
-      x-authz-action: member.manage
-      x-authz-resource: {type: member, engagement: engagementId}
-      parameters:
-        - $ref: "#/components/parameters/CSRF"
-      responses: {"200": {description: ok}}
-
 `
 
 // statuses is one operation's answer to each caller, in the order [sweepCallers]
@@ -185,10 +173,14 @@ var sweepOperations = []sweepOp{
 		Want:  statuses{200, 200, 403, 200, 403, 404},
 	},
 	{
-		// The observer's 403 is the Spectator fall-through, on the wire.
+		// Admin/lead pass authorization but the user does not exist → 404.
+		// Outsider also gets 404, but from concealment rather than user lookup.
+		// Both are problem code "not_found" so the assertion holds.
 		Name: "manage the members", Method: http.MethodPost,
 		Route: "/engagements/{engagementId}/members",
-		Want:  statuses{200, 200, 403, 403, 403, 404},
+		Real:  true,
+		Body:  `{"userId":"ffffffff-ffff-ffff-ffff-ffffffffffff","role":"red"}`,
+		Want:  statuses{404, 404, 403, 403, 403, 404},
 	},
 	{
 		// v1's ungated page, rebuilt: this is the real endpoint M1-016 ships,
@@ -304,7 +296,7 @@ func (s *sweepServer) assertRefusalShape(t *testing.T, recorder *httptest.Respon
 				"later make change something", caller.Name, op.Name, ranOrNot(reached), want)
 		}
 	}
-	if want == http.StatusOK || want == http.StatusAccepted {
+	if want == http.StatusOK || want == http.StatusCreated || want == http.StatusAccepted {
 		return
 	}
 
@@ -537,7 +529,8 @@ func (s *sweepServer) target(route string) string {
 // asSession performs one request as a signed-in browser: the session cookie, and
 // the CSRF cookie and header that go with it on a state-changing method.
 func (s *sweepServer) asSession(caller *sweepCaller, op sweepOp, target string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(op.Method, target, strings.NewReader(op.Body))
+	body := strings.ReplaceAll(op.Body, "{targetUserID}", s.targetUser.ID)
+	request := httptest.NewRequest(op.Method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", jsonMediaType)
 	request.AddCookie(caller.session)
 	s.attachCSRF(request, caller.session)
@@ -548,7 +541,8 @@ func (s *sweepServer) asSession(caller *sweepCaller, op sweepOp, target string) 
 // and no CSRF header — a token-authenticated request is not subject to that
 // check, because nothing attaches one on a caller's behalf.
 func (s *sweepServer) asToken(caller *sweepCaller, op sweepOp, target string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(op.Method, target, strings.NewReader(op.Body))
+	body := strings.ReplaceAll(op.Body, "{targetUserID}", s.targetUser.ID)
+	request := httptest.NewRequest(op.Method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", jsonMediaType)
 	request.Header.Set("Authorization", "Bearer "+caller.token)
 	return do(s.handler, request)

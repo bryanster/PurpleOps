@@ -28,6 +28,8 @@ type Service struct {
 	engagements *storengagement.Engagements
 	attackpin   *attackpin.Service
 	activity    *events.Log
+	memberships MemberStore
+	users       UserStore
 }
 
 // Deps is everything a [Service] is built from.
@@ -35,20 +37,26 @@ type Deps struct {
 	Engagements *storengagement.Engagements
 	AttackPin   *attackpin.Service
 	Activity    *events.Log // optional; nil skips durable activity rows
+	Memberships MemberStore
+	Users       UserStore // optional; nil skips user validation on add
 }
 
 // New returns a Service over deps, or an error naming what is missing.
 func New(deps Deps) (*Service, error) {
-	switch {
-	case deps.Engagements == nil:
+	if deps.Engagements == nil {
 		return nil, errors.New("engagement: no engagements repository")
-	case deps.AttackPin == nil:
-		return nil, errors.New("engagement: no attackpin service")
 	}
+	if deps.Memberships == nil {
+		return nil, errors.New("engagement: no memberships repository")
+	}
+	// AttackPin is optional — only needed for create/update operations
+	// that validate ATT&CK version pins.
 	return &Service{
 		engagements: deps.Engagements,
 		attackpin:   deps.AttackPin,
 		activity:    deps.Activity,
+		memberships: deps.Memberships,
+		users:       deps.Users,
 	}, nil
 }
 

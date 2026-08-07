@@ -108,6 +108,12 @@ const (
 	VerbEngagementUpdated       Verb = "engagement.updated"
 	VerbEngagementStatusChanged Verb = "engagement.status_changed"
 	VerbEngagementDeleted       Verb = "engagement.deleted"
+
+	// Engagement membership lifecycle (M3-003). Object is the member row;
+	// engagement_id names which engagement they were added to / removed from.
+	VerbMemberAdded       Verb = "member.added"
+	VerbMemberRoleChanged Verb = "member.role_changed"
+	VerbMemberRemoved     Verb = "member.removed"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -127,6 +133,8 @@ const (
 	ObjectContentProcedureTemplate = "content_procedure_template"
 	ObjectContentDetectionRuleRef  = "content_detection_rule_ref"
 	ObjectContentNote              = "content_note"
+
+	ObjectMember = "member"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

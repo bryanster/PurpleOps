@@ -1265,6 +1265,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the members of an engagement.
+         * @description Lead, red, blue, observer, and platform administrators may read the
+         *     member list. A non-member is answered 404 rather than 403, so the
+         *     existence of an engagement is not confirmed.
+         */
+        get: operations["listEngagementMembers"];
+        put?: never;
+        /**
+         * Add a user to an engagement.
+         * @description Lead and platform administrators. Only `active` users may be added.
+         *     Adding someone who is already a member returns 409. Use PATCH to
+         *     change a member's role.
+         */
+        post: operations["addEngagementMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a user from an engagement.
+         * @description Lead and platform administrators. The last `lead` cannot be removed.
+         *     A lead may remove themselves only when another lead remains.
+         */
+        delete: operations["removeEngagementMember"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a member's engagement role.
+         * @description Lead and platform administrators. The last `lead` cannot be demoted
+         *     or removed. A lead may remove themselves only when another lead
+         *     remains.
+         */
+        patch: operations["patchEngagementMember"];
+        trace?: never;
+    };
     "/content/sources": {
         parameters: {
             query?: never;
@@ -2503,6 +2558,28 @@ export interface components {
             role: components["schemas"]["EngagementRole"];
             /** Format: date-time */
             addedAt: string;
+        };
+        /** @description One person seated in one engagement, with user display fields. */
+        EngagementMember: {
+            /** @description The user's identifier. */
+            id: string;
+            /** @description Their email address. */
+            email: string;
+            /** @description The name to show for this person. */
+            displayName: string;
+            role: components["schemas"]["EngagementRole"];
+            /** Format: date-time */
+            addedAt: string;
+        };
+        /** @description Request to seat a user in an engagement. */
+        AddMember: {
+            /** @description The user to add. */
+            userId: string;
+            role: components["schemas"]["EngagementRole"];
+        };
+        /** @description Change a member's engagement role. */
+        PatchMember: {
+            role: components["schemas"]["EngagementRole"];
         };
         /**
          * @description Whether an account can be used. Retirement is a status change and never
@@ -5937,6 +6014,131 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listEngagementMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The member list, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementMember"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    addEngagementMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMember"];
+            };
+        };
+        responses: {
+            /** @description The member was added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementMember"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    removeEngagementMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The user to remove. */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The member was removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchEngagementMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The user to re-seat. */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchMember"];
+            };
+        };
+        responses: {
+            /** @description The membership with the updated role. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementMember"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

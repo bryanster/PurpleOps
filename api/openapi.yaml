@@ -2198,6 +2198,165 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/members:
+    get:
+      operationId: listEngagementMembers
+      summary: List the members of an engagement.
+      description: |
+        Lead, red, blue, observer, and platform administrators may read the
+        member list. A non-member is answered 404 rather than 403, so the
+        existence of an engagement is not confirmed.
+      tags:
+        - engagements
+      x-authz-action: member.read
+      x-authz-resource:
+        type: member
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The member list, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EngagementMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: addEngagementMember
+      summary: Add a user to an engagement.
+      description: |
+        Lead and platform administrators. Only `active` users may be added.
+        Adding someone who is already a member returns 409. Use PATCH to
+        change a member's role.
+      tags:
+        - engagements
+      x-authz-action: member.manage
+      x-authz-resource:
+        type: member
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMember"
+      responses:
+        "201":
+          description: The member was added.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/members/{userId}:
+    patch:
+      operationId: patchEngagementMember
+      summary: Change a member's engagement role.
+      description: |
+        Lead and platform administrators. The last `lead` cannot be demoted
+        or removed. A lead may remove themselves only when another lead
+        remains.
+      tags:
+        - engagements
+      x-authz-action: member.manage
+      x-authz-resource:
+        type: member
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - name: userId
+          in: path
+          required: true
+          description: The user to re-seat.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchMember"
+      responses:
+        "200":
+          description: The membership with the updated role.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: removeEngagementMember
+      summary: Remove a user from an engagement.
+      description: |
+        Lead and platform administrators. The last `lead` cannot be removed.
+        A lead may remove themselves only when another lead remains.
+      tags:
+        - engagements
+      x-authz-action: member.manage
+      x-authz-resource:
+        type: member
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - name: userId
+          in: path
+          required: true
+          description: The user to remove.
+          schema:
+            type: string
+      responses:
+        "204":
+          description: The member was removed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /content/sources:
     get:
       operationId: listContentSources
@@ -4960,6 +5119,53 @@ components:
         addedAt:
           type: string
           format: date-time
+
+    EngagementMember:
+      type: object
+      description: One person seated in one engagement, with user display fields.
+      required:
+        - id
+        - email
+        - displayName
+        - role
+        - addedAt
+      properties:
+        id:
+          type: string
+          description: The user's identifier.
+        email:
+          type: string
+          description: Their email address.
+        displayName:
+          type: string
+          description: The name to show for this person.
+        role:
+          $ref: "#/components/schemas/EngagementRole"
+        addedAt:
+          type: string
+          format: date-time
+
+    AddMember:
+      type: object
+      description: Request to seat a user in an engagement.
+      required:
+        - userId
+        - role
+      properties:
+        userId:
+          type: string
+          description: The user to add.
+        role:
+          $ref: "#/components/schemas/EngagementRole"
+
+    PatchMember:
+      type: object
+      description: Change a member's engagement role.
+      required:
+        - role
+      properties:
+        role:
+          $ref: "#/components/schemas/EngagementRole"
 
     UserStatus:
       type: string

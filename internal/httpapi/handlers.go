@@ -70,8 +70,12 @@ type handlers struct {
 	// attackpin is the ATT&CK version catalog and pin surface (M2-007).
 	attackpin *attackpin.Service
 
-	// engagements is the engagement CRUD and status lifecycle service (M3-002).
+	// engagements is the engagement CRUD, status lifecycle, and membership
+	// management service (M3-002, M3-003).
 	engagements *engagement.Service
+
+	// users resolves user display fields for membership responses (M3-003).
+	users membershipUserStore
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit
 	// GET /events.

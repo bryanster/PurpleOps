@@ -545,10 +545,14 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: attackpin: " + err.Error())
 	}
+	memberships := identity.NewMemberships(deps.Store)
+	users := identity.NewUsers(deps.Store)
 	engSvc, err := engagement.New(engagement.Deps{
 		Engagements: engagements,
 		AttackPin:   pin,
 		Activity:    activityLog,
+		Memberships: memberships,
+		Users:       users,
 	})
 	if err != nil {
 		panic("httpapi: engagement: " + err.Error())
@@ -640,7 +644,9 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			emulationPlans: emulationPlans,
 			custom:         customSvc,
 
-			attackpin:       pin,
+			attackpin: pin,
+
+			users:           users,
 			engagements:     engSvc,
 			hub:             hub,
 			eventsHeartbeat: deps.Config.Events.Heartbeat,
