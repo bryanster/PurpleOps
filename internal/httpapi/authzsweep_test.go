@@ -57,8 +57,8 @@ import (
 const (
 	sweepEngagement = "0192f1a0-0000-7000-8000-00000000e001"
 	sweepExecution  = "0192f1a0-0000-7000-8000-00000000e002"
-	sweepScenario  = "0192f1a0-0000-7000-8000-00000000e003"
-
+	sweepScenario   = "0192f1a0-0000-7000-8000-00000000e003"
+	sweepStep       = "0192f1a0-0000-7000-8000-00000000e004"
 )
 
 // sweepSpec declares the five endpoints that do not exist yet, mapped the way M2
@@ -532,6 +532,7 @@ func (s *sweepServer) target(route string) string {
 	return BasePath + strings.NewReplacer(
 		"{engagementId}", sweepEngagement,
 		"{scenarioId}", sweepScenario,
+		"{stepId}", sweepStep,
 		"{userId}", s.targetUser.ID,
 		"{sourceId}", storecontent.SourceIDCustom,
 	).Replace(route)

@@ -30,13 +30,12 @@ func newTestService(t *testing.T) *testDeps {
 	users := identity.NewUsers(db)
 	scenarios := storengagement.NewScenarios(db)
 
-
 	svc, err := engagement.New(engagement.Deps{
 		Engagements: engagements,
 		AttackPin:   nil,
 		Memberships: memberships,
-		Scenarios:  scenarios,
-		Users:      users,
+		Scenarios:   scenarios,
+		Users:       users,
 	})
 	if err != nil {
 		t.Fatalf("engagement.New: %v", err)

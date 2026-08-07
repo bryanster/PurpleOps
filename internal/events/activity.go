@@ -121,6 +121,14 @@ const (
 	VerbScenarioUpdated   Verb = "scenario.updated"
 	VerbScenarioDeleted   Verb = "scenario.deleted"
 	VerbScenarioReordered Verb = "scenario.reordered"
+
+	// Workbook step lifecycle (M3-005). Object is the step row;
+	// engagement_id names which engagement and scenario the step belongs to.
+	VerbStepCreated   Verb = "step.created"
+	VerbStepUpdated   Verb = "step.updated"
+	VerbStepDeleted   Verb = "step.deleted"
+	VerbStepReordered Verb = "step.reordered"
+	VerbStepRevealed  Verb = "step.revealed"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -144,6 +152,8 @@ const (
 	ObjectMember = "member"
 
 	ObjectScenario = "scenario"
+
+	ObjectStep = "step"
 )
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not

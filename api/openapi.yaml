@@ -2576,6 +2576,317 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/scenarios/{scenarioId}/steps:
+    get:
+      operationId: listSteps
+      summary: List every step in a scenario.
+      description: |
+        Members and platform administrators. Ordered by ordinal ascending.
+        In a blind engagement, blue members only see revealed steps.
+      tags:
+        - scenarios
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      responses:
+        "200":
+          description: The list of steps.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createStep
+      summary: Create a new step in a scenario.
+      description: |
+        Lead, red and platform administrators. The ordinal is assigned as
+        the next dense position (1-based). A sibling execution row is created
+        in the same transaction with status pending. Closed/archived engagements
+        return 409.
+
+        Manual creation accepts raw fields; `techniqueExternalId` triggers a
+        resolve against the engagement's pinned ATT&CK version.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStep"
+      responses:
+        "201":
+          description: The created step.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}:
+    get:
+      operationId: getStep
+      summary: Return one step.
+      description: |
+        Members and platform administrators. In a blind engagement, blue members
+        receive 404 conceal (not 403) for unrevealed steps.
+      tags:
+        - scenarios
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+        - $ref: "#/components/parameters/StepId"
+      responses:
+        "200":
+          description: The step.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: patchStep
+      summary: Patch step fields.
+      description: |
+        Lead, red and platform administrators. Every field is optional;
+        only the ones present are changed. Closed/archived engagements
+        return 409.
+
+        Soft freeze: once the step's execution has left `pending`, identity
+        fields (technique_id, subtechnique_id, tactic_id, procedure,
+        template_id, attack_version) are immutable. A PATCH that attempts
+        to change any of them returns 409 naming the frozen fields.
+
+        Always-editable: name, objective, target_asset, tools,
+        controls_in_scope, ordinal (via reorder).
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+        - $ref: "#/components/parameters/StepId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchStep"
+      responses:
+        "200":
+          description: The patched step.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteStep
+      summary: Delete a step and cascade its children.
+      description: |
+        Lead, red and platform administrators. Cascades: execution,
+        comment revisions, comments, evidence links, finding_step links.
+        Closed/archived engagements return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+        - $ref: "#/components/parameters/StepId"
+      responses:
+        "204":
+          description: The step and its children are deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
+  /engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}/reveal:
+    post:
+      operationId: revealStep
+      summary: Reveal a step to the blue team.
+      description: |
+        Lead, red and platform administrators. Sets `revealed_at` to the
+        current time. Idempotent: calling on an already-revealed step
+        succeeds with no change. Activity: step.revealed.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+        - $ref: "#/components/parameters/StepId"
+      responses:
+        "200":
+          description: The revealed step.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /engagements/{engagementId}/scenarios/{scenarioId}/steps/order:
+    put:
+      operationId: reorderSteps
+      summary: Reorder steps in a scenario.
+      description: |
+        Lead, red and platform administrators. The body lists every step
+        id in the desired order. Ordinals are reassigned 1..N to match.
+        Closed/archived engagements return 409.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderSteps"
+      responses:
+        "200":
+          description: The reordered step list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/steps:
+    get:
+      operationId: listEngagementSteps
+      summary: List every step across every scenario in an engagement.
+      description: |
+        Members and platform administrators. Ordered by scenario ordinal,
+        then step ordinal. In a blind engagement, blue members only see
+        revealed steps.
+      tags:
+        - scenarios
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The flat list of steps across all scenarios.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /content/sources:
     get:
       operationId: listContentSources
@@ -4549,6 +4860,15 @@ components:
       in: path
       required: true
       description: The scenario being read or changed.
+      schema:
+        type: string
+        format: uuid
+
+    StepId:
+      name: stepId
+      in: path
+      required: true
+      description: The step being read or changed.
       schema:
         type: string
         format: uuid
@@ -8016,4 +8336,184 @@ components:
             type: string
             format: uuid
           description: Ordered list of scenario ids. Every scenario in the engagement
+            must appear exactly once. Ordinals are reassigned 1..N to match this order.
+
+    Step:
+      type: object
+      required:
+        - id
+        - scenarioId
+        - ordinal
+        - name
+        - objective
+        - templateId
+        - targetAsset
+        - attackVersion
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7.
+        scenarioId:
+          type: string
+          format: uuid
+        ordinal:
+          type: integer
+          description: 1-based dense position; UI order.
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        objective:
+          type: string
+          maxLength: 4096
+        techniqueId:
+          type: string
+          maxLength: 32
+          description: ATT&CK technique external id (e.g. "T1059").
+        subtechniqueId:
+          type: string
+          maxLength: 32
+          description: ATT&CK subtechnique external id (e.g. "T1059.001").
+        tacticId:
+          type: string
+          maxLength: 32
+          description: ATT&CK tactic external id (e.g. "TA0002").
+        procedure:
+          type: object
+          description: Structured procedure payload (platform, executor, command, etc).
+        templateId:
+          type: string
+          maxLength: 255
+          description: Weak lineage to content procedure template.
+        targetAsset:
+          type: string
+          maxLength: 255
+        tools:
+          type: array
+          items:
+            type: string
+          description: Tools used in this step.
+        controlsInScope:
+          type: array
+          items:
+            type: string
+          description: Controls in scope for this step.
+        attackVersion:
+          type: string
+          description: Snapshot of the engagement's ATT&CK version at create time.
+        revealedAt:
+          type: string
+          format: date-time
+          description: When this step was revealed to blue (null if unrevealed).
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    StepList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Step"
+
+    CreateStep:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        objective:
+          type: string
+          maxLength: 4096
+          default: ""
+        techniqueId:
+          type: string
+          maxLength: 32
+          default: ""
+        subtechniqueId:
+          type: string
+          maxLength: 32
+          default: ""
+        tacticId:
+          type: string
+          maxLength: 32
+          default: ""
+        techniqueExternalId:
+          type: string
+          maxLength: 32
+          description: When set, resolve the technique against the engagement's
+            pinned ATT&CK version and snapshot display fields. Mutually exclusive
+            with technique_id/subtechnique_id.
+        procedure:
+          type: object
+          description: Structured procedure JSON.
+        templateId:
+          type: string
+          maxLength: 255
+          default: ""
+        targetAsset:
+          type: string
+          maxLength: 255
+          default: ""
+        tools:
+          type: array
+          items:
+            type: string
+          default: []
+        controlsInScope:
+          type: array
+          items:
+            type: string
+          default: []
+
+    PatchStep:
+      type: object
+      description: Every field is optional; only the ones present are changed.
+        Soft freeze prevents changes to identity fields after the step's
+        execution leaves pending.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        objective:
+          type: string
+          maxLength: 4096
+        targetAsset:
+          type: string
+          maxLength: 255
+        tools:
+          type: array
+          items:
+            type: string
+        controlsInScope:
+          type: array
+          items:
+            type: string
+
+    ReorderSteps:
+      type: object
+      required:
+        - ids
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+          description: Ordered list of step ids. Every step in the scenario
             must appear exactly once. Ordinals are reassigned 1..N to match this order.

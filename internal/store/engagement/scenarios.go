@@ -2,10 +2,10 @@ package engagement
 
 import (
 	"context"
-	"errors"
-
 	"database/sql"
+	"errors"
 	"fmt"
+
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
@@ -213,20 +213,6 @@ func (r *Scenarios) Reorder(ctx context.Context, ids []string) error {
 		}
 		return nil
 	})
-}
-
-// Renumber dense-ordinals after a delete: shifts every ordinal above the
-// gap down by one. Must run in the same transaction as the delete.
-func (r *Scenarios) renumberAfterDelete(ctx context.Context, tx *sql.Tx, engagementID string, removedOrdinal int) error {
-	ts := now()
-	_, err := tx.ExecContext(ctx,
-		`UPDATE app.scenario SET ordinal = ordinal - 1, updated_at = ? WHERE engagement_id = ? AND ordinal > ?`,
-		ts, engagementID, removedOrdinal,
-	)
-	if err != nil {
-		return fmt.Errorf("scenario: renumber after delete: %w", err)
-	}
-	return nil
 }
 
 func scanScenario(row interface{ Scan(...any) error }) (Scenario, error) {

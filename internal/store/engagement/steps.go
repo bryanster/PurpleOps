@@ -277,3 +277,157 @@ func scanStep(row interface{ Scan(...any) error }) (Step, error) {
 	s.UpdatedAt = s.UpdatedAt.UTC()
 	return s, nil
 }
+
+const updateStep = `UPDATE app.step SET
+	name = ?, objective = ?, target_asset = ?, tools = ?, controls_in_scope = ?, updated_at = ?
+	WHERE id = ?`
+
+// StepUpdateChanges describes the fields to patch on a step.
+type StepUpdateChanges struct {
+	Name            string
+	Objective       string
+	TargetAsset     string
+	Tools           json.RawMessage
+	ControlsInScope json.RawMessage
+}
+
+// Update patches a step's always-editable fields and returns it as stored.
+// Identity fields (technique, procedure, template, attack_version) are NOT
+// patchable here; callers enforce soft-freeze before reaching this method.
+func (r *Steps) Update(ctx context.Context, id string, changes StepUpdateChanges, after ...After) (Step, error) {
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		ts := now()
+		_, err := tx.ExecContext(ctx, updateStep,
+			changes.Name,
+			changes.Objective,
+			changes.TargetAsset,
+			bindJSON(changes.Tools),
+			bindJSON(changes.ControlsInScope),
+			ts,
+			id,
+		)
+		if err != nil {
+			return fmt.Errorf("step: update %q: %w", id, err)
+		}
+		ctx = WithAfterEntity(ctx, id)
+		return runAfter(ctx, tx, after)
+	})
+	if err != nil {
+		return Step{}, err
+	}
+	return r.ByID(ctx, id)
+}
+
+const deleteStepGraph = `
+	DELETE FROM app.comment_revision WHERE comment_id IN (SELECT id FROM app."comment" WHERE execution_id IN (SELECT id FROM app.execution WHERE step_id = ?));
+	DELETE FROM app.evidence WHERE execution_id IN (SELECT id FROM app.execution WHERE step_id = ?) OR comment_id IN (SELECT id FROM app."comment" WHERE execution_id IN (SELECT id FROM app.execution WHERE step_id = ?));
+	DELETE FROM app."comment" WHERE execution_id IN (SELECT id FROM app.execution WHERE step_id = ?);
+	DELETE FROM app.finding_step WHERE step_id = ?;
+	DELETE FROM app.execution WHERE step_id = ?;
+	DELETE FROM app.step WHERE id = ?;
+	DELETE FROM app.activity WHERE object_id = ?;
+`
+
+// Delete removes a step and its whole graph, then renumbers remaining
+// ordinals in the scenario to keep them dense. The order respects FK
+// RESTRICT constraints so child rows are dropped before their parents.
+func (r *Steps) Delete(ctx context.Context, id string, scenarioID string, ordinal int) error {
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, deleteStepGraph,
+			// comment_revision
+			id,
+			// evidence (execution parent)
+			id,
+			// evidence (comment parent)
+			id,
+			// comment
+			id,
+			// finding_step
+			id,
+			// execution
+			id,
+			// step
+			id,
+			// activity
+			id,
+		)
+		if err != nil {
+			return fmt.Errorf("step: delete %q: %w", id, err)
+		}
+		// Renumber ordinals after the gap to keep them dense and unique.
+		ts := now()
+		_, err = tx.ExecContext(ctx,
+			`UPDATE app.step SET ordinal = ordinal - 1, updated_at = ? WHERE scenario_id = ? AND ordinal > ?`,
+			ts, scenarioID, ordinal,
+		)
+		if err != nil {
+			return fmt.Errorf("step: renumber after delete: %w", err)
+		}
+		return nil
+	})
+}
+
+const updateStepOrdinals = `UPDATE app.step SET ordinal = ?, updated_at = ? WHERE id = ?`
+
+// Reorder assigns ordinals 1..N to match the order of ids, in one
+// transaction. Every id must belong to the scenario; callers must
+// validate before calling.
+func (r *Steps) Reorder(ctx context.Context, ids []string) error {
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		ts := now()
+		for i, id := range ids {
+			ordinal := i + 1
+			_, err := tx.ExecContext(ctx, updateStepOrdinals, ordinal, ts, id)
+			if err != nil {
+				return fmt.Errorf("step: reorder %q -> %d: %w", id, ordinal, err)
+			}
+		}
+		return nil
+	})
+}
+
+const revealStep = `UPDATE app.step SET revealed_at = ?, updated_at = ? WHERE id = ? AND revealed_at IS NULL`
+
+// Reveal sets revealed_at to now if it is still NULL. Returns the step as
+// stored. Idempotent: an already-revealed step is a no-op and returns the
+// current row.
+func (r *Steps) Reveal(ctx context.Context, id string) (Step, error) {
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		ts := now()
+		_, err := tx.ExecContext(ctx, revealStep, ts, ts, id)
+		if err != nil {
+			return fmt.Errorf("step: reveal %q: %w", id, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return Step{}, err
+	}
+	return r.ByID(ctx, id)
+}
+
+const listStepsByEngagement = selectStep + `
+	JOIN app.scenario ON app.step.scenario_id = app.scenario.id
+	WHERE app.scenario.engagement_id = ?
+	ORDER BY app.scenario.ordinal ASC, app.step.ordinal ASC`
+
+// ListByEngagement returns every step across all scenarios in an engagement,
+// ordered by scenario ordinal then step ordinal. Callers apply blind filtering
+// via [Scope.Where] by concatenating it into the WHERE clause; this method
+// returns all steps unfiltered so the caller can control what to hide.
+func (r *Steps) ListByEngagement(ctx context.Context, engagementID string) ([]Step, error) {
+	rows, err := r.db.Read().QueryContext(ctx, listStepsByEngagement, engagementID)
+	if err != nil {
+		return nil, fmt.Errorf("step: list by engagement: %w", err)
+	}
+	defer rows.Close()
+	var out []Step
+	for rows.Next() {
+		s, err := scanStep(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}

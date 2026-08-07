@@ -152,6 +152,15 @@ func TestM1011NoProtectedRouteIsReachableWithoutACredential(t *testing.T) {
 		// attacker's would not be — the account counter is exercised by its own
 		// test, and one shared prefix here would lock the walk out halfway
 		// through and report that as a passing route.
+		// Substitute path parameters with valid UUIDs so the request validator
+		// passes them through to the auth layer.
+		url := strings.NewReplacer(
+			"{engagementId}", "0192f1a0-0000-7000-8000-00000000e001",
+			"{scenarioId}", "0192f1a0-0000-7000-8000-00000000e003",
+			"{stepId}", "0192f1a0-0000-7000-8000-00000000e004",
+			"{userId}", "0192f1a0-0000-7000-8000-000000000001",
+		).Replace(route)
+
 		invented := fmt.Sprintf("Bearer bl_%010d_%s", checked, strings.Repeat("B", 52))
 
 		for name, authorization := range map[string]string{
@@ -160,7 +169,7 @@ func TestM1011NoProtectedRouteIsReachableWithoutACredential(t *testing.T) {
 			"a token-shaped string": "Bearer not-a-token-at-all",
 			"an empty bearer":       "Bearer ",
 		} {
-			request := httptest.NewRequest(method, route, strings.NewReader(body))
+			request := httptest.NewRequest(method, url, strings.NewReader(body))
 			request.Header.Set("Content-Type", mediaType)
 			if authorization != "" {
 				request.Header.Set("Authorization", authorization)

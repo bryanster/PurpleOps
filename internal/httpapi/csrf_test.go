@@ -538,6 +538,19 @@ var csrfCoverage = map[string]struct {
 	"PUT " + BasePath + "/engagements/{engagementId}/scenarios/order": {
 		body: `{"ids":["00000000-0000-0000-0000-000000000001"]}`,
 	},
+
+	// Step CRUD (M3-005).
+	"POST " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps": {
+		body: `{"name":"Walked"}`,
+	},
+	"PATCH " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}": {
+		body: `{"name":"Walked"}`,
+	},
+	"DELETE " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}": {},
+	"PUT " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps/order": {
+		body: `{"ids":["00000000-0000-0000-0000-000000000001"]}`,
+	},
+	"POST " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}/reveal": {},
 }
 
 // The two media types the walks send.

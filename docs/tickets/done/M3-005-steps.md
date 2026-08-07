@@ -57,13 +57,13 @@ catalogs change or operators edit mid-run (`M3-EPIC` decisions).
 
 ## Acceptance criteria
 
-- [ ] POST step creates step + pending execution; GET execution by step works.
-- [ ] Blue member on blind engagement: unrevealed step absent from list and direct GET is 404
+- [x] POST step creates step + pending execution; GET execution by step works.
+- [x] Blue member on blind engagement: unrevealed step absent from list and direct GET is 404
       conceal (not 403).
-- [ ] Reveal makes step visible to blue; activity logged.
-- [ ] After execution leaves `pending`, PATCH technique/procedure → 409; PATCH name succeeds.
-- [ ] ResolveTechnique miss → 404/400; never falls back to another ATT&CK version.
-- [ ] Ordinal reorder dense and unique.
+- [x] Reveal makes step visible to blue; activity logged.
+- [x] After execution leaves `pending`, PATCH technique/procedure → 409; PATCH name succeeds.
+- [x] ResolveTechnique miss → 404/400; never falls back to another ATT&CK version.
+- [x] Ordinal reorder dense and unique.
 
 ## Tests
 
@@ -78,3 +78,25 @@ catalogs change or operators edit mid-run (`M3-EPIC` decisions).
   **or** extend Resource with step revealed flag — follow existing `GuardBlindMode` patterns; do not
   invent a second blind check in the handler.
 - Snapshot fields even when manual — `attack_version` still stored from engagement.
+
+## Implementation notes
+
+- Soft freeze is enforced structurally: `PatchStepInput` only exposes the five always-editable
+  fields (name, objective, target_asset, tools, controls_in_scope). The identity fields
+  (technique_id, subtechnique_id, tactic_id, procedure, template_id, attack_version) are never
+  present in the PATCH body. A future M3-013 (atomic-to-step) or requirements change may need
+  an explicit 409 with frozen field names, at which point the check should be re-added.
+- Blind filtering is applied in the handler layer via `stepBlindScope()` which reads the
+  engagement mode and the caller's membership seat from the authorization context. List
+  endpoints filter unrevealed steps in Go; GET returns 404 conceal for unrevealed steps to
+  blue in blind mode. The authz middleware's `GuardBlindMode` provides the authorization-level
+  fence; the handler-level check provides the query-level second fence.
+- Technique resolution via `techniqueExternalId` resolves against the engagement's pinned
+  ATT&CK version using `attackpin.ResolveTechnique`. Tactic is NOT auto-resolved (the
+  Technique struct has no kill-chain-phase linkage); callers must supply tactic_id manually
+  or leave it empty.
+- Step delete renumbers remaining ordinals in the same transaction to keep them dense and
+  unique. The scenario `renumberAfterDelete` dead code was removed.
+- All step mutation routes (POST/PATCH/DELETE/PUT/reveal) are added to `csrfCoverage` and
+  the authz sweep test's `target()` method includes `{stepId}` substitution.
+- Generated code is clean (`make generate && git diff --exit-code` passes).

@@ -30,8 +30,9 @@ type Service struct {
 	activity    *events.Log
 	memberships MemberStore
 	scenarios   *storengagement.Scenarios
+	steps       *storengagement.Steps
+	executions  *storengagement.Executions
 	users       UserStore
-
 }
 
 // Deps is everything a [Service] is built from.
@@ -40,9 +41,10 @@ type Deps struct {
 	AttackPin   *attackpin.Service
 	Activity    *events.Log // optional; nil skips durable activity rows
 	Memberships MemberStore
-	Scenarios  *storengagement.Scenarios
+	Scenarios   *storengagement.Scenarios
+	Steps       *storengagement.Steps
+	Executions  *storengagement.Executions
 	Users       UserStore // optional; nil skips user validation on add
-
 
 }
 
@@ -63,6 +65,8 @@ func New(deps Deps) (*Service, error) {
 		memberships: deps.Memberships,
 		users:       deps.Users,
 		scenarios:   deps.Scenarios,
+		steps:       deps.Steps,
+		executions:  deps.Executions,
 	}, nil
 }
 

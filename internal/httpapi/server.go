@@ -533,6 +533,8 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		panic("httpapi: content registry: " + err.Error())
 	}
 	scenarios := storengagement.NewScenarios(deps.Store)
+	steps := storengagement.NewSteps(deps.Store)
+	executions := storengagement.NewExecutions(deps.Store)
 	engagements := storengagement.NewEngagements(deps.Store)
 	refs := storengagement.NewReferences(engagements)
 	pin, err := attackpin.New(attackpin.Deps{
@@ -553,7 +555,9 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		AttackPin:   pin,
 		Activity:    activityLog,
 		Memberships: memberships,
-		Scenarios:  scenarios,
+		Scenarios:   scenarios,
+		Steps:       steps,
+		Executions:  executions,
 		Users:       users,
 	})
 	if err != nil {

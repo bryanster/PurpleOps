@@ -446,8 +446,13 @@ func TestAConfinedSessionCanOnlyReachTheEnrolmentRoutes(t *testing.T) {
 		// runs before the gate, so a malformed body would be a 400 and would
 		// say nothing about whether the route is gated. The bodies come from
 		// csrfCoverage, which already holds one per mutating route — a second
-		// table would drift from it.
-		recorder := server.request(method, route,
+		// Substitute path parameters with valid UUIDs for request validation.
+		url := strings.NewReplacer(
+			"{engagementId}", "0192f1a0-0000-7000-8000-00000000e001",
+			"{scenarioId}", "0192f1a0-0000-7000-8000-00000000e003",
+			"{stepId}", "0192f1a0-0000-7000-8000-00000000e004",
+		).Replace(route)
+		recorder := server.request(method, url,
 			csrfCoverage[key].body, mediaTypeOf(csrfCoverage[key].mediaType), confined)
 		_, allowed := enrolmentOnlyRoutes[key]
 

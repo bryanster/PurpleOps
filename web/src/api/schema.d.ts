@@ -1400,6 +1400,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/scenarios/{scenarioId}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List every step in a scenario.
+         * @description Members and platform administrators. Ordered by ordinal ascending.
+         *     In a blind engagement, blue members only see revealed steps.
+         */
+        get: operations["listSteps"];
+        put?: never;
+        /**
+         * Create a new step in a scenario.
+         * @description Lead, red and platform administrators. The ordinal is assigned as
+         *     the next dense position (1-based). A sibling execution row is created
+         *     in the same transaction with status pending. Closed/archived engagements
+         *     return 409.
+         *
+         *     Manual creation accepts raw fields; `techniqueExternalId` triggers a
+         *     resolve against the engagement's pinned ATT&CK version.
+         */
+        post: operations["createStep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one step.
+         * @description Members and platform administrators. In a blind engagement, blue members
+         *     receive 404 conceal (not 403) for unrevealed steps.
+         */
+        get: operations["getStep"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a step and cascade its children.
+         * @description Lead, red and platform administrators. Cascades: execution,
+         *     comment revisions, comments, evidence links, finding_step links.
+         *     Closed/archived engagements return 409.
+         */
+        delete: operations["deleteStep"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch step fields.
+         * @description Lead, red and platform administrators. Every field is optional;
+         *     only the ones present are changed. Closed/archived engagements
+         *     return 409.
+         *
+         *     Soft freeze: once the step's execution has left `pending`, identity
+         *     fields (technique_id, subtechnique_id, tactic_id, procedure,
+         *     template_id, attack_version) are immutable. A PATCH that attempts
+         *     to change any of them returns 409 naming the frozen fields.
+         *
+         *     Always-editable: name, objective, target_asset, tools,
+         *     controls_in_scope, ordinal (via reorder).
+         */
+        patch: operations["patchStep"];
+        trace?: never;
+    };
+    "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal a step to the blue team.
+         * @description Lead, red and platform administrators. Sets `revealed_at` to the
+         *     current time. Idempotent: calling on an already-revealed step
+         *     succeeds with no change. Activity: step.revealed.
+         */
+        post: operations["revealStep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/scenarios/{scenarioId}/steps/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder steps in a scenario.
+         * @description Lead, red and platform administrators. The body lists every step
+         *     id in the desired order. Ordinals are reassigned 1..N to match.
+         *     Closed/archived engagements return 409.
+         */
+        put: operations["reorderSteps"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List every step across every scenario in an engagement.
+         * @description Members and platform administrators. Ordered by scenario ordinal,
+         *     then step ordinal. In a blind engagement, blue members only see
+         *     revealed steps.
+         */
+        get: operations["listEngagementSteps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/sources": {
         parameters: {
             query?: never;
@@ -4138,6 +4276,83 @@ export interface components {
             /** @description Ordered list of scenario ids. Every scenario in the engagement must appear exactly once. Ordinals are reassigned 1..N to match this order. */
             ids: string[];
         };
+        Step: {
+            /**
+             * Format: uuid
+             * @description UUIDv7.
+             */
+            id: string;
+            /** Format: uuid */
+            scenarioId: string;
+            /** @description 1-based dense position; UI order. */
+            ordinal: number;
+            name: string;
+            objective: string;
+            /** @description ATT&CK technique external id (e.g. "T1059"). */
+            techniqueId?: string;
+            /** @description ATT&CK subtechnique external id (e.g. "T1059.001"). */
+            subtechniqueId?: string;
+            /** @description ATT&CK tactic external id (e.g. "TA0002"). */
+            tacticId?: string;
+            /** @description Structured procedure payload (platform, executor, command, etc). */
+            procedure?: Record<string, never>;
+            /** @description Weak lineage to content procedure template. */
+            templateId: string;
+            targetAsset: string;
+            /** @description Tools used in this step. */
+            tools?: string[];
+            /** @description Controls in scope for this step. */
+            controlsInScope?: string[];
+            /** @description Snapshot of the engagement's ATT&CK version at create time. */
+            attackVersion: string;
+            /**
+             * Format: date-time
+             * @description When this step was revealed to blue (null if unrevealed).
+             */
+            revealedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        StepList: {
+            items: components["schemas"]["Step"][];
+        };
+        CreateStep: {
+            name: string;
+            /** @default  */
+            objective: string;
+            /** @default  */
+            techniqueId: string;
+            /** @default  */
+            subtechniqueId: string;
+            /** @default  */
+            tacticId: string;
+            /** @description When set, resolve the technique against the engagement's pinned ATT&CK version and snapshot display fields. Mutually exclusive with technique_id/subtechnique_id. */
+            techniqueExternalId?: string;
+            /** @description Structured procedure JSON. */
+            procedure?: Record<string, never>;
+            /** @default  */
+            templateId: string;
+            /** @default  */
+            targetAsset: string;
+            /** @default [] */
+            tools: string[];
+            /** @default [] */
+            controlsInScope: string[];
+        };
+        /** @description Every field is optional; only the ones present are changed. Soft freeze prevents changes to identity fields after the step's execution leaves pending. */
+        PatchStep: {
+            name?: string;
+            objective?: string;
+            targetAsset?: string;
+            tools?: string[];
+            controlsInScope?: string[];
+        };
+        ReorderSteps: {
+            /** @description Ordered list of step ids. Every step in the scenario must appear exactly once. Ordinals are reassigned 1..N to match this order. */
+            ids: string[];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -4299,6 +4514,8 @@ export interface components {
         UserId: string;
         /** @description The scenario being read or changed. */
         ScenarioId: string;
+        /** @description The step being read or changed. */
+        StepId: string;
         /** @description Restrict the listing to accounts in this state. */
         UserStatusFilter: components["schemas"]["UserStatus"];
         /** @description Restrict the listing to accounts holding this platform role. */
@@ -6459,6 +6676,267 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listSteps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list of steps. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStep"];
+            };
+        };
+        responses: {
+            /** @description The created step. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Step"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+                /** @description The step being read or changed. */
+                stepId: components["parameters"]["StepId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The step. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Step"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+                /** @description The step being read or changed. */
+                stepId: components["parameters"]["StepId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The step and its children are deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+                /** @description The step being read or changed. */
+                stepId: components["parameters"]["StepId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchStep"];
+            };
+        };
+        responses: {
+            /** @description The patched step. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Step"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revealStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+                /** @description The step being read or changed. */
+                stepId: components["parameters"]["StepId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The revealed step. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Step"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reorderSteps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderSteps"];
+            };
+        };
+        responses: {
+            /** @description The reordered step list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listEngagementSteps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The flat list of steps across all scenarios. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

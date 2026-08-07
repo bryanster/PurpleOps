@@ -36,7 +36,6 @@ const (
 	ResourceFinding    ResourceType = "finding"
 	ResourceReport     ResourceType = "report"
 	ResourceScenario   ResourceType = "scenario"
-
 )
 
 // resourceOwners says who owns each resource type. A type absent from this map
