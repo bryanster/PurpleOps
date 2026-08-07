@@ -19,6 +19,7 @@ import {
   useEngagement,
   type EngagementRole,
 } from './queries'
+import { useEngagementEvents } from './use-engagement-events'
 
 interface TabDef {
   label: string
@@ -36,6 +37,7 @@ export function EngagementLayout(): ReactNode {
   const { engagementId } = useParams<{ engagementId: string }>()
   const engagement = useEngagement(engagementId)
   const user = useSignedInUser()
+  useEngagementEvents(engagementId)
 
   if (engagement.isPending) {
     return <PageLoading label="Loading engagement…" />

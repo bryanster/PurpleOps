@@ -133,20 +133,22 @@ func TestSSEHeadersAndProgressEndToEnd(t *testing.T) {
 			if !ok {
 				t.Fatal("SSE stream closed before terminal event")
 			}
-			if fr.event == ":ping" || fr.event == "" {
+			if fr.event == ":ping" || (fr.event == "" && fr.data == "") {
 				continue
 			}
-			switch fr.event {
+			// Parse the hub envelope — no event: field since M4-003.
+			var envelope struct {
+				Type string          `json:"type"`
+				Data json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(fr.data), &envelope); err != nil {
+				t.Fatalf("envelope parse: %v\n%s", err, fr.data)
+			}
+			switch envelope.Type {
 			case events.TypeContentJobProgress:
 				sawProgress = true
 			case events.TypeContentJobTerminal:
 				sawTerminal = true
-				var envelope struct {
-					Data json.RawMessage `json:"data"`
-				}
-				if err := json.Unmarshal([]byte(fr.data), &envelope); err != nil {
-					t.Fatalf("terminal data: %v\n%s", err, fr.data)
-				}
 				var body contentJobEventData
 				if err := json.Unmarshal(envelope.Data, &body); err != nil {
 					t.Fatalf("terminal body: %v\n%s", err, envelope.Data)

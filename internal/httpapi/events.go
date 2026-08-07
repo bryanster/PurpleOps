@@ -155,16 +155,13 @@ func streamEvents(ctx context.Context, w *io.PipeWriter, ch <-chan events.Event,
 }
 
 func writeSSE(w io.Writer, ev events.Event) error {
-	// id / event / data per the SSE spec. data is one JSON object.
+	// id / data per the SSE spec. data is the full Event JSON (envelope).
+	// No event: field — the type is in the envelope payload; all events hit
+	// onmessage so the frontend parses the envelope generically (M4-003).
 	var b strings.Builder
 	if ev.ID != "" {
 		b.WriteString("id: ")
 		b.WriteString(ev.ID)
-		b.WriteByte('\n')
-	}
-	if ev.Type != "" {
-		b.WriteString("event: ")
-		b.WriteString(ev.Type)
 		b.WriteByte('\n')
 	}
 	payload, err := json.Marshal(ev)
