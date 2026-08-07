@@ -50,6 +50,7 @@ export type NewFinding = components['schemas']['NewFinding']
 export type Evidence = components['schemas']['Evidence']
 export type Comment = components['schemas']['Comment']
 export type CreateComment = components['schemas']['CreateComment']
+export type PatchComment = components['schemas']['PatchComment']
 export type ImportPlanRequest = components['schemas']['ImportPlanRequest']
 export type ImportPlanResponse = components['schemas']['ImportPlanResponse']
 export type CreateStepFromTemplate = components['schemas']['CreateStepFromTemplate']
@@ -765,6 +766,34 @@ export function useCreateComment(): UseMutationResult<
           variables.engagementId,
           variables.executionId,
         ),
+      })
+    },
+  })
+}
+
+export function usePatchComment(): UseMutationResult<
+  Comment,
+  Error,
+  { engagementId: string; commentId: string; body: PatchComment }
+> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ engagementId, commentId, body }) =>
+      unwrap(
+        await api.PATCH(
+          '/engagements/{engagementId}/comments/{commentId}',
+          {
+            params: { path: { engagementId, commentId } },
+            body,
+          },
+        ),
+      ),
+    onSuccess: (_data, variables) => {
+      // Invalidate all comment lists — the comment's executionId is
+      // not known to the mutation, so we invalidate executions which
+      // cascades to comments via the SSE-driven invalidations.
+      void qc.invalidateQueries({
+        queryKey: engagementKeys.executions(variables.engagementId),
       })
     },
   })

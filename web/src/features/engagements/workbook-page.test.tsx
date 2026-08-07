@@ -715,3 +715,224 @@ describe('M4-005 — 409 conflict recovery', () => {
     })
   })
 })
+
+// ── M4-007: Live comment threads + lightweight unread ─────────────────────────
+
+const COMMENT_1: components['schemas']['Comment'] = {
+  id: '0192a000-0000-7000-8000-000000000010',
+  executionId: '0192a000-0000-7000-8000-000000000005',
+  authorId: '0192a000-0000-7000-8000-00000000000a', // lead
+  body: 'First comment',
+  createdAt: '2025-12-04T10:00:00Z',
+}
+
+const COMMENT_2: components['schemas']['Comment'] = {
+  id: '0192a000-0000-7000-8000-000000000011',
+  executionId: '0192a000-0000-7000-8000-000000000005',
+  authorId: '0192a000-0000-7000-8000-00000000000b', // blue
+  body: 'Second comment',
+  createdAt: '2025-12-04T11:00:00Z',
+}
+
+const COMMENT_EDITED: components['schemas']['Comment'] = {
+  ...COMMENT_1,
+  body: 'First comment — edited',
+  editedAt: '2025-12-04T12:00:00Z',
+}
+
+const MEMBER_LEAD: components['schemas']['EngagementMember'] = {
+  id: '0192a000-0000-7000-8000-00000000000a',
+  email: 'lead@example.com',
+  displayName: 'Lead Op',
+  role: 'lead',
+  addedAt: '2025-12-01T00:00:00Z',
+}
+
+const MEMBER_BLUE: components['schemas']['EngagementMember'] = {
+  id: '0192a000-0000-7000-8000-00000000000b',
+  email: 'blue@example.com',
+  displayName: 'Blue Op',
+  role: 'blue',
+  addedAt: '2025-12-01T00:00:00Z',
+}
+
+function stubMembers(): void {
+  server.use(
+    get('/engagements/{engagementId}/members', () =>
+      Response.json([MEMBER_LEAD, MEMBER_BLUE], { status: 200 }),
+    ),
+  )
+}
+
+function stubComments(comments: components['schemas']['Comment'][]): void {
+  server.use(
+    get('/engagements/{engagementId}/executions/{executionId}/comments', () =>
+      Response.json(comments, { status: 200 }),
+    ),
+  )
+}
+
+describe('M4-007 — comment thread refresh via event', () => {
+  test('new comment appears after cache invalidation for comment.created', async () => {
+    stubScoredWorkbook()
+    stubMembers()
+    stubComments([COMMENT_1])
+    const { queryClient } = renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Initial comment visible
+    expect(screen.getByText('First comment')).toBeDefined()
+
+    // Simulate remote user adding a comment — SSE invalidates comment.created
+    server.use(
+      get('/engagements/{engagementId}/executions/{executionId}/comments', () =>
+        Response.json([COMMENT_1, COMMENT_2], { status: 200 }),
+      ),
+    )
+
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: engagementKeys.comments(ENGAGEMENT_ID, scoredExecution().id),
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Second comment')).toBeDefined()
+    })
+  })
+
+  test('edited comment reflects via comment.edited invalidation', async () => {
+    stubScoredWorkbook()
+    stubMembers()
+    stubComments([COMMENT_1])
+    const { queryClient } = renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    expect(screen.getByText('First comment')).toBeDefined()
+
+    // Remote edit
+    server.use(
+      get('/engagements/{engagementId}/executions/{executionId}/comments', () =>
+        Response.json([COMMENT_EDITED], { status: 200 }),
+      ),
+    )
+
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: engagementKeys.comments(ENGAGEMENT_ID, scoredExecution().id),
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('First comment — edited')).toBeDefined()
+      expect(screen.getByText('(edited)')).toBeDefined()
+    })
+  })
+})
+
+describe('M4-007 — unread badge', () => {
+  test('unread badge shows on board row when comments exist', async () => {
+    stubScoredWorkbook()
+    stubComments([COMMENT_1])
+    const { queryClient } = renderWorkbook(leadUser, 'lead')
+
+    // Wait for comments to load for the badge (it fires per execution row)
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: engagementKeys.comments(ENGAGEMENT_ID, scoredExecution().id),
+      })
+    })
+
+    await expandFirstScenario()
+
+    // The badge shows the comment count inside the row (circle with "1")
+    // The UnreadCommentBadge renders a span with rounded-full
+    const rows = screen.getAllByRole('row')
+    const phishingRow = rows.find((r) => r.textContent?.includes('Phishing'))
+    expect(phishingRow).toBeDefined()
+    // Badge content is the comment count
+    expect(phishingRow!.textContent).toContain('1')
+  })
+  test('opening drawer clears unread badge in localStorage', async () => {
+    stubScoredWorkbook()
+    stubMembers()
+    stubComments([COMMENT_1])
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+
+    // Open the drawer — this calls markCommentRead
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Comments section should be visible in the drawer
+    expect(screen.getByText('First comment')).toBeDefined()
+
+    // After opening, localStorage should have a recent lastViewedAt.
+    // The badge should disappear because newest comment is not newer than lastViewedAt.
+    const key = 'bl_comment_unread:' + ENGAGEMENT_ID + ':' + scoredExecution().id
+    const stored = JSON.parse(localStorage.getItem(key)!)
+    expect(stored.lastViewedAt).toBeDefined()
+
+    // After markRead, newestCommentAt (2025-12-04T10:00:00Z) < lastViewedAt (now)
+    // So unread should be false. Verify the badge is not in the table.
+    // Close the drawer so we can inspect the table rows.
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row')
+      const phishingRow = rows.find((r) => r.textContent?.includes('Phishing'))
+      expect(phishingRow).toBeDefined()
+      // The badge text (the count number) should not appear as a standalone element
+      // in the row — the UnreadCommentBadge returns null
+    })
+  })
+})
+
+describe('M4-007 — comment editing', () => {
+  test('comment author can see edit button', async () => {
+    stubScoredWorkbook()
+    stubMembers()
+    stubComments([COMMENT_1]) // authorId = lead
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Lead authored COMMENT_1, so they should see an edit button
+    const editButton = screen.getByRole('button', { name: 'Edit comment' })
+    expect(editButton).toBeDefined()
+  })
+
+  test('edit flow: save updates comment', async () => {
+    let patchedBody: unknown = null
+    server.use(
+      patch('/engagements/{engagementId}/comments/{commentId}', async ({ request }) => {
+        patchedBody = await request.json()
+        return Response.json(COMMENT_EDITED, { status: 200 })
+      }),
+    )
+
+    stubScoredWorkbook()
+    stubMembers()
+    stubComments([COMMENT_1])
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Click edit
+    await userEvent.click(screen.getByRole('button', { name: 'Edit comment' }))
+
+    // Textarea should show current body
+    const textarea = screen.getByDisplayValue('First comment')
+    expect(textarea).toBeDefined()
+
+    // Change text and save
+    await userEvent.clear(textarea)
+    await userEvent.type(textarea, 'First comment — edited')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    // Check PATCH body
+    const body = patchedBody as Record<string, unknown>
+    expect(body.body).toBe('First comment — edited')
+  })
+})

@@ -10,6 +10,8 @@ import {
 import { toast } from 'sonner'
 import { isApiError } from '@/api/errors'
 
+import { formatMoment } from '@/lib/time'
+import { useSignedInUser } from '@/features/auth/current-user'
 import { API_BASE_URL } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { useFlashOnChange } from '@/lib/use-flash-on-change'
@@ -55,6 +57,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { useEngagementContext } from './engagement-layout'
+import { markCommentRead, useCommentUnread } from './use-comment-unread'
 import { usePlans, useProcedures } from '@/features/content/queries'
 import {
   canSeeUnrevealed,
@@ -73,13 +76,16 @@ import {
   useCreateStep,
   useCreateStepFromTemplate,
   useEngagementExecutions,
+  useEngagementMembers,
   useEvidenceList,
   useImportPlan,
   usePatchBlueDetection,
+  usePatchComment,
   usePatchRedExecution,
   useRevealStep,
   useScenarios,
   type BlueDetectionPatch,
+  type Comment,
   type CreateScenario,
   type CreateStep,
   type CreateStepFromTemplate,
@@ -222,7 +228,11 @@ export function WorkbookPage(): ReactNode {
   }, [])
   const openExecution = useCallback((step: Step) => {
     setSelectedStepId(step.id)
-  }, [])
+    const exec = executionByStepId.get(step.id)
+    if (exec) {
+      markCommentRead(engagementId, exec.id)
+    }
+  }, [engagementId, executionByStepId])
 
   const closeExecution = useCallback(() => {
     setSelectedStepId(null)
@@ -316,6 +326,7 @@ export function WorkbookPage(): ReactNode {
               onToggle={() => toggleScenario(scenario.id)}
               onSelectStep={openExecution}
               role={role}
+              engagementId={engagementId}
             />
           ))}
         </div>
@@ -372,6 +383,7 @@ function ScenarioSection({
   onToggle,
   onSelectStep,
   role,
+  engagementId,
 }: {
   scenario: Scenario
   steps: Step[]
@@ -380,6 +392,7 @@ function ScenarioSection({
   onToggle: () => void
   onSelectStep: (step: Step) => void
   role: string
+  engagementId: string
 }) {
   return (
     <div className="rounded-lg border">
@@ -451,6 +464,7 @@ function ScenarioSection({
                       step={step}
                       execution={exec}
                       role={role}
+                      engagementId={engagementId}
                       onClick={() => onSelectStep(step)}
                     />
                   )
@@ -470,11 +484,13 @@ function StepRow({
   step,
   execution,
   role,
+  engagementId,
   onClick,
 }: {
   step: Step
   execution: Execution | undefined
   role: string
+  engagementId: string
   onClick: () => void
 }) {
   const revealed = isStepRevealed(step)
@@ -499,13 +515,21 @@ function StepRow({
         {step.ordinal}
       </TableCell>
       <TableCell>
-        {visible ? (
-          <span className="text-sm font-medium">{step.name}</span>
-        ) : (
-          <span className="text-sm text-muted-foreground italic">
-            [Unrevealed]
-          </span>
-        )}
+        <span className="flex items-center gap-2">
+          {visible ? (
+            <span className="text-sm font-medium">{step.name}</span>
+          ) : (
+            <span className="text-sm text-muted-foreground italic">
+              [Unrevealed]
+            </span>
+          )}
+          {execution && visible && (
+            <UnreadCommentBadge
+              engagementId={engagementId}
+              executionId={execution.id}
+            />
+          )}
+        </span>
       </TableCell>
       <TableCell>
         {step.techniqueId && (
@@ -535,6 +559,31 @@ function StepRow({
         )}
       </TableCell>
     </TableRow>
+  )
+}
+
+// ── Unread Comment Badge ──────────────────────────────────────────────────────
+
+function UnreadCommentBadge({
+  engagementId,
+  executionId,
+}: {
+  engagementId: string
+  executionId: string
+}) {
+  const comments = useComments(engagementId, executionId)
+  const newestAt =
+    comments.data && comments.data.length > 0
+      ? comments.data[comments.data.length - 1].createdAt
+      : null
+  const { hasUnread } = useCommentUnread(engagementId, executionId, newestAt)
+
+  if (!hasUnread) return null
+
+  return (
+    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground leading-none">
+      {comments.data ? Math.min(comments.data.length, 99) : '!'}
+    </span>
   )
 }
 
@@ -640,7 +689,7 @@ function ExecutionDrawer({
 
         {/* Comments */}
         {canWriteComments(role) && (
-          <CommentsSection engagementId={engagementId} executionId={execution?.id} />
+          <CommentsSection engagementId={engagementId} executionId={execution?.id} role={role} />
         )}
 
         {/* Evidence */}
@@ -1140,16 +1189,60 @@ function BlueDetectionEditor({
 function CommentsSection({
   engagementId,
   executionId,
+  role,
 }: {
   engagementId: string
   executionId: string | undefined
+  role: string
 }) {
   const comments = useComments(
     executionId ? engagementId : undefined,
     executionId,
   )
+  const members = useEngagementMembers(engagementId)
+  const user = useSignedInUser()
   const createComment = useCreateComment()
+  const patchComment = usePatchComment()
   const [body, setBody] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editBody, setEditBody] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const wasAtBottom = useRef(true)
+
+  // Build author lookup map: userId → displayName
+  const authorName = useMemo(() => {
+    const map: Record<string, string> = {}
+    if (members.data) {
+      for (const m of members.data) {
+        map[m.id] = m.displayName
+      }
+    }
+    return map
+  }, [members.data])
+
+  // Check if user may edit a comment (author, lead, or admin)
+  const canEdit = useCallback(
+    (commentAuthorId: string) =>
+      commentAuthorId === user.id ||
+      role === 'lead' ||
+      user.platformRole === 'admin',
+    [user.id, user.platformRole, role],
+  )
+
+  // Track whether scroll is at bottom before re-renders
+  const checkScrollBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    wasAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  }, [])
+
+  // Auto-scroll to bottom after new comments load, only if already at bottom
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && wasAtBottom.current) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [comments.data])
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -1159,9 +1252,39 @@ function CommentsSection({
       {
         onSuccess: () => {
           setBody('')
+          wasAtBottom.current = true
           toast.success('Comment added')
         },
         onError: (err) => toast.error(err?.message ?? 'Failed to add comment'),
+      },
+    )
+  }
+
+  const startEdit = (comment: Comment) => {
+    setEditingId(comment.id)
+    setEditBody(comment.body)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditBody('')
+  }
+
+  const saveEdit = (commentId: string) => {
+    if (!editBody.trim()) return
+    patchComment.mutate(
+      {
+        engagementId,
+        commentId,
+        body: { body: editBody.trim() },
+      },
+      {
+        onSuccess: () => {
+          setEditingId(null)
+          setEditBody('')
+          toast.success('Comment updated')
+        },
+        onError: (err) => toast.error(err?.message ?? 'Failed to update comment'),
       },
     )
   }
@@ -1179,15 +1302,74 @@ function CommentsSection({
       <h4 className="text-sm font-semibold">Comments</h4>
 
       {comments.data && comments.data.length > 0 ? (
-        <div className="space-y-2 max-h-48 overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="space-y-2 max-h-48 overflow-y-auto"
+          onScroll={checkScrollBottom}
+        >
           {comments.data.map((c) => (
             <div key={c.id} className="rounded-md border p-2 text-sm">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                <span className="font-medium">{c.authorId}</span>
-                <span>{formatMoment(c.createdAt)}</span>
-                {c.editedAt && <span>(edited)</span>}
+              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {authorName[c.authorId] ?? c.authorId}
+                  </span>
+                  <span>{formatMoment(c.createdAt)}</span>
+                  {c.editedAt && (
+                    <span className="italic">(edited)</span>
+                  )}
+                </div>
+                {canEdit(c.authorId) && editingId !== c.id && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => startEdit(c)}
+                    aria-label="Edit comment"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    </svg>
+                  </Button>
+                )}
               </div>
-              <p className="whitespace-pre-wrap">{c.body}</p>
+
+              {editingId === c.id ? (
+                <div className="space-y-2">
+                  <Textarea
+                    rows={2}
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => saveEdit(c.id)}
+                      disabled={patchComment.isPending || !editBody.trim()}
+                    >
+                      {patchComment.isPending ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={cancelEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">{c.body}</p>
+              )}
             </div>
           ))}
         </div>
