@@ -128,3 +128,17 @@
     @apply font-sans;
   }
 }
+
+/* M4-005: brief highlight when a workbook row reflects a remote update. */
+@keyframes flash-update {
+  from {
+    background-color: var(--color-accent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.animate-flash-update {
+  animation: flash-update 1.2s ease-out;
+}

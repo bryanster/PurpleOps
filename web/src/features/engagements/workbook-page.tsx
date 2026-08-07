@@ -2,6 +2,7 @@ import {
   type FormEvent,
   type ReactNode,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import { isApiError } from '@/api/errors'
 
 import { API_BASE_URL } from '@/api/client'
 import { cn } from '@/lib/utils'
+import { useFlashOnChange } from '@/lib/use-flash-on-change'
 import { useQueryClient } from '@tanstack/react-query'
 import { PageError, PageLoading } from '@/app/shell/page-state'
 import { Badge } from '@/components/ui/badge'
@@ -179,8 +181,7 @@ export function WorkbookPage(): ReactNode {
   const executions = useEngagementExecutions(engagementId)
 
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set())
-  const [selectedExecution, setSelectedExecution] = useState<Execution | null>(null)
-  const [selectedStep, setSelectedStep] = useState<Step | null>(null)
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const [addScenarioOpen, setAddScenarioOpen] = useState(false)
   const [addStepOpen, setAddStepOpen] = useState(false)
   const [addStepScenarioId, setAddStepScenarioId] = useState<string>('')
@@ -210,6 +211,7 @@ export function WorkbookPage(): ReactNode {
     return map
   }, [executions.data])
 
+
   const toggleScenario = useCallback((id: string) => {
     setExpandedScenarios((prev) => {
       const next = new Set(prev)
@@ -218,20 +220,26 @@ export function WorkbookPage(): ReactNode {
       return next
     })
   }, [])
-
-  const openExecution = useCallback(
-    (step: Step) => {
-      const exec = executionByStepId.get(step.id) ?? null
-      setSelectedStep(step)
-      setSelectedExecution(exec)
-    },
-    [executionByStepId],
-  )
+  const openExecution = useCallback((step: Step) => {
+    setSelectedStepId(step.id)
+  }, [])
 
   const closeExecution = useCallback(() => {
-    setSelectedStep(null)
-    setSelectedExecution(null)
+    setSelectedStepId(null)
   }, [])
+
+  // Derive current step and execution from live query data (M4-005).
+  // This ensures the open drawer reflects remote updates without reload.
+  const selectedStep = useMemo(() => {
+    if (!selectedStepId || !steps.data?.items) return null
+    return steps.data.items.find((s) => s.id === selectedStepId) ?? null
+  }, [selectedStepId, steps.data])
+
+  const selectedExecution = useMemo(() => {
+    if (!selectedStepId) return null
+    return executionByStepId.get(selectedStepId) ?? null
+  }, [selectedStepId, executionByStepId])
+
 
   // Loading / error states
   if (scenarios.isLoading || steps.isLoading || executions.isLoading) {
@@ -473,9 +481,18 @@ function StepRow({
   const canSee = canSeeUnrevealed(role)
   const visible = revealed || canSee
 
+  const flash = useFlashOnChange(
+    execution
+      ? `${String(execution.version)}:${step.updatedAt}`
+      : step.updatedAt,
+  )
+
   return (
     <TableRow
-      className="cursor-pointer hover:bg-muted/50"
+      className={cn(
+        'cursor-pointer hover:bg-muted/50',
+        flash && 'animate-flash-update',
+      )}
       onClick={onClick}
     >
       <TableCell className="text-xs text-muted-foreground font-mono">
@@ -514,7 +531,7 @@ function StepRow({
             {DETECTION_LABEL[execution.detectionCategory] ?? execution.detectionCategory}
           </Badge>
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">&mdash;</span>
         )}
       </TableCell>
     </TableRow>
@@ -689,6 +706,23 @@ function RedExecutionEditor({
   const [targetHost, setTargetHost] = useState(execution.targetHost ?? '')
   const [redNotes, setRedNotes] = useState(execution.redNotes ?? '')
 
+  // Reset local state when the execution version changes (remote update or
+  // 409 recovery refetch).  This ensures the editor always reflects the
+  // committed server state (M4-005).
+  const [version, setVersion] = useState(execution.version)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional controlled reset on version change
+  useEffect(() => {
+    if (execution.version !== version) {
+      setVersion(execution.version)
+      setStatus(execution.status)
+      setCommandRun(execution.commandRun)
+      setSourceHost(execution.sourceHost)
+      setTargetHost(execution.targetHost)
+      setRedNotes(execution.redNotes)
+    }
+  }, [execution.version]) // eslint-disable-line react-hooks/exhaustive-deps
+
+
   const disabled = closed || readOnly
 
   const handleSave = () => {
@@ -831,6 +865,24 @@ function BlueDetectionEditor({
   const [advancedOpen, setAdvancedOpen] = useState(
     (execution.detectionModifiers ?? []).length > 0,
   )
+
+  // Reset local state when the execution version changes (M4-005).
+  const [blueVersion, setBlueVersion] = useState(execution.version)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional controlled reset on version change
+  useEffect(() => {
+    if (execution.version !== blueVersion) {
+      setBlueVersion(execution.version)
+      setDetectionCategory(execution.detectionCategory ?? '')
+      setSelectedModifiers(execution.detectionModifiers)
+      setProtection(execution.protection ?? '')
+      setDetectedAt(execution.detectedAt ? toLocalDatetime(execution.detectedAt) : '')
+      setDetectingSource(execution.detectingSource)
+      setDetectingRuleRef(execution.detectingRuleRef)
+      setAlertSeverity(execution.alertSeverity)
+      setBlueNotes(execution.blueNotes)
+      setAdvancedOpen(execution.detectionModifiers.length > 0)
+    }
+  }, [execution.version]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const disabled = closed || readOnly
 

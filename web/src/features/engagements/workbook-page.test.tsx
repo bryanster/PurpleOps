@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { screen } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import type { components } from '@/api/schema'
@@ -14,6 +14,7 @@ import { renderWithProviders } from '@/test/render'
 
 import { EngagementCtx, type EngagementContextValue } from './engagement-layout'
 import { engagementWorkbookPath } from './paths'
+import { engagementKeys } from './queries'
 import { WorkbookPage } from './workbook-page'
 
 const ENGAGEMENT_ID = '0192a000-0000-7000-8000-000000000001'
@@ -462,5 +463,255 @@ describe('BlueDetectionEditor — scoring', () => {
     await userEvent.click(screen.getByText('Phishing'))
 
     expect(screen.getByText('Not Detected')).toBeDefined()
+  })
+})
+
+
+// ── M4-005: Live workbook updates + 409 conflict recovery ──────────────────────
+
+describe('M4-005 — live drawer updates', () => {
+  test('drawer reflects remote red status change after cache invalidation', async () => {
+    stubScoredWorkbook()
+    const { queryClient } = renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+
+    // Open the drawer — the drawer info bar shows a status badge
+    await userEvent.click(screen.getByText('Phishing'))
+    // "Complete" appears in the table row and the drawer — findAllByText returns all
+    const completeBadges = screen.getAllByText('Complete')
+    expect(completeBadges.length).toBeGreaterThanOrEqual(1)
+
+    // Simulate remote update: change MSW handler to return 'running' status
+    const updated = { ...scoredExecution(), version: 2, status: 'running' as const }
+    server.use(
+      get('/engagements/{engagementId}/executions', () =>
+        Response.json({ items: [updated] }, { status: 200 }),
+      ),
+    )
+
+    // Simulate SSE-triggered invalidation
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: engagementKeys.executions(ENGAGEMENT_ID),
+      })
+    })
+
+    // Drawer should now show the updated status (live derivation from query data)
+    await waitFor(() => {
+      const runningBadges = screen.getAllByText('Running')
+      expect(runningBadges.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  test('drawer reflects remote blue detection change after cache invalidation', async () => {
+    stubScoredWorkbook()
+    const { queryClient } = renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Initially shows "Not Detected" outcome
+    expect(screen.getByText('Not Detected')).toBeDefined()
+
+    // Remote blue team scores technique detection
+    const updated = {
+      ...scoredExecution(),
+      version: 3,
+      detectionCategory: 'technique' as const,
+      outcome: 'detected' as const,
+      mttdSeconds: 1800,
+    }
+    server.use(
+      get('/engagements/{engagementId}/executions', () =>
+        Response.json({ items: [updated] }, { status: 200 }),
+      ),
+    )
+
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: engagementKeys.executions(ENGAGEMENT_ID),
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Detected')).toBeDefined()
+    })
+  })
+
+  test('board row flashes when remote execution data changes', async () => {
+    stubScoredWorkbook()
+    const { queryClient } = renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+
+    // Remote update changes version
+    const updated = { ...scoredExecution(), version: 4 }
+    server.use(
+      get('/engagements/{engagementId}/executions', () =>
+        Response.json({ items: [updated] }, { status: 200 }),
+      ),
+    )
+
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: engagementKeys.executions(ENGAGEMENT_ID),
+      })
+    })
+
+    // Row should briefly have the flash class (1200ms window)
+    // Use a tight polling interval to catch the brief flash
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row')
+      const flashed = rows.find((r) => r.textContent?.includes('Phishing'))
+      expect(flashed.className).toContain('animate-flash-update')
+    }, { timeout: 3000, interval: 50 })
+  })
+})
+
+describe('M4-005 — 409 conflict recovery', () => {
+  test('409 resets red editor to server version after refetch', async () => {
+    stubScoredWorkbook()
+
+    // Patch returns 409; GET returns new server data with higher version.
+    // server.use AFTER stubScoredWorkbook so our GET overrides the stub.
+    const serverExec = { ...scoredExecution(), version: 5, status: 'running' as const, redNotes: 'Server note' }
+    server.use(
+      patch('/engagements/{engagementId}/executions/{executionId}/execution', () =>
+        new Response(
+          JSON.stringify({
+            code: 'conflict',
+            detail: 'Version mismatch',
+            status: 409,
+            title: 'Conflict',
+          }),
+          {
+            status: 409,
+            headers: { 'content-type': 'application/problem+json' },
+          },
+        ),
+      ),
+      get('/engagements/{engagementId}/executions', () =>
+        Response.json({ items: [serverExec] }, { status: 200 }),
+      ),
+    )
+
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // Click save to trigger 409
+    await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
+
+    // Toast appears
+    expect(
+      await screen.findByText(/modified by someone else/i),
+    ).toBeDefined()
+
+    // After invalidation → refetch → version change, the editor resets.
+    // The status badge in the drawer should now show 'Running'.
+    await waitFor(() => {
+      const runningBadges = screen.getAllByText('Running')
+      expect(runningBadges.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  test('409 resets blue editor to server version after refetch', async () => {
+    stubScoredWorkbook()
+
+    const serverExec = {
+      ...scoredExecution(),
+      version: 5,
+      detectionCategory: 'technique' as const,
+      outcome: 'detected' as const,
+      blueNotes: 'Server blue note',
+    }
+    server.use(
+      patch('/engagements/{engagementId}/executions/{executionId}/detection', () =>
+        new Response(
+          JSON.stringify({
+            code: 'conflict',
+            detail: 'Version mismatch',
+            status: 409,
+            title: 'Conflict',
+          }),
+          {
+            status: 409,
+            headers: { 'content-type': 'application/problem+json' },
+          },
+        ),
+      ),
+      get('/engagements/{engagementId}/executions', () =>
+        Response.json({ items: [serverExec] }, { status: 200 }),
+      ),
+    )
+
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save Blue' }))
+
+    expect(
+      await screen.findByText(/modified by someone else/i),
+    ).toBeDefined()
+
+    // After reset, outcome should show the server version's outcome
+    await waitFor(() => {
+      expect(screen.getByText('Detected')).toBeDefined()
+    })
+  })
+
+  test('409 toast appears and user can retry successfully', async () => {
+    stubScoredWorkbook()
+
+    let callCount = 0
+    const serverExec = { ...scoredExecution(), version: 5, status: 'running' as const }
+    server.use(
+      patch('/engagements/{engagementId}/executions/{executionId}/execution', () => {
+        callCount++
+        if (callCount === 1) {
+          return new Response(
+            JSON.stringify({
+              code: 'conflict',
+              detail: 'Version mismatch',
+              status: 409,
+              title: 'Conflict',
+            }),
+            {
+              status: 409,
+              headers: { 'content-type': 'application/problem+json' },
+            },
+          )
+        }
+        // Second call succeeds
+        return Response.json(
+          { ...serverExec, version: 6, status: 'complete' as const },
+          { status: 200 },
+        )
+      }),
+      get('/engagements/{engagementId}/executions', () =>
+        Response.json({ items: [serverExec] }, { status: 200 }),
+      ),
+    )
+
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    // First save — 409
+    await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
+    expect(
+      await screen.findByText(/modified by someone else/i),
+    ).toBeDefined()
+
+    // Wait for editor to reset to server state
+    await waitFor(() => {
+      const runningBadges = screen.getAllByText('Running')
+      expect(runningBadges.length).toBeGreaterThanOrEqual(1)
+    })
+
+    // Second save — succeeds
+    await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
+    await waitFor(() => {
+      expect(screen.getByText('Red execution saved')).toBeDefined()
+    })
   })
 })

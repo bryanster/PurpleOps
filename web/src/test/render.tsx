@@ -32,7 +32,10 @@ import { createTestQueryClient } from './query'
 export function renderWithProviders(
   ui: ReactNode,
   options: { user?: CurrentUser; route?: string } = {},
-): RenderResult & { onUnauthorized: ReturnType<typeof createTestQueryClient>['onUnauthorized'] } {
+): RenderResult & {
+  onUnauthorized: ReturnType<typeof createTestQueryClient>['onUnauthorized']
+  queryClient: ReturnType<typeof createTestQueryClient>['queryClient']
+} {
   const { queryClient, onUnauthorized } = createTestQueryClient()
   const result = render(
     <QueryClientProvider client={queryClient}>
@@ -51,5 +54,5 @@ export function renderWithProviders(
     </QueryClientProvider>,
   )
 
-  return { ...result, onUnauthorized }
+  return { ...result, onUnauthorized, queryClient }
 }
