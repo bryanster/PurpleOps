@@ -81,18 +81,6 @@ components:
       required: false
       schema: {type: string}
 paths:
-  /engagements/{engagementId}/executions/{executionId}/red:
-    parameters:
-      - {name: engagementId, in: path, required: true, schema: {type: string}}
-      - {name: executionId, in: path, required: true, schema: {type: string}}
-    put:
-      operationId: sweepWriteRedField
-      summary: Write the attack side of one execution.
-      x-authz-action: execution.write_red
-      x-authz-resource: {type: execution, param: executionId, engagement: engagementId}
-      parameters:
-        - $ref: "#/components/parameters/CSRF"
-      responses: {"200": {description: ok}}
   /engagements/{engagementId}/executions/{executionId}/blue:
     parameters:
       - {name: engagementId, in: path, required: true, schema: {type: string}}
@@ -165,9 +153,11 @@ var sweepOperations = []sweepOp{
 	{
 		// Blue's 403 here and red's 403 below are v1's two definitions of
 		// "blue", on the wire.
-		Name: "write a red field", Method: http.MethodPut,
-		Route: "/engagements/{engagementId}/executions/{executionId}/red",
-		Want:  statuses{200, 200, 200, 403, 403, 404},
+		Name: "write a red field", Method: http.MethodPatch,
+		Route: "/engagements/{engagementId}/executions/{executionId}/execution",
+		Real:  true,
+		Body:  `{"version":1,"status":"running"}`,
+		Want:  statuses{404, 404, 404, 403, 403, 404},
 	},
 	{
 		Name: "write a blue field", Method: http.MethodPut,
@@ -533,6 +523,7 @@ func (s *sweepServer) target(route string) string {
 		"{engagementId}", sweepEngagement,
 		"{scenarioId}", sweepScenario,
 		"{stepId}", sweepStep,
+		"{executionId}", sweepExecution,
 		"{userId}", s.targetUser.ID,
 		"{sourceId}", storecontent.SourceIDCustom,
 	).Replace(route)

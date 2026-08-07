@@ -248,6 +248,84 @@ func (e EngagementStatus) Valid() bool {
 	}
 }
 
+// Defines values for ExecutionDetectionCategory.
+const (
+	ExecutionDetectionCategoryGeneral   ExecutionDetectionCategory = "general"
+	ExecutionDetectionCategoryNone      ExecutionDetectionCategory = "none"
+	ExecutionDetectionCategoryTactic    ExecutionDetectionCategory = "tactic"
+	ExecutionDetectionCategoryTechnique ExecutionDetectionCategory = "technique"
+	ExecutionDetectionCategoryTelemetry ExecutionDetectionCategory = "telemetry"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionDetectionCategory enum.
+func (e ExecutionDetectionCategory) Valid() bool {
+	switch e {
+	case ExecutionDetectionCategoryGeneral:
+		return true
+	case ExecutionDetectionCategoryNone:
+		return true
+	case ExecutionDetectionCategoryTactic:
+		return true
+	case ExecutionDetectionCategoryTechnique:
+		return true
+	case ExecutionDetectionCategoryTelemetry:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExecutionProtection.
+const (
+	ExecutionProtectionBlocked    ExecutionProtection = "blocked"
+	ExecutionProtectionNa         ExecutionProtection = "n/a"
+	ExecutionProtectionNotBlocked ExecutionProtection = "not_blocked"
+	ExecutionProtectionPartial    ExecutionProtection = "partial"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionProtection enum.
+func (e ExecutionProtection) Valid() bool {
+	switch e {
+	case ExecutionProtectionBlocked:
+		return true
+	case ExecutionProtectionNa:
+		return true
+	case ExecutionProtectionNotBlocked:
+		return true
+	case ExecutionProtectionPartial:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExecutionStatus.
+const (
+	ExecutionStatusBlocked  ExecutionStatus = "blocked"
+	ExecutionStatusComplete ExecutionStatus = "complete"
+	ExecutionStatusPending  ExecutionStatus = "pending"
+	ExecutionStatusRunning  ExecutionStatus = "running"
+	ExecutionStatusSkipped  ExecutionStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionStatus enum.
+func (e ExecutionStatus) Valid() bool {
+	switch e {
+	case ExecutionStatusBlocked:
+		return true
+	case ExecutionStatusComplete:
+		return true
+	case ExecutionStatusPending:
+		return true
+	case ExecutionStatusRunning:
+		return true
+	case ExecutionStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthState.
 const (
 	HealthStateError HealthState = "error"
@@ -1677,6 +1755,74 @@ type EngagementRole string
 // `draft` → `active` → `closed` → `archived`, plus `draft` → `closed`.
 type EngagementStatus string
 
+// Execution defines model for Execution.
+type Execution struct {
+	// AlertSeverity Alert severity (e.g. "high", "medium", "low").
+	AlertSeverity string `json:"alertSeverity"`
+
+	// BlueNotes Free-form notes from the blue operator.
+	BlueNotes string `json:"blueNotes"`
+
+	// CommandRun The command or payload that was executed.
+	CommandRun string     `json:"commandRun"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	DetectedAt *time.Time `json:"detectedAt,omitempty"`
+
+	// DetectingRuleRef Reference to the detection rule that fired.
+	DetectingRuleRef string `json:"detectingRuleRef"`
+
+	// DetectingSource Source of detection (e.g. "Splunk", "Sentinel").
+	DetectingSource   string                                        `json:"detectingSource"`
+	DetectionCategory nullable.Nullable[ExecutionDetectionCategory] `json:"detectionCategory,omitempty"`
+
+	// DetectionModifiers Qualifiers on the detection category.
+	DetectionModifiers []string   `json:"detectionModifiers"`
+	EndedAt            *time.Time `json:"endedAt,omitempty"`
+
+	// ExecutedBy User id of the first red operator who moved this out of pending.
+	ExecutedBy string `json:"executedBy"`
+
+	// Id UUIDv7.
+	Id         openapi_types.UUID                     `json:"id"`
+	Protection nullable.Nullable[ExecutionProtection] `json:"protection,omitempty"`
+
+	// RedNotes Free-form notes from the red operator.
+	RedNotes string     `json:"redNotes"`
+	ScoredAt *time.Time `json:"scoredAt,omitempty"`
+
+	// ScoredBy User id of the scorer.
+	ScoredBy string `json:"scoredBy"`
+
+	// SourceHost The host that ran the attack.
+	SourceHost string     `json:"sourceHost"`
+	StartedAt  *time.Time `json:"startedAt,omitempty"`
+
+	// Status The red-side state of one execution.
+	Status ExecutionStatus    `json:"status"`
+	StepId openapi_types.UUID `json:"stepId"`
+
+	// TargetHost The host that received the attack.
+	TargetHost string    `json:"targetHost"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+
+	// Version Optimistic-lock version. Incremented on every red or blue PATCH.
+	Version int `json:"version"`
+}
+
+// ExecutionDetectionCategory defines model for Execution.DetectionCategory.
+type ExecutionDetectionCategory string
+
+// ExecutionProtection defines model for Execution.Protection.
+type ExecutionProtection string
+
+// ExecutionList defines model for ExecutionList.
+type ExecutionList struct {
+	Items []Execution `json:"items"`
+}
+
+// ExecutionStatus The red-side state of one execution.
+type ExecutionStatus string
+
 // FieldError One field-level validation failure.
 type FieldError struct {
 	// Field Path of the offending field within the request body.
@@ -1986,6 +2132,27 @@ type RecoveryCodes struct {
 	// "you last replaced these on …", and the moment every previous code
 	// stopped working.
 	GeneratedAt time.Time `json:"generatedAt"`
+}
+
+// RedExecutionPatch Red-side only PATCH body for an execution. `version` is the
+// optimistic-lock field and is required on every call. Detection
+// fields are not present — blue writes through a separate endpoint
+// (M3-007) with its own type.
+type RedExecutionPatch struct {
+	CommandRun *string    `json:"commandRun,omitempty"`
+	EndedAt    *time.Time `json:"endedAt,omitempty"`
+	RedNotes   *string    `json:"redNotes,omitempty"`
+	SourceHost *string    `json:"sourceHost,omitempty"`
+
+	// StartedAt When execution began. If omitted on a →running transition, the server sets it to UTC now.
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// Status The red-side state of one execution.
+	Status     *ExecutionStatus `json:"status,omitempty"`
+	TargetHost *string          `json:"targetHost,omitempty"`
+
+	// Version The version the caller read. Mismatch → 409.
+	Version int `json:"version"`
 }
 
 // RegenerateRecoveryCodesRequest Body of `POST /auth/mfa/recovery/regenerate`. The current password is
@@ -2584,6 +2751,9 @@ type Cursor = string
 
 // EngagementId defines model for EngagementId.
 type EngagementId = openapi_types.UUID
+
+// ExecutionId defines model for ExecutionId.
+type ExecutionId = openapi_types.UUID
 
 // Limit defines model for Limit.
 type Limit = int
@@ -3554,6 +3724,34 @@ type ListEngagementActivityParams struct {
 	ObjectId *ActivityObjectId `form:"objectId,omitempty" json:"objectId,omitempty"`
 }
 
+// ListEngagementExecutionsParams defines parameters for ListEngagementExecutions.
+type ListEngagementExecutionsParams struct {
+	// ScenarioId Restrict to executions under this scenario.
+	ScenarioId *openapi_types.UUID `form:"scenarioId,omitempty" json:"scenarioId,omitempty"`
+
+	// Status Restrict to executions in this red-side state.
+	Status *ExecutionStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// PatchRedExecutionParams defines parameters for PatchRedExecution.
+type PatchRedExecutionParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SubscribeEventsParams defines parameters for SubscribeEvents.
 type SubscribeEventsParams struct {
 	// Topics One or more topic names to subscribe to. Repeat the parameter
@@ -3827,6 +4025,9 @@ type CreateEngagementJSONRequestBody = CreateEngagement
 
 // PatchEngagementJSONRequestBody defines body for PatchEngagement for application/json ContentType.
 type PatchEngagementJSONRequestBody = PatchEngagement
+
+// PatchRedExecutionJSONRequestBody defines body for PatchRedExecution for application/json ContentType.
+type PatchRedExecutionJSONRequestBody = RedExecutionPatch
 
 // AddEngagementMemberJSONRequestBody defines body for AddEngagementMember for application/json ContentType.
 type AddEngagementMemberJSONRequestBody = AddMember
@@ -4106,6 +4307,15 @@ type ServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
+	// ListEngagementExecutions List executions in an engagement.
+	// (GET /engagements/{engagementId}/executions)
+	ListEngagementExecutions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementExecutionsParams)
+	// GetExecution Return one execution by id.
+	// (GET /engagements/{engagementId}/executions/{executionId})
+	GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId)
+	// PatchRedExecution Write the red (attack) side of one execution.
+	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
+	PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams)
 	// ListEngagementMembers List the members of an engagement.
 	// (GET /engagements/{engagementId}/members)
 	ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -4688,6 +4898,24 @@ func (_ Unimplemented) PatchEngagement(w http.ResponseWriter, r *http.Request, e
 // ListEngagementActivity List one engagement's activity log.
 // (GET /engagements/{engagementId}/activity)
 func (_ Unimplemented) ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListEngagementExecutions List executions in an engagement.
+// (GET /engagements/{engagementId}/executions)
+func (_ Unimplemented) ListEngagementExecutions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementExecutionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetExecution Return one execution by id.
+// (GET /engagements/{engagementId}/executions/{executionId})
+func (_ Unimplemented) GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchRedExecution Write the red (attack) side of one execution.
+// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
+func (_ Unimplemented) PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8254,6 +8482,155 @@ func (siw *ServerInterfaceWrapper) ListEngagementActivity(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListEngagementExecutions operation middleware
+func (siw *ServerInterfaceWrapper) ListEngagementExecutions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEngagementExecutionsParams
+
+	// ------------- Optional query parameter "scenarioId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "scenarioId", r.URL.Query(), &params.ScenarioId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scenarioId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scenarioId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEngagementExecutions(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetExecution operation middleware
+func (siw *ServerInterfaceWrapper) GetExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetExecution(w, r, engagementId, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchRedExecution operation middleware
+func (siw *ServerInterfaceWrapper) PatchRedExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchRedExecutionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchRedExecution(w, r, engagementId, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListEngagementMembers operation middleware
 func (siw *ServerInterfaceWrapper) ListEngagementMembers(w http.ResponseWriter, r *http.Request) {
 
@@ -9858,6 +10235,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/steps", wrapper.ListEngagementSteps)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}", wrapper.GetExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/executions", wrapper.ListEngagementExecutions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}/execution", wrapper.PatchRedExecution)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/sources", wrapper.ListContentSources)
@@ -17212,6 +17598,333 @@ func (response ListEngagementActivity500ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type ListEngagementExecutionsRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       ListEngagementExecutionsParams
+}
+
+type ListEngagementExecutionsResponseObject interface {
+	VisitListEngagementExecutionsResponse(w http.ResponseWriter) error
+}
+
+type ListEngagementExecutions200JSONResponse ExecutionList
+
+func (response ListEngagementExecutions200JSONResponse) VisitListEngagementExecutionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementExecutions400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementExecutions400ApplicationProblemPlusJSONResponse) VisitListEngagementExecutionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementExecutions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementExecutions401ApplicationProblemPlusJSONResponse) VisitListEngagementExecutionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementExecutions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementExecutions403ApplicationProblemPlusJSONResponse) VisitListEngagementExecutionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementExecutions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementExecutions404ApplicationProblemPlusJSONResponse) VisitListEngagementExecutionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEngagementExecutions500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListEngagementExecutions500ApplicationProblemPlusJSONResponse) VisitListEngagementExecutionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExecutionRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ExecutionId  ExecutionId  `json:"executionId"`
+}
+
+type GetExecutionResponseObject interface {
+	VisitGetExecutionResponse(w http.ResponseWriter) error
+}
+
+type GetExecution200JSONResponse Execution
+
+func (response GetExecution200JSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExecution400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetExecution400ApplicationProblemPlusJSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExecution401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetExecution401ApplicationProblemPlusJSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExecution403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetExecution403ApplicationProblemPlusJSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExecution404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetExecution404ApplicationProblemPlusJSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExecution500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetExecution500ApplicationProblemPlusJSONResponse) VisitGetExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecutionRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ExecutionId  ExecutionId  `json:"executionId"`
+	Params       PatchRedExecutionParams
+	Body         *PatchRedExecutionJSONRequestBody
+}
+
+type PatchRedExecutionResponseObject interface {
+	VisitPatchRedExecutionResponse(w http.ResponseWriter) error
+}
+
+type PatchRedExecution200JSONResponse Execution
+
+func (response PatchRedExecution200JSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecution400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchRedExecution400ApplicationProblemPlusJSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecution401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchRedExecution401ApplicationProblemPlusJSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecution403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchRedExecution403ApplicationProblemPlusJSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecution404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchRedExecution404ApplicationProblemPlusJSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecution409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PatchRedExecution409ApplicationProblemPlusJSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchRedExecution500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchRedExecution500ApplicationProblemPlusJSONResponse) VisitPatchRedExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListEngagementMembersRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -21085,6 +21798,15 @@ type StrictServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
+	// ListEngagementExecutions List executions in an engagement.
+	// (GET /engagements/{engagementId}/executions)
+	ListEngagementExecutions(ctx context.Context, request ListEngagementExecutionsRequestObject) (ListEngagementExecutionsResponseObject, error)
+	// GetExecution Return one execution by id.
+	// (GET /engagements/{engagementId}/executions/{executionId})
+	GetExecution(ctx context.Context, request GetExecutionRequestObject) (GetExecutionResponseObject, error)
+	// PatchRedExecution Write the red (attack) side of one execution.
+	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
+	PatchRedExecution(ctx context.Context, request PatchRedExecutionRequestObject) (PatchRedExecutionResponseObject, error)
 	// ListEngagementMembers List the members of an engagement.
 	// (GET /engagements/{engagementId}/members)
 	ListEngagementMembers(ctx context.Context, request ListEngagementMembersRequestObject) (ListEngagementMembersResponseObject, error)
@@ -23439,6 +24161,95 @@ func (sh *strictHandler) ListEngagementActivity(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListEngagementActivityResponseObject); ok {
 		if err := validResponse.VisitListEngagementActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEngagementExecutions operation middleware
+func (sh *strictHandler) ListEngagementExecutions(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementExecutionsParams) {
+	var request ListEngagementExecutionsRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEngagementExecutions(ctx, request.(ListEngagementExecutionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEngagementExecutions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEngagementExecutionsResponseObject); ok {
+		if err := validResponse.VisitListEngagementExecutionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetExecution operation middleware
+func (sh *strictHandler) GetExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId) {
+	var request GetExecutionRequestObject
+
+	request.EngagementId = engagementId
+	request.ExecutionId = executionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetExecution(ctx, request.(GetExecutionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetExecution")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetExecutionResponseObject); ok {
+		if err := validResponse.VisitGetExecutionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchRedExecution operation middleware
+func (sh *strictHandler) PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams) {
+	var request PatchRedExecutionRequestObject
+
+	request.EngagementId = engagementId
+	request.ExecutionId = executionId
+	request.Params = params
+
+	var body PatchRedExecutionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchRedExecution(ctx, request.(PatchRedExecutionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchRedExecution")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchRedExecutionResponseObject); ok {
+		if err := validResponse.VisitPatchRedExecutionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

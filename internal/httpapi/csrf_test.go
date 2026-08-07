@@ -551,6 +551,11 @@ var csrfCoverage = map[string]struct {
 		body: `{"ids":["00000000-0000-0000-0000-000000000001"]}`,
 	},
 	"POST " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}/reveal": {},
+
+	// Execution red PATCH (M3-006).
+	"PATCH " + BasePath + "/engagements/{engagementId}/executions/{executionId}/execution": {
+		body: `{"version":1,"status":"running"}`,
+	},
 }
 
 // The two media types the walks send.

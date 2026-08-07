@@ -1538,6 +1538,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/executions/{executionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one execution by id.
+         * @description Members and platform administrators. In a blind engagement, an
+         *     execution belonging to an unrevealed step is 404-concealed for blue.
+         */
+        get: operations["getExecution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List executions in an engagement.
+         * @description Members and platform administrators. Filters by scenario and/or
+         *     status. In a blind engagement, blue members only see executions
+         *     for revealed steps.
+         */
+        get: operations["listEngagementExecutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/executions/{executionId}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Write the red (attack) side of one execution.
+         * @description Lead, red and platform administrators. The PATCH body only accepts
+         *     red fields — status, timestamps, command, hosts, notes — so a blue
+         *     client cannot send fields it does not own. Optimistic locking:
+         *     `version` is required and must match; mismatch → 409.
+         *
+         *     Status transitions: `pending` → `running`|`skipped`|`blocked`;
+         *     `running` → `complete`|`blocked`|`skipped`. Terminal states
+         *     (complete/blocked/skipped) accept note/host/command edits without
+         *     a status change. Illegal jumps → 409.
+         *
+         *     Auto-reveal: when the status becomes `running` or `complete` and
+         *     the engagement is blind with `auto_reveal_on_start` enabled and
+         *     the step is unrevealed, the step is revealed in the same transaction.
+         *
+         *     A closed engagement returns 409. The first non-pending transition
+         *     sets `executed_by` to the caller's id if still empty.
+         */
+        patch: operations["patchRedExecution"];
+        trace?: never;
+    };
     "/content/sources": {
         parameters: {
             query?: never;
@@ -4353,6 +4431,86 @@ export interface components {
             /** @description Ordered list of step ids. Every step in the scenario must appear exactly once. Ordinals are reassigned 1..N to match this order. */
             ids: string[];
         };
+        /**
+         * @description The red-side state of one execution.
+         * @enum {string}
+         */
+        ExecutionStatus: "pending" | "running" | "complete" | "blocked" | "skipped";
+        Execution: {
+            /**
+             * Format: uuid
+             * @description UUIDv7.
+             */
+            id: string;
+            /** Format: uuid */
+            stepId: string;
+            /** @description Optimistic-lock version. Incremented on every red or blue PATCH. */
+            version: number;
+            status: components["schemas"]["ExecutionStatus"];
+            /** @description User id of the first red operator who moved this out of pending. */
+            executedBy: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            /** @description The command or payload that was executed. */
+            commandRun: string;
+            /** @description The host that ran the attack. */
+            sourceHost: string;
+            /** @description The host that received the attack. */
+            targetHost: string;
+            /** @description Free-form notes from the red operator. */
+            redNotes: string;
+            /** @enum {string|null} */
+            detectionCategory?: "none" | "telemetry" | "general" | "tactic" | "technique" | null;
+            /** @description Qualifiers on the detection category. */
+            detectionModifiers: string[];
+            /** @enum {string|null} */
+            protection?: "blocked" | "partial" | "not_blocked" | "n/a" | null;
+            /** Format: date-time */
+            detectedAt?: string;
+            /** @description Source of detection (e.g. "Splunk", "Sentinel"). */
+            detectingSource: string;
+            /** @description Reference to the detection rule that fired. */
+            detectingRuleRef: string;
+            /** @description Alert severity (e.g. "high", "medium", "low"). */
+            alertSeverity: string;
+            /** @description Free-form notes from the blue operator. */
+            blueNotes: string;
+            /** @description User id of the scorer. */
+            scoredBy: string;
+            /** Format: date-time */
+            scoredAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExecutionList: {
+            items: components["schemas"]["Execution"][];
+        };
+        /**
+         * @description Red-side only PATCH body for an execution. `version` is the
+         *     optimistic-lock field and is required on every call. Detection
+         *     fields are not present — blue writes through a separate endpoint
+         *     (M3-007) with its own type.
+         */
+        RedExecutionPatch: {
+            /** @description The version the caller read. Mismatch → 409. */
+            version: number;
+            status?: components["schemas"]["ExecutionStatus"];
+            /**
+             * Format: date-time
+             * @description When execution began. If omitted on a →running transition, the server sets it to UTC now.
+             */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            commandRun?: string;
+            sourceHost?: string;
+            targetHost?: string;
+            redNotes?: string;
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -4516,6 +4674,8 @@ export interface components {
         ScenarioId: string;
         /** @description The step being read or changed. */
         StepId: string;
+        /** @description The execution being read or changed. */
+        ExecutionId: string;
         /** @description Restrict the listing to accounts in this state. */
         UserStatusFilter: components["schemas"]["UserStatus"];
         /** @description Restrict the listing to accounts holding this platform role. */
@@ -6937,6 +7097,122 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The execution being read or changed. */
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The execution. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Execution"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listEngagementExecutions: {
+        parameters: {
+            query?: {
+                /** @description Restrict to executions under this scenario. */
+                scenarioId?: string;
+                /** @description Restrict to executions in this red-side state. */
+                status?: components["schemas"]["ExecutionStatus"];
+            };
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The filtered list of executions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchRedExecution: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The execution being read or changed. */
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedExecutionPatch"];
+            };
+        };
+        responses: {
+            /** @description The patched execution. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Execution"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

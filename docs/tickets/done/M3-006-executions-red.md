@@ -45,11 +45,11 @@ prevents silent war-room overwrites (`M3-EPIC`).
 
 ## Acceptance criteria
 
-- [ ] OpenAPI has distinct `RedExecutionPatch` vs later `BlueDetectionPatch` types.
-- [ ] Stale `version` → 409; successful patch returns new version = old+1.
-- [ ] Blue token/session calling red endpoint → 403.
-- [ ] Auto-reveal fires only when setting enabled and engagement blind.
-- [ ] Response validation against spec in handler tests.
+- [x] OpenAPI has distinct `RedExecutionPatch` vs later `BlueDetectionPatch` types.
+- [x] Stale `version` → 409; successful patch returns new version = old+1.
+- [x] Blue token/session calling red endpoint → 403.
+- [x] Auto-reveal fires only when setting enabled and engagement blind.
+- [x] Response validation against spec in handler tests.
 
 ## Tests
 
@@ -63,3 +63,29 @@ prevents silent war-room overwrites (`M3-EPIC`).
 - Prefer landing route stubs for blue in the same OpenAPI PR only if it keeps generate green; else
   M3-007 adds the path.
 - Never accept full-row PUT that mixes sides.
+
+## Implementation notes
+
+- Routes changed from ticket spec to include `engagementId` in path-parameter position:
+  `GET /engagements/{engagementId}/executions/{executionId}` and
+  `PATCH /engagements/{engagementId}/executions/{executionId}/execution`. The authz middleware
+  requires the engagement ID as a declared path parameter for engagement-scoped resources
+  (`api/authz.go` `parseResource`). The list endpoint already had it.
+
+- `scanExecution` did not convert `sql.ErrNoRows` to `apierr.NotFound` (unlike `scanScenario`).
+  Added the conversion — this was a pre-existing M3-001 gap. Without it, missing executions
+  returned 500 instead of 404.
+
+- Auto-reveal calls `steps.Reveal` inside the domain layer (not in the store txn). The step
+  reveal and execution patch share the same store `Write` serialization but are separate
+  `Write` calls. Both succeed or both fail at the domain layer, but the step reveal is not
+  in the same database transaction as the execution patch.
+
+- The `detectionCategory` and `protection` fields use `type: [string, "null"]` (OAS 3.1)
+  instead of `nullable: true` (OAS 3.0), per api/conventions_test.go enforcement.
+
+- CSRF coverage, enrolment-only route gate, and authz sweep test all updated for the
+  new PATCH route.
+
+- The authz sweep's `write_red` operation now drives the real endpoint instead of a stub,
+  verifying that blue/observer get 403 and non-members get 404 for `execution.write_red`.

@@ -2887,6 +2887,147 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+
+  /engagements/{engagementId}/executions/{executionId}:
+    get:
+      operationId: getExecution
+      summary: Return one execution by id.
+      description: |
+        Members and platform administrators. In a blind engagement, an
+        execution belonging to an unrevealed step is 404-concealed for blue.
+      tags:
+        - executions
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+        param: executionId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ExecutionId"
+      responses:
+        "200":
+          description: The execution.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Execution"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/executions:
+    get:
+      operationId: listEngagementExecutions
+      summary: List executions in an engagement.
+      description: |
+        Members and platform administrators. Filters by scenario and/or
+        status. In a blind engagement, blue members only see executions
+        for revealed steps.
+      tags:
+        - executions
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - name: scenarioId
+          in: query
+          required: false
+          description: Restrict to executions under this scenario.
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Restrict to executions in this red-side state.
+          schema:
+            $ref: "#/components/schemas/ExecutionStatus"
+      responses:
+        "200":
+          description: The filtered list of executions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/executions/{executionId}/execution:
+    patch:
+      operationId: patchRedExecution
+      summary: Write the red (attack) side of one execution.
+      description: |
+        Lead, red and platform administrators. The PATCH body only accepts
+        red fields — status, timestamps, command, hosts, notes — so a blue
+        client cannot send fields it does not own. Optimistic locking:
+        `version` is required and must match; mismatch → 409.
+
+        Status transitions: `pending` → `running`|`skipped`|`blocked`;
+        `running` → `complete`|`blocked`|`skipped`. Terminal states
+        (complete/blocked/skipped) accept note/host/command edits without
+        a status change. Illegal jumps → 409.
+
+        Auto-reveal: when the status becomes `running` or `complete` and
+        the engagement is blind with `auto_reveal_on_start` enabled and
+        the step is unrevealed, the step is revealed in the same transaction.
+
+        A closed engagement returns 409. The first non-pending transition
+        sets `executed_by` to the caller's id if still empty.
+      tags:
+        - executions
+      x-authz-action: execution.write_red
+      x-authz-resource:
+        type: execution
+        engagement: engagementId
+        param: executionId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ExecutionId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedExecutionPatch"
+      responses:
+        "200":
+          description: The patched execution.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Execution"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /content/sources:
     get:
       operationId: listContentSources
@@ -4869,6 +5010,15 @@ components:
       in: path
       required: true
       description: The step being read or changed.
+      schema:
+        type: string
+        format: uuid
+
+    ExecutionId:
+      name: executionId
+      in: path
+      required: true
+      description: The execution being read or changed.
       schema:
         type: string
         format: uuid
@@ -8517,3 +8667,169 @@ components:
             format: uuid
           description: Ordered list of step ids. Every step in the scenario
             must appear exactly once. Ordinals are reassigned 1..N to match this order.
+
+    ExecutionStatus:
+      type: string
+      description: The red-side state of one execution.
+      enum:
+        - pending
+        - running
+        - complete
+        - blocked
+        - skipped
+
+    Execution:
+      type: object
+      required:
+        - id
+        - stepId
+        - version
+        - status
+        - executedBy
+        - commandRun
+        - sourceHost
+        - targetHost
+        - redNotes
+        - detectionModifiers
+        - detectingSource
+        - detectingRuleRef
+        - alertSeverity
+        - blueNotes
+        - scoredBy
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7.
+        stepId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Optimistic-lock version. Incremented on every red or blue PATCH.
+        status:
+          $ref: "#/components/schemas/ExecutionStatus"
+        executedBy:
+          type: string
+          description: User id of the first red operator who moved this out of pending.
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        commandRun:
+          type: string
+          maxLength: 4096
+          description: The command or payload that was executed.
+        sourceHost:
+          type: string
+          maxLength: 255
+          description: The host that ran the attack.
+        targetHost:
+          type: string
+          maxLength: 255
+          description: The host that received the attack.
+        redNotes:
+          type: string
+          maxLength: 4096
+          description: Free-form notes from the red operator.
+        detectionCategory:
+          type: [string, "null"]
+          enum:
+            - none
+            - telemetry
+            - general
+            - tactic
+            - technique
+        detectionModifiers:
+          type: array
+          items:
+            type: string
+          description: Qualifiers on the detection category.
+        protection:
+          type: [string, "null"]
+          enum:
+            - blocked
+            - partial
+            - not_blocked
+            - n/a
+        detectedAt:
+          type: string
+          format: date-time
+        detectingSource:
+          type: string
+          maxLength: 255
+          description: Source of detection (e.g. "Splunk", "Sentinel").
+        detectingRuleRef:
+          type: string
+          maxLength: 255
+          description: Reference to the detection rule that fired.
+        alertSeverity:
+          type: string
+          maxLength: 64
+          description: Alert severity (e.g. "high", "medium", "low").
+        blueNotes:
+          type: string
+          maxLength: 4096
+          description: Free-form notes from the blue operator.
+        scoredBy:
+          type: string
+          description: User id of the scorer.
+        scoredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ExecutionList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Execution"
+
+    RedExecutionPatch:
+      type: object
+      description: |
+        Red-side only PATCH body for an execution. `version` is the
+        optimistic-lock field and is required on every call. Detection
+        fields are not present — blue writes through a separate endpoint
+        (M3-007) with its own type.
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          minimum: 1
+          description: The version the caller read. Mismatch → 409.
+        status:
+          $ref: "#/components/schemas/ExecutionStatus"
+        startedAt:
+          type: string
+          format: date-time
+          description: When execution began. If omitted on a →running transition, the server sets it to UTC now.
+        endedAt:
+          type: string
+          format: date-time
+        commandRun:
+          type: string
+          maxLength: 4096
+        sourceHost:
+          type: string
+          maxLength: 255
+        targetHost:
+          type: string
+          maxLength: 255
+        redNotes:
+          type: string
+          maxLength: 4096

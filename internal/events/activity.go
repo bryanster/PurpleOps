@@ -129,6 +129,10 @@ const (
 	VerbStepDeleted   Verb = "step.deleted"
 	VerbStepReordered Verb = "step.reordered"
 	VerbStepRevealed  Verb = "step.revealed"
+
+	// Workbook execution lifecycle (M3-006). Object is the execution row;
+	// engagement_id names which engagement the execution belongs to.
+	VerbExecutionRedUpdated Verb = "execution.red_updated"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -150,6 +154,8 @@ const (
 	ObjectContentNote              = "content_note"
 
 	ObjectMember = "member"
+
+	ObjectExecution = "execution"
 
 	ObjectScenario = "scenario"
 

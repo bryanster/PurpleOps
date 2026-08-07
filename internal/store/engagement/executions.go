@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 const executionColumns = `id, step_id, version, status, executed_by, started_at, ended_at, command_run, source_host, target_host, red_notes, detection_category, detection_modifiers, protection, detected_at, detecting_source, detecting_rule_ref, alert_severity, blue_notes, scored_by, scored_at, created_at, updated_at`
@@ -109,6 +113,9 @@ func scanExecution(row interface{ Scan(...any) error }) (Execution, error) {
 		&e.BlueNotes, &e.ScoredBy, &scoredAt,
 		&e.CreatedAt, &e.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Execution{}, apierr.NotFound("execution", "(id)")
+		}
 		return Execution{}, err
 	}
 
@@ -134,4 +141,149 @@ func scanExecution(row interface{ Scan(...any) error }) (Execution, error) {
 	e.CreatedAt = e.CreatedAt.UTC()
 	e.UpdatedAt = e.UpdatedAt.UTC()
 	return e, nil
+}
+
+// RedPatchChanges describes the red-side fields to patch on an execution.
+// All fields are optional; only non-nil fields (except ExecutedBy which uses
+// the string pointer pattern) are written.
+type RedPatchChanges struct {
+	Status     *ExecutionStatus
+	StartedAt  *time.Time
+	EndedAt    *time.Time
+	CommandRun *string
+	SourceHost *string
+	TargetHost *string
+	RedNotes   *string
+	ExecutedBy *string
+}
+
+// PatchRed atomically updates red-side fields on an execution with
+// optimistic locking. The caller must supply the version they read;
+// a mismatch returns an error wrapping [versionConflictError].
+// Non-nil fields in changes are written; the version is incremented
+// and updated_at is set to now on success.
+func (r *Executions) PatchRed(ctx context.Context, id string, expectedVersion int, changes RedPatchChanges, after ...After) (Execution, error) {
+	var e Execution
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		// Build dynamic SET clause from non-nil fields.
+		var sets []string
+		var args []any
+
+		if changes.Status != nil {
+			sets = append(sets, "status = ?")
+			args = append(args, string(*changes.Status))
+		}
+		if changes.StartedAt != nil {
+			sets = append(sets, "started_at = ?")
+			args = append(args, toStorage(*changes.StartedAt))
+		}
+		if changes.EndedAt != nil {
+			sets = append(sets, "ended_at = ?")
+			args = append(args, toStorage(*changes.EndedAt))
+		}
+		if changes.CommandRun != nil {
+			sets = append(sets, "command_run = ?")
+			args = append(args, *changes.CommandRun)
+		}
+		if changes.SourceHost != nil {
+			sets = append(sets, "source_host = ?")
+			args = append(args, *changes.SourceHost)
+		}
+		if changes.TargetHost != nil {
+			sets = append(sets, "target_host = ?")
+			args = append(args, *changes.TargetHost)
+		}
+		if changes.RedNotes != nil {
+			sets = append(sets, "red_notes = ?")
+			args = append(args, *changes.RedNotes)
+		}
+		if changes.ExecutedBy != nil {
+			sets = append(sets, "executed_by = ?")
+			args = append(args, *changes.ExecutedBy)
+		}
+
+		sets = append(sets, "version = version + 1", "updated_at = ?")
+		args = append(args, now())
+
+		// Append version check and id at the end.
+		args = append(args, id, expectedVersion)
+
+		query := "UPDATE app.execution SET " + strings.Join(sets, ", ") + " WHERE id = ? AND version = ?" //nolint:gosec // sets built from hardcoded column names, not user input
+
+		result, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("execution: patch red %q: %w", id, err)
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			current, err := scanExecution(tx.QueryRowContext(ctx, selectExecution+`WHERE id = ?`, id))
+			if err != nil {
+				return err
+			}
+			return &versionConflictError{current: current}
+		}
+
+		// Re-read to return the updated row.
+		var scanErr error
+		e, scanErr = scanExecution(tx.QueryRowContext(ctx, selectExecution+`WHERE id = ?`, id))
+		if scanErr != nil {
+			return scanErr
+		}
+
+		ctx := WithAfterEntity(ctx, e.ID)
+		return runAfter(ctx, tx, after)
+	})
+	if err != nil {
+		var vc *versionConflictError
+		if errors.As(err, &vc) {
+			return Execution{}, fmt.Errorf("execution %s: version conflict: expected %d, current %d: %w",
+				id, expectedVersion, vc.current.Version, err)
+		}
+		return Execution{}, err
+	}
+	return e, nil
+}
+
+// ListByEngagement returns executions for an engagement, optionally
+// filtered by scenario and/or status. Ordered by scenario ordinal,
+// then step ordinal so the workbook order is stable.
+func (r *Executions) ListByEngagement(ctx context.Context, engagementID string, scenarioID *string, status *ExecutionStatus) ([]Execution, error) {
+	query := selectExecution + `
+		JOIN app.step ON app.step.id = app.execution.step_id
+		JOIN app.scenario ON app.scenario.id = app.step.scenario_id
+		WHERE app.scenario.engagement_id = ?`
+	args := []any{engagementID}
+
+	if scenarioID != nil {
+		query += ` AND app.scenario.id = ?`
+		args = append(args, *scenarioID)
+	}
+	if status != nil {
+		query += ` AND app.execution.status = ?`
+		args = append(args, string(*status))
+	}
+
+	query += ` ORDER BY app.scenario.ordinal ASC, app.step.ordinal ASC`
+
+	rows, err := r.db.Read().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("execution: list by engagement %q: %w", engagementID, err)
+	}
+	defer rows.Close()
+
+	var executions []Execution
+	for rows.Next() {
+		e, err := scanExecution(rows)
+		if err != nil {
+			return nil, err
+		}
+		executions = append(executions, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("execution: list by engagement %q: %w", engagementID, err)
+	}
+	return executions, nil
 }
