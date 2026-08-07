@@ -5,15 +5,14 @@ package loadtest_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/authz"
+	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/store"
@@ -371,10 +370,5 @@ func maxDuration(samples []time.Duration) time.Duration {
 }
 
 func loadtestEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("BLACKLIGHT_LOADTEST"))) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+	return config.LoadTestEnabled()
 }

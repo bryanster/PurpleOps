@@ -691,3 +691,14 @@ func (b binding) set(raw string) error {
 	}
 	return nil
 }
+
+// LoadTestEnabled reports whether the BLACKLIGHT_LOADTEST env var is set to
+// a truthy value. Load tests that are too expensive for CI gate on this.
+func LoadTestEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("BLACKLIGHT_LOADTEST"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}

@@ -225,6 +225,49 @@ ATT&CK checked-in fixtures are deliberately tiny (a handful of STIX objects);
 the multi-batch volume under test is the synthetic fixture adapter, which is
 what production adapters already share for `Writer` batching.
 
+## War-room concurrency (M3-016)
+
+Twenty concurrent users updating executions, uploading evidence, and posting
+comments share the single serialized DuckDB writer. `internal/engagement/loadtest`
+proves the optimistic-lock gate catches lost updates and interactive latency stays
+within budget. **This is the gate before M4–M6.**
+
+### CI (always on)
+
+```sh
+go test ./internal/engagement/loadtest/
+```
+
+| Test | What it proves |
+|---|---|
+| `TestWarRoomConcurrency` | 5 users × 20 steps, 5s: red/blue patches, evidence, comments, reads. Interactive **p95 ≤ 200ms**, max ≤ 2s, zero lost updates. |
+| `TestWarRoomConcurrencyDetectsLostUpdates` | Same setup with version WHERE clause removed from patches. The consistency check detects lost updates (version sums don't add up) — proves the gate catches the bug. |
+
+Both ride along with `make test` / `make test-race`. A failure on the first means
+the serialized writer is overloaded — check for `store.Write` held across
+non-trivial work. A failure on the second means the version-check detector itself
+regressed.
+
+### Full developer load
+
+```sh
+BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/engagement/loadtest/ -run TestWarRoomLoad
+```
+
+Runs **20 users** across **50+ steps** for 15 seconds at production concurrency.
+Pass/fail uses the same p95 budget. Ballpark on a local SSD / arm64 devcontainer:
+~15s, interactive p95 well under 200ms.
+
+Assumptions: single process, local NVMe/SSD, no competing writers. Not a
+multi-node test and not an SSE fan-out stress (M4).
+
+### Retry helper
+
+`patchRedWithRetry` and `patchBlueWithRetry` in the test demonstrate the client
+409 → re-GET → re-PATCH pattern under contention: on version conflict, re-read
+the execution to get the current version and retry up to 5 times.
+
+
 
 ## What CI runs
 
