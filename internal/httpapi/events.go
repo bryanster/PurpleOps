@@ -90,9 +90,24 @@ func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEve
 		return events.VisibleActivity(scope, ev)
 	}
 
+	// Build the Modify transform for per-subscriber event mutation.
+	// Presence join/update events have focus targets stripped for blue
+	// subscribers in blind engagements (M4-009).
+	modifyFilter := func(ev events.Event) events.Event {
+		if ev.Topic == events.TopicContentJobs || strings.HasPrefix(ev.Topic, events.TopicContentJobs+".") {
+			return ev
+		}
+		scope, ok := blindScopes[ev.Topic]
+		if !ok {
+			return ev
+		}
+		return events.FilterPresenceEvent(ctx, scope, ev, h)
+	}
+
 	ch, unsub, err := h.hub.Subscribe(ctx, events.Subscription{
 		Topics: authzTopics,
 		Allow:  allowFilter,
+		Modify: modifyFilter,
 	})
 	if err != nil {
 		switch {

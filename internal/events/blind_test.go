@@ -1,6 +1,7 @@
 package events_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -120,4 +121,91 @@ func TestNewGapEvent(t *testing.T) {
 	if d.EngagementID != "eng-1" || d.Reason != "replay truncated" {
 		t.Errorf("data = %+v", d)
 	}
+}
+
+func TestFilterPresenceEvent(t *testing.T) {
+	blueScope := blind.Scope{Blind: true, Seat: "blue"}
+	noWithhold := blind.Scope{Blind: false, Seat: "blue"}
+
+	stepID := "01900000-0000-7000-8000-000000000099"
+	presenceJSON := json.RawMessage(`{"engagementId":"eng-1","userId":"red-1","displayName":"Red","stepId":"` + stepID + `","executionId":""}`)
+
+	// Fake reveal lookup that always says "not revealed".
+	neverRevealed := fakeRevealLookup{}
+
+	// Fake reveal lookup that says "revealed".
+	alwaysRevealed := fakeRevealLookup{revealed: true}
+
+	tests := []struct {
+		name   string
+		scope  blind.Scope
+		lookup events.RevealLookup
+		evType string
+		wantID bool // whether stepId should be present in output
+	}{
+		{
+			name:   "blue blind strips unrevealed focus",
+			scope:  blueScope,
+			lookup: neverRevealed,
+			evType: events.TypePresenceJoin,
+			wantID: false,
+		},
+		{
+			name:   "blue blind keeps revealed focus",
+			scope:  blueScope,
+			lookup: alwaysRevealed,
+			evType: events.TypePresenceUpdate,
+			wantID: true,
+		},
+		{
+			name:   "no withhold passes through",
+			scope:  noWithhold,
+			lookup: neverRevealed,
+			evType: events.TypePresenceJoin,
+			wantID: true,
+		},
+		{
+			name:   "presence leave always passes",
+			scope:  blueScope,
+			lookup: neverRevealed,
+			evType: events.TypePresenceLeave,
+			wantID: true, // leave events pass through unchanged
+		},
+		{
+			name:   "nil lookup conservatively strips",
+			scope:  blueScope,
+			lookup: nil,
+			evType: events.TypePresenceJoin,
+			wantID: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ev := events.Event{
+				Type: tt.evType,
+				Data: presenceJSON,
+			}
+			got := events.FilterPresenceEvent(t.Context(), tt.scope, ev, tt.lookup)
+
+			var pd struct {
+				StepID string `json:"stepId"`
+			}
+			if err := json.Unmarshal(got.Data, &pd); err != nil {
+				t.Fatalf("unmarshal result: %v", err)
+			}
+			hasID := pd.StepID != ""
+			if hasID != tt.wantID {
+				t.Errorf("stepId present = %v, want %v (data=%s)", hasID, tt.wantID, got.Data)
+			}
+		})
+	}
+}
+
+type fakeRevealLookup struct {
+	revealed bool
+}
+
+func (f fakeRevealLookup) IsStepRevealed(_ context.Context, _ string) (bool, error) {
+	return f.revealed, nil
 }

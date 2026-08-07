@@ -109,3 +109,75 @@ func StepIDForEvent(d *EventData) string {
 		return ""
 	}
 }
+
+// presenceData is the JSON shape carried by presence.join and
+// presence.update events (see httpapi.presenceEventJSON).
+type presenceData struct {
+	EngagementID string `json:"engagementId"`
+	UserID       string `json:"userId"`
+	DisplayName  string `json:"displayName"`
+	StepID       string `json:"stepId"`
+	ExecutionID  string `json:"executionId"`
+}
+
+// FilterPresenceEvent strips unrevealed focus targets from a presence
+// join or update event for the given blind scope. Leave events pass
+// through unchanged. This is the per-subscriber transform wired via
+// [Subscription.Modify] in the SSE path (M4-009).
+//
+// lookup may be nil — unrevealed focus is then dropped conservatively
+// (the step id is stripped). A non-nil lookup confirms reveal status from
+// the store.
+func FilterPresenceEvent(ctx context.Context, scope blind.Scope, ev Event, lookup RevealLookup) Event {
+	if !scope.Withholds() {
+		return ev
+	}
+	if ev.Type != TypePresenceJoin && ev.Type != TypePresenceUpdate {
+		return ev
+	}
+
+	var pd presenceData
+	if err := json.Unmarshal(ev.Data, &pd); err != nil {
+		return ev // unparseable — don't mutate
+	}
+
+	// If no focus is set, nothing to strip.
+	if pd.StepID == "" && pd.ExecutionID == "" {
+		return ev
+	}
+
+	var stripped bool
+	if pd.StepID != "" && !isStepVisible(ctx, pd.StepID, lookup) {
+		pd.StepID = ""
+		stripped = true
+	}
+	if pd.ExecutionID != "" && !isStepVisible(ctx, pd.ExecutionID, lookup) {
+		pd.ExecutionID = ""
+		stripped = true
+	}
+
+	if !stripped {
+		return ev
+	}
+
+	// Re-serialize with stripped focus.
+	b, err := json.Marshal(pd)
+	if err != nil {
+		return ev
+	}
+	ev.Data = json.RawMessage(b)
+	return ev
+}
+
+// isStepVisible reports whether a step id should be visible.
+// When lookup is nil we conservatively strip (return false).
+func isStepVisible(ctx context.Context, stepID string, lookup RevealLookup) bool {
+	if lookup == nil {
+		return false
+	}
+	revealed, err := lookup.IsStepRevealed(ctx, stepID)
+	if err != nil || !revealed {
+		return false
+	}
+	return true
+}

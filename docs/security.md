@@ -454,3 +454,67 @@ out, and it must not also break every integration in the deployment.
 
 The operator's half — creating, using, rotating, revoking, and what to do when one leaks — is
 [`docs/api-tokens.md`](api-tokens.md).
+
+## Blind mode
+
+A blind engagement withholds unrevealed steps from the blue seat: blue members cannot see, list,
+or infer the existence of steps that red or the engagement lead has not explicitly revealed.
+This is a security boundary, not a UX preference — every path that could leak a step id to blue
+is a fence.
+
+### Three fences (belt, braces, second braces)
+
+1. **Authz middleware** (`GuardBlindMode`): the policy denies `execution.read`,
+   `execution.write_blue`, and `evidence.read` for blue in a blind engagement when the step is
+   unrevealed. Denial returns 404 (concealed), identical to a non-member asking.
+
+2. **SQL WHERE clause** (`internal/store/blind`): every query that reads steps filters out
+   unrevealed rows for blue. This catches any handler that forgets the guard — a missed authz
+   rule still cannot return an unrevealed step.
+
+3. **Live-event filter** (`events.VisibleActivity`): SSE activity events, catch-up replay, and
+   the activity list all pass through one shared visibility check. Blue never receives an event
+   naming an unrevealed step, its execution, or its evidence.
+
+### Live collaboration (M4)
+
+SSE live updates, presence focus, and catch-up replay all apply the same blind filtering:
+
+- **SSE activity events**: filtered per-subscriber via `Subscription.Allow` using the shared
+  `VisibleActivity` helper. A blue subscriber receives no events referencing unrevealed steps.
+- **SSE presence events**: presence `join` and `update` events carry a `stepId`/`executionId`
+  focus target. For blue subscribers in blind engagements, the server strips unrevealed focus
+  targets before delivery via `Subscription.Modify` (M4-009). Blue sees *who* is online, but
+  not *what* they are looking at when it is unrevealed.
+- **Presence REST snapshot**: `GET /engagements/{id}/presence` applies the same focus stripping
+  for blue callers.
+- **Catch-up replay**: `Last-Event-ID` replay passes events through `VisibleActivity` before
+  writing them to the stream.
+
+### Reveal
+
+`POST /engagements/{eid}/scenarios/{sid}/steps/{stepId}/reveal` sets `revealed_at = now()` and
+emits a `step.revealed` activity event. After reveal:
+- Blue can GET the step body.
+- Blue receives subsequent SSE events for the step.
+- The reveal itself is visible in the activity rail (blue learns that the step was revealed,
+  which is the point — concealment ends at reveal time).
+
+### What blue never sees
+
+- Step names or ids of unrevealed steps in any response body or event payload.
+- Activity entries for unrevealed steps in the activity list or SSE stream.
+- A count of hidden steps ("3 steps remain hidden") — the empty state is deliberately
+  indistinguishable from an engagement with no steps at all.
+- A colleague's presence focus when it points at an unrevealed step.
+
+### Tests
+
+`internal/events/blind_test.go` — unit tests for `VisibleActivity`, `FilterPresenceEvent`,
+`StepIDForEvent`.
+
+`internal/httpapi/blind_integration_test.go` — integration tests: REST 404-conceal, SSE
+presence focus stripping, hub-level Allow filter, standard-engagement passthrough.
+
+`e2e/specs/blind-mode.spec.ts` — end-to-end: blue cannot GET unrevealed steps, cannot list
+them, cannot see red's focus on them, and can see them after reveal.

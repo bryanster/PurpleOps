@@ -34,7 +34,7 @@ func EngagementTopic(engagementID string) string {
 }
 
 // Stable event type values on the wire. Progress ticks while a job runs;
-// terminal fires once when the job reaches a final status.
+// terminal fires once the job reaches a final status.
 const (
 	TypeContentJobProgress = "content.job.progress"
 	TypeContentJobTerminal = "content.job.terminal"
@@ -67,9 +67,15 @@ type Event struct {
 // Allow is a per-subscriber delivery filter: events that pass topic matching
 // are still dropped for this subscriber when Allow returns false. Publish is
 // unaffected. M4 uses this for blind-mode per-seat filtering.
+//
+// Modify is an optional per-subscriber transform that runs after Allow. It
+// receives a copy of the event and may return a modified copy — the original
+// is unchanged for other subscribers. M4-009 uses this to strip unrevealed
+// focus from presence events for blue subscribers.
 type Subscription struct {
 	Topics []string
 	Allow  func(Event) bool
+	Modify func(Event) Event
 }
 
 // Options bounds hub memory and plugs M4 extension points.
@@ -100,10 +106,9 @@ const (
 type Hub struct {
 	maxSubs int
 	buffer  int
-	topicOK func(ctx context.Context, topic string) (bool, error)
-
-	mu   sync.Mutex
-	subs map[*subscriber]struct{}
+	topicOK func(context.Context, string) (bool, error)
+	mu      sync.Mutex
+	subs    map[*subscriber]struct{}
 }
 
 // subscriber serializes send and close so Publish cannot race close(ch).
@@ -111,6 +116,7 @@ type subscriber struct {
 	hub    *Hub
 	topics map[string]struct{}
 	allow  func(Event) bool
+	modify func(Event) Event
 	ch     chan Event
 	stop   chan struct{}
 
@@ -188,6 +194,7 @@ func (h *Hub) Subscribe(ctx context.Context, sub Subscription) (<-chan Event, fu
 		hub:    h,
 		topics: allowed,
 		allow:  sub.Allow,
+		modify: sub.Modify,
 		ch:     make(chan Event, h.buffer),
 		stop:   make(chan struct{}),
 	}
@@ -216,7 +223,8 @@ func (h *Hub) Subscribe(ctx context.Context, sub Subscription) (<-chan Event, fu
 }
 
 // Publish fans evt out to every subscriber of topic, then each subscriber's
-// [Subscription.Allow] (when set) may skip delivery. Missing ID/At/Topic are
+// [Subscription.Allow] (when set) may skip delivery. Modify (when set)
+// transforms the event per-subscriber after Allow. Missing ID/At/Topic are
 // filled in. Never blocks: a slow subscriber is dropped.
 func (h *Hub) Publish(topic string, evt Event) {
 	if topic == "" {
@@ -253,9 +261,14 @@ func (h *Hub) Publish(topic string, evt Event) {
 	h.mu.Unlock()
 
 	for _, s := range targets {
-		if s.allow == nil || s.allow(evt) {
-			s.trySend(evt)
+		candidate := evt
+		if s.allow != nil && !s.allow(candidate) {
+			continue
 		}
+		if s.modify != nil {
+			candidate = s.modify(candidate)
+		}
+		s.trySend(candidate)
 	}
 }
 
@@ -315,14 +328,13 @@ func knownTopic(topic string) bool {
 	if topic == TopicContentJobs {
 		return true
 	}
-	if prefix := TopicContentJobs + "."; strings.HasPrefix(topic, prefix) && len(topic) > len(prefix) {
+	if strings.HasPrefix(topic, TopicContentJobs+".") {
 		return true
 	}
-	// engagement.{engagementId}: a UUIDv7 after the prefix.
-	if rest, ok := strings.CutPrefix(topic, TopicEngagementPrefix); ok {
-		if _, err := uuid.Parse(rest); err == nil {
-			return true
-		}
+	if strings.HasPrefix(topic, TopicEngagementPrefix) {
+		engID := strings.TrimPrefix(topic, TopicEngagementPrefix)
+		_, err := uuid.Parse(engID)
+		return err == nil
 	}
 	return false
 }

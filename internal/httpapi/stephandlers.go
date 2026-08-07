@@ -273,6 +273,10 @@ func (h *handlers) ListEngagementSteps(ctx context.Context,
 // stepBlindScope builds a blind.Scope for the given engagement from the
 // authorization context. It reads the engagement to determine its mode and
 // matches the caller's seat to decide whether they are held to blind mode.
+//
+// For Self operations (e.g. SSE subscribe), the authorization Subject may not
+// carry cached memberships. This function falls back to the ownership store
+// when the cached map is empty (M4-009).
 func (h *handlers) stepBlindScope(ctx context.Context, engagementID string) (blind.Scope, error) {
 	eng, err := h.engagements.Get(ctx, engagementID)
 	if err != nil {
@@ -285,7 +289,16 @@ func (h *handlers) stepBlindScope(ctx context.Context, engagementID string) (bli
 		return blind.Scope{}, nil
 	}
 
-	seat, _ := auth.Subject.MembershipIn(engagementID)
+	seat, member := auth.Subject.MembershipIn(engagementID)
+	if !member && h.ownership != nil {
+		// Self operations (like SSE subscribe) don't carry cached
+		// memberships in the authorization Subject. Load from store.
+		s, m, err := h.ownership.Seat(ctx, engagementID, auth.Subject.UserID)
+		if err == nil && m {
+			seat = s
+			member = true
+		}
+	}
 
 	return blind.Scope{
 		Blind: eng.Mode == storengagement.EngagementModeBlind,
