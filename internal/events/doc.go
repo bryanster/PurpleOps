@@ -40,6 +40,15 @@
 //     content.jobs; engagement membership for engagement topics).
 //     TopicAuthz is the per-topic half; [Subscription.Allow] is the
 //     per-event half used by blind mode (M4-004).
+//   - Activity → SSE fan-out (M4-002): call [Log.SetHub] after construction
+//     to enable automatic SSE publishing for engagement-scoped activity.
+//     [Log.Record] queues a post-commit callback via [store.PostCommitFanout];
+//     [store.DB.Write] flushes the queue after commit and clears it on
+//     rollback. [Log.RecordAlone] publishes directly since it owns its
+//     transaction. Platform events (empty engagement_id) never fan out.
+//     Event payloads carry id-refs only: engagementId, actorId, verb,
+//     objectType, objectId, plus optional parent refs from [Entry.ParentIDs].
+//     No full resource bodies, no secrets, no deltas.
 //   - Catch-up: accept Last-Event-ID and replay from the activity log. M2
 //     accepts the header and ignores it (best-effort live tail only).
 //   - Presence: a separate in-memory registry can live alongside [Hub]; do not

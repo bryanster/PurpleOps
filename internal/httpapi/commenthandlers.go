@@ -78,7 +78,7 @@ func (h *handlers) CreateComment(ctx context.Context,
 		return nil, apierr.NotFound("execution", request.ExecutionId.String())
 	}
 
-	comment, err := h.engagements.CreateComment(ctx, actor, request.ExecutionId.String(), request.Body.Body)
+	comment, err := h.engagements.CreateComment(ctx, actor, request.EngagementId.String(), request.ExecutionId.String(), request.Body.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +107,10 @@ func (h *handlers) PatchComment(ctx context.Context,
 		}
 	}
 	edited, err := h.engagements.EditComment(ctx, actor, engagement.EditCommentInput{
-		CommentID: request.CommentId.String(),
-		Body:      request.Body.Body,
+		CommentID:    request.CommentId.String(),
+		EngagementID: request.EngagementId.String(),
+		ExecutionID:  comment.ExecutionID,
+		Body:         request.Body.Body,
 	})
 	if err != nil {
 		return nil, err

@@ -12,7 +12,7 @@ import (
 // CreateComment writes a comment on an execution. The author is the
 // authenticated caller. Authorization (comment.write) is handled by the
 // authz middleware. This method validates body length and records activity.
-func (s *Service) CreateComment(ctx context.Context, actor authn.Subject, executionID, body string) (storengagement.Comment, error) {
+func (s *Service) CreateComment(ctx context.Context, actor authn.Subject, engagementID, executionID, body string) (storengagement.Comment, error) {
 	if body == "" {
 		return storengagement.Comment{}, fmt.Errorf("engagement: comment body is empty")
 	}
@@ -29,15 +29,17 @@ func (s *Service) CreateComment(ctx context.Context, actor authn.Subject, execut
 		return storengagement.Comment{}, err
 	}
 
-	recordCommentActivity(ctx, s.activity, actor.UserID, comment.ID, events.VerbCommentCreated, nil)
+	recordCommentActivity(ctx, s.activity, actor.UserID, engagementID, executionID, comment.ID, events.VerbCommentCreated, nil)
 
 	return comment, nil
 }
 
 // EditCommentInput is the caller's half of editing a comment.
 type EditCommentInput struct {
-	CommentID string
-	Body      string
+	CommentID    string
+	EngagementID string
+	ExecutionID  string
+	Body         string
 }
 
 // EditComment updates a comment's body, appending the previous body to the
@@ -60,7 +62,7 @@ func (s *Service) EditComment(ctx context.Context, actor authn.Subject, in EditC
 	delta := map[string]any{
 		"body": in.Body,
 	}
-	recordCommentActivity(ctx, s.activity, actor.UserID, in.CommentID, events.VerbCommentEdited, delta)
+	recordCommentActivity(ctx, s.activity, actor.UserID, in.EngagementID, in.ExecutionID, in.CommentID, events.VerbCommentEdited, delta)
 
 	return comment, nil
 }
@@ -82,16 +84,18 @@ func (s *Service) ListCommentRevisions(ctx context.Context, commentID string) ([
 
 // recordCommentActivity writes an activity entry for a comment change,
 // or is a no-op when activity recording is disabled.
-func recordCommentActivity(ctx context.Context, log *events.Log, actorID, objectID string, verb events.Verb, delta map[string]any) {
+func recordCommentActivity(ctx context.Context, log *events.Log, actorID, engagementID, executionID, objectID string, verb events.Verb, delta map[string]any) {
 	if log == nil {
 		return
 	}
 	//nolint:errcheck // best-effort audit trail; failure is logged by the store
 	log.RecordAlone(ctx, events.Entry{
-		ActorID:    actorID,
-		Verb:       verb,
-		ObjectType: events.ObjectComment,
-		ObjectID:   objectID,
-		Delta:      delta,
+		EngagementID: engagementID,
+		ActorID:      actorID,
+		Verb:         verb,
+		ObjectType:   events.ObjectComment,
+		ObjectID:     objectID,
+		ParentIDs:    map[string]string{"executionId": executionID},
+		Delta:        delta,
 	})
 }

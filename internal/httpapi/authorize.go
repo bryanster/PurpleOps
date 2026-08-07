@@ -344,7 +344,6 @@ func decide(ctx context.Context, requirement api.Requirement, route specRoute, o
 	return decided{authorization: authorization, refusal: refuse(requirement, resource, decision)}, nil
 }
 
-
 // refuse turns a denial into the answer the caller gets: 404 where admitting the
 // resource exists is itself the leak, and 403 everywhere else. Neither carries
 // the reason — see apierr.NotFound and apierr.Forbidden, which put it in the log

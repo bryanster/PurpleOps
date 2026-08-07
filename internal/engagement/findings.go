@@ -73,7 +73,7 @@ func (s *Service) CreateFinding(ctx context.Context, actor authn.Subject, in Cre
 		return storengagement.Finding{}, err
 	}
 
-	recordFindingActivity(ctx, s.activity, actor.UserID, finding.ID, events.VerbFindingCreated, nil)
+	recordFindingActivity(ctx, s.activity, actor.UserID, in.EngagementID, finding.ID, events.VerbFindingCreated, nil)
 
 	return finding, nil
 }
@@ -118,18 +118,21 @@ func (s *Service) UpdateFinding(ctx context.Context, actor authn.Subject, id str
 		"owner":          in.Owner,
 		"status":         in.Status,
 	})
-	recordFindingActivity(ctx, s.activity, actor.UserID, finding.ID, events.VerbFindingUpdated, delta)
+	recordFindingActivity(ctx, s.activity, actor.UserID, existing.EngagementID, finding.ID, events.VerbFindingUpdated, delta)
 
 	return finding, nil
 }
 
 // DeleteFinding removes a finding and its step join rows.
 func (s *Service) DeleteFinding(ctx context.Context, actor authn.Subject, id string) error {
+	existing, err := s.findings.ByID(ctx, id)
+	if err != nil {
+		return err
+	}
 	if err := s.findings.Delete(ctx, id); err != nil {
 		return err
 	}
-
-	recordFindingActivity(ctx, s.activity, actor.UserID, id, events.VerbFindingDeleted, nil)
+	recordFindingActivity(ctx, s.activity, actor.UserID, existing.EngagementID, id, events.VerbFindingDeleted, nil)
 	return nil
 }
 
@@ -171,7 +174,7 @@ func (s *Service) SetFindingSteps(ctx context.Context, actor authn.Subject, find
 		return err
 	}
 
-	recordFindingActivity(ctx, s.activity, actor.UserID, findingID, events.VerbFindingStepsChanged, nil)
+	recordFindingActivity(ctx, s.activity, actor.UserID, finding.EngagementID, findingID, events.VerbFindingStepsChanged, nil)
 	return nil
 }
 
@@ -182,16 +185,17 @@ func (s *Service) FindingSteps(ctx context.Context, findingID string) ([]storeng
 
 // recordFindingActivity writes an activity entry for a finding change,
 // or is a no-op when activity recording is disabled.
-func recordFindingActivity(ctx context.Context, log *events.Log, actorID, objectID string, verb events.Verb, delta map[string]any) {
+func recordFindingActivity(ctx context.Context, log *events.Log, actorID, engagementID, objectID string, verb events.Verb, delta map[string]any) {
 	if log == nil {
 		return
 	}
 	//nolint:errcheck // best-effort audit trail; failure is logged by the store
 	log.RecordAlone(ctx, events.Entry{
-		ActorID:    actorID,
-		Verb:       verb,
-		ObjectType: events.ObjectFinding,
-		ObjectID:   objectID,
-		Delta:      delta,
+		EngagementID: engagementID,
+		ActorID:      actorID,
+		Verb:         verb,
+		ObjectType:   events.ObjectFinding,
+		ObjectID:     objectID,
+		Delta:        delta,
 	})
 }

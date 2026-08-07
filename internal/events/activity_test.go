@@ -7,8 +7,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bryanster/blacklight/internal/events"
+	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/activity"
 	"github.com/bryanster/blacklight/internal/store/storetest"
 )
@@ -170,4 +172,280 @@ func TestRedactionAcrossM1Verbs(t *testing.T) {
 			t.Errorf("serialized activity contains %q", banned)
 		}
 	}
+}
+
+// --- M4-002: Activity → SSE fan-out -----------------------------------------
+	// Not parallel — uses global PostCommitFanout.
+func TestRecordFansOutToEngagementTopic(t *testing.T) {
+	db := storetest.Migrated(t)
+	hub := events.NewHub(events.Options{})
+	log := events.New(activity.New(db))
+	log.SetHub(hub)
+
+	// Must set the fanout queue so DB.Write flushes it.
+	origFanout := store.PostCommitFanout.Load()
+	store.PostCommitFanout.Store(new(store.FanoutQueue))
+	t.Cleanup(func() { store.PostCommitFanout.Store(origFanout) })
+
+	engID := "019385a2-1234-7890-abcd-ef0123456789"
+
+	// Subscribe to the engagement topic before publishing.
+	ch, unsub, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.EngagementTopic(engID)},
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer unsub()
+
+	// Record activity inside a write transaction.
+	err = db.Write(t.Context(), func(tx *sql.Tx) error {
+		return log.Record(t.Context(), tx, events.Entry{
+			EngagementID: engID,
+			ActorID:      "actor-1",
+			Verb:         events.VerbExecutionRedUpdated,
+			ObjectType:   events.ObjectExecution,
+			ObjectID:     "exec-1",
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Receive the fan-out event.
+	ev := recvOne(t, ch)
+	if ev.Type != string(events.VerbExecutionRedUpdated) {
+		t.Fatalf("type = %q, want %q", ev.Type, events.VerbExecutionRedUpdated)
+	}
+	if ev.Topic != events.EngagementTopic(engID) {
+		t.Fatalf("topic = %q, want %q", ev.Topic, events.EngagementTopic(engID))
+	}
+	if ev.ID == "" {
+		t.Fatal("event id is empty")
+	}
+
+	// Verify the activity row exists with the same id.
+	rows, _, err := activity.New(db).List(t.Context(), activity.ListFilter{
+		ScopeEngagement: engID,
+		Limit:           10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d activity rows, want 1", len(rows))
+	}
+	if rows[0].ID != ev.ID {
+		t.Fatalf("activity row id = %q, event id = %q", rows[0].ID, ev.ID)
+	}
+}
+
+	// Not parallel — uses global PostCommitFanout.
+func TestRecordRollbackProducesNoSSEEvent(t *testing.T) {
+	db := storetest.Migrated(t)
+	hub := events.NewHub(events.Options{})
+	log := events.New(activity.New(db))
+	log.SetHub(hub)
+
+	origFanout := store.PostCommitFanout.Load()
+	store.PostCommitFanout.Store(new(store.FanoutQueue))
+	t.Cleanup(func() { store.PostCommitFanout.Store(origFanout) })
+
+	engID := "019385a2-1234-7890-abcd-ef0123456789"
+
+	ch, unsub, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.EngagementTopic(engID)},
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer unsub()
+
+	sentinel := errors.New("rollback")
+	err = db.Write(t.Context(), func(tx *sql.Tx) error {
+		if err := log.Record(t.Context(), tx, events.Entry{
+			EngagementID: engID,
+			ActorID:      "actor-1",
+			Verb:         events.VerbExecutionRedUpdated,
+			ObjectType:   events.ObjectExecution,
+			ObjectID:     "exec-1",
+		}); err != nil {
+			return err
+		}
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("err = %v, want sentinel", err)
+	}
+
+	// No activity rows.
+	rows, _, err := activity.New(db).List(t.Context(), activity.ListFilter{
+		ScopeEngagement: engID,
+		Limit:           10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("rolled back record left %d rows", len(rows))
+	}
+
+	// No SSE event.
+	select {
+	case ev := <-ch:
+		t.Fatalf("unexpected event after rollback: %+v", ev)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+func TestEventPayloadIsIdRefsOnly(t *testing.T) {
+	// Not parallel — uses global PostCommitFanout.
+	db := storetest.Migrated(t)
+	hub := events.NewHub(events.Options{})
+	log := events.New(activity.New(db))
+	log.SetHub(hub)
+
+	origFanout := store.PostCommitFanout.Load()
+	store.PostCommitFanout.Store(new(store.FanoutQueue))
+	t.Cleanup(func() { store.PostCommitFanout.Store(origFanout) })
+
+	engID := "019385a2-1234-7890-abcd-ef0123456789"
+
+	ch, unsub, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.EngagementTopic(engID)},
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer unsub()
+
+	err = db.Write(t.Context(), func(tx *sql.Tx) error {
+		return log.Record(t.Context(), tx, events.Entry{
+			EngagementID: engID,
+			ActorID:      "actor-1",
+			Verb:         events.VerbCommentCreated,
+			ObjectType:   events.ObjectComment,
+			ObjectID:     "comment-1",
+			ParentIDs:    map[string]string{"executionId": "exec-1"},
+			Delta:        events.Delta(map[string]any{"body": "hello"}),
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ev := recvOne(t, ch)
+
+	var data map[string]any
+	if err := json.Unmarshal(ev.Data, &data); err != nil {
+		t.Fatalf("unmarshal event data: %v", err)
+	}
+
+	// Must have id-ref fields.
+	for _, key := range []string{"engagementId", "actorId", "verb", "objectType", "objectId"} {
+		if _, ok := data[key]; !ok {
+			t.Errorf("event data missing key %q", key)
+		}
+	}
+	// Must have parent refs.
+	if data["executionId"] != "exec-1" {
+		t.Errorf("executionId = %v, want exec-1", data["executionId"])
+	}
+
+	// Must NOT have secrets or full bodies.
+	for _, banned := range []string{"body", "delta", "password", "secret"} {
+		if _, ok := data[banned]; ok {
+			t.Errorf("event data contains banned key %q", banned)
+		}
+	}
+}
+
+func TestPlatformActivityDoesNotFanOut(t *testing.T) {
+	// Not parallel — uses global PostCommitFanout.
+	db := storetest.Migrated(t)
+	hub := events.NewHub(events.Options{})
+	log := events.New(activity.New(db))
+	log.SetHub(hub)
+	origFanout := store.PostCommitFanout.Load()
+	store.PostCommitFanout.Store(new(store.FanoutQueue))
+	t.Cleanup(func() { store.PostCommitFanout.Store(origFanout) })
+
+	engID := "019385a2-1234-7890-abcd-ef0123456789"
+
+	ch, unsub, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.EngagementTopic(engID)},
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer unsub()
+
+	// Record a platform event (no engagement_id).
+	err = db.Write(t.Context(), func(tx *sql.Tx) error {
+		return log.Record(t.Context(), tx, events.Entry{
+			ActorID:    "actor-1",
+			Verb:       events.VerbSessionLogin,
+			ObjectType: events.ObjectSession,
+			ObjectID:   "session-1",
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No SSE event on the engagement topic.
+	select {
+	case ev := <-ch:
+		t.Fatalf("unexpected event for platform activity: %+v", ev)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestRecordAloneFansOutAfterCommit(t *testing.T) {
+	db := storetest.Migrated(t)
+	hub := events.NewHub(events.Options{})
+	log := events.New(activity.New(db))
+	log.SetHub(hub)
+
+	engID := "019385a2-1234-7890-abcd-ef0123456789"
+
+	ch, unsub, err := hub.Subscribe(t.Context(), events.Subscription{
+		Topics: []string{events.EngagementTopic(engID)},
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer unsub()
+
+	// RecordAlone opens its own transaction and publishes after commit.
+	err = log.RecordAlone(t.Context(), events.Entry{
+		EngagementID: engID,
+		ActorID:      "actor-1",
+		Verb:         events.VerbCommentCreated,
+		ObjectType:   events.ObjectComment,
+		ObjectID:     "comment-1",
+		ParentIDs:    map[string]string{"executionId": "exec-1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ev := recvOne(t, ch)
+	if ev.Type != string(events.VerbCommentCreated) {
+		t.Fatalf("type = %q, want %q", ev.Type, events.VerbCommentCreated)
+	}
+	if ev.ID == "" {
+		t.Fatal("event id is empty")
+	}
+}
+
+// recvOne receives one event or fails the test.
+func recvOne(t *testing.T, ch <-chan events.Event) events.Event {
+	t.Helper()
+	select {
+	case ev := <-ch:
+		return ev
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for event")
+	}
+	return events.Event{}
 }

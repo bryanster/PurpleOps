@@ -148,6 +148,10 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 
 	activityLog := events.New(activity.New(deps.Store))
 
+	// M4-002: set up the post-commit fan-out queue. DB.Write flushes it
+	// after every successful commit. The log's hub is wired below.
+	store.PostCommitFanout.Store(new(store.FanoutQueue))
+
 	auth, sessions, challenges, err := newAuthn(deps, activityLog, log)
 	if err != nil {
 		return nil, err
@@ -617,10 +621,14 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: content runner: " + err.Error())
 	}
+
 	hub := events.NewHub(events.Options{
 		MaxSubscribers: deps.Config.Events.MaxSubscribers,
 		Buffer:         deps.Config.Events.Buffer,
 	})
+
+	// M4-002: enable SSE fan-out from the activity log through the hub.
+	activityLog.SetHub(hub)
 	if !deps.DisableContentRunner {
 		// Boot/Start are process-lifetime, not request-scoped. There is no
 		// request context at server construction.

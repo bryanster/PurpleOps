@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/activity"
 )
 
@@ -193,8 +194,12 @@ type Entry struct {
 	Verb         Verb
 	ObjectType   string
 	ObjectID     string
-	Delta        map[string]any
-	At           time.Time
+	// ParentIDs carries optional parent object references for SSE fan-out
+	// invalidation (M4-002). Keys are the parent field names sent on the wire
+	// (e.g. "executionId", "scenarioId", "stepId"). Nil means no parents.
+	ParentIDs map[string]string
+	Delta     map[string]any
+	At        time.Time
 }
 
 // Log is the append-only activity recorder (M1-015). Construct it with [New].
@@ -202,16 +207,29 @@ type Entry struct {
 // Record writes inside the caller's transaction so the log and the change it
 // describes commit or roll back together. That is the central design
 // constraint of this package.
+//
+// When [SetHub] has been called, engagement-scoped activity entries are
+// automatically fanned out to SSE subscribers after the transaction commits
+// (M4-002). The returned context carries the post-commit hook; callers MUST
+// capture and use it inside [store.DB.Write] callbacks for the hook to run.
 type Log struct {
 	entries *activity.Entries
+	hub     *Hub
 }
 
-// New returns a Log over the activity store.
+// New returns a Log over the activity store. Call [Log.SetHub] to enable
+// SSE fan-out.
 func New(entries *activity.Entries) *Log {
 	if entries == nil {
 		panic("events: New called with nil activity store")
 	}
 	return &Log{entries: entries}
+}
+
+// SetHub enables post-commit SSE fan-out for engagement-scoped activity
+// entries (M4-002). Safe to call after construction; nil resets.
+func (l *Log) SetHub(h *Hub) {
+	l.hub = h
 }
 
 // Entries exposes the underlying repository for list endpoints. Handlers read;
@@ -223,27 +241,85 @@ func (l *Log) Entries() *activity.Entries { return l.entries }
 // tx must be the transaction the change is happening on. Passing nil is a
 // programming error — use [Log.RecordAlone] for events that are not
 // accompanying a mutation.
+//
+// When the hub is set and the entry has an EngagementID, a post-commit
+// callback is queued via [store.PostCommitFanout] and executed after the
+// transaction commits in [store.DB.Write] (M4-002).
 func (l *Log) Record(ctx context.Context, tx *sql.Tx, e Entry) error {
-	row, err := toStore(e)
+	storeEntry, err := toStore(e)
 	if err != nil {
 		return err
 	}
-	_, err = l.entries.Insert(ctx, tx, row)
-	return err
+	row, err := l.entries.Insert(ctx, tx, storeEntry)
+	if err != nil {
+		return err
+	}
+	// Queue post-commit SSE fan-out for engagement-scoped events (M4-002).
+	if e.EngagementID != "" && l.hub != nil {
+		if q := store.PostCommitFanout.Load(); q != nil {
+			q.Push(l.fanOut(e.EngagementID, row, e))
+		}
+	}
+	return nil
 }
 
 // RecordAlone opens its own write transaction and appends entry. It is for
 // events whose whole substance is the log row — a failed login, a lockout —
 // where there is no sibling mutation to share a commit with.
+//
+// SSE fan-out for engagement-scoped entries: publish directly after Append
+// returns — its internal [store.DB.Write] already committed.
 func (l *Log) RecordAlone(ctx context.Context, e Entry) error {
-	row, err := toStore(e)
+	storeEntry, err := toStore(e)
 	if err != nil {
 		return err
 	}
-	_, err = l.entries.Append(ctx, row)
-	return err
+	row, err := l.entries.Append(ctx, storeEntry)
+	if err != nil {
+		return err
+	}
+	if e.EngagementID != "" && l.hub != nil {
+		l.hub.Publish(EngagementTopic(e.EngagementID), Event{
+			ID:    row.ID,
+			Type:  string(e.Verb),
+			At:    row.At,
+			Topic: EngagementTopic(e.EngagementID),
+			Data:  buildEventData(row, e),
+		})
+	}
+	return nil
 }
 
+// fanOut returns a post-commit callback that publishes one SSE event.
+func (l *Log) fanOut(engagementID string, row activity.Row, e Entry) store.PostCommitFunc {
+	return func() {
+		l.hub.Publish(EngagementTopic(engagementID), Event{
+			ID:    row.ID,
+			Type:  string(e.Verb),
+			At:    row.At,
+			Topic: EngagementTopic(engagementID),
+			Data:  buildEventData(row, e),
+		})
+	}
+}
+
+// buildEventData constructs the SSE event payload from the stored activity
+// row and the caller's entry. The payload is id-refs only — no full resource
+// bodies, no secrets, no deltas.
+func buildEventData(row activity.Row, e Entry) json.RawMessage {
+	m := map[string]any{
+		"engagementId": row.EngagementID,
+		"actorId":      row.ActorID,
+		"verb":         row.Verb,
+		"objectType":   row.ObjectType,
+		"objectId":     row.ObjectID,
+	}
+	for k, v := range e.ParentIDs {
+		m[k] = v
+	}
+	raw, _ := json.Marshal(m)
+	return raw
+}
 func toStore(e Entry) (activity.Entry, error) {
 	out := activity.Entry{
 		EngagementID: e.EngagementID,

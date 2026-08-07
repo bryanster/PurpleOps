@@ -33,8 +33,6 @@ func EngagementTopic(engagementID string) string {
 	return TopicEngagementPrefix + engagementID
 }
 
-
-
 // Stable event type values on the wire. Progress ticks while a job runs;
 // terminal fires once when the job reaches a final status.
 const (
@@ -63,7 +61,6 @@ type Subscription struct {
 	Topics []string
 	Allow  func(Event) bool
 }
-
 
 // Options bounds hub memory and plugs M4 extension points.
 type Options struct {

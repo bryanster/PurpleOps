@@ -78,6 +78,9 @@ func TestTheMappingIsAnExemptionOrAPermissionAndNeverBoth(t *testing.T) {
 		// Engagement list returns only what the caller can see — members see
 		// their memberships, admins see all. Non-members get an empty list.
 		"listEngagements": true,
+		// SSE subscription (M4-001): any authenticated session may subscribe;
+		// per-topic authz is enforced in the handler, not the middleware.
+		"subscribeEvents": true,
 	}
 
 	for id, requirement := range requirements {

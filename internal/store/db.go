@@ -134,6 +134,9 @@ func (db *DB) Read() Reader { return db.read }
 //
 // The tx belongs to Write and is finished by the time it returns; do not retain
 // it. Do not call Write from inside fn — it is not re-entrant.
+//
+// Post-commit hooks registered via [WithPostCommit] run after the commit
+// succeeds and before Write returns (M4-002).
 func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	release, err := db.acquireWrite(ctx)
 	if err != nil {
@@ -146,7 +149,7 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 		return fmt.Errorf("store: begin write transaction: %w", err)
 	}
 
-	// done marks the exit paths that have already finished with tx. The one
+	// done marks exit paths that have already finished with tx. The one
 	// that has not is fn panicking — or calling runtime.Goexit, which is what
 	// t.Fatal does. Without this, the shared write connection would be handed
 	// to the next writer with a transaction still open on it, and every later
@@ -175,12 +178,23 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 		if rbErr := rollback(tx); rbErr != nil {
 			return errors.Join(err, fmt.Errorf("store: rollback: %w", rbErr))
 		}
+		// Drop pending fan-out events: the rows they describe rolled back (M4-002).
+		if q := PostCommitFanout.Load(); q != nil {
+			q.Clear()
+		}
 		return err
 	}
 
 	done = true
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("store: commit write transaction: %w", err)
+	}
+	// Post-commit hooks: activity → SSE fan-out (M4-002) and future
+	// consumers. Run only after commit succeeds so we never publish
+	// events for rows that rolled back.
+	RunPostCommit(ctx)
+	if q := PostCommitFanout.Load(); q != nil {
+		q.Flush()
 	}
 	return nil
 }
