@@ -22,7 +22,10 @@ func TestModifyIsAppliedPerSubscriber(t *testing.T) {
 				return ev
 			}
 			delete(data, "secret")
-			b, _ := json.Marshal(data)
+			b, err := json.Marshal(data)
+			if err != nil {
+				return ev
+			}
 			ev.Data = b
 			return ev
 		},

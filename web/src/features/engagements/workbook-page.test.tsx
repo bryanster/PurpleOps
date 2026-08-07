@@ -3,11 +3,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import type { components } from '@/api/schema'
-import {
-  adminUserFixture,
-  get,
-  memberUserFixture,
-} from '@/test/msw/handlers'
+import { adminUserFixture, get, memberUserFixture } from '@/test/msw/handlers'
 import { patch } from '@/test/msw/handlers'
 import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/render'
@@ -173,10 +169,7 @@ function stubScoredWorkbook(): void {
       Response.json({ items: [scenarioFixture] }, { status: 200 }),
     ),
     get('/engagements/{engagementId}/steps', () =>
-      Response.json(
-        { items: [revealedStep] },
-        { status: 200 },
-      ),
+      Response.json({ items: [revealedStep] }, { status: 200 }),
     ),
     get('/engagements/{engagementId}/executions', () =>
       Response.json({ items: [exec] }, { status: 200 }),
@@ -192,10 +185,7 @@ function stubWorkbookData(): void {
       Response.json({ items: [scenarioFixture] }, { status: 200 }),
     ),
     get('/engagements/{engagementId}/steps', () =>
-      Response.json(
-        { items: [revealedStep, unrevealedStep] },
-        { status: 200 },
-      ),
+      Response.json({ items: [revealedStep, unrevealedStep] }, { status: 200 }),
     ),
     get('/engagements/{engagementId}/executions', () =>
       Response.json(
@@ -330,13 +320,22 @@ describe('BlueDetectionEditor — scoring', () => {
   test('selects a category and sends it in the PATCH body', async () => {
     let patchedBody: unknown = null
     server.use(
-      patch('/engagements/{engagementId}/executions/{executionId}/detection', async ({ request }) => {
-        patchedBody = await request.json()
-        return Response.json(
-          { ...scoredExecution(), version: 2, detectionCategory: 'technique' as const, outcome: 'detected' as const, mttdSeconds: 3600 },
-          { status: 200 },
-        )
-      }),
+      patch(
+        '/engagements/{engagementId}/executions/{executionId}/detection',
+        async ({ request }) => {
+          patchedBody = await request.json()
+          return Response.json(
+            {
+              ...scoredExecution(),
+              version: 2,
+              detectionCategory: 'technique' as const,
+              outcome: 'detected' as const,
+              mttdSeconds: 3600,
+            },
+            { status: 200 },
+          )
+        },
+      ),
     )
 
     stubScoredWorkbook()
@@ -388,13 +387,16 @@ describe('BlueDetectionEditor — scoring', () => {
   test('selects modifiers and persists them in PATCH', async () => {
     let patchedBody: unknown = null
     server.use(
-      patch('/engagements/{engagementId}/executions/{executionId}/detection', async ({ request }) => {
-        patchedBody = await request.json()
-        return Response.json(
-          { ...scoredExecution(), version: 2, detectionModifiers: ['alert', 'delayed'] },
-          { status: 200 },
-        )
-      }),
+      patch(
+        '/engagements/{engagementId}/executions/{executionId}/detection',
+        async ({ request }) => {
+          patchedBody = await request.json()
+          return Response.json(
+            { ...scoredExecution(), version: 2, detectionModifiers: ['alert', 'delayed'] },
+            { status: 200 },
+          )
+        },
+      ),
     )
 
     stubScoredWorkbook()
@@ -418,19 +420,21 @@ describe('BlueDetectionEditor — scoring', () => {
 
   test('shows conflict toast on 409 and invalidates queries', async () => {
     server.use(
-      patch('/engagements/{engagementId}/executions/{executionId}/detection', () =>
-        new Response(
-          JSON.stringify({
-            code: 'conflict',
-            detail: 'Version mismatch',
-            status: 409,
-            title: 'Conflict',
-          }),
-          {
-            status: 409,
-            headers: { 'content-type': 'application/problem+json' },
-          },
-        ),
+      patch(
+        '/engagements/{engagementId}/executions/{executionId}/detection',
+        () =>
+          new Response(
+            JSON.stringify({
+              code: 'conflict',
+              detail: 'Version mismatch',
+              status: 409,
+              title: 'Conflict',
+            }),
+            {
+              status: 409,
+              headers: { 'content-type': 'application/problem+json' },
+            },
+          ),
       ),
     )
 
@@ -441,9 +445,7 @@ describe('BlueDetectionEditor — scoring', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Save Blue' }))
 
-    expect(
-      await screen.findByText(/modified by someone else/i),
-    ).toBeDefined()
+    expect(await screen.findByText(/modified by someone else/i)).toBeDefined()
   })
 
   test('blue detection panel is read-only for observer', async () => {
@@ -465,7 +467,6 @@ describe('BlueDetectionEditor — scoring', () => {
     expect(screen.getByText('Not Detected')).toBeDefined()
   })
 })
-
 
 // ── M4-005: Live workbook updates + 409 conflict recovery ──────────────────────
 
@@ -558,11 +559,14 @@ describe('M4-005 — live drawer updates', () => {
 
     // Row should briefly have the flash class (1200ms window)
     // Use a tight polling interval to catch the brief flash
-    await waitFor(() => {
-      const rows = screen.getAllByRole('row')
-      const flashed = rows.find((r) => r.textContent?.includes('Phishing'))
-      expect(flashed.className).toContain('animate-flash-update')
-    }, { timeout: 3000, interval: 50 })
+    await waitFor(
+      () => {
+        const rows = screen.getAllByRole('row')
+        const flashed = rows.find((r) => r.textContent?.includes('Phishing'))
+        expect(flashed?.className).toContain('animate-flash-update')
+      },
+      { timeout: 3000, interval: 50 },
+    )
   })
 })
 
@@ -572,21 +576,28 @@ describe('M4-005 — 409 conflict recovery', () => {
 
     // Patch returns 409; GET returns new server data with higher version.
     // server.use AFTER stubScoredWorkbook so our GET overrides the stub.
-    const serverExec = { ...scoredExecution(), version: 5, status: 'running' as const, redNotes: 'Server note' }
+    const serverExec = {
+      ...scoredExecution(),
+      version: 5,
+      status: 'running' as const,
+      redNotes: 'Server note',
+    }
     server.use(
-      patch('/engagements/{engagementId}/executions/{executionId}/execution', () =>
-        new Response(
-          JSON.stringify({
-            code: 'conflict',
-            detail: 'Version mismatch',
-            status: 409,
-            title: 'Conflict',
-          }),
-          {
-            status: 409,
-            headers: { 'content-type': 'application/problem+json' },
-          },
-        ),
+      patch(
+        '/engagements/{engagementId}/executions/{executionId}/execution',
+        () =>
+          new Response(
+            JSON.stringify({
+              code: 'conflict',
+              detail: 'Version mismatch',
+              status: 409,
+              title: 'Conflict',
+            }),
+            {
+              status: 409,
+              headers: { 'content-type': 'application/problem+json' },
+            },
+          ),
       ),
       get('/engagements/{engagementId}/executions', () =>
         Response.json({ items: [serverExec] }, { status: 200 }),
@@ -601,9 +612,7 @@ describe('M4-005 — 409 conflict recovery', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
 
     // Toast appears
-    expect(
-      await screen.findByText(/modified by someone else/i),
-    ).toBeDefined()
+    expect(await screen.findByText(/modified by someone else/i)).toBeDefined()
 
     // After invalidation → refetch → version change, the editor resets.
     // The status badge in the drawer should now show 'Running'.
@@ -624,19 +633,21 @@ describe('M4-005 — 409 conflict recovery', () => {
       blueNotes: 'Server blue note',
     }
     server.use(
-      patch('/engagements/{engagementId}/executions/{executionId}/detection', () =>
-        new Response(
-          JSON.stringify({
-            code: 'conflict',
-            detail: 'Version mismatch',
-            status: 409,
-            title: 'Conflict',
-          }),
-          {
-            status: 409,
-            headers: { 'content-type': 'application/problem+json' },
-          },
-        ),
+      patch(
+        '/engagements/{engagementId}/executions/{executionId}/detection',
+        () =>
+          new Response(
+            JSON.stringify({
+              code: 'conflict',
+              detail: 'Version mismatch',
+              status: 409,
+              title: 'Conflict',
+            }),
+            {
+              status: 409,
+              headers: { 'content-type': 'application/problem+json' },
+            },
+          ),
       ),
       get('/engagements/{engagementId}/executions', () =>
         Response.json({ items: [serverExec] }, { status: 200 }),
@@ -649,9 +660,7 @@ describe('M4-005 — 409 conflict recovery', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Save Blue' }))
 
-    expect(
-      await screen.findByText(/modified by someone else/i),
-    ).toBeDefined()
+    expect(await screen.findByText(/modified by someone else/i)).toBeDefined()
 
     // After reset, outcome should show the server version's outcome
     await waitFor(() => {
@@ -698,9 +707,7 @@ describe('M4-005 — 409 conflict recovery', () => {
 
     // First save — 409
     await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
-    expect(
-      await screen.findByText(/modified by someone else/i),
-    ).toBeDefined()
+    expect(await screen.findByText(/modified by someone else/i)).toBeDefined()
 
     // Wait for editor to reset to server state
     await waitFor(() => {

@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 export function useFlashOnChange(value: unknown, durationMs = 1200): boolean {
   const [flashing, setFlashing] = useState(false)
   const mounted = useRef(false)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     if (!mounted.current) {

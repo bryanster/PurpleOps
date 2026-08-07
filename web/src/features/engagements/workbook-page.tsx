@@ -45,16 +45,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { useEngagementContext } from './engagement-layout'
 import { markCommentRead, useCommentUnread } from './use-comment-unread'
@@ -89,6 +81,7 @@ import {
   type CreateScenario,
   type CreateStep,
   type CreateStepFromTemplate,
+  type EngagementRole,
   type Execution,
   type ImportPlanRequest,
   type Scenario,
@@ -217,7 +210,6 @@ export function WorkbookPage(): ReactNode {
     return map
   }, [executions.data])
 
-
   const toggleScenario = useCallback((id: string) => {
     setExpandedScenarios((prev) => {
       const next = new Set(prev)
@@ -226,13 +218,16 @@ export function WorkbookPage(): ReactNode {
       return next
     })
   }, [])
-  const openExecution = useCallback((step: Step) => {
-    setSelectedStepId(step.id)
-    const exec = executionByStepId.get(step.id)
-    if (exec) {
-      markCommentRead(engagementId, exec.id)
-    }
-  }, [engagementId, executionByStepId])
+  const openExecution = useCallback(
+    (step: Step) => {
+      setSelectedStepId(step.id)
+      const exec = executionByStepId.get(step.id)
+      if (exec) {
+        markCommentRead(engagementId, exec.id)
+      }
+    },
+    [engagementId, executionByStepId],
+  )
 
   const closeExecution = useCallback(() => {
     setSelectedStepId(null)
@@ -250,19 +245,36 @@ export function WorkbookPage(): ReactNode {
     return executionByStepId.get(selectedStepId) ?? null
   }, [selectedStepId, executionByStepId])
 
-
   // Loading / error states
   if (scenarios.isLoading || steps.isLoading || executions.isLoading) {
     return <PageLoading label="Loading workbook..." />
   }
   if (scenarios.isError) {
-    return <PageError message={scenarios.error?.message ?? 'Failed to load scenarios'} />
+    return (
+      <PageError
+        error={
+          scenarios.error instanceof Error ? scenarios.error : new Error('Failed to load scenarios')
+        }
+      />
+    )
   }
   if (steps.isError) {
-    return <PageError message={steps.error?.message ?? 'Failed to load steps'} />
+    return (
+      <PageError
+        error={steps.error instanceof Error ? steps.error : new Error('Failed to load steps')}
+      />
+    )
   }
   if (executions.isError) {
-    return <PageError message={executions.error?.message ?? 'Failed to load executions'} />
+    return (
+      <PageError
+        error={
+          executions.error instanceof Error
+            ? executions.error
+            : new Error('Failed to load executions')
+        }
+      />
+    )
   }
 
   const scenarioItems = scenarios.data?.items ?? []
@@ -279,27 +291,25 @@ export function WorkbookPage(): ReactNode {
             size="sm"
             variant="outline"
             onClick={() => {
-              if (scenarioItems.length > 0) {
-                setAddStepScenarioId(scenarioItems[0].id)
+              const first = scenarioItems[0]
+              if (first) {
+                setAddStepScenarioId(first.id)
               }
               setAddStepOpen(true)
             }}
           >
             Add Step
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setImportCtidOpen(true)}
-          >
+          <Button size="sm" variant="outline" onClick={() => setImportCtidOpen(true)}>
             Import CTID
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={() => {
-              if (scenarioItems.length > 0) {
-                setFromTemplateScenarioId(scenarioItems[0].id)
+              const first = scenarioItems[0]
+              if (first) {
+                setFromTemplateScenarioId(first.id)
               }
               setFromTemplateOpen(true)
             }}
@@ -311,7 +321,7 @@ export function WorkbookPage(): ReactNode {
 
       {/* Scenarios */}
       {scenarioItems.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
+        <p className="text-muted-foreground py-8 text-center text-sm">
           No scenarios yet. Add a scenario to start building the workbook.
         </p>
       ) : (
@@ -391,7 +401,7 @@ function ScenarioSection({
   expanded: boolean
   onToggle: () => void
   onSelectStep: (step: Step) => void
-  role: string
+  role: EngagementRole
   engagementId: string
 }) {
   return (
@@ -399,11 +409,11 @@ function ScenarioSection({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
+        className="hover:bg-muted/50 flex w-full items-center gap-3 rounded-t-lg px-4 py-3 text-left transition-colors"
       >
         <svg
           className={cn(
-            'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+            'text-muted-foreground h-4 w-4 shrink-0 transition-transform',
             expanded && 'rotate-90',
           )}
           xmlns="http://www.w3.org/2000/svg"
@@ -418,17 +428,15 @@ function ScenarioSection({
         >
           <path d="m9 18 6-6-6-6" />
         </svg>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold truncate">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold">
             {scenario.ordinal}. {scenario.name}
           </h3>
           {scenario.threatActor && (
-            <p className="text-xs text-muted-foreground truncate">
-              {scenario.threatActor}
-            </p>
+            <p className="text-muted-foreground truncate text-xs">{scenario.threatActor}</p>
           )}
         </div>
-        <Badge variant="outline" className="text-xs shrink-0">
+        <Badge variant="outline" className="shrink-0 text-xs">
           {steps.length} step{steps.length !== 1 ? 's' : ''}
         </Badge>
       </button>
@@ -436,12 +444,12 @@ function ScenarioSection({
       {expanded && (
         <div className="border-t">
           {scenario.narrative && (
-            <p className="px-4 py-2 text-xs text-muted-foreground border-b bg-muted/20">
+            <p className="text-muted-foreground bg-muted/20 border-b px-4 py-2 text-xs">
               {scenario.narrative}
             </p>
           )}
           {steps.length === 0 ? (
-            <p className="px-4 py-4 text-xs text-muted-foreground text-center">
+            <p className="text-muted-foreground px-4 py-4 text-center text-xs">
               No steps in this scenario.
             </p>
           ) : (
@@ -489,7 +497,7 @@ function StepRow({
 }: {
   step: Step
   execution: Execution | undefined
-  role: string
+  role: EngagementRole
   engagementId: string
   onClick: () => void
 }) {
@@ -498,42 +506,30 @@ function StepRow({
   const visible = revealed || canSee
 
   const flash = useFlashOnChange(
-    execution
-      ? `${String(execution.version)}:${step.updatedAt}`
-      : step.updatedAt,
+    execution ? `${String(execution.version)}:${step.updatedAt}` : step.updatedAt,
   )
 
   return (
     <TableRow
-      className={cn(
-        'cursor-pointer hover:bg-muted/50',
-        flash && 'animate-flash-update',
-      )}
+      className={cn('hover:bg-muted/50 cursor-pointer', flash && 'animate-flash-update')}
       onClick={onClick}
     >
-      <TableCell className="text-xs text-muted-foreground font-mono">
-        {step.ordinal}
-      </TableCell>
+      <TableCell className="text-muted-foreground font-mono text-xs">{step.ordinal}</TableCell>
       <TableCell>
         <span className="flex items-center gap-2">
           {visible ? (
             <span className="text-sm font-medium">{step.name}</span>
           ) : (
-            <span className="text-sm text-muted-foreground italic">
-              [Unrevealed]
-            </span>
+            <span className="text-muted-foreground text-sm italic">[Unrevealed]</span>
           )}
           {execution && visible && (
-            <UnreadCommentBadge
-              engagementId={engagementId}
-              executionId={execution.id}
-            />
+            <UnreadCommentBadge engagementId={engagementId} executionId={execution.id} />
           )}
         </span>
       </TableCell>
       <TableCell>
         {step.techniqueId && (
-          <Badge variant="outline" className="text-xs font-mono">
+          <Badge variant="outline" className="font-mono text-xs">
             {step.techniqueId}
           </Badge>
         )}
@@ -549,13 +545,11 @@ function StepRow({
       </TableCell>
       <TableCell>
         {execution?.detectionCategory ? (
-          <Badge
-            variant={DETECTION_VARIANT[execution.detectionCategory] ?? 'outline'}
-          >
+          <Badge variant={DETECTION_VARIANT[execution.detectionCategory] ?? 'outline'}>
             {DETECTION_LABEL[execution.detectionCategory] ?? execution.detectionCategory}
           </Badge>
         ) : (
-          <span className="text-xs text-muted-foreground">&mdash;</span>
+          <span className="text-muted-foreground text-xs">&mdash;</span>
         )}
       </TableCell>
     </TableRow>
@@ -572,16 +566,15 @@ function UnreadCommentBadge({
   executionId: string
 }) {
   const comments = useComments(engagementId, executionId)
-  const newestAt =
-    comments.data && comments.data.length > 0
-      ? comments.data[comments.data.length - 1].createdAt
-      : null
+  const lastComment =
+    comments.data && comments.data.length > 0 ? comments.data[comments.data.length - 1] : undefined
+  const newestAt = lastComment?.createdAt ?? null
   const { hasUnread } = useCommentUnread(engagementId, executionId, newestAt)
 
   if (!hasUnread) return null
 
   return (
-    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground leading-none">
+    <span className="bg-primary text-primary-foreground flex h-5 w-5 items-center justify-center rounded-full text-[10px] leading-none font-bold">
       {comments.data ? Math.min(comments.data.length, 99) : '!'}
     </span>
   )
@@ -600,7 +593,7 @@ function ExecutionDrawer({
   step: Step
   execution: Execution | null
   engagementId: string
-  role: string
+  role: EngagementRole
   closed: boolean
   onClose: () => void
 }) {
@@ -609,19 +602,20 @@ function ExecutionDrawer({
   const visible = revealed || canSee
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {visible ? step.name : '[Unrevealed]'}
-          </DialogTitle>
-          <DialogDescription>
-            {step.objective && <span>{step.objective}</span>}
-          </DialogDescription>
+          <DialogTitle>{visible ? step.name : '[Unrevealed]'}</DialogTitle>
+          <DialogDescription>{step.objective && <span>{step.objective}</span>}</DialogDescription>
         </DialogHeader>
 
         {/* Step info bar */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
           {step.techniqueId && (
             <Badge variant="outline" className="font-mono">
               {step.techniqueId}
@@ -642,11 +636,7 @@ function ExecutionDrawer({
 
         {/* Reveal button */}
         {canSee && !revealed && !closed && (
-          <RevealButton
-            engagementId={engagementId}
-            scenarioId={step.scenarioId}
-            stepId={step.id}
-          />
+          <RevealButton engagementId={engagementId} scenarioId={step.scenarioId} stepId={step.id} />
         )}
 
         <Separator />
@@ -680,7 +670,7 @@ function ExecutionDrawer({
                 {OUTCOME_LABEL[execution.outcome] ?? execution.outcome}
               </Badge>
             ) : (
-              <span className="text-xs text-muted-foreground">—</span>
+              <span className="text-muted-foreground text-xs">—</span>
             )}
           </div>
         )}
@@ -693,11 +683,7 @@ function ExecutionDrawer({
         )}
 
         {/* Evidence */}
-        <EvidenceSection
-          engagementId={engagementId}
-          executionId={execution?.id}
-          role={role}
-        />
+        <EvidenceSection engagementId={engagementId} executionId={execution?.id} role={role} />
       </DialogContent>
     </Dialog>
   )
@@ -771,7 +757,6 @@ function RedExecutionEditor({
     }
   }, [execution.version]) // eslint-disable-line react-hooks/exhaustive-deps
 
-
   const disabled = closed || readOnly
 
   const handleSave = () => {
@@ -792,9 +777,7 @@ function RedExecutionEditor({
         onSuccess: () => toast.success('Red execution saved'),
         onError: (err) => {
           if (isApiError(err, 'conflict')) {
-            toast.error(
-              'This execution was modified by someone else. Reloading current state.',
-            )
+            toast.error('This execution was modified by someone else. Reloading current state.')
             void qc.invalidateQueries({
               queryKey: engagementKeys.executions(engagementId),
             })
@@ -867,11 +850,7 @@ function RedExecutionEditor({
         />
       </div>
       {!disabled && (
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={patchRed.isPending}
-        >
+        <Button size="sm" onClick={handleSave} disabled={patchRed.isPending}>
           {patchRed.isPending ? 'Saving...' : 'Save Red'}
         </Button>
       )}
@@ -893,9 +872,7 @@ function BlueDetectionEditor({
   const qc = useQueryClient()
   const patchBlue = usePatchBlueDetection()
 
-  const [detectionCategory, setDetectionCategory] = useState(
-    execution.detectionCategory ?? '',
-  )
+  const [detectionCategory, setDetectionCategory] = useState(execution.detectionCategory ?? '')
   const [selectedModifiers, setSelectedModifiers] = useState<string[]>(
     execution.detectionModifiers ?? [],
   )
@@ -903,17 +880,11 @@ function BlueDetectionEditor({
   const [detectedAt, setDetectedAt] = useState(
     execution.detectedAt ? toLocalDatetime(execution.detectedAt) : '',
   )
-  const [detectingSource, setDetectingSource] = useState(
-    execution.detectingSource ?? '',
-  )
-  const [detectingRuleRef, setDetectingRuleRef] = useState(
-    execution.detectingRuleRef ?? '',
-  )
+  const [detectingSource, setDetectingSource] = useState(execution.detectingSource ?? '')
+  const [detectingRuleRef, setDetectingRuleRef] = useState(execution.detectingRuleRef ?? '')
   const [alertSeverity, setAlertSeverity] = useState(execution.alertSeverity ?? '')
   const [blueNotes, setBlueNotes] = useState(execution.blueNotes ?? '')
-  const [advancedOpen, setAdvancedOpen] = useState(
-    (execution.detectionModifiers ?? []).length > 0,
-  )
+  const [advancedOpen, setAdvancedOpen] = useState((execution.detectionModifiers ?? []).length > 0)
 
   // Reset local state when the execution version changes (M4-005).
   const [blueVersion, setBlueVersion] = useState(execution.version)
@@ -957,9 +928,7 @@ function BlueDetectionEditor({
               ? (selectedModifiers as BlueDetectionPatch['detectionModifiers'])
               : undefined,
           protection:
-            protection === ''
-              ? undefined
-              : (protection as BlueDetectionPatch['protection']),
+            protection === '' ? undefined : (protection as BlueDetectionPatch['protection']),
           detectedAt: detectedAt ? new Date(detectedAt).toISOString() : undefined,
           detectingSource: detectingSource || undefined,
           detectingRuleRef: detectingRuleRef || undefined,
@@ -974,9 +943,7 @@ function BlueDetectionEditor({
         onSuccess: () => toast.success('Blue detection saved'),
         onError: (err) => {
           if (isApiError(err, 'conflict')) {
-            toast.error(
-              'This execution was modified by someone else. Reloading current state.',
-            )
+            toast.error('This execution was modified by someone else. Reloading current state.')
             void qc.invalidateQueries({
               queryKey: engagementKeys.executions(engagementId),
             })
@@ -1022,7 +989,7 @@ function BlueDetectionEditor({
                     onClick={() => setDetectionCategory(cat.key)}
                     className={cn(
                       'flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
                       disabled && 'cursor-not-allowed opacity-60',
                       selected
                         ? 'border-primary bg-primary text-primary-foreground'
@@ -1045,11 +1012,7 @@ function BlueDetectionEditor({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Protection</Label>
-          <Select
-            value={protection}
-            onValueChange={setProtection}
-            disabled={disabled}
-          >
+          <Select value={protection} onValueChange={setProtection} disabled={disabled}>
             <SelectTrigger>
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
@@ -1074,9 +1037,7 @@ function BlueDetectionEditor({
             disabled={disabled}
           />
           {execution.mttdSeconds != null && (
-            <p className="text-xs text-muted-foreground">
-              MTTD: {execution.mttdSeconds}s
-            </p>
+            <p className="text-muted-foreground text-xs">MTTD: {execution.mttdSeconds}s</p>
           )}
         </div>
       </div>
@@ -1100,11 +1061,7 @@ function BlueDetectionEditor({
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Alert Severity</Label>
-          <Select
-            value={alertSeverity}
-            onValueChange={setAlertSeverity}
-            disabled={disabled}
-          >
+          <Select value={alertSeverity} onValueChange={setAlertSeverity} disabled={disabled}>
             <SelectTrigger>
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
@@ -1122,13 +1079,11 @@ function BlueDetectionEditor({
 
       {/* Advanced — modifiers */}
       <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors">
           <span>Advanced</span>
-          <span className={cn('transition-transform', advancedOpen && 'rotate-90')}>
-            ▸
-          </span>
+          <span className={cn('transition-transform', advancedOpen && 'rotate-90')}>▸</span>
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2 space-y-1">
+        <CollapsibleContent className="space-y-1 pt-2">
           <Label className="text-xs">Detection Modifiers</Label>
           <div className="flex flex-wrap gap-2">
             {modifierOptions.map(([value, label]) => {
@@ -1140,9 +1095,7 @@ function BlueDetectionEditor({
                       variant={active ? 'default' : 'outline'}
                       className={cn(
                         'select-none',
-                        disabled
-                          ? 'cursor-not-allowed opacity-60'
-                          : 'cursor-pointer',
+                        disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                       )}
                       onClick={() => {
                         if (!disabled) toggleModifier(value)
@@ -1172,11 +1125,7 @@ function BlueDetectionEditor({
       </div>
 
       {!disabled && (
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={patchBlue.isPending}
-        >
+        <Button size="sm" onClick={handleSave} disabled={patchBlue.isPending}>
           {patchBlue.isPending ? 'Saving...' : 'Save Blue'}
         </Button>
       )}
@@ -1193,12 +1142,9 @@ function CommentsSection({
 }: {
   engagementId: string
   executionId: string | undefined
-  role: string
+  role: EngagementRole
 }) {
-  const comments = useComments(
-    executionId ? engagementId : undefined,
-    executionId,
-  )
+  const comments = useComments(executionId ? engagementId : undefined, executionId)
   const members = useEngagementMembers(engagementId)
   const user = useSignedInUser()
   const createComment = useCreateComment()
@@ -1223,9 +1169,7 @@ function CommentsSection({
   // Check if user may edit a comment (author, lead, or admin)
   const canEdit = useCallback(
     (commentAuthorId: string) =>
-      commentAuthorId === user.id ||
-      role === 'lead' ||
-      user.platformRole === 'admin',
+      commentAuthorId === user.id || role === 'lead' || user.platformRole === 'admin',
     [user.id, user.platformRole, role],
   )
 
@@ -1291,7 +1235,7 @@ function CommentsSection({
 
   if (!executionId) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         Execution not yet available. Run the step first.
       </p>
     )
@@ -1304,20 +1248,16 @@ function CommentsSection({
       {comments.data && comments.data.length > 0 ? (
         <div
           ref={scrollRef}
-          className="space-y-2 max-h-48 overflow-y-auto"
+          className="max-h-48 space-y-2 overflow-y-auto"
           onScroll={checkScrollBottom}
         >
           {comments.data.map((c) => (
             <div key={c.id} className="rounded-md border p-2 text-sm">
-              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground mb-1">
+              <div className="text-muted-foreground mb-1 flex items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">
-                    {authorName[c.authorId] ?? c.authorId}
-                  </span>
+                  <span className="font-medium">{authorName[c.authorId] ?? c.authorId}</span>
                   <span>{formatMoment(c.createdAt)}</span>
-                  {c.editedAt && (
-                    <span className="italic">(edited)</span>
-                  )}
+                  {c.editedAt && <span className="italic">(edited)</span>}
                 </div>
                 {canEdit(c.authorId) && editingId !== c.id && (
                   <Button
@@ -1358,11 +1298,7 @@ function CommentsSection({
                     >
                       {patchComment.isPending ? 'Saving...' : 'Save'}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={cancelEdit}
-                    >
+                    <Button size="sm" variant="ghost" onClick={cancelEdit}>
                       Cancel
                     </Button>
                   </div>
@@ -1374,7 +1310,7 @@ function CommentsSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No comments yet.</p>
+        <p className="text-muted-foreground text-xs">No comments yet.</p>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-2">
@@ -1384,11 +1320,7 @@ function CommentsSection({
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={createComment.isPending || !body.trim()}
-        >
+        <Button type="submit" size="sm" disabled={createComment.isPending || !body.trim()}>
           {createComment.isPending ? 'Posting...' : 'Post Comment'}
         </Button>
       </form>
@@ -1404,13 +1336,10 @@ function EvidenceSection({
 }: {
   engagementId: string
   executionId: string | undefined
-  role: string
+  role: EngagementRole
 }) {
   const qc = useQueryClient()
-  const evidence = useEvidenceList(
-    executionId ? engagementId : undefined,
-    executionId,
-  )
+  const evidence = useEvidenceList(executionId ? engagementId : undefined, executionId)
   const fileRef = useRef<HTMLInputElement>(null)
   const [caption, setCaption] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -1456,11 +1385,7 @@ function EvidenceSection({
   }
 
   if (!executionId) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Execution not yet available.
-      </p>
-    )
+    return <p className="text-muted-foreground text-xs">Execution not yet available.</p>
   }
 
   return (
@@ -1470,20 +1395,17 @@ function EvidenceSection({
       {evidence.data && evidence.data.length > 0 ? (
         <div className="space-y-2">
           {evidence.data.map((ev) => (
-            <div
-              key={ev.id}
-              className="flex items-center gap-3 rounded-md border p-2 text-sm"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{ev.filename}</p>
-                <p className="text-xs text-muted-foreground">
+            <div key={ev.id} className="flex items-center gap-3 rounded-md border p-2 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{ev.filename}</p>
+                <p className="text-muted-foreground text-xs">
                   {formatBytes(ev.size)} &middot; {ev.mime} &middot;{' '}
                   {ev.caption && <span>{ev.caption}</span>}
                 </p>
               </div>
               <a
                 href={`${API_BASE_URL}/engagements/${engagementId}/executions/${executionId}/evidence/${ev.id}/download`}
-                className="text-xs text-primary hover:underline shrink-0"
+                className="text-primary shrink-0 text-xs hover:underline"
                 download
               >
                 Download
@@ -1492,26 +1414,18 @@ function EvidenceSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No evidence uploaded.</p>
+        <p className="text-muted-foreground text-xs">No evidence uploaded.</p>
       )}
 
       <div className="space-y-2">
-        <Input
-          type="file"
-          ref={fileRef}
-          className="text-xs"
-        />
+        <Input type="file" ref={fileRef} className="text-xs" />
         <Input
           placeholder="Caption (optional)"
           value={caption}
           onChange={(e) => setCaption(e.target.value)}
           className="text-xs"
         />
-        <Button
-          size="sm"
-          onClick={handleUpload}
-          disabled={uploading}
-        >
+        <Button size="sm" onClick={handleUpload} disabled={uploading}>
           {uploading ? 'Uploading...' : 'Upload Evidence'}
         </Button>
       </div>
@@ -1567,9 +1481,7 @@ function AddScenarioDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Scenario</DialogTitle>
-          <DialogDescription>
-            Create a new manual scenario for this engagement.
-          </DialogDescription>
+          <DialogDescription>Create a new manual scenario for this engagement.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -1599,17 +1511,10 @@ function AddScenarioDialog({
             />
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={createScenario.isPending || !name.trim()}
-            >
+            <Button type="submit" disabled={createScenario.isPending || !name.trim()}>
               {createScenario.isPending ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>
@@ -1685,17 +1590,12 @@ function AddStepDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Step</DialogTitle>
-          <DialogDescription>
-            Create a new step in a scenario.
-          </DialogDescription>
+          <DialogDescription>Create a new step in a scenario.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Scenario</Label>
-            <Select
-              value={scenarioId}
-              onValueChange={setScenarioId}
-            >
+            <Select value={scenarioId} onValueChange={setScenarioId}>
               <SelectTrigger>
                 <SelectValue placeholder="Select scenario..." />
               </SelectTrigger>
@@ -1742,17 +1642,10 @@ function AddStepDialog({
             />
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={createStep.isPending || !name.trim() || !scenarioId}
-            >
+            <Button type="submit" disabled={createStep.isPending || !name.trim() || !scenarioId}>
               {createStep.isPending ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>
@@ -1796,9 +1689,7 @@ function ImportCtidDialog({
             `Imported ${data.stepCount} step${data.stepCount !== 1 ? 's' : ''} to scenario "${data.scenario.name}"`,
           )
           if (data.warnings.length > 0) {
-            toast.warning(
-              `${data.warnings.length} technique(s) could not be resolved`,
-            )
+            toast.warning(`${data.warnings.length} technique(s) could not be resolved`)
           }
           setPlanId('')
           setName('')
@@ -1853,17 +1744,10 @@ function ImportCtidDialog({
             />
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={importPlan.isPending || !planId}
-            >
+            <Button type="submit" disabled={importPlan.isPending || !planId}>
               {importPlan.isPending ? 'Importing...' : 'Import'}
             </Button>
           </DialogFooter>
@@ -1938,8 +1822,7 @@ function StepFromTemplateDialog({
           setArgValuesText('')
           onOpenChange(false)
         },
-        onError: (err) =>
-          toast.error(err?.message ?? 'Failed to create step from template'),
+        onError: (err) => toast.error(err?.message ?? 'Failed to create step from template'),
       },
     )
   }
@@ -2016,23 +1899,17 @@ function StepFromTemplateDialog({
               onChange={(e) => setArgValuesText(e.target.value)}
               placeholder={'KEY1=value1\nKEY2=value2'}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               One <code>KEY=VALUE</code> pair per line. Used for template variable substitution.
             </p>
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={
-                createFromTemplate.isPending || !templateId || !scenarioId
-              }
+              disabled={createFromTemplate.isPending || !templateId || !scenarioId}
             >
               {createFromTemplate.isPending ? 'Creating...' : 'Create'}
             </Button>
@@ -2053,7 +1930,7 @@ function formatBytes(bytes: number): string {
 
 function getCsrfToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)bl_csrf=([^;]*)/)
-  return match ? match[1] : ''
+  return match?.[1] ?? ''
 }
 
 /** Convert an ISO 8601 UTC string to a datetime-local value (no timezone suffix). */

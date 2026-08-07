@@ -197,7 +197,6 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	return nil
 }
 
-
 // Health reports whether the database is answering, for /healthz.
 //
 // It exercises the read pool only. A check that took the write lock would queue
@@ -220,6 +219,7 @@ func (db *DB) Health(ctx context.Context) error {
 	}
 	return nil
 }
+
 // Close stops accepting writes, waits for the in-flight write (there is at most
 // one) to commit or roll back, and closes the connections. It is safe to call
 // from any number of goroutines and any number of times; every call returns the

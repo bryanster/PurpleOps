@@ -24,7 +24,6 @@ import {
   useSetEngagementStatus,
   type Engagement,
   type EngagementMode,
-  type EngagementRole,
   type EngagementStatus,
 } from './queries'
 import { canManage } from './roles'
@@ -70,11 +69,7 @@ export function SettingsPage(): ReactNode {
 
   return (
     <div className="flex flex-col gap-6">
-      <EngagementSettings
-        engagement={engagement.data}
-        engagementId={engagementId}
-        role={role}
-      />
+      <EngagementSettings engagement={engagement.data} engagementId={engagementId} />
     </div>
   )
 }
@@ -84,30 +79,21 @@ export function SettingsPage(): ReactNode {
 function EngagementSettings({
   engagement,
   engagementId,
-  role,
 }: {
   engagement: Engagement
   engagementId: string
-  role: EngagementRole
 }): ReactNode {
   const closed = engagement.status === 'closed' || engagement.status === 'archived'
 
   return (
     <>
-      <ModeSection
-        engagementId={engagementId}
-        mode={engagement.mode}
-        disabled={closed}
-      />
+      <ModeSection engagementId={engagementId} mode={engagement.mode} disabled={closed} />
       <AutoRevealSection
         engagementId={engagementId}
         autoReveal={engagement.autoRevealOnStart}
         disabled={closed}
       />
-      <StatusSection
-        engagementId={engagementId}
-        current={engagement.status}
-      />
+      <StatusSection engagementId={engagementId} current={engagement.status} />
       <DangerSection engagementId={engagementId} engagementName={engagement.name} />
     </>
   )
@@ -130,8 +116,8 @@ function ModeSection({
     <section className="rounded-lg border p-5">
       <h2 className="mb-3 text-lg font-semibold">Mode</h2>
       <p className="text-muted-foreground mb-3 text-sm">
-        Standard shows the workbook to both sides. Blind hides step details from
-        blue until red manually reveals them.
+        Standard shows the workbook to both sides. Blind hides step details from blue until red
+        manually reveals them.
       </p>
       {disabled && (
         <p className="text-muted-foreground mb-3 text-xs">
@@ -188,8 +174,8 @@ function AutoRevealSection({
     <section className="rounded-lg border p-5">
       <h2 className="mb-3 text-lg font-semibold">Auto-reveal</h2>
       <p className="text-muted-foreground mb-3 text-sm">
-        When enabled, the first red execution on each step automatically reveals
-        it to blue. When disabled, steps must be manually revealed.
+        When enabled, the first red execution on each step automatically reveals it to blue. When
+        disabled, steps must be manually revealed.
       </p>
       <div className="flex items-center gap-2">
         <Checkbox
@@ -204,11 +190,7 @@ function AutoRevealSection({
               },
               {
                 onSuccess: () => {
-                  toast.success(
-                    checked === true
-                      ? 'Auto-reveal enabled.'
-                      : 'Auto-reveal disabled.',
-                  )
+                  toast.success(checked === true ? 'Auto-reveal enabled.' : 'Auto-reveal disabled.')
                 },
                 onError: (error) => {
                   toast.error(error.message)
@@ -245,13 +227,7 @@ function StatusSection({
       <p className="text-muted-foreground mb-3 text-sm">
         Current status:{' '}
         <Badge
-          variant={
-            current === 'active'
-              ? 'default'
-              : current === 'draft'
-                ? 'secondary'
-                : 'outline'
-          }
+          variant={current === 'active' ? 'default' : current === 'draft' ? 'secondary' : 'outline'}
         >
           {current.charAt(0).toUpperCase() + current.slice(1)}
         </Badge>
@@ -286,9 +262,7 @@ function StatusSection({
   )
 }
 
-function validTransitions(
-  current: EngagementStatus,
-): { to: EngagementStatus; label: string }[] {
+function validTransitions(current: EngagementStatus): { to: EngagementStatus; label: string }[] {
   switch (current) {
     case 'draft':
       return [
@@ -318,13 +292,11 @@ function DangerSection({
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
-    <section className="rounded-lg border border-destructive/30 p-5">
-      <h2 className="text-destructive mb-3 text-lg font-semibold">
-        Danger zone
-      </h2>
+    <section className="border-destructive/30 rounded-lg border p-5">
+      <h2 className="text-destructive mb-3 text-lg font-semibold">Danger zone</h2>
       <p className="text-muted-foreground mb-3 text-sm">
-        Permanently delete this engagement and all its scenarios, steps,
-        executions, findings, and evidence. This cannot be undone.
+        Permanently delete this engagement and all its scenarios, steps, executions, findings, and
+        evidence. This cannot be undone.
       </p>
 
       <Button
@@ -343,8 +315,8 @@ function DangerSection({
         title="Delete engagement"
         description={
           <>
-            Permanently delete <strong>{engagementName}</strong> and all of its
-            data? This action cannot be undone.
+            Permanently delete <strong>{engagementName}</strong> and all of its data? This action
+            cannot be undone.
           </>
         }
         confirmLabel="Delete"

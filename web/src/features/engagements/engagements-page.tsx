@@ -196,16 +196,12 @@ function EngagementRow({ engagement }: { engagement: Engagement }): ReactNode {
           {engagement.name}
         </Link>
       </TableCell>
-      <TableCell className="text-muted-foreground text-sm">
-        {engagement.client || '—'}
-      </TableCell>
+      <TableCell className="text-muted-foreground text-sm">{engagement.client || '—'}</TableCell>
       <TableCell>
         <StatusBadge status={engagement.status} />
       </TableCell>
       <TableCell>
-        <Badge variant="outline">
-          {engagement.mode === 'blind' ? 'Blind' : 'Standard'}
-        </Badge>
+        <Badge variant="outline">{engagement.mode === 'blind' ? 'Blind' : 'Standard'}</Badge>
       </TableCell>
       <TableCell className="font-mono text-sm">{engagement.attackVersion}</TableCell>
       <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
@@ -264,11 +260,13 @@ function CreateEngagementDialog({
     setSubmitted(true)
     const body: CreateEngagement = {
       name: name.trim(),
+      client: client.trim(),
+      description: '',
       attackVersion,
       mode: mode as 'standard' | 'blind',
       autoRevealOnStart: autoReveal,
     }
-    if (client.trim()) body.client = client.trim()
+
     createEngagement.mutate(body, {
       onSuccess: () => {
         toast.success(`Engagement "${name}" created.`)
@@ -287,8 +285,7 @@ function CreateEngagementDialog({
     onOpenChange(next)
   }
 
-  const canSubmit =
-    name.trim().length > 0 && attackVersion !== '' && !versions.isPending
+  const canSubmit = name.trim().length > 0 && attackVersion !== '' && !versions.isPending
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -342,9 +339,7 @@ function CreateEngagementDialog({
                   {browsable.map((v) => (
                     <SelectItem key={v.version} value={v.version}>
                       {v.version}
-                      <span className="text-muted-foreground ml-2 text-xs">
-                        ({v.itemCount})
-                      </span>
+                      <span className="text-muted-foreground ml-2 text-xs">({v.itemCount})</span>
                     </SelectItem>
                   ))}
                 </SelectContent>

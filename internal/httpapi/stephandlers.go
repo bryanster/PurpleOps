@@ -293,10 +293,8 @@ func (h *handlers) stepBlindScope(ctx context.Context, engagementID string) (bli
 	if !member && h.ownership != nil {
 		// Self operations (like SSE subscribe) don't carry cached
 		// memberships in the authorization Subject. Load from store.
-		s, m, err := h.ownership.Seat(ctx, engagementID, auth.Subject.UserID)
-		if err == nil && m {
+		if s, m, err := h.ownership.Seat(ctx, engagementID, auth.Subject.UserID); err == nil && m {
 			seat = s
-			member = true
 		}
 	}
 

@@ -1,4 +1,4 @@
-import type { EngagementRole } from '@/api/schema'
+import type { EngagementRole } from './queries'
 
 /**
  * Engagement-role predicates (M3-014).
@@ -26,7 +26,7 @@ export function canWriteBlue(role: EngagementRole): boolean {
 }
 
 /** May write comments (observers hold this one write). */
-export function canWriteComments(role: EngagementRole): boolean {
+export function canWriteComments(_role: EngagementRole): boolean {
   return true // Every role, including observer, may comment.
 }
 

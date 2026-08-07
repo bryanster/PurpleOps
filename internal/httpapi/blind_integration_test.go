@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/events"
@@ -53,15 +52,18 @@ func captureSSE(t *testing.T, url string, cookie *http.Cookie, ctx context.Conte
 	if err != nil {
 		t.Fatalf("SSE connect: %v", err)
 	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			t.Fatalf("SSE status = %d (and body read failed: %v)", resp.StatusCode, err)
+		}
 		t.Fatalf("SSE status = %d\n%s", resp.StatusCode, body)
 	}
 
 	frames := make(chan sseFrame, 64)
 	go func() {
-		defer resp.Body.Close()
 		defer close(frames)
 		sc := bufio.NewScanner(resp.Body)
 		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -317,22 +319,28 @@ func TestBlindHubAllowFilterDropsUnrevealedActivity(t *testing.T) {
 	revealedFalse := false
 
 	// Publish an unrevealed step event — should be dropped.
-	unrevealedData, _ := json.Marshal(events.EventData{
+	unrevealedData, err := json.Marshal(events.EventData{
 		ObjectType: events.ObjectStep,
 		ObjectID:   "step-1",
 		Revealed:   &revealedFalse,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	hub.Publish(events.EngagementTopic("01900000-b004-7000-8000-000000000001"), events.Event{
 		Type: "step.created",
 		Data: unrevealedData,
 	})
 
 	// Publish a revealed step event — should arrive.
-	revealedData, _ := json.Marshal(events.EventData{
+	revealedData, err := json.Marshal(events.EventData{
 		ObjectType: events.ObjectStep,
 		ObjectID:   "step-2",
 		Revealed:   &revealedTrue,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	hub.Publish(events.EngagementTopic("01900000-b004-7000-8000-000000000001"), events.Event{
 		Type: "step.revealed",
 		Data: revealedData,
@@ -356,8 +364,11 @@ func TestBlindHubAllowFilterDropsUnrevealedActivity(t *testing.T) {
 	select {
 	case ev := <-ch:
 		var d events.EventData
-		_ = json.Unmarshal(ev.Data, &d)
-		t.Errorf("unexpected second event for step %s", d.ObjectID)
+		if err := json.Unmarshal(ev.Data, &d); err != nil {
+			t.Errorf("unexpected second event (unmarshal failed: %v)", err)
+		} else {
+			t.Errorf("unexpected second event for step %s", d.ObjectID)
+		}
 	case <-time.After(200 * time.Millisecond):
 		// Good — unrevealed event was dropped.
 	}
@@ -458,22 +469,23 @@ func setPresence(t *testing.T, server *authServer, engID string,
 	presenceUUID uuid.UUID, stepID, execID *uuid.UUID, cookie *http.Cookie,
 ) {
 	t.Helper()
-	hb := gen.PresenceHeartbeat{
-		PresenceId: openapi_types.UUID(presenceUUID),
-		Focus: &struct {
-			ExecutionId *openapi_types.UUID `json:"executionId,omitempty"`
-			StepId      *openapi_types.UUID `json:"stepId,omitempty"`
-		}{},
+	payload := map[string]any{
+		"presenceId": presenceUUID.String(),
 	}
-	if stepID != nil {
-		id := openapi_types.UUID(*stepID)
-		hb.Focus.StepId = &id
+	if stepID != nil || execID != nil {
+		focus := map[string]any{}
+		if stepID != nil {
+			focus["stepId"] = stepID.String()
+		}
+		if execID != nil {
+			focus["executionId"] = execID.String()
+		}
+		payload["focus"] = focus
 	}
-	if execID != nil {
-		id := openapi_types.UUID(*execID)
-		hb.Focus.ExecutionId = &id
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
 	}
-	body, _ := json.Marshal(hb)
 	res := server.send(http.MethodPut,
 		BasePath+"/engagements/"+engID+"/presence?presenceId="+presenceUUID.String(),
 		string(body), cookie)

@@ -33,16 +33,8 @@ import {
 import { formatMoment } from '@/lib/time'
 
 import { useEngagementContext } from './engagement-layout'
-import {
-  canWriteFindings,
-  canManage,
-} from './roles'
-import {
-  useCreateFinding,
-  useFindings,
-  type Finding,
-  type NewFinding,
-} from './queries'
+import { canWriteFindings } from './roles'
+import { useCreateFinding, useFindings, type Finding, type NewFinding } from './queries'
 
 const SEVERITIES = [
   { value: 'critical', label: 'Critical' },
@@ -52,22 +44,13 @@ const SEVERITIES = [
   { value: 'info', label: 'Info' },
 ]
 
-const STATUSES = [
-  { value: 'open', label: 'Open' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'wont_fix', label: "Won't Fix" },
-]
-
 export function FindingsPage(): ReactNode {
   const { engagementId, role, closed } = useEngagementContext()
   const findings = useFindings(engagementId)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | undefined>(undefined)
 
-  const detailFinding = detailId
-    ? (findings.data ?? []).find((f) => f.id === detailId)
-    : undefined
+  const detailFinding = detailId ? (findings.data ?? []).find((f) => f.id === detailId) : undefined
 
   if (findings.isPending) {
     return <PageLoading label="Loading findings…" />
@@ -154,10 +137,7 @@ export function FindingsPage(): ReactNode {
         </div>
       )}
 
-      <CreateFindingDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-      />
+      <CreateFindingDialog open={createOpen} onOpenChange={setCreateOpen} />
 
       {detailFinding !== undefined && (
         <FindingDetailDialog
@@ -172,11 +152,7 @@ export function FindingsPage(): ReactNode {
   )
 }
 
-function SeverityBadge({
-  severity,
-}: {
-  severity: string
-}): ReactNode {
+function SeverityBadge({ severity }: { severity: string }): ReactNode {
   const variant =
     severity === 'critical' || severity === 'high'
       ? 'destructive'
@@ -271,9 +247,7 @@ function CreateFindingDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New finding</DialogTitle>
-          <DialogDescription>
-            Raise a remediation finding for this engagement.
-          </DialogDescription>
+          <DialogDescription>Raise a remediation finding for this engagement.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
@@ -373,11 +347,7 @@ function FindingDetailDialog({
             </div>
           </DialogTitle>
           <DialogDescription className="text-left">
-            {finding.owner && (
-              <span>
-                Owner: {finding.owner} ·{' '}
-              </span>
-            )}
+            {finding.owner && <span>Owner: {finding.owner} · </span>}
             Created {formatMoment(finding.createdAt)}
             {finding.updatedAt !== finding.createdAt &&
               ` · Updated ${formatMoment(finding.updatedAt)}`}

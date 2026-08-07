@@ -76,6 +76,8 @@ export interface UseEventSourceState {
  * `lastEventId` tracks the most recent envelope `id` for M4-004 replay.
  *
  * Prefer this over hand-rolled `EventSource` so all M2/M4 consumers share
+ * one reconnect, envelope-parse and lastEventId contract.
+ */
 export function useEventSource(options: UseEventSourceOptions): UseEventSourceState {
   const { topics, onEvent, enabled = true, initialLastEventId } = options
   const onEventRef = useRef(onEvent)
@@ -85,7 +87,7 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceSt
 
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState<Event | null>(null)
-  const lastEventIdRef = useRef<string | undefined>(undefined)
+  const [lastEventId, setLastEventId] = useState<string | undefined>(undefined)
 
   // Stable key so topic-array identity changes that are value-equal do not
   // thrash the socket.
@@ -121,7 +123,7 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceSt
       }
 
       if (isHubEnvelope(parsed)) {
-        lastEventIdRef.current = parsed.id
+        setLastEventId(parsed.id)
         onEventRef.current?.({
           id: parsed.id,
           type: parsed.type,
@@ -129,8 +131,8 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceSt
         })
       } else {
         onEventRef.current?.({
-          id: (ev as MessageEvent).lastEventId || undefined,
-          type: (ev as MessageEvent).type || 'message',
+          id: ev.lastEventId || undefined,
+          type: ev.type || 'message',
           data: parsed,
         })
       }
@@ -149,7 +151,7 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceSt
   return {
     connected: active ? connected : false,
     error: active ? error : null,
-    lastEventId: lastEventIdRef.current,
+    lastEventId,
   }
 }
 

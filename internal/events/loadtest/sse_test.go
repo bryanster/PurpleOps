@@ -9,7 +9,7 @@
 //
 //   - TestSSEWarRoomLoad — full developer load (BLACKLIGHT_LOADTEST=1)
 //
-//	BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/events/loadtest/ -run TestSSEWarRoomLoad
+//     BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/events/loadtest/ -run TestSSEWarRoomLoad
 package loadtest_test
 
 import (
@@ -215,7 +215,7 @@ func runSSELoadTest(t *testing.T, opts sseLoadOpts) {
 	t.Logf("seed: %d users, %d steps, %d activity rows, %d subscribers (%d stalled)",
 		opts.users, opts.steps, opts.activityHistory, opts.subscribers, opts.stalledSubs)
 
-	assertSSEWarRoom(t, result)
+	assertSSEWarRoom(t, &result)
 }
 
 func heartbeater(ctx context.Context, baseURL, engID string,
@@ -231,10 +231,13 @@ func heartbeater(ctx context.Context, baseURL, engID string,
 				}
 				pid := uuid.Must(uuid.NewV7()).String()
 				body := fmt.Sprintf(`{"presenceId":%q}`, pid)
-				req, _ := http.NewRequestWithContext(ctx, http.MethodPut,
+				req, err := http.NewRequestWithContext(ctx, http.MethodPut,
 					fmt.Sprintf("%s%s/engagements/%s/presence",
 						baseURL, httpapi.BasePath, engID),
 					strings.NewReader(body))
+				if err != nil {
+					continue
+				}
 				req.Header.Set("Content-Type", "application/json")
 				req.AddCookie(sessions[i])
 				resp, err := http.DefaultClient.Do(req)
@@ -453,18 +456,24 @@ func loginUsers(t *testing.T, baseURL string, data loadTestData) []*http.Cookie 
 	for i := range data.userIDs {
 		email := fmt.Sprintf("loadtest-user-%d@blacklight.test", i)
 		body := fmt.Sprintf(`{"email":%q,"password":%q}`, email, testPasswordPlaintext)
-		req, _ := http.NewRequestWithContext(t.Context(),
+		req, err := http.NewRequestWithContext(t.Context(),
 			http.MethodPost,
 			baseURL+httpapi.BasePath+"/auth/login",
 			strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("login request for user %d: %v", i, err)
+		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("login for user %d: %v", i, err)
 		}
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("login body for user %d: %v", i, err)
+		}
 
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("login for user %d = %d, want 200\nbody: %s",
@@ -510,21 +519,23 @@ func captureSSE(t *testing.T, url string, cookie *http.Cookie,
 	if err != nil {
 		t.Fatalf("SSE connect: %v", err)
 	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			t.Fatalf("SSE status = %d (and body read failed: %v)", resp.StatusCode, err)
+		}
 		t.Fatalf("SSE status = %d\n%s", resp.StatusCode, body)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "text/event-stream") {
-		resp.Body.Close()
 		t.Fatalf("Content-Type = %q, want text/event-stream", ct)
 	}
 
 	frames := make(chan sseFrame, 256)
 
 	go func() {
-		defer resp.Body.Close()
 		defer close(frames)
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 0, 4096), 256*1024)
@@ -575,7 +586,7 @@ func captureSSE(t *testing.T, url string, cookie *http.Cookie,
 // Assertions
 // ---------------------------------------------------------------------------
 
-func assertSSEWarRoom(t *testing.T, result sseLoadResult) {
+func assertSSEWarRoom(t *testing.T, result *sseLoadResult) {
 	t.Helper()
 
 	if len(result.publishLatencies) > 0 {

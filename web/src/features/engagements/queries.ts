@@ -11,9 +11,7 @@ import {
 } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/api/client'
-import { isApiError } from '@/api/errors'
 import type { components } from '@/api/schema'
-import { authKeys } from '@/features/auth/queries'
 
 /**
  * Engagement, scenario, step, execution, finding, evidence, comment and member
@@ -32,7 +30,10 @@ export type CreateEngagement = components['schemas']['CreateEngagement']
 export type PatchEngagement = components['schemas']['PatchEngagement']
 export type SetEngagementStatus = components['schemas']['SetEngagementStatus']
 export type EngagementMember = components['schemas']['EngagementMember']
-export type EngagementRole = components['schemas']['EngagementRole']
+/** Seat role stored on memberships — excludes platform-admin pseudo-role. */
+export type MemberRole = components['schemas']['EngagementRole']
+/** Caller capability in an engagement UI, including platform admin. */
+export type EngagementRole = MemberRole | 'admin'
 export type AddMember = components['schemas']['AddMember']
 export type PatchMember = components['schemas']['PatchMember']
 export type Scenario = components['schemas']['Scenario']
@@ -62,16 +63,13 @@ export const engagementKeys = {
   list: (filters: { status?: string; limit?: number; cursor?: string }) =>
     [...engagementKeys.all, 'list', filters] as const,
   detail: (id: string) => [...engagementKeys.all, 'detail', id] as const,
-  members: (engagementId: string) =>
-    [...engagementKeys.all, 'members', engagementId] as const,
-  scenarios: (engagementId: string) =>
-    [...engagementKeys.all, 'scenarios', engagementId] as const,
+  members: (engagementId: string) => [...engagementKeys.all, 'members', engagementId] as const,
+  scenarios: (engagementId: string) => [...engagementKeys.all, 'scenarios', engagementId] as const,
   scenario: (engagementId: string, scenarioId: string) =>
     [...engagementKeys.all, 'scenario', engagementId, scenarioId] as const,
   steps: (engagementId: string, scenarioId: string) =>
     [...engagementKeys.all, 'steps', engagementId, scenarioId] as const,
-  allSteps: (engagementId: string) =>
-    [...engagementKeys.all, 'allSteps', engagementId] as const,
+  allSteps: (engagementId: string) => [...engagementKeys.all, 'allSteps', engagementId] as const,
   step: (engagementId: string, scenarioId: string, stepId: string) =>
     [...engagementKeys.all, 'step', engagementId, scenarioId, stepId] as const,
   executions: (engagementId: string) =>
@@ -82,8 +80,7 @@ export const engagementKeys = {
     [...engagementKeys.all, 'comments', engagementId, executionId] as const,
   evidence: (engagementId: string, executionId: string) =>
     [...engagementKeys.all, 'evidence', engagementId, executionId] as const,
-  findings: (engagementId: string) =>
-    [...engagementKeys.all, 'findings', engagementId] as const,
+  findings: (engagementId: string) => [...engagementKeys.all, 'findings', engagementId] as const,
   activityPrefix: (engagementId: string) =>
     [...engagementKeys.all, 'activity', engagementId] as const,
   activity: (engagementId: string, filters: { verb?: string }) =>
@@ -119,17 +116,13 @@ export function engagementsQueryOptions(filters: {
   })
 }
 
-export function useEngagements(
-  filters: { status?: string } = {},
-): UseInfiniteQueryResult<{
+export function useEngagements(filters: { status?: string } = {}): UseInfiniteQueryResult<{
   pages: components['schemas']['EngagementPage'][]
 }> {
   return useInfiniteQuery(engagementsQueryOptions(filters))
 }
 
-export function useEngagement(
-  engagementId: string | undefined,
-): UseQueryResult<Engagement> {
+export function useEngagement(engagementId: string | undefined): UseQueryResult<Engagement> {
   return useQuery(engagementQueryOptions(engagementId))
 }
 
@@ -147,11 +140,7 @@ export function engagementQueryOptions(engagementId: string | undefined) {
   })
 }
 
-export function useCreateEngagement(): UseMutationResult<
-  Engagement,
-  Error,
-  CreateEngagement
-> {
+export function useCreateEngagement(): UseMutationResult<Engagement, Error, CreateEngagement> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (body) =>
@@ -213,11 +202,7 @@ export function useSetEngagementStatus(): UseMutationResult<
   })
 }
 
-export function useDeleteEngagement(): UseMutationResult<
-  void,
-  Error,
-  { engagementId: string }
-> {
+export function useDeleteEngagement(): UseMutationResult<void, Error, { engagementId: string }> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ engagementId }) => {
@@ -426,15 +411,12 @@ export function useSteps(
     queryKey: engagementKeys.steps(engagementId ?? '', scenarioId ?? ''),
     queryFn: async ({ signal }) =>
       unwrap(
-        await api.GET(
-          '/engagements/{engagementId}/scenarios/{scenarioId}/steps',
-          {
-            params: {
-              path: { engagementId: engagementId!, scenarioId: scenarioId! },
-            },
-            signal,
+        await api.GET('/engagements/{engagementId}/scenarios/{scenarioId}/steps', {
+          params: {
+            path: { engagementId: engagementId!, scenarioId: scenarioId! },
           },
-        ),
+          signal,
+        }),
       ),
     enabled:
       engagementId !== undefined &&
@@ -469,20 +451,14 @@ export function useCreateStep(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, scenarioId, body }) =>
       unwrap(
-        await api.POST(
-          '/engagements/{engagementId}/scenarios/{scenarioId}/steps',
-          {
-            params: { path: { engagementId, scenarioId } },
-            body,
-          },
-        ),
+        await api.POST('/engagements/{engagementId}/scenarios/{scenarioId}/steps', {
+          params: { path: { engagementId, scenarioId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(
-          variables.engagementId,
-          variables.scenarioId,
-        ),
+        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
       })
     },
   })
@@ -497,20 +473,14 @@ export function usePatchStep(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, scenarioId, stepId, body }) =>
       unwrap(
-        await api.PATCH(
-          '/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}',
-          {
-            params: { path: { engagementId, scenarioId, stepId } },
-            body,
-          },
-        ),
+        await api.PATCH('/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}', {
+          params: { path: { engagementId, scenarioId, stepId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(
-          variables.engagementId,
-          variables.scenarioId,
-        ),
+        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
       })
     },
   })
@@ -524,19 +494,13 @@ export function useDeleteStep(): UseMutationResult<
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ engagementId, scenarioId, stepId }) => {
-      await api.DELETE(
-        '/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}',
-        {
-          params: { path: { engagementId, scenarioId, stepId } },
-        },
-      )
+      await api.DELETE('/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}', {
+        params: { path: { engagementId, scenarioId, stepId } },
+      })
     },
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(
-          variables.engagementId,
-          variables.scenarioId,
-        ),
+        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
       })
     },
   })
@@ -551,19 +515,13 @@ export function useRevealStep(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, scenarioId, stepId }) =>
       unwrap(
-        await api.POST(
-          '/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}/reveal',
-          {
-            params: { path: { engagementId, scenarioId, stepId } },
-          },
-        ),
+        await api.POST('/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}/reveal', {
+          params: { path: { engagementId, scenarioId, stepId } },
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(
-          variables.engagementId,
-          variables.scenarioId,
-        ),
+        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
       })
       void qc.invalidateQueries({
         queryKey: engagementKeys.allSteps(variables.engagementId),
@@ -580,20 +538,14 @@ export function useReorderSteps(): UseMutationResult<
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ engagementId, scenarioId, ids }) => {
-      await api.PUT(
-        '/engagements/{engagementId}/scenarios/{scenarioId}/steps/order',
-        {
-          params: { path: { engagementId, scenarioId } },
-          body: { ids },
-        },
-      )
+      await api.PUT('/engagements/{engagementId}/scenarios/{scenarioId}/steps/order', {
+        params: { path: { engagementId, scenarioId } },
+        body: { ids },
+      })
     },
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(
-          variables.engagementId,
-          variables.scenarioId,
-        ),
+        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
       })
     },
   })
@@ -622,21 +574,15 @@ export function useExecution(
   executionId: string | undefined,
 ): UseQueryResult<Execution> {
   return useQuery({
-    queryKey: engagementKeys.execution(
-      engagementId ?? '',
-      executionId ?? '',
-    ),
+    queryKey: engagementKeys.execution(engagementId ?? '', executionId ?? ''),
     queryFn: async ({ signal }) =>
       unwrap(
-        await api.GET(
-          '/engagements/{engagementId}/executions/{executionId}',
-          {
-            params: {
-              path: { engagementId: engagementId!, executionId: executionId! },
-            },
-            signal,
+        await api.GET('/engagements/{engagementId}/executions/{executionId}', {
+          params: {
+            path: { engagementId: engagementId!, executionId: executionId! },
           },
-        ),
+          signal,
+        }),
       ),
     enabled:
       engagementId !== undefined &&
@@ -659,23 +605,17 @@ export function usePatchRedExecution(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, executionId, body }) =>
       unwrap(
-        await api.PATCH(
-          '/engagements/{engagementId}/executions/{executionId}/execution',
-          {
-            params: { path: { engagementId, executionId } },
-            body,
-          },
-        ),
+        await api.PATCH('/engagements/{engagementId}/executions/{executionId}/execution', {
+          params: { path: { engagementId, executionId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
         queryKey: engagementKeys.executions(variables.engagementId),
       })
       void qc.invalidateQueries({
-        queryKey: engagementKeys.execution(
-          variables.engagementId,
-          variables.executionId,
-        ),
+        queryKey: engagementKeys.execution(variables.engagementId, variables.executionId),
       })
     },
   })
@@ -694,23 +634,17 @@ export function usePatchBlueDetection(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, executionId, body }) =>
       unwrap(
-        await api.PATCH(
-          '/engagements/{engagementId}/executions/{executionId}/detection',
-          {
-            params: { path: { engagementId, executionId } },
-            body,
-          },
-        ),
+        await api.PATCH('/engagements/{engagementId}/executions/{executionId}/detection', {
+          params: { path: { engagementId, executionId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
         queryKey: engagementKeys.executions(variables.engagementId),
       })
       void qc.invalidateQueries({
-        queryKey: engagementKeys.execution(
-          variables.engagementId,
-          variables.executionId,
-        ),
+        queryKey: engagementKeys.execution(variables.engagementId, variables.executionId),
       })
     },
   })
@@ -723,21 +657,15 @@ export function useComments(
   executionId: string | undefined,
 ): UseQueryResult<Comment[]> {
   return useQuery({
-    queryKey: engagementKeys.comments(
-      engagementId ?? '',
-      executionId ?? '',
-    ),
+    queryKey: engagementKeys.comments(engagementId ?? '', executionId ?? ''),
     queryFn: async ({ signal }) =>
       unwrap(
-        await api.GET(
-          '/engagements/{engagementId}/executions/{executionId}/comments',
-          {
-            params: {
-              path: { engagementId: engagementId!, executionId: executionId! },
-            },
-            signal,
+        await api.GET('/engagements/{engagementId}/executions/{executionId}/comments', {
+          params: {
+            path: { engagementId: engagementId!, executionId: executionId! },
           },
-        ),
+          signal,
+        }),
       ),
     enabled:
       engagementId !== undefined &&
@@ -756,20 +684,14 @@ export function useCreateComment(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, executionId, body }) =>
       unwrap(
-        await api.POST(
-          '/engagements/{engagementId}/executions/{executionId}/comments',
-          {
-            params: { path: { engagementId, executionId } },
-            body,
-          },
-        ),
+        await api.POST('/engagements/{engagementId}/executions/{executionId}/comments', {
+          params: { path: { engagementId, executionId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.comments(
-          variables.engagementId,
-          variables.executionId,
-        ),
+        queryKey: engagementKeys.comments(variables.engagementId, variables.executionId),
       })
     },
   })
@@ -784,13 +706,10 @@ export function usePatchComment(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, commentId, body }) =>
       unwrap(
-        await api.PATCH(
-          '/engagements/{engagementId}/comments/{commentId}',
-          {
-            params: { path: { engagementId, commentId } },
-            body,
-          },
-        ),
+        await api.PATCH('/engagements/{engagementId}/comments/{commentId}', {
+          params: { path: { engagementId, commentId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       // Invalidate all comment lists — the comment's executionId is
@@ -813,15 +732,12 @@ export function useEvidenceList(
     queryKey: engagementKeys.evidence(engagementId ?? '', executionId ?? ''),
     queryFn: async ({ signal }) =>
       unwrap(
-        await api.GET(
-          '/engagements/{engagementId}/executions/{executionId}/evidence',
-          {
-            params: {
-              path: { engagementId: engagementId!, executionId: executionId! },
-            },
-            signal,
+        await api.GET('/executions/{executionId}/evidence', {
+          params: {
+            path: { executionId: executionId! },
           },
-        ),
+          signal,
+        }),
       ),
     enabled:
       engagementId !== undefined &&
@@ -833,9 +749,7 @@ export function useEvidenceList(
 
 // ── Findings ─────────────────────────────────────────────────────────────────
 
-export function useFindings(
-  engagementId: string | undefined,
-): UseQueryResult<Finding[]> {
+export function useFindings(engagementId: string | undefined): UseQueryResult<Finding[]> {
   return useQuery({
     queryKey: engagementKeys.findings(engagementId ?? ''),
     queryFn: async ({ signal }) =>
@@ -908,20 +822,14 @@ export function useCreateStepFromTemplate(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ engagementId, scenarioId, body }) =>
       unwrap(
-        await api.POST(
-          '/engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template',
-          {
-            params: { path: { engagementId, scenarioId } },
-            body,
-          },
-        ),
+        await api.POST('/engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template', {
+          params: { path: { engagementId, scenarioId } },
+          body,
+        }),
       ),
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(
-          variables.engagementId,
-          variables.scenarioId,
-        ),
+        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
       })
     },
   })
@@ -938,9 +846,7 @@ export function roleInEngagement(
 }
 
 /** The caller is an admin and thus has implicit access to every engagement. */
-export function isPlatformAdmin(
-  user: components['schemas']['CurrentUser'],
-): boolean {
+export function isPlatformAdmin(user: components['schemas']['CurrentUser']): boolean {
   return user.platformRole === 'admin'
 }
 

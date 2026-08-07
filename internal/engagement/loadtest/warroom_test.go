@@ -133,12 +133,12 @@ type warRoomOpts struct {
 }
 
 type warRoomResult struct {
-	latencies    []time.Duration
-	maxLatency   time.Duration
-	totalWrites  int64
-	conflicts    int64
-	lostUpdates  int64
-	probeErrors  []error
+	latencies   []time.Duration
+	maxLatency  time.Duration
+	totalWrites int64
+	conflicts   int64
+	lostUpdates int64
+	probeErrors []error
 }
 
 // runWarRoom seeds one engagement with steps (each with an execution), spins up

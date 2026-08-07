@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bryanster/blacklight/internal/authn"
-	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -145,7 +144,7 @@ func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEve
 // Admin sees everything. Content jobs require admin. Engagement topics
 // require membership or admin.
 func (h *handlers) topicAllowed(ctx context.Context, caller authn.Subject, topic string) bool {
-	if caller.PlatformRole == authz.PlatformRoleAdmin {
+	if string(caller.PlatformRole) == string(gen.PlatformRoleAdmin) {
 		return true
 	}
 

@@ -140,7 +140,8 @@ func (h *handlers) UploadEvidence(ctx context.Context,
 
 	// Activity.
 	if h.activity != nil {
-		h.activity.RecordAlone(ctx, events.Entry{
+		//nolint:errcheck // best-effort audit trail; failure is logged by the store
+		_ = h.activity.RecordAlone(ctx, events.Entry{
 			ActorID:      actor.UserID,
 			Verb:         events.VerbEvidenceUploaded,
 			ObjectType:   events.ObjectEvidence,
@@ -266,6 +267,7 @@ func (h *handlers) DeleteEvidence(ctx context.Context,
 		if err := h.evidenceStore.RemoveBlobFile(ev.BlobSHA256); err != nil {
 			return nil, err
 		}
+		//nolint:errcheck // best-effort blob row cleanup after file GC
 		_ = h.blobRepo.DeleteBlob(ctx, ev.BlobSHA256)
 	}
 
@@ -284,7 +286,8 @@ func (h *handlers) DeleteEvidence(ctx context.Context,
 				}
 			}
 		}
-		h.activity.RecordAlone(ctx, events.Entry{
+		//nolint:errcheck // best-effort audit trail; failure is logged by the store
+		_ = h.activity.RecordAlone(ctx, events.Entry{
 			ActorID:      actor.UserID,
 			Verb:         events.VerbEvidenceDeleted,
 			ObjectType:   events.ObjectEvidence,
@@ -329,11 +332,4 @@ func evidenceToWire(e storengagement.Evidence) (gen.Evidence, error) {
 		w.CommentId.Set(cid)
 	}
 	return w, nil
-}
-
-func filenameFromSHA(sha256 string) string {
-	if len(sha256) > 12 {
-		return sha256[:12]
-	}
-	return sha256
 }

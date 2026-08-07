@@ -28,13 +28,7 @@ import { FindingsPage } from '@/features/engagements/findings-page'
 import { OverviewPage } from '@/features/engagements/overview-page'
 import { SettingsPage } from '@/features/engagements/settings-page'
 import { WorkbookPage } from '@/features/engagements/workbook-page'
-import {
-  ENGAGEMENTS_PATH,
-  engagementFindingsPath,
-  engagementPath,
-  engagementSettingsPath,
-  engagementWorkbookPath,
-} from '@/features/engagements/paths'
+import { ENGAGEMENTS_PATH } from '@/features/engagements/paths'
 import { HealthPage } from '@/features/system/health-page'
 import { VersionPage } from '@/features/system/version-page'
 import { TokensPage } from '@/features/tokens/tokens-page'
@@ -59,10 +53,7 @@ export function AppRoutes(): ReactNode {
 
           <Route path={ENGAGEMENTS_PATH} element={<EngagementsPage />} />
 
-          <Route
-            path={`${ENGAGEMENTS_PATH}/:engagementId`}
-            element={<EngagementLayout />}
-          >
+          <Route path={`${ENGAGEMENTS_PATH}/:engagementId`} element={<EngagementLayout />}>
             <Route index element={<OverviewPage />} />
             <Route path="workbook" element={<WorkbookPage />} />
             <Route path="findings" element={<FindingsPage />} />

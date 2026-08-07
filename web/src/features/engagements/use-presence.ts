@@ -36,15 +36,12 @@ export interface PresenceState {
  * The server TTL (45s) is the source of truth for eviction; the
  * DELETE on unmount is best-effort.
  */
-export function usePresence(
-  engagementId: string | undefined,
-  enabled: boolean,
-): PresenceState {
+export function usePresence(engagementId: string | undefined, enabled: boolean): PresenceState {
   const [users, setUsers] = useState<PresenceUser[]>([])
   const [connected, setConnected] = useState(false)
   const presenceIdRef = useRef<string>(crypto.randomUUID())
   const focusRef = useRef<PresenceFocus>({})
-  const intervalRef = useRef<ReturnType<typeof setInterval>>()
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const mountedRef = useRef(true)
 
   const heartbeat = useCallback(
@@ -77,12 +74,9 @@ export function usePresence(
   const fetchSnapshot = useCallback(async () => {
     if (!engagementId) return
     try {
-      const res = await api.GET(
-        '/engagements/{engagementId}/presence',
-        {
-          params: { path: { engagementId } },
-        },
-      )
+      const res = await api.GET('/engagements/{engagementId}/presence', {
+        params: { path: { engagementId } },
+      })
       if (res.data) {
         setUsers(res.data.entries ?? [])
       }

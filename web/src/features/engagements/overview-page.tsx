@@ -38,10 +38,11 @@ import {
   type EngagementMember,
   type EngagementRole,
   type EngagementStatus,
+  type MemberRole,
 } from './queries'
 import { canManage } from './roles'
 
-const ROLE_OPTIONS: { value: EngagementRole; label: string }[] = [
+const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
   { value: 'lead', label: 'Lead' },
   { value: 'red', label: 'Red' },
   { value: 'blue', label: 'Blue' },
@@ -119,8 +120,7 @@ function MetadataCard({
 }): ReactNode {
   const canManageEng = canManage(role)
   const setStatus = useSetEngagementStatus()
-  const transitions =
-    canManageEng && !closed ? validTransitions(engagement.status) : []
+  const transitions = canManageEng && !closed ? validTransitions(engagement.status) : []
 
   return (
     <section className="rounded-lg border p-5">
@@ -149,8 +149,7 @@ function MetadataCard({
                     : 'outline'
               }
             >
-              {engagement.status.charAt(0).toUpperCase() +
-                engagement.status.slice(1)}
+              {engagement.status.charAt(0).toUpperCase() + engagement.status.slice(1)}
             </Badge>
           </dd>
         </div>
@@ -158,9 +157,7 @@ function MetadataCard({
         <div>
           <dt className="text-muted-foreground text-sm">Mode</dt>
           <dd>
-            <Badge variant="outline">
-              {engagement.mode === 'blind' ? 'Blind' : 'Standard'}
-            </Badge>
+            <Badge variant="outline">{engagement.mode === 'blind' ? 'Blind' : 'Standard'}</Badge>
           </dd>
         </div>
 
@@ -226,9 +223,7 @@ function MetadataCard({
   )
 }
 
-function validTransitions(
-  current: EngagementStatus,
-): { to: EngagementStatus; label: string }[] {
+function validTransitions(current: EngagementStatus): { to: EngagementStatus; label: string }[] {
   switch (current) {
     case 'draft':
       return [
@@ -275,10 +270,7 @@ function MembersCard({
       {error && <PageError error={error} onRetry={refetchMembers} />}
 
       {!isPending && !error && members.length === 0 && (
-        <PageEmpty
-          title="No members"
-          description="Add team members to this engagement."
-        />
+        <PageEmpty title="No members" description="Add team members to this engagement." />
       )}
 
       {!isPending && !error && members.length > 0 && (
@@ -315,12 +307,8 @@ function MemberRow({
   return (
     <li className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">
-          {member.displayName}
-        </span>
-        <span className="text-muted-foreground truncate text-xs">
-          {member.email}
-        </span>
+        <span className="truncate text-sm font-medium">{member.displayName}</span>
+        <span className="text-muted-foreground truncate text-xs">{member.email}</span>
       </div>
 
       <div className="flex items-center gap-2">
@@ -328,7 +316,7 @@ function MemberRow({
           <Select
             value={member.role}
             onValueChange={(v) => {
-              const newRole = v as EngagementRole
+              const newRole = v as MemberRole
               if (newRole === member.role) return
               patchMember.mutate(
                 {
@@ -338,9 +326,7 @@ function MemberRow({
                 },
                 {
                   onSuccess: () => {
-                    toast.success(
-                      `${member.displayName} is now ${roleLabel(newRole)}.`,
-                    )
+                    toast.success(`${member.displayName} is now ${roleLabel(newRole)}.`)
                   },
                   onError: (error) => {
                     toast.error(error.message)
@@ -383,8 +369,8 @@ function MemberRow({
               title="Remove member"
               description={
                 <>
-                  Remove <strong>{member.displayName}</strong> from this
-                  engagement? They will lose access to the workbook and findings.
+                  Remove <strong>{member.displayName}</strong> from this engagement? They will lose
+                  access to the workbook and findings.
                 </>
               }
               confirmLabel="Remove"
@@ -414,15 +400,11 @@ function MemberRow({
 
 // ── Add Member Dialog ──────────────────────────────────────────────────────────
 
-function AddMemberDialog({
-  engagementId,
-}: {
-  engagementId: string
-}): ReactNode {
+function AddMemberDialog({ engagementId }: { engagementId: string }): ReactNode {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedUserId, setSelectedUserId] = useState('')
-  const [selectedRole, setSelectedRole] = useState<EngagementRole>('observer')
+  const [selectedRole, setSelectedRole] = useState<MemberRole>('observer')
   const addMember = useAddMember()
   const users = useUsers(search.trim() ? { q: search.trim() } : {})
 
@@ -486,9 +468,7 @@ function AddMemberDialog({
                 setSelectedUserId('')
               }}
             />
-            {users.isPending && (
-              <p className="text-muted-foreground text-xs">Searching…</p>
-            )}
+            {users.isPending && <p className="text-muted-foreground text-xs">Searching…</p>}
             {allUsers.length > 0 && (
               <div className="max-h-40 overflow-y-auto rounded-md border">
                 {allUsers.map((user) => {
@@ -507,30 +487,21 @@ function AddMemberDialog({
                       }}
                     >
                       <span className="font-medium">{user.displayName}</span>
-                      <span className="text-muted-foreground ml-2 text-xs">
-                        {user.email}
-                      </span>
+                      <span className="text-muted-foreground ml-2 text-xs">{user.email}</span>
                     </button>
                   )
                 })}
               </div>
             )}
-            {!users.isPending &&
-              search.trim() &&
-              allUsers.length === 0 && (
-                <p className="text-muted-foreground text-xs">
-                  No users found.
-                </p>
-              )}
+            {!users.isPending && search.trim() && allUsers.length === 0 && (
+              <p className="text-muted-foreground text-xs">No users found.</p>
+            )}
           </div>
 
           {/* Role picker */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="member-role">Role</Label>
-            <Select
-              value={selectedRole}
-              onValueChange={(v) => setSelectedRole(v as EngagementRole)}
-            >
+            <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as MemberRole)}>
               <SelectTrigger id="member-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -553,10 +524,7 @@ function AddMemberDialog({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={!selectedUserId || addMember.isPending}
-            >
+            <Button type="submit" disabled={!selectedUserId || addMember.isPending}>
               {addMember.isPending ? 'Adding…' : 'Add'}
             </Button>
           </DialogFooter>
