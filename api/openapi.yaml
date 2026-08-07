@@ -2718,6 +2718,56 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template:
+    post:
+      operationId: createStepFromTemplate
+      summary: Create a step from a content procedure template.
+      description: |
+        Lead, red and platform administrators. Resolves a procedure template
+        from the content catalog, snapshots its structure into the step's
+        procedure JSON, resolves technique ids against the engagement's
+        pinned ATT&CK version, and creates the step plus a pending execution
+        in one transaction.
+
+        A disabled source returns 409; a missing template returns 404.
+        Closed/archived engagements return 409. `#{key}` placeholders in
+        command and cleanup are substituted from `argValues`; missing values
+        are left as-is.
+      tags:
+        - scenarios
+      x-authz-action: workbook.write
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ScenarioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStepFromTemplate"
+      responses:
+        "201":
+          description: The created step.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Step"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}:
     get:
       operationId: getStep
@@ -9386,6 +9436,37 @@ components:
             technique/tactic/subtechnique fields are empty.
 
 
+
+    CreateStepFromTemplate:
+      type: object
+      required:
+        - templateId
+      properties:
+        templateId:
+          type: string
+          format: uuid
+          description: Content catalog surrogate id of the procedure template.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Override the step name (defaults to the template name).
+        objective:
+          type: string
+          maxLength: 4096
+          description: Override the step objective (defaults to template description).
+        targetAsset:
+          type: string
+          maxLength: 255
+          description: Target asset for this step.
+        argValues:
+          type: object
+          description: |
+            Map of template input arg name to value. `#{key}` placeholders in
+            command and cleanup are replaced with the corresponding value.
+            Keys without a provided value are left as-is in the snapshot.
+          additionalProperties:
+            type: string
     CreateStep:
       type: object
       required:

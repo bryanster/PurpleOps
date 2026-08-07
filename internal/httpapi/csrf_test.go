@@ -544,6 +544,11 @@ var csrfCoverage = map[string]struct {
 		body: `{"planId":"0192f1a0-0000-7000-8000-00000000e002"}`,
 	},
 
+	// Template → Step (M3-013).
+	"POST " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template": {
+		body: `{"templateId":"0192f1a0-0000-7000-8000-00000000e003"}`,
+	},
+
 	// Step CRUD (M3-005).
 	"POST " + BasePath + "/engagements/{engagementId}/scenarios/{scenarioId}/steps": {
 		body: `{"name":"Walked"}`,

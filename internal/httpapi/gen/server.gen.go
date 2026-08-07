@@ -1807,6 +1807,26 @@ type CreateStep struct {
 	Tools               *[]string `json:"tools,omitempty"`
 }
 
+// CreateStepFromTemplate defines model for CreateStepFromTemplate.
+type CreateStepFromTemplate struct {
+	// ArgValues Map of template input arg name to value. `#{key}` placeholders in
+	// command and cleanup are replaced with the corresponding value.
+	// Keys without a provided value are left as-is in the snapshot.
+	ArgValues *map[string]string `json:"argValues,omitempty"`
+
+	// Name Override the step name (defaults to the template name).
+	Name *string `json:"name,omitempty"`
+
+	// Objective Override the step objective (defaults to template description).
+	Objective *string `json:"objective,omitempty"`
+
+	// TargetAsset Target asset for this step.
+	TargetAsset *string `json:"targetAsset,omitempty"`
+
+	// TemplateId Content catalog surrogate id of the procedure template.
+	TemplateId openapi_types.UUID `json:"templateId"`
+}
+
 // CreateUserRequest Body of `POST /users`. The identifier, the timestamps and the invite
 // link are the server's; everything a caller chooses is here.
 type CreateUserRequest struct {
@@ -4717,6 +4737,9 @@ type PatchScenarioJSONRequestBody = PatchScenario
 // CreateStepJSONRequestBody defines body for CreateStep for application/json ContentType.
 type CreateStepJSONRequestBody = CreateStep
 
+// CreateStepFromTemplateJSONRequestBody defines body for CreateStepFromTemplate for application/json ContentType.
+type CreateStepFromTemplateJSONRequestBody = CreateStepFromTemplate
+
 // ReorderStepsJSONRequestBody defines body for ReorderSteps for application/json ContentType.
 type ReorderStepsJSONRequestBody = ReorderSteps
 
@@ -5055,6 +5078,9 @@ type ServerInterface interface {
 	// CreateStep Create a new step in a scenario.
 	// (POST /engagements/{engagementId}/scenarios/{scenarioId}/steps)
 	CreateStep(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId)
+	// CreateStepFromTemplate Create a step from a content procedure template.
+	// (POST /engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template)
+	CreateStepFromTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId)
 	// ReorderSteps Reorder steps in a scenario.
 	// (PUT /engagements/{engagementId}/scenarios/{scenarioId}/steps/order)
 	ReorderSteps(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId)
@@ -5766,6 +5792,12 @@ func (_ Unimplemented) ListSteps(w http.ResponseWriter, r *http.Request, engagem
 // CreateStep Create a new step in a scenario.
 // (POST /engagements/{engagementId}/scenarios/{scenarioId}/steps)
 func (_ Unimplemented) CreateStep(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateStepFromTemplate Create a step from a content procedure template.
+// (POST /engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template)
+func (_ Unimplemented) CreateStepFromTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10229,6 +10261,41 @@ func (siw *ServerInterfaceWrapper) CreateStep(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// CreateStepFromTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateStepFromTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "scenarioId" -------------
+	var scenarioId ScenarioId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scenarioId", chi.URLParam(r, "scenarioId"), &scenarioId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scenarioId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStepFromTemplate(w, r, engagementId, scenarioId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReorderSteps operation middleware
 func (siw *ServerInterfaceWrapper) ReorderSteps(w http.ResponseWriter, r *http.Request) {
 
@@ -11797,6 +11864,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}/steps", wrapper.CreateStep)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template", wrapper.CreateStepFromTemplate)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}", wrapper.DeleteStep)
@@ -21755,6 +21825,126 @@ func (response CreateStep500ApplicationProblemPlusJSONResponse) VisitCreateStepR
 	return err
 }
 
+type CreateStepFromTemplateRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ScenarioId   ScenarioId   `json:"scenarioId"`
+	Body         *CreateStepFromTemplateJSONRequestBody
+}
+
+type CreateStepFromTemplateResponseObject interface {
+	VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateStepFromTemplate201JSONResponse Step
+
+func (response CreateStepFromTemplate201JSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepFromTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepFromTemplate400ApplicationProblemPlusJSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepFromTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepFromTemplate401ApplicationProblemPlusJSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepFromTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepFromTemplate403ApplicationProblemPlusJSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepFromTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepFromTemplate404ApplicationProblemPlusJSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepFromTemplate409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepFromTemplate409ApplicationProblemPlusJSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepFromTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepFromTemplate500ApplicationProblemPlusJSONResponse) VisitCreateStepFromTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReorderStepsRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	ScenarioId   ScenarioId   `json:"scenarioId"`
@@ -25210,6 +25400,9 @@ type StrictServerInterface interface {
 	// CreateStep Create a new step in a scenario.
 	// (POST /engagements/{engagementId}/scenarios/{scenarioId}/steps)
 	CreateStep(ctx context.Context, request CreateStepRequestObject) (CreateStepResponseObject, error)
+	// CreateStepFromTemplate Create a step from a content procedure template.
+	// (POST /engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template)
+	CreateStepFromTemplate(ctx context.Context, request CreateStepFromTemplateRequestObject) (CreateStepFromTemplateResponseObject, error)
 	// ReorderSteps Reorder steps in a scenario.
 	// (PUT /engagements/{engagementId}/scenarios/{scenarioId}/steps/order)
 	ReorderSteps(ctx context.Context, request ReorderStepsRequestObject) (ReorderStepsResponseObject, error)
@@ -28258,6 +28451,40 @@ func (sh *strictHandler) CreateStep(w http.ResponseWriter, r *http.Request, enga
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateStepResponseObject); ok {
 		if err := validResponse.VisitCreateStepResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateStepFromTemplate operation middleware
+func (sh *strictHandler) CreateStepFromTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, scenarioId ScenarioId) {
+	var request CreateStepFromTemplateRequestObject
+
+	request.EngagementId = engagementId
+	request.ScenarioId = scenarioId
+
+	var body CreateStepFromTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateStepFromTemplate(ctx, request.(CreateStepFromTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateStepFromTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateStepFromTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateStepFromTemplateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

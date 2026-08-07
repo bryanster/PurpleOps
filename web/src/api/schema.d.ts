@@ -1470,6 +1470,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/scenarios/{scenarioId}/steps/from-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a step from a content procedure template.
+         * @description Lead, red and platform administrators. Resolves a procedure template
+         *     from the content catalog, snapshots its structure into the step's
+         *     procedure JSON, resolves technique ids against the engagement's
+         *     pinned ATT&CK version, and creates the step plus a pending execution
+         *     in one transaction.
+         *
+         *     A disabled source returns 409; a missing template returns 404.
+         *     Closed/archived engagements return 409. `#{key}` placeholders in
+         *     command and cleanup are substituted from `argValues`; missing values
+         *     are left as-is.
+         */
+        post: operations["createStepFromTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagements/{engagementId}/scenarios/{scenarioId}/steps/{stepId}": {
         parameters: {
             query?: never;
@@ -4759,6 +4788,27 @@ export interface components {
              */
             warnings: components["schemas"]["ImportPlanWarning"][];
         };
+        CreateStepFromTemplate: {
+            /**
+             * Format: uuid
+             * @description Content catalog surrogate id of the procedure template.
+             */
+            templateId: string;
+            /** @description Override the step name (defaults to the template name). */
+            name?: string;
+            /** @description Override the step objective (defaults to template description). */
+            objective?: string;
+            /** @description Target asset for this step. */
+            targetAsset?: string;
+            /**
+             * @description Map of template input arg name to value. `#{key}` placeholders in
+             *     command and cleanup are replaced with the corresponding value.
+             *     Keys without a provided value are left as-is in the snapshot.
+             */
+            argValues?: {
+                [key: string]: string;
+            };
+        };
         CreateStep: {
             name: string;
             /** @default  */
@@ -7487,6 +7537,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateStep"];
+            };
+        };
+        responses: {
+            /** @description The created step. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Step"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createStepFromTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The scenario being read or changed. */
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStepFromTemplate"];
             };
         };
         responses: {
