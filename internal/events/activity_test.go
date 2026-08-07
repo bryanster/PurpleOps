@@ -175,7 +175,7 @@ func TestRedactionAcrossM1Verbs(t *testing.T) {
 }
 
 // --- M4-002: Activity → SSE fan-out -----------------------------------------
-	// Not parallel — uses global PostCommitFanout.
+// Not parallel — uses global PostCommitFanout.
 func TestRecordFansOutToEngagementTopic(t *testing.T) {
 	db := storetest.Migrated(t)
 	hub := events.NewHub(events.Options{})
@@ -240,7 +240,7 @@ func TestRecordFansOutToEngagementTopic(t *testing.T) {
 	}
 }
 
-	// Not parallel — uses global PostCommitFanout.
+// Not parallel — uses global PostCommitFanout.
 func TestRecordRollbackProducesNoSSEEvent(t *testing.T) {
 	db := storetest.Migrated(t)
 	hub := events.NewHub(events.Options{})

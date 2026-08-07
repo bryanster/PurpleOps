@@ -249,6 +249,34 @@ func (r *Entries) List(ctx context.Context, f ListFilter) (rows []Row, nextCurso
 	return rows, nextCursor, nil
 }
 
+// ReplayAfterCursor returns rows for engagementID with id strictly after
+// cursor, oldest first, up to limit. Cursor is an activity row id (UUIDv7).
+// Used for SSE catch-up (M4-004).
+func (r *Entries) ReplayAfterCursor(ctx context.Context, engagementID, cursor string, limit int) ([]Row, error) {
+	query := selectEntry + `WHERE engagement_id = ? AND id > ? ORDER BY id ASC LIMIT ?`
+	rs, err := r.db.Read().QueryContext(ctx, query, engagementID, cursor, limit)
+	if err != nil {
+		return nil, fmt.Errorf("activity: replay: %w", err)
+	}
+	defer rs.Close()
+
+	var rows []Row
+	for rs.Next() {
+		row, err := scanEntry(rs)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	if err := rs.Err(); err != nil {
+		return nil, fmt.Errorf("activity: replay: %w", err)
+	}
+	if rows == nil {
+		rows = []Row{}
+	}
+	return rows, nil
+}
+
 func validate(e Entry) error {
 	switch {
 	case strings.TrimSpace(e.Verb) == "":

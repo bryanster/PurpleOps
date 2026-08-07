@@ -651,36 +651,42 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	blobRepo := storengagement.NewEvidenceBlobRepo(deps.Store)
 	evidenceStore := evidence.NewStore(deps.Config.Evidence.Dir, deps.Config.Evidence, blobRepo)
 
+	h := &handlers{
+		store:          deps.Store,
+		auth:           auth,
+		ownership:      deps.Ownership,
+		evidenceStore:  evidenceStore,
+		evidenceRepo:   evidenceRepo,
+		blobRepo:       blobRepo,
+		sessions:       sessions,
+		challenges:     challenges,
+		oidc:           provider,
+		saml:           federation,
+		activity:       activityLog,
+		content:        registry,
+		runner:         runner,
+		objects:        objects,
+		procedures:     procedures,
+		detections:     detections,
+		emulationPlans: emulationPlans,
+		custom:         customSvc,
+
+		attackpin: pin,
+
+		users:           users,
+		engagements:     engSvc,
+		hub:             hub,
+		eventsMaxReplay: deps.Config.Events.MaxReplayEvents,
+		eventsHeartbeat: deps.Config.Events.Heartbeat,
+		signInURL:       signInURL(deps.Config),
+		log:             log,
+	}
+
+	// M4-004: wire the RevealLookup for step-scoped event data.
+	activityLog.SetRevealLookup(h)
+
 	return gen.NewStrictHandlerWithOptions(
-		&handlers{
-			store:          deps.Store,
-			auth:           auth,
-			ownership:      deps.Ownership,
-			evidenceStore:  evidenceStore,
-			evidenceRepo:   evidenceRepo,
-			blobRepo:       blobRepo,
-			sessions:       sessions,
-			challenges:     challenges,
-			oidc:           provider,
-			saml:           federation,
-			activity:       activityLog,
-			content:        registry,
-			runner:         runner,
-			objects:        objects,
-			procedures:     procedures,
-			detections:     detections,
-			emulationPlans: emulationPlans,
-			custom:         customSvc,
-
-			attackpin: pin,
-
-			users:           users,
-			engagements:     engSvc,
-			hub:             hub,
-			eventsHeartbeat: deps.Config.Events.Heartbeat,
-			signInURL:       signInURL(deps.Config),
-			log:             log,
-		},
+		h,
 		nil, // No strict middleware: the chain is chi's, so there is one of them.
 		gen.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  responder.Write,

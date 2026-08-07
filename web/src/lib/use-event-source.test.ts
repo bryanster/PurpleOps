@@ -14,6 +14,12 @@ describe('eventsUrl', () => {
   it('encodes odd topic characters', () => {
     expect(eventsUrl(['a b'])).toBe(`${API_BASE_URL}/events?topics=a+b`)
   })
+
+  it('appends lastEventId query param when provided', () => {
+    expect(eventsUrl(['engagement.abc'], 'cursor-123')).toBe(
+      `${API_BASE_URL}/events?topics=engagement.abc&lastEventId=cursor-123`,
+    )
+  })
 })
 
 describe('isHubEnvelope', () => {

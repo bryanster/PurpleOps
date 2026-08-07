@@ -37,6 +37,7 @@ const (
 	envEventsMaxSubscribers = prefix + "EVENTS_MAX_SUBSCRIBERS"
 	envEventsBuffer         = prefix + "EVENTS_BUFFER"
 	envEventsHeartbeat      = prefix + "EVENTS_HEARTBEAT"
+	envEventsMaxReplay      = prefix + "EVENTS_MAX_REPLAY"
 
 	envSessionSecret   = prefix + "SESSION_SECRET"
 	envEncryptionKey   = prefix + "ENCRYPTION_KEY"
@@ -190,8 +191,11 @@ type Events struct {
 
 	// Heartbeat is how often the SSE handler writes a comment frame so idle
 	// proxies do not close the connection. Must be well under typical proxy
-	// idle timeouts (60s+).
-	Heartbeat time.Duration
+	// MaxReplayEvents caps how many activity rows the SSE handler replays on
+	// a reconnect with Last-Event-ID before sending stream.gap. Default 500;
+	// 0 disables replay (only live tail).
+	MaxReplayEvents int
+	Heartbeat       time.Duration
 }
 
 // Session holds the secrets and the timings behind cookie sessions.
@@ -483,6 +487,7 @@ func (c *Config) bindings() []binding {
 		{name: envEventsMaxSubscribers, target: &c.Events.MaxSubscribers, def: "256"},
 		{name: envEventsBuffer, target: &c.Events.Buffer, def: "16"},
 		{name: envEventsHeartbeat, target: &c.Events.Heartbeat, def: "15s"},
+		{name: envEventsMaxReplay, target: &c.Events.MaxReplayEvents, def: "500"},
 
 		{name: envSessionSecret, target: &c.Session.Secret, required: true, sensitive: true},
 		{name: envEncryptionKey, target: &c.Encryption.Key, required: true, sensitive: true},

@@ -10058,6 +10058,13 @@ export interface operations {
                  *     failure about the query string.
                  */
                 topics?: string[];
+                /**
+                 * @description Query-parameter twin of `Last-Event-ID` for EventSource
+                 *     first-connection support (M4-004). Browsers send the header
+                 *     only on reconnect; a new EventSource on page load passes the
+                 *     cursor here. Header takes precedence when both are set.
+                 */
+                lastEventId?: string;
             };
             header?: {
                 /**

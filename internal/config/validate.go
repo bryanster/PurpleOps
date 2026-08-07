@@ -92,6 +92,13 @@ func (c *Config) validate() []error {
 			Msg:   "must be a positive duration",
 		})
 	}
+	if c.Events.MaxReplayEvents < 0 {
+		errs = append(errs, &FieldError{
+			Name:  envEventsMaxReplay,
+			Value: strconv.Itoa(c.Events.MaxReplayEvents),
+			Msg:   "must be at least 0",
+		})
+	}
 
 	errs = append(errs, c.validateOIDC()...)
 	errs = append(errs, c.validateSAML()...)

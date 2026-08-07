@@ -17,6 +17,7 @@ import (
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/store/blind"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 )
 
@@ -28,16 +29,19 @@ import (
 // caller permission: content.jobs* requires admin; engagement.{id} requires
 // membership or admin via [handlers.topicAllowed].
 //
-// Last-Event-ID is accepted and ignored in M2 — no activity-log catch-up yet.
-// M4-004 owns guaranteed catch-up against the activity log.
+// M4-004: Last-Event-ID triggers catch-up replay from the activity log.
+// Events are replayed oldest-first then the stream transitions to live tail.
+// The Allow filter drops blind-withheld events per subscriber.
 func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEventsRequestObject) (gen.SubscribeEventsResponseObject, error) {
 	if h.hub == nil {
 		return nil, apierr.Internal(errors.New("events hub is not configured"))
 	}
-
-	// Best-effort only in M2: accept the header so clients can send it, do not
-	// replay. M4 owns guaranteed catch-up against the activity log.
-	_ = request.Params.LastEventID
+	cursor := ""
+	if request.Params.LastEventID != nil {
+		cursor = *request.Params.LastEventID
+	} else if request.Params.LastEventId != nil {
+		cursor = *request.Params.LastEventId
+	}
 
 	var requestedTopics []string
 	if request.Params.Topics != nil {
@@ -46,16 +50,50 @@ func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEve
 
 	// Per-topic authorization: the middleware only checks that the caller is
 	// an authenticated session. This handler decides which topics they may see.
-	// Admin sees all; members see engagements they belong to.
 	caller, _ := authn.SubjectFrom(ctx)
-	var topics []string
+	var authzTopics []string
 	for _, topic := range requestedTopics {
 		if h.topicAllowed(ctx, caller, topic) {
-			topics = append(topics, topic)
+			authzTopics = append(authzTopics, topic)
 		}
 	}
 
-	ch, unsub, err := h.hub.Subscribe(ctx, events.Subscription{Topics: topics})
+	// Build per-topic blind scopes for engagement topics (M4-004).
+	blindScopes := make(map[string]blind.Scope)
+	for _, topic := range authzTopics {
+		engID, ok := strings.CutPrefix(topic, events.TopicEngagementPrefix)
+		if !ok {
+			continue
+		}
+		scope, err := h.stepBlindScope(ctx, engID)
+		if err != nil {
+			// Engagement gone or other error — skip this topic.
+			h.log.DebugContext(ctx, "events: blind scope lookup failed, skipping topic",
+				slog.String("engagement_id", engID), slog.String("error", err.Error()))
+			continue
+		}
+		blindScopes[topic] = scope
+	}
+
+	// Build the Allow filter for live events. Engagement events are
+	// filtered by blind scope; content events pass through.
+	allowFilter := func(ev events.Event) bool {
+		// Content job events always pass.
+		if ev.Topic == events.TopicContentJobs || strings.HasPrefix(ev.Topic, events.TopicContentJobs+".") {
+			return true
+		}
+		scope, ok := blindScopes[ev.Topic]
+		if !ok {
+			// Unknown topic — this shouldn't happen, but don't drop.
+			return true
+		}
+		return events.VisibleActivity(scope, ev)
+	}
+
+	ch, unsub, err := h.hub.Subscribe(ctx, events.Subscription{
+		Topics: authzTopics,
+		Allow:  allowFilter,
+	})
 	if err != nil {
 		switch {
 		case errors.Is(err, events.ErrUnknownTopic):
@@ -68,13 +106,14 @@ func (h *handlers) SubscribeEvents(ctx context.Context, request gen.SubscribeEve
 			return nil, apierr.Internal(fmt.Errorf("subscribe: %w", err))
 		}
 	}
+
 	pr, pw := io.Pipe()
 	heartbeat := h.eventsHeartbeat
 	if heartbeat <= 0 {
 		heartbeat = 15 * time.Second
 	}
 
-	go streamEvents(ctx, pw, ch, unsub, heartbeat, h.log)
+	go h.streamWithReplay(ctx, pw, ch, unsub, heartbeat, authzTopics, blindScopes, cursor, h.log)
 
 	cacheControl := "no-cache"
 	contentType := "text/event-stream"
@@ -115,45 +154,6 @@ func (h *handlers) topicAllowed(ctx context.Context, caller authn.Subject, topic
 	return true
 }
 
-// streamEvents writes SSE frames until ctx ends, the hub closes ch, or a write
-// fails. unsub always runs so a slow-client eviction and a clean disconnect
-// both detach the hub entry.
-func streamEvents(ctx context.Context, w *io.PipeWriter, ch <-chan events.Event, unsub func(), heartbeat time.Duration, log *slog.Logger) {
-	defer unsub()
-	defer w.Close()
-
-	// Leading retry hint: browsers reconnect after this many ms on drop.
-	if _, err := io.WriteString(w, "retry: 3000\n\n"); err != nil {
-		return
-	}
-
-	tick := time.NewTicker(heartbeat)
-	defer tick.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
-			// Comment frame: keeps idle proxies from closing the socket.
-			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
-				return
-			}
-		case ev, ok := <-ch:
-			if !ok {
-				// Evicted or unsubscribed.
-				return
-			}
-			if err := writeSSE(w, ev); err != nil {
-				if log != nil {
-					log.DebugContext(ctx, "events: sse write ended", "error", err)
-				}
-				return
-			}
-		}
-	}
-}
-
 func writeSSE(w io.Writer, ev events.Event) error {
 	// id / data per the SSE spec. data is the full Event JSON (envelope).
 	// No event: field — the type is in the envelope payload; all events hit
@@ -173,6 +173,100 @@ func writeSSE(w io.Writer, ev events.Event) error {
 	b.WriteString("\n\n")
 	_, err = io.WriteString(w, b.String())
 	return err
+}
+
+// streamWithReplay replays catch-up events for each engagement topic then
+// transitions to live tail. Replay is skipped when cursor is empty or
+// MaxReplayEvents is 0.
+func (h *handlers) streamWithReplay(
+	ctx context.Context,
+	w *io.PipeWriter,
+	ch <-chan events.Event,
+	unsub func(),
+	heartbeat time.Duration,
+	topics []string,
+	blindScopes map[string]blind.Scope,
+	cursor string,
+	log *slog.Logger,
+) {
+	defer unsub()
+	defer w.Close()
+
+	// Leading retry hint: browsers reconnect after this many ms on drop.
+	if _, err := io.WriteString(w, "retry: 3000\n\n"); err != nil {
+		return
+	}
+
+	// Replay phase (M4-004): catch up for each engagement topic.
+	if cursor != "" && h.eventsMaxReplay > 0 {
+		for _, topic := range topics {
+			engID, ok := strings.CutPrefix(topic, events.TopicEngagementPrefix)
+			if !ok {
+				// Content topics: no replay (Last-Event-ID ignored).
+				continue
+			}
+
+			result, err := h.activity.ReplayAfter(ctx, engID, cursor, h.eventsMaxReplay)
+			if err != nil {
+				if log != nil {
+					log.DebugContext(ctx, "events: replay failed, sending gap",
+						slog.String("engagement_id", engID),
+						slog.String("error", err.Error()))
+				}
+				// Send gap so client refetches.
+				if werr := writeSSE(w, events.NewGapEvent(engID, "replay error")); werr != nil {
+					return
+				}
+				continue
+			}
+
+			scope := blindScopes[topic]
+
+			for _, ev := range result.Events {
+				// Apply blind visibility filter during replay.
+				if !events.VisibleActivity(scope, ev) {
+					continue
+				}
+				if err := writeSSE(w, ev); err != nil {
+					if log != nil {
+						log.DebugContext(ctx, "events: replay write ended", "error", err)
+					}
+					return
+				}
+			}
+
+			if result.Truncated {
+				if err := writeSSE(w, events.NewGapEvent(engID, "replay truncated")); err != nil {
+					return
+				}
+			}
+		}
+	}
+
+	// Live tail phase.
+	tick := time.NewTicker(heartbeat)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+				return
+			}
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			if err := writeSSE(w, ev); err != nil {
+				if log != nil {
+					log.DebugContext(ctx, "events: sse write ended", "error", err)
+				}
+				return
+			}
+		}
+	}
 }
 
 // bridgeContentProgress maps the runner's in-process progress channel onto the
@@ -224,4 +318,15 @@ const eventsPath = BasePath + "/events"
 // timeout middleware to leave the request context unbounded.
 func isSSEPath(r *http.Request) bool {
 	return r.URL != nil && r.URL.Path == eventsPath
+}
+
+// IsStepRevealed implements [events.RevealLookup] for the fan-out revealed
+// flag (M4-004). It returns whether the step has been revealed to the blue
+// side.
+func (h *handlers) IsStepRevealed(ctx context.Context, stepID string) (bool, error) {
+	step, err := h.engagements.GetStep(ctx, stepID)
+	if err != nil {
+		return false, err
+	}
+	return step.RevealedAt != nil, nil
 }

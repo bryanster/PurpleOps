@@ -48,6 +48,8 @@ export interface UseEventSourceOptions {
   onEvent?: (event: ServerEvent) => void
   /** When false the connection is not opened. Default true. */
   enabled?: boolean
+  /** Initial cursor for replay on first connect (M4-004). Passed as `lastEventId` query param. */
+  initialLastEventId?: string
 }
 
 export interface UseEventSourceState {
@@ -74,10 +76,8 @@ export interface UseEventSourceState {
  * `lastEventId` tracks the most recent envelope `id` for M4-004 replay.
  *
  * Prefer this over hand-rolled `EventSource` so all M2/M4 consumers share
- * one reconnect and teardown path.
- */
 export function useEventSource(options: UseEventSourceOptions): UseEventSourceState {
-  const { topics, onEvent, enabled = true } = options
+  const { topics, onEvent, enabled = true, initialLastEventId } = options
   const onEventRef = useRef(onEvent)
   useEffect(() => {
     onEventRef.current = onEvent
@@ -97,7 +97,7 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceSt
       return
     }
 
-    const source = new EventSource(eventsUrl(topics), { withCredentials: true })
+    const source = new EventSource(eventsUrl(topics, initialLastEventId), { withCredentials: true })
 
     source.onopen = () => {
       setConnected(true)
@@ -154,10 +154,13 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceSt
 }
 
 /** Build the absolute events URL — useful for tests and non-hook callers. */
-export function eventsUrl(topics: string[]): string {
+export function eventsUrl(topics: string[], initialLastEventId?: string): string {
   const params = new URLSearchParams()
   for (const topic of topics) {
     params.append('topics', topic)
+  }
+  if (initialLastEventId) {
+    params.append('lastEventId', initialLastEventId)
   }
   return `${apiUrl('/events')}?${params.toString()}`
 }

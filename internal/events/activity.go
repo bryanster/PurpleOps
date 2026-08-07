@@ -213,8 +213,9 @@ type Entry struct {
 // (M4-002). The returned context carries the post-commit hook; callers MUST
 // capture and use it inside [store.DB.Write] callbacks for the hook to run.
 type Log struct {
-	entries *activity.Entries
-	hub     *Hub
+	entries      *activity.Entries
+	hub          *Hub
+	revealLookup RevealLookup
 }
 
 // New returns a Log over the activity store. Call [Log.SetHub] to enable
@@ -232,6 +233,12 @@ func (l *Log) SetHub(h *Hub) {
 	l.hub = h
 }
 
+// SetRevealLookup enables the revealed field in engagement-scoped event
+// payloads (M4-004). Safe to call after construction; nil resets.
+func (l *Log) SetRevealLookup(r RevealLookup) {
+	l.revealLookup = r
+}
+
 // Entries exposes the underlying repository for list endpoints. Handlers read;
 // nothing outside this package should insert through it.
 func (l *Log) Entries() *activity.Entries { return l.entries }
@@ -244,7 +251,6 @@ func (l *Log) Entries() *activity.Entries { return l.entries }
 //
 // When the hub is set and the entry has an EngagementID, a post-commit
 // callback is queued via [store.PostCommitFanout] and executed after the
-// transaction commits in [store.DB.Write] (M4-002).
 func (l *Log) Record(ctx context.Context, tx *sql.Tx, e Entry) error {
 	storeEntry, err := toStore(e)
 	if err != nil {
@@ -255,9 +261,11 @@ func (l *Log) Record(ctx context.Context, tx *sql.Tx, e Entry) error {
 		return err
 	}
 	// Queue post-commit SSE fan-out for engagement-scoped events (M4-002).
+	// The revealed lookup happens inside the callback (post-commit) so it
+	// sees the step committed in the same transaction.
 	if e.EngagementID != "" && l.hub != nil {
 		if q := store.PostCommitFanout.Load(); q != nil {
-			q.Push(l.fanOut(e.EngagementID, row, e))
+			q.Push(l.fanOut(e.EngagementID, row, e)) //nolint:contextcheck // post-commit: handler ctx is cancelled
 		}
 	}
 	return nil
@@ -266,9 +274,6 @@ func (l *Log) Record(ctx context.Context, tx *sql.Tx, e Entry) error {
 // RecordAlone opens its own write transaction and appends entry. It is for
 // events whose whole substance is the log row — a failed login, a lockout —
 // where there is no sibling mutation to share a commit with.
-//
-// SSE fan-out for engagement-scoped entries: publish directly after Append
-// returns — its internal [store.DB.Write] already committed.
 func (l *Log) RecordAlone(ctx context.Context, e Entry) error {
 	storeEntry, err := toStore(e)
 	if err != nil {
@@ -279,26 +284,30 @@ func (l *Log) RecordAlone(ctx context.Context, e Entry) error {
 		return err
 	}
 	if e.EngagementID != "" && l.hub != nil {
+		revealed := l.lookupRevealed(ctx, e)
 		l.hub.Publish(EngagementTopic(e.EngagementID), Event{
 			ID:    row.ID,
 			Type:  string(e.Verb),
 			At:    row.At,
 			Topic: EngagementTopic(e.EngagementID),
-			Data:  buildEventData(row, e),
+			Data:  buildEventData(row, e, revealed),
 		})
 	}
 	return nil
 }
 
 // fanOut returns a post-commit callback that publishes one SSE event.
-func (l *Log) fanOut(engagementID string, row activity.Row, e Entry) store.PostCommitFunc {
-	return func() {
+// The revealed lookup runs inside the callback so it sees data committed
+// in the same write transaction (step.created, step.revealed).
+func (l *Log) fanOut(engagementID string, row activity.Row, e Entry) store.PostCommitFunc { //nolint:contextcheck // post-commit callback: handler ctx is cancelled
+	return func() { //nolint:contextcheck // post-commit: handler ctx is cancelled
+		revealed := l.lookupRevealed(context.Background(), e)
 		l.hub.Publish(EngagementTopic(engagementID), Event{
 			ID:    row.ID,
 			Type:  string(e.Verb),
 			At:    row.At,
 			Topic: EngagementTopic(engagementID),
-			Data:  buildEventData(row, e),
+			Data:  buildEventData(row, e, revealed),
 		})
 	}
 }
@@ -306,7 +315,10 @@ func (l *Log) fanOut(engagementID string, row activity.Row, e Entry) store.PostC
 // buildEventData constructs the SSE event payload from the stored activity
 // row and the caller's entry. The payload is id-refs only — no full resource
 // bodies, no secrets, no deltas.
-func buildEventData(row activity.Row, e Entry) json.RawMessage {
+//
+// revealed is the step reveal status for step-scoped objects, or nil for
+// non-step-scoped events. When nil, the "revealed" key is omitted from the
+func buildEventData(row activity.Row, e Entry, revealed *bool) json.RawMessage {
 	m := map[string]any{
 		"engagementId": row.EngagementID,
 		"actorId":      row.ActorID,
@@ -317,8 +329,48 @@ func buildEventData(row activity.Row, e Entry) json.RawMessage {
 	for k, v := range e.ParentIDs {
 		m[k] = v
 	}
-	raw, _ := json.Marshal(m)
+	if revealed != nil {
+		m["revealed"] = *revealed
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		// Infallible for map[string]any, but handle defensively.
+		raw = []byte(`{}`)
+	}
 	return raw
+}
+
+// lookupRevealed returns the revealed status for an entry's step, or nil
+// when the entry is not step-scoped or no RevealLookup is configured.
+func (l *Log) lookupRevealed(ctx context.Context, e Entry) *bool {
+	if l.revealLookup == nil {
+		return nil
+	}
+	stepID := stepIDForEntry(e)
+	if stepID == "" {
+		return nil
+	}
+	revealed, err := l.revealLookup.IsStepRevealed(ctx, stepID)
+	if err != nil {
+		return nil // conservative: don't drop events on lookup failure
+	}
+	return &revealed
+}
+
+// stepIDForEntry returns the step id an entry is about, or "" if not
+// step-scoped.
+func stepIDForEntry(e Entry) string {
+	switch e.ObjectType {
+	case ObjectStep:
+		return e.ObjectID
+	case ObjectExecution, ObjectEvidence, ObjectComment:
+		if e.ParentIDs != nil {
+			return e.ParentIDs["stepId"]
+		}
+		return ""
+	default:
+		return ""
+	}
 }
 func toStore(e Entry) (activity.Entry, error) {
 	out := activity.Entry{

@@ -4341,6 +4341,12 @@ type SubscribeEventsParams struct {
 	// failure about the query string.
 	Topics *[]string `form:"topics,omitempty" json:"topics,omitempty"`
 
+	// LastEventId Query-parameter twin of `Last-Event-ID` for EventSource
+	// first-connection support (M4-004). Browsers send the header
+	// only on reconnect; a new EventSource on page load passes the
+	// cursor here. Header takes precedence when both are set.
+	LastEventId *string `form:"lastEventId,omitempty" json:"lastEventId,omitempty"`
+
 	// LastEventID SSE last-event cursor. Accepted and ignored in M2 (live tail only;
 	// no activity-log catch-up). M4 will replay from this id.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
@@ -10577,6 +10583,19 @@ func (siw *ServerInterfaceWrapper) SubscribeEvents(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "topics"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topics", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "lastEventId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lastEventId", r.URL.Query(), &params.LastEventId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lastEventId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lastEventId", Err: err})
 		}
 		return
 	}

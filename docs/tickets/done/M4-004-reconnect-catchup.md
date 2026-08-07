@@ -92,4 +92,25 @@ Id-only payloads still leak step existence to blue.
 - Do not replay into `content.jobs` from activity.
 - Keep the visibility helper free of HTTP types where practical so presence
   (`M4-006`) can reuse step/execution revealed checks.
+
+## Implementation notes
+
+- **Cursor ordering:** Activity rows are replayed in `id > cursor ORDER BY id ASC` (UUIDv7 order). This is consistent with the fan-out id field and gives chronological replay.
+- **Query param twin:** Added `lastEventId` query parameter to OpenAPI spec alongside the `Last-Event-ID` header. The browser's EventSource auto-sends the header on reconnect, but first connection after page load uses the query param populated from `sessionStorage`.
+- **Revealed field:** The fan-out path now includes a `revealed` boolean in engagement-scoped event data for step/execution/evidence/comment objects. This is computed post-commit via `RevealLookup` so it sees the data committed in the same transaction. The `VisibleActivity` helper reads this field for blind filtering; nil means "not step-scoped, always visible."
+- **Stream gap:** When replay exceeds `BLACKLIGHT_EVENTS_MAX_REPLAY` (default 500), a `stream.gap` event is sent before live tail. The frontend handles this by invalidating all engagement queries.
+- **Config:** `BLACKLIGHT_EVENTS_MAX_REPLAY` (default 500, 0 disables replay).
+- **Files changed:**
+  - `internal/config/config.go` + `validate.go` — new `MaxReplayEvents` field
+  - `internal/events/activity.go` — `RevealLookup`, `revealed` in `buildEventData`, `lookupRevealed`
+  - `internal/events/blind.go` — `VisibleActivity`, `RevealLookup`, `EventData`, `StepIDForEvent`
+  - `internal/events/replay.go` — `ReplayAfter`, `NewGapEvent`
+  - `internal/events/hub.go` — `TypeStreamGap`, `TypeSyncRequired` constants
+  - `internal/store/activity/activity.go` — `ReplayAfterCursor`
+  - `internal/httpapi/events.go` — rewritten `SubscribeEvents` with replay + Allow filter, `streamWithReplay`, `IsStepRevealed`
+  - `internal/httpapi/server.go` — wired `eventsMaxReplay` + `SetRevealLookup`
+  - `api/openapi.yaml` — `lastEventId` query param twin
+  - `web/src/lib/use-event-source.ts` — `initialLastEventId` option, `eventsUrl` accepts cursor
+  - `web/src/features/engagements/use-engagement-events.ts` — cursor persistence in `sessionStorage`, `stream.gap` handling
+  - `.env.example` — `BLACKLIGHT_EVENTS_MAX_REPLAY`
 - After this ticket, blind war-room demos are allowed; before it, they are not.

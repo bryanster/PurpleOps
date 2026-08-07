@@ -38,6 +38,8 @@ func EngagementTopic(engagementID string) string {
 const (
 	TypeContentJobProgress = "content.job.progress"
 	TypeContentJobTerminal = "content.job.terminal"
+	TypeStreamGap          = "stream.gap"
+	TypeSyncRequired       = "sync.required"
 )
 
 // Event is one fan-out message. ID is a UUIDv7 so Last-Event-ID ordering is

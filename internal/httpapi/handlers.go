@@ -98,6 +98,8 @@ type handlers struct {
 
 	// eventsHeartbeat is how often the SSE handler writes a comment frame.
 	eventsHeartbeat time.Duration
+	// eventsMaxReplay caps catch-up events per reconnect (M4-004).
+	eventsMaxReplay int
 
 	// signInURL is where this deployment is signed in to, absolute, for the one
 	// response that has to tell somebody who is not looking at the application:
