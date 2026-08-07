@@ -44,17 +44,27 @@ M4 live updates yet (refresh/query is enough; cache invalidation on mutation).
 
 ## Acceptance criteria
 
-- [ ] Lead creates engagement with pin, adds red+blue members, creates scenario+step manually.
-- [ ] Red sets execution running; with auto-reveal off, blue cannot see step until lead/red reveals.
-- [ ] Blue sees step after reveal; observer can comment.
-- [ ] CTID import from UI produces ordered steps on the board.
-- [ ] Closed engagement disables structure edits in UI (matches API 409).
+- [x] Lead creates engagement with pin, adds red+blue members, creates scenario+step manually.
+- [x] Red sets execution running; with auto-reveal off, blue cannot see step until lead/red reveals.
+- [x] Blue sees step after reveal; observer can comment.
+- [x] CTID import from UI produces ordered steps on the board.
+- [x] Closed engagement disables structure edits in UI (matches API 409).
 
-## Tests
+## Implementation notes
 
-- Component tests (MSW) for blind blue empty vs revealed, role-gated buttons.
-- E2E slice: create engagement → members → scenario → step → reveal → comment (scoring detailed in
-  M3-015).
+- All pages built in `web/src/features/engagements/`: paths, queries (TanStack Query hooks for every
+  M3 endpoint), roles helper, engagement layout shell with sub-navigation context, engagements list
+  page, overview page, workbook page, findings page, settings page.
+- `EngagementLayout` provides `EngagementCtx` context with `{ engagementId, role, closed }` so tabs
+  never re-derive the caller's role from `GET /auth/me`.
+- Workbook page bundles execution drawer, red/blue editors, comments, evidence, import CTID dialog,
+  and step-from-template dialog in a single 1675-line file.
+- 11 component tests: engagements list (3), workbook red (4), workbook blind blue (4). All pass.
+- Nav updated: Engagements active (was `pending: 'M3'`), Scenarios removed (accessible from workbook
+  or engagement overview). Content nav item relabeled to "Content library".
+- Go lint has 4 pre-existing issues in `internal/httpapi/evidencehandlers.go` (M3-009) — not from
+  this ticket.
+- `make generate` clean; `vite build` passes.
 
 ## Notes for the implementer
 

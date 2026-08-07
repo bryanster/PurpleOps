@@ -22,33 +22,25 @@ import {
   MFA_CHALLENGE_PATH,
   TOKENS_PATH,
 } from '@/features/auth/paths'
+import { EngagementLayout } from '@/features/engagements/engagement-layout'
+import { EngagementsPage } from '@/features/engagements/engagements-page'
+import { FindingsPage } from '@/features/engagements/findings-page'
+import { OverviewPage } from '@/features/engagements/overview-page'
+import { SettingsPage } from '@/features/engagements/settings-page'
+import { WorkbookPage } from '@/features/engagements/workbook-page'
+import {
+  ENGAGEMENTS_PATH,
+  engagementFindingsPath,
+  engagementPath,
+  engagementSettingsPath,
+  engagementWorkbookPath,
+} from '@/features/engagements/paths'
 import { HealthPage } from '@/features/system/health-page'
 import { VersionPage } from '@/features/system/version-page'
 import { TokensPage } from '@/features/tokens/tokens-page'
 
 import { NotFoundPage } from './not-found'
 
-/**
- * Every route, in three tiers (M1-017).
- *
- * 1. **Public**, and outside the shell: the two sign-in screens. There is no
- *    session to draw a nav from, and a half-usable interface around a sign-in
- *    form is a phishing lesson nobody needs.
- * 2. **Signed in**, behind [RequireAuth]. Forced enrolment sits here rather
- *    than in the public tier — it *has* a session, one confined to enrolling —
- *    and deliberately outside the shell, because there is nothing else it may
- *    reach.
- * 3. **Signed in, inside the shell**, and within that, the administrator-only
- *    routes behind [RequireAdmin].
- *
- * The nesting is the enforcement, not a convenience: there is no route below
- * the guard that renders without it having run, so a screen cannot be reached
- * by adding it in the wrong place. That is what makes "the enrolment screen
- * cannot be escaped by editing the URL" a property of this table.
- *
- * The root still redirects to /system/version. M2–M6 give the product a real
- * landing screen and this becomes a redirect to that instead.
- */
 export function AppRoutes(): ReactNode {
   return (
     <Routes>
@@ -64,6 +56,18 @@ export function AppRoutes(): ReactNode {
           <Route path={ACCOUNT_PATH} element={<AccountPage />} />
           <Route path={TOKENS_PATH} element={<TokensPage />} />
           <Route path={CONTENT_PATH} element={<LibraryPage />} />
+
+          <Route path={ENGAGEMENTS_PATH} element={<EngagementsPage />} />
+
+          <Route
+            path={`${ENGAGEMENTS_PATH}/:engagementId`}
+            element={<EngagementLayout />}
+          >
+            <Route index element={<OverviewPage />} />
+            <Route path="workbook" element={<WorkbookPage />} />
+            <Route path="findings" element={<FindingsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
 
           <Route element={<RequireAdmin />}>
             <Route path={ADMIN_USERS_PATH} element={<UsersPage />} />

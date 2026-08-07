@@ -85,10 +85,12 @@ describe('AppShell', () => {
     renderShell()
 
     const nav = screen.getByRole('navigation', { name: 'Sections' })
-    expect(within(nav).getByText('Engagements')).toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'Engagements' })).not.toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Engagements' })).toHaveAttribute(
+      'href',
+      '/engagements',
+    )
     // Content is live as of M2-013.
-    expect(within(nav).getByRole('link', { name: 'Content' })).toHaveAttribute('href', '/content')
+    expect(within(nav).getByRole('link', { name: 'Content library' })).toHaveAttribute('href', '/content')
   })
 
   it('navigates between screens from the nav', async () => {
@@ -164,6 +166,6 @@ describe('AppShell', () => {
     expect(reachable).toContain(screen.getByRole('button', { name: /^Theme:/ }))
     expect(reachable).toContain(screen.getByRole('button', { name: /^Account:/ }))
     expect(reachable).toContain(screen.getByRole('link', { name: 'Version' }))
-    expect(reachable).toContain(screen.getByRole('link', { name: 'Health' }))
+    expect(reachable).toContain(screen.getByRole('link', { name: 'Engagements' }))
   })
 })
