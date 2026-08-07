@@ -84,14 +84,13 @@ export function queryKeysForVerb(
         engagementKeys.allSteps(engagementId),
         ...activityKeys,
       ]
-      const withScenario =
-        parents.scenarioId
-          ? [
-              ...base,
-              engagementKeys.steps(engagementId, parents.scenarioId),
-              engagementKeys.step(engagementId, parents.scenarioId, parents.stepId ?? ''),
-            ]
-          : base
+      const withScenario = parents.scenarioId
+        ? [
+            ...base,
+            engagementKeys.steps(engagementId, parents.scenarioId),
+            engagementKeys.step(engagementId, parents.scenarioId, parents.stepId ?? ''),
+          ]
+        : base
       // A reveal may change the visible execution status for blue.
       if (parents.stepId) {
         return [...withScenario, engagementKeys.executions(engagementId)]

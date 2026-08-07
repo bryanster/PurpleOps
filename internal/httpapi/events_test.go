@@ -311,7 +311,10 @@ func assertSSEConnects(t *testing.T, server *authServer, topic string, cookie *h
 	defer resp.Body.Close()
 
 	if resp.StatusCode != wantStatus {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			t.Fatalf("SSE status = %d, want %d (also failed reading body: %v)", resp.StatusCode, wantStatus, err)
+		}
 		t.Fatalf("SSE status = %d, want %d\n%s", resp.StatusCode, wantStatus, body)
 	}
 }
