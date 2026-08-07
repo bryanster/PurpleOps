@@ -249,3 +249,106 @@ func TestLoginWritesActivityWithoutSecrets(t *testing.T) {
 		t.Error("missing session.login_failed")
 	}
 }
+
+func TestBlindEngagementActivityFiltersUnrevealedSteps(t *testing.T) {
+	t.Parallel()
+	server := newAuthServer(t)
+	red := server.seedUser(t, func(u *identity.NewUser) {
+		u.Email = "red-lead@example.com"
+		u.PlatformRole = authz.PlatformRoleMember
+	})
+	blue, err := identity.NewUsers(server.db).Create(t.Context(), identity.NewUser{
+		Email:        "blue@example.com",
+		DisplayName:  "Blue",
+		PasswordHash: testPasswordHash(),
+		PlatformRole: authz.PlatformRoleMember,
+		Status:       identity.StatusActive,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	engID := "01900000-0000-7000-8000-000000000002"
+	scenarioID := "01900000-0000-7000-8000-000000000003"
+	stepID := "01900000-0000-7000-8000-000000000004"
+
+	if err := server.db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(),
+			`INSERT INTO app.engagement (id, name, client, description, status, starts_on, ends_on, attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+			VALUES (?, 'blind-test', 'test', '', 'draft', '2026-01-01', '2026-06-01', '15.1', 'blind', false, 'u1', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+			engID,
+		)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(t.Context(),
+			`INSERT INTO app.scenario (id, engagement_id, ordinal, name, narrative, source, threat_actor, source_ref, plan_id, created_at, updated_at)
+			VALUES (?, ?, 0, 'scenario-1', '', 'manual', '', '', '', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+			scenarioID, engID,
+		)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(t.Context(),
+			`INSERT INTO app.step (id, scenario_id, ordinal, name, objective, technique_id, subtechnique_id, tactic_id, "procedure", template_id, target_asset, tools, controls_in_scope, attack_version, revealed_at, created_at, updated_at)
+			VALUES (?, ?, 0, 'step-1', '', 'T1003', '', '', '{}', '', '', '[]', '[]', '15.1', NULL, '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+			stepID, scenarioID,
+		)
+		return err
+	}); err != nil {
+		t.Fatalf("creating blind engagement: %v", err)
+	}
+
+	// Add memberships: red as lead, blue as blue.
+	memberships := identity.NewMemberships(server.db)
+	if _, err := memberships.Add(t.Context(), identity.NewMembership{
+		EngagementID: engID, UserID: red.ID, Role: authz.EngagementRoleLead,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memberships.Add(t.Context(), identity.NewMembership{
+		EngagementID: engID, UserID: blue.ID, Role: authz.EngagementRoleBlue,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Record a step.created activity entry.
+	log := events.New(activity.New(server.db))
+	if err := server.db.Write(t.Context(), func(tx *sql.Tx) error {
+		return log.Record(context.Background(), tx, events.Entry{
+			EngagementID: engID, ActorID: red.ID,
+			Verb: "step.created", ObjectType: "step", ObjectID: stepID,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Blue sees NO activity — the step is unrevealed.
+	blueCookie := sessionCookie(t, server.login(blue.Email, testPassword))
+	res := server.get(BasePath+"/engagements/"+engID+"/activity", blueCookie)
+	if res.Code != http.StatusOK {
+		t.Fatalf("blue status = %d body=%s", res.Code, res.Body)
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("blue saw %d items, want 0 — unrevealed step.created must be withheld", len(page.Items))
+	}
+
+	// Lead (red) sees the activity.
+	redCookie := sessionCookie(t, server.login(red.Email, testPassword))
+	res = server.get(BasePath+"/engagements/"+engID+"/activity", redCookie)
+	if res.Code != http.StatusOK {
+		t.Fatalf("lead status = %d body=%s", res.Code, res.Body)
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("lead saw %d items, want 1 — revealed step should be visible to lead", len(page.Items))
+	}
+}

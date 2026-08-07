@@ -3862,6 +3862,13 @@ export interface components {
              * @description When it happened, UTC.
              */
             at: string;
+            /**
+             * @description Whether the step this event is about has been revealed to blue.
+             *     Present only for step-scoped objects (step, execution, evidence,
+             *     comment) in a blind engagement. A blue caller's activity list
+             *     omits rows where `revealed` is false (M4-008).
+             */
+            revealed?: boolean;
         };
         /**
          * @description One page of the activity log. `nextCursor` is taken verbatim from a

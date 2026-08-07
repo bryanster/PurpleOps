@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { useSignedInUser } from '@/features/auth/current-user'
 import { cn } from '@/lib/utils'
 
+import { ActivityRail } from './activity-rail'
 import {
   engagementFindingsPath,
   engagementPath,
@@ -122,7 +123,12 @@ export function EngagementLayout(): ReactNode {
           </div>
         </nav>
 
-        <Outlet />
+        <div className="flex flex-1 min-h-0 gap-0">
+          <div className="flex-1 min-w-0">
+            <Outlet />
+          </div>
+          <ActivityRail />
+        </div>
       </div>
     </EngagementContextProvider>
   )

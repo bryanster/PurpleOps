@@ -84,6 +84,10 @@ export const engagementKeys = {
     [...engagementKeys.all, 'evidence', engagementId, executionId] as const,
   findings: (engagementId: string) =>
     [...engagementKeys.all, 'findings', engagementId] as const,
+  activityPrefix: (engagementId: string) =>
+    [...engagementKeys.all, 'activity', engagementId] as const,
+  activity: (engagementId: string, filters: { verb?: string }) =>
+    [...engagementKeys.all, 'activity', engagementId, filters] as const,
 }
 
 // ── Engagements ──────────────────────────────────────────────────────────────

@@ -7593,6 +7593,13 @@ components:
           type: string
           format: date-time
           description: When it happened, UTC.
+        revealed:
+          type: boolean
+          description: |
+            Whether the step this event is about has been revealed to blue.
+            Present only for step-scoped objects (step, execution, evidence,
+            comment) in a blind engagement. A blue caller's activity list
+            omits rows where `revealed` is false (M4-008).
 
     ActivityPage:
       type: object

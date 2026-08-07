@@ -860,6 +860,12 @@ type ActivityEntry struct {
 	// Examples: session
 	ObjectType string `json:"objectType"`
 
+	// Revealed Whether the step this event is about has been revealed to blue.
+	// Present only for step-scoped objects (step, execution, evidence,
+	// comment) in a blind engagement. A blue caller's activity list
+	// omits rows where `revealed` is false (M4-008).
+	Revealed *bool `json:"revealed,omitempty"`
+
 	// Verb What happened, spelled `object.past_tense_verb`. Examples:
 	// `session.login`, `session.login_failed`, `token.created`,
 	// `mfa.enrolled`.
