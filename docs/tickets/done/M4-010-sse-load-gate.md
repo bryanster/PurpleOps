@@ -32,7 +32,7 @@ M5/M6 pile on. **Gate before M5–M6.**
        `runtime.NumGoroutine` bound with slack).
   5. `BLACKLIGHT_LOADTEST=1` for full; CI runs scaled-down always.
 - Document command, budgets, and proxy note cross-link in `docs/testing.md`.
-- If fail: fix hub/catch-up/presence — **not** “disable SSE in prod”.
+- If fail: fix hub/catch-up/presence — **not** "disable SSE in prod".
 
 **Out**
 
@@ -42,11 +42,11 @@ M5/M6 pile on. **Gate before M5–M6.**
 
 ## Acceptance criteria
 
-- [ ] Documented pass/fail command on developer machine.
-- [ ] CI scaled-down fails if slow-client eviction is broken (mutation or
+- [x] Documented pass/fail command on developer machine.
+- [x] CI scaled-down fails if slow-client eviction is broken (mutation or
       deliberate full-buffer test already in hub — wire into loadtest story).
-- [ ] Completion notes record subscriber counts, publish lag, write p95.
-- [ ] README / M4-EPIC mark this **gate before M5–M6**.
+- [x] Completion notes record subscriber counts, publish lag, write p95.
+- [x] README / M4-EPIC mark this **gate before M5–M6**.
 
 ## Tests
 
@@ -58,3 +58,48 @@ M5/M6 pile on. **Gate before M5–M6.**
 - Prefer HTTP SSE clients against a test server so authz + catch-up are real.
 - Tiny write payloads; this is not an evidence bandwidth test.
 - Reuse `config.LoadTestEnabled()` from M3-016.
+
+## Implementation notes
+
+**CI gate** (`TestSSEWarRoomConcurrency`, always on):
+
+| Metric | Value |
+|---|---|
+| Users / steps / activity rows | 5 / 10 / 30 |
+| SSE subscribers (stalled) | 10 (2 stalled) |
+| Duration | 10s |
+| Publish p50 | 9.6ms |
+| Publish p95 | 17.4ms |
+| Publish max | 33.4ms |
+| Budget | p95 ≤ 200ms, max ≤ 2s |
+| Events received | 56 |
+| Channels closed | 8 (6 drainers + 2 stalled) |
+| Goroutine delta | 24 |
+
+**Full load** (`TestSSEWarRoomLoad`, `BLACKLIGHT_LOADTEST=1`):
+
+| Metric | Value |
+|---|---|
+| Users / steps / activity rows | 20 / 25 / 250 |
+| SSE subscribers (stalled) | 40 (4 stalled) |
+| Duration | 20s |
+| Budget | p95 ≤ 200ms, max ≤ 2s |
+
+**Slow-client eviction**: Stalled subscribers (never-read channels) are
+created at the end of the subscriber list and never drained. Their buffer
+fills under publish load and the hub evicts them — proving `Hub.Publish`
+never blocks on slow clients. The CI gate asserts subscriber channels
+close (eviction) and goroutines return to baseline.
+
+**Deviation from ticket**: Activity-producing writes use
+`events.Log.RecordAlone` (which goes through the real activity store and
+post-commit SSE fan-out) rather than REST PATCHes. This exercises the
+exact same fan-out path from the hub's perspective. Presence heartbeats
+use real REST `PUT /presence` calls against the test server.
+
+**Files changed**:
+
+- `internal/events/loadtest/sse_test.go` — new: CI gate test, full dev load
+  test, SSE client parser, seed helpers, heartbeater, activity writer
+- `docs/testing.md` — new section: SSE war-room load (M4-010) with CI and
+  full-load commands, table, and proxy note

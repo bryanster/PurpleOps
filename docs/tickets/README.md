@@ -62,7 +62,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M1 — Identity & access | ✅ done — 18/18 | [18 tickets](#m1--identity--access) |
 | M2 — Content | ✅ done — 16/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
 | M3 — Core domain | ✅ done — 16/16 | [16 tickets](#m3--core-domain) · [`M3-EPIC.md`](done/M3-EPIC.md) |
-| M4 — Collaboration | refined — 0/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](M4-EPIC.md) |
+| M4 — Collaboration | ✅ done — 10/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](M4-EPIC.md) |
 | M5 — Analytics | epic, needs refinement | [`M5-EPIC.md`](M5-EPIC.md) |
 | M6 — Reporting | epic, needs refinement | [`M6-EPIC.md`](M6-EPIC.md) |
 | M7 — Cutover | epic, needs refinement | [`M7-EPIC.md`](M7-EPIC.md) |

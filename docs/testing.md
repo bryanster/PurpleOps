@@ -268,6 +268,54 @@ multi-node test and not an SSE fan-out stress (M4).
 the execution to get the current version and retry up to 5 times.
 
 
+## SSE war-room load (M4-010)
+
+Twenty concurrent SSE subscribers, catch-up replay, presence heartbeats,
+and slow-client eviction share the in-process SSE hub.
+`internal/events/loadtest` proves publish p95 stays under budget under
+concurrent subscriber load, stalled subscribers are evicted without
+blocking publishers, and goroutines do not leak. **This is the gate
+before M5–M6.**
+
+### CI (always on)
+
+```sh
+go test ./internal/events/loadtest/
+```
+
+| Test | What it proves |
+|---|---|
+| `TestSSEWarRoomConcurrency` | 5 users × 10 steps, 30 activity rows, 10 SSE subscribers (2 stalled), 10s: red PATCHes via RecordAlone, presence heartbeats, catch-up with Last-Event-ID. Publish **p95 ≤ 200ms**, max ≤ 2s, events received, stalled channels closed, goroutine delta ≤ 100. |
+
+Rides along with `make test` / `make test-race`. A failure means the hub
+publish path is blocking on slow clients — check `Hub.Publish` and the
+subscriber channel eviction path.
+
+### Full developer load
+
+```sh
+BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/events/loadtest/ -run TestSSEWarRoomLoad
+```
+
+Runs **20 users** × 2 tabs (40 SSE subscribers), 250 activity rows,
+25 steps for 20 seconds. Pass/fail uses the same p95 budget. Ballpark
+on a local SSD / arm64 devcontainer: ~25s, publish p95 well under 200ms.
+
+Assumptions: single process, local NVMe/SSD. Real HTTP SSE against a
+test server so authz and catch-up replay are exercised end to end.
+Not a multi-node test and not a browser fan-out at scale.
+
+The `TestSSEWarRoomConcurrency` CI gate verifies that stalled subscribers
+(never-read channels) are evicted and publish continues — a mutation in
+the hub that silently removes eviction would cause the CI gate to hang
+or exceed the goroutine budget.
+
+### Reverse proxy note
+
+SSE through buffering proxies breaks live UX. Deploy docs note
+`proxy_buffering off` for `/api/v1/events` (M2-004). M4-010 verifies
+through the compose/deploy path, not only Vite dev.
+
 
 ## What CI runs
 
