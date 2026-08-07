@@ -31,6 +31,7 @@ import (
 	"github.com/bryanster/blacklight/internal/content/ctid"
 	"github.com/bryanster/blacklight/internal/content/sigma"
 	engagement "github.com/bryanster/blacklight/internal/engagement"
+	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -633,10 +634,18 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		go bridgeContentProgress(hub, progCh, progUnsub, log)
 	}
 
+	evidenceRepo := storengagement.NewEvidenceRepo(deps.Store)
+	blobRepo := storengagement.NewEvidenceBlobRepo(deps.Store)
+	evidenceStore := evidence.NewStore(deps.Config.Evidence.Dir, deps.Config.Evidence, blobRepo)
+
 	return gen.NewStrictHandlerWithOptions(
 		&handlers{
 			store:          deps.Store,
 			auth:           auth,
+			ownership:      deps.Ownership,
+			evidenceStore:  evidenceStore,
+			evidenceRepo:   evidenceRepo,
+			blobRepo:       blobRepo,
 			sessions:       sessions,
 			challenges:     challenges,
 			oidc:           provider,

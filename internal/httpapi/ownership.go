@@ -7,6 +7,7 @@ import (
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/store/identity"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 )
 
 // Memberships is the part of the identity store [membershipOwnership] needs.
@@ -63,4 +64,79 @@ func (o membershipOwnership) Seat(ctx context.Context, engagementID, userID stri
 		return "", false, err
 	}
 	return m.Role, true, nil
+}
+
+// enforceEvidenceSide checks that the caller's seat permits uploading on the
+// given side. Admin without a seat may write either. Red seat -> red only,
+// blue seat -> blue only, lead -> either.
+func enforceEvidenceSide(ctx context.Context, o Ownership, platformRole authz.PlatformRole, userID, engagementID string, side storengagement.EvidenceSide) error {
+	// Platform admin without a seat may write either side for support.
+	if platformRole == authz.PlatformRoleAdmin {
+		seat, member, err := o.Seat(ctx, engagementID, userID)
+		if err != nil {
+			return err
+		}
+		if !member {
+			return nil // admin without seat: allowed either side
+		}
+		switch seat {
+		case authz.EngagementRoleLead:
+			return nil
+		case authz.EngagementRoleRed:
+			if side != storengagement.EvidenceSideRed {
+				return apierr.Forbidden("red seat may only upload side=red evidence")
+			}
+		case authz.EngagementRoleBlue:
+			if side != storengagement.EvidenceSideBlue {
+				return apierr.Forbidden("blue seat may only upload side=blue evidence")
+			}
+		}
+		return nil
+	}
+
+	// Non-admin: enforce seat.
+	seat, member, err := o.Seat(ctx, engagementID, userID)
+	if err != nil {
+		return err
+	}
+	if !member {
+		return apierr.Forbidden("not a member of this engagement")
+	}
+	switch seat {
+	case authz.EngagementRoleLead:
+		return nil
+	case authz.EngagementRoleRed:
+		if side != storengagement.EvidenceSideRed {
+			return apierr.Forbidden("red seat may only upload side=red evidence")
+		}
+	case authz.EngagementRoleBlue:
+		if side != storengagement.EvidenceSideBlue {
+			return apierr.Forbidden("blue seat may only upload side=blue evidence")
+		}
+	default:
+		return apierr.Forbidden("observer cannot upload evidence")
+	}
+	return nil
+}
+
+// canDeleteEvidence returns nil when the caller is the uploader, the engagement
+// lead, or a platform admin. It uses the authz constants for role literals.
+func canDeleteEvidence(ctx context.Context, o Ownership, platformRole authz.PlatformRole, userID, engagementID, uploadedBy string) error {
+	if userID == uploadedBy {
+		return nil
+	}
+	if platformRole == authz.PlatformRoleAdmin {
+		return nil
+	}
+	if engagementID == "" {
+		return apierr.Forbidden("only the uploader, lead, or admin may delete evidence")
+	}
+	seat, member, err := o.Seat(ctx, engagementID, userID)
+	if err != nil {
+		return err
+	}
+	if member && seat == authz.EngagementRoleLead {
+		return nil
+	}
+	return apierr.Forbidden("only the uploader, lead, or admin may delete evidence")
 }

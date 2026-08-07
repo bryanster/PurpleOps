@@ -14,6 +14,8 @@ import (
 	"github.com/bryanster/blacklight/internal/content/attackpin"
 	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
+	"github.com/bryanster/blacklight/internal/evidence"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
@@ -75,6 +77,19 @@ type handlers struct {
 	engagements *engagement.Service
 
 	// users resolves user display fields for membership responses (M3-003).
+
+	// ownership resolves engagement-scoped authorization facts for handlers
+	// that need the caller's seat (evidence side enforcement, etc.).
+	ownership Ownership
+
+	// evidenceStore is the content-addressed blob store (M3-009).
+	evidenceStore *evidence.Store
+
+	// evidenceRepo manages the evidence metadata rows (M3-009).
+	evidenceRepo *storengagement.EvidenceRepo
+
+	// blobRepo manages the evidence_blob rows for refcount GC (M3-009).
+	blobRepo *storengagement.EvidenceBlobRepo
 	users membershipUserStore
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit

@@ -1650,6 +1650,92 @@ export interface paths {
         patch: operations["patchBlueDetection"];
         trace?: never;
     };
+    "/executions/{executionId}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List evidence for an execution.
+         * @description Any engagement member who can read the execution. Evidence on
+         *     unrevealed steps in blind mode is concealed (same rule as
+         *     execution.read). Newest first.
+         */
+        get: operations["listEvidenceByExecution"];
+        put?: never;
+        /**
+         * Upload evidence to an execution.
+         * @description Lead, red, blue and platform administrators. Observer cannot upload.
+         *     Domain enforces side: red seat → side=red only; blue → blue; lead →
+         *     either; admin without seat may write either for support.
+         *
+         *     File is streamed to a temp file and content-addressed by SHA-256:
+         *     identical bytes uploaded twice produce one blob on disk with
+         *     ref_count=2. MIME is validated against the configured allowlist.
+         *     Default limits: 25 MiB per file, 2 GiB per engagement.
+         *
+         *     Closed engagements return 409. Activity: `evidence.uploaded`.
+         */
+        post: operations["uploadEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/evidence/{evidenceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read evidence metadata.
+         * @description Any engagement member who can read the owning execution. In blind
+         *     mode, evidence on an unrevealed step is 404-concealed.
+         */
+        get: operations["getEvidence"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete evidence.
+         * @description Uploader, lead or platform administrator. Decrements the blob
+         *     refcount; if it reaches zero the blob file is removed from disk.
+         *
+         *     Closed engagements still allow delete (cleanup), unlike uploads.
+         *     Activity: `evidence.deleted`.
+         */
+        delete: operations["deleteEvidence"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/evidence/{evidenceId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download evidence file content.
+         * @description Any engagement member who can read the owning execution. Content-Type
+         *     is the stored MIME from upload (allowlisted). Content-Disposition:
+         *     attachment with filename. X-Content-Type-Options: nosniff.
+         */
+        get: operations["getEvidenceContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/content/sources": {
         parameters: {
             query?: never;
@@ -2698,7 +2784,7 @@ export interface components {
          *     holds the refinement table that says which that is.
          * @enum {string}
          */
-        ProblemCode: "validation_failed" | "unauthenticated" | "forbidden" | "mfa_enrolment_required" | "not_found" | "method_not_allowed" | "conflict" | "rate_limited" | "internal";
+        ProblemCode: "validation_failed" | "unauthenticated" | "forbidden" | "mfa_enrolment_required" | "not_found" | "method_not_allowed" | "conflict" | "rate_limited" | "payload_too_large" | "internal";
         /** @description One field-level validation failure. */
         FieldError: {
             /**
@@ -4598,6 +4684,48 @@ export interface components {
          * @enum {string}
          */
         AlertSeverity: "info" | "low" | "medium" | "high" | "critical";
+        /**
+         * @description Which side uploaded this evidence.
+         * @enum {string}
+         */
+        EvidenceSide: "red" | "blue";
+        Evidence: {
+            /** Format: uuid */
+            id: string;
+            /** @description SHA-256 hex digest of the blob content. */
+            blobSha256: string;
+            filename: string;
+            caption: string;
+            side: components["schemas"]["EvidenceSide"];
+            /**
+             * Format: uuid
+             * @description The execution this evidence is linked to.
+             */
+            executionId: string;
+            /**
+             * Format: uuid
+             * @description The comment this evidence is linked to (null when execution-only).
+             */
+            commentId?: string | null;
+            /** @description User id of the uploader. */
+            uploadedBy: string;
+            /** Format: date-time */
+            uploadedAt: string;
+            /** @description File size in bytes. */
+            size: number;
+            /** @description Stored MIME type from upload. */
+            mime: string;
+        };
+        NewEvidenceRequest: {
+            /**
+             * Format: binary
+             * @description The evidence file.
+             */
+            file: string;
+            /** @description Optional caption for the evidence. */
+            caption?: string;
+            side: components["schemas"]["EvidenceSide"];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -4707,6 +4835,15 @@ export interface components {
             headers: {
                 /** @description Seconds to wait before trying again. */
                 "Retry-After": number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request body exceeds the configured size limit. `code` is `payload_too_large`. */
+        PayloadTooLarge: {
+            headers: {
                 [name: string]: unknown;
             };
             content: {
@@ -4827,6 +4964,8 @@ export interface components {
         ContentEmulationPlanId: string;
         /** @description Knowledge-base note surrogate id (UUIDv7). */
         ContentNoteId: string;
+        /** @description Evidence surrogate id (UUIDv7). */
+        EvidenceId: string;
         /**
          * @description Restrict to rules with this Sigma level label (for example `low`,
          *     `medium`, `high`, `critical`). Case-insensitive exact match.
@@ -7353,6 +7492,182 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listEvidenceByExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The execution being read or changed. */
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A list of evidence metadata rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"][];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadEvidence: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The execution being read or changed. */
+                executionId: components["parameters"]["ExecutionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["NewEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Evidence metadata for the uploaded file. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Evidence surrogate id (UUIDv7). */
+                evidenceId: components["parameters"]["EvidenceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evidence metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteEvidence: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Evidence surrogate id (UUIDv7). */
+                evidenceId: components["parameters"]["EvidenceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evidence deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getEvidenceContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Evidence surrogate id (UUIDv7). */
+                evidenceId: components["parameters"]["EvidenceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The evidence file content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

@@ -24,6 +24,9 @@ const (
 	envShutdownTimeout     = prefix + "SHUTDOWN_TIMEOUT"
 	envTrustedProxies      = prefix + "TRUSTED_PROXIES"
 	envDBPath              = prefix + "DB_PATH"
+	envEvidenceMaxUpload     = prefix + "EVIDENCE_MAX_UPLOAD_BYTES"
+	envEvidenceMaxEngagement = prefix + "EVIDENCE_MAX_ENGAGEMENT_BYTES"
+	envEvidenceMIMEAllowlist = prefix + "EVIDENCE_MIME_ALLOWLIST"
 	envEvidenceDir         = prefix + "EVIDENCE_DIR"
 	envContentDir          = prefix + "CONTENT_DIR"
 	envContentMaxBytes     = prefix + "CONTENT_MAX_BYTES"
@@ -127,10 +130,25 @@ type Database struct {
 	Path string
 }
 
-// Evidence locates the on-disk blob store.
+// Evidence locates the on-disk blob store and sets the upload policy.
 type Evidence struct {
 	// Dir holds uploaded evidence. It is created at startup if absent.
 	Dir string
+
+	// MaxUploadBytes is the largest single file accepted on upload. Post body
+	// is streamed to a temp file before this is checked; the gate is the
+	// configured bytes plus one — "read one more byte and reject past limit"
+	// is the contract, and every streaming reader in this codebase upholds it.
+	MaxUploadBytes ByteSize
+
+	// MaxEngagementBytes is the soft cap on total evidence bytes linked to one
+	// engagement, counting unique blobs once. Exceeding it returns 413.
+	MaxEngagementBytes ByteSize
+
+	// MIMEAllowlist is a comma-separated list of accepted Content-Types for
+	// uploads. Types matching the list pass; everything else is rejected with
+	// a problem detail naming the allowed types.
+	MIMEAllowlist string
 }
 
 // Content locates on-disk raw upstream snapshots and offline bundles (M2),
@@ -453,6 +471,9 @@ func (c *Config) bindings() []binding {
 		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
 		{name: envDBPath, target: &c.Database.Path, def: "./blacklight.duckdb", tool: true},
 		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
+		{name: envEvidenceMaxUpload, target: &c.Evidence.MaxUploadBytes, def: "25MiB"},
+		{name: envEvidenceMaxEngagement, target: &c.Evidence.MaxEngagementBytes, def: "2GiB"},
+		{name: envEvidenceMIMEAllowlist, target: &c.Evidence.MIMEAllowlist, def: "image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,application/zip,application/x-tar,application/gzip,application/x-7z-compressed,text/x-log"},
 		{name: envContentDir, target: &c.Content.Dir, def: "./content", tool: true},
 		{name: envContentMaxBytes, target: &c.Content.MaxBytes, def: "512MiB", tool: true},
 		{name: envContentJobTimeout, target: &c.Content.JobTimeout, def: "30m", tool: true},

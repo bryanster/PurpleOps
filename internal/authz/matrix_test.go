@@ -556,6 +556,44 @@ var matrix = []row{
 			Member: bySeat{deny404, allow, allow, deny403, deny403},
 		},
 	},
+
+
+	{
+		// evidence.read (M3-009): all members can read evidence, with
+		// blind-mode conceal on unrevealed steps.
+		Action: authz.ActionEvidenceRead, Resource: authz.ResourceEvidence,
+		Scope: authz.TokenScopeEngagementsRead, Token: tokensMayHoldIt,
+		Standard: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindRevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindUnrevealed: seats{
+			Admin:  bySeat{allow, allow, allow, deny404, allow},
+			Member: bySeat{deny404, allow, allow, deny404, allow},
+		},
+	},
+	{
+		// evidence.write (M3-009): lead + red + blue upload and delete
+		// evidence. Observer cannot.
+		Action: authz.ActionEvidenceWrite, Resource: authz.ResourceEvidence,
+		Scope: authz.TokenScopeEngagementsWrite, Token: tokensMayHoldIt,
+		Standard: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, deny403},
+		},
+		BlindRevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, deny403},
+		},
+		BlindUnrevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, deny403},
+		},
+	},
 }
 
 // lens is one way of arriving at a cell: how the request authenticated, and with

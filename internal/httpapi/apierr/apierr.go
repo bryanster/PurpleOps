@@ -211,6 +211,13 @@ func Conflict(detail string) *Error {
 	return &Error{code: gen.ProblemCodeConflict, detail: detail}
 }
 
+// PayloadTooLarge reports that the request body exceeds the configured size
+// limit. detail is shown to the client and should name the limit ("file exceeds
+// 25 MiB upload limit").
+func PayloadTooLarge(detail string) *Error {
+	return &Error{code: gen.ProblemCodePayloadTooLarge, detail: detail}
+}
+
 // RateLimited reports that the caller has been throttled. detail is shown to
 // the client and should say what the limit is on — and, where the limit is on a
 // credential, it should say nothing else: the sign-in throttle answers a real

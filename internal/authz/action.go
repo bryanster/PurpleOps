@@ -78,6 +78,9 @@ const (
 	ActionReportPublish
 	ActionWorkbookWrite
 
+	ActionEvidenceRead
+	ActionEvidenceWrite
+
 	// numActions is one past the last action, and must stay last. It is the
 	// exhaustiveness check: the rule table is required to cover every value in
 	// (ActionUnknown, numActions).

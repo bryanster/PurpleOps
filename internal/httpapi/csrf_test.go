@@ -561,6 +561,12 @@ var csrfCoverage = map[string]struct {
 	"PATCH " + BasePath + "/engagements/{engagementId}/executions/{executionId}/detection": {
 		body: `{"version":1}`,
 	},
+
+	// Evidence upload and delete (M3-009).
+	"POST " + BasePath + "/executions/{executionId}/evidence": {
+		mediaType: "multipart/form-data; boundary=walk",
+	},
+	"DELETE " + BasePath + "/evidence/{evidenceId}": {},
 }
 
 // The two media types the walks send.

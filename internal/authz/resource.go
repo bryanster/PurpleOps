@@ -35,6 +35,7 @@ const (
 	ResourceComment    ResourceType = "comment"
 	ResourceFinding    ResourceType = "finding"
 	ResourceReport     ResourceType = "report"
+	ResourceEvidence ResourceType = "evidence"
 	ResourceScenario   ResourceType = "scenario"
 )
 
@@ -52,6 +53,7 @@ var resourceOwners = map[ResourceType]owner{
 	ResourceExecution:    ownedByEngagement,
 	ResourceComment:      ownedByEngagement,
 	ResourceFinding:      ownedByEngagement,
+	ResourceEvidence:    ownedByEngagement,
 	ResourceReport:       ownedByEngagement,
 	ResourceScenario:     ownedByEngagement,
 }

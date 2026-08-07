@@ -42,6 +42,7 @@ var (
 	ErrConflict             = errors.New("conflict")
 	ErrRateLimited          = errors.New("rate limited")
 	ErrInternal             = errors.New("internal error")
+	ErrPayloadTooLarge = errors.New("payload too large")
 )
 
 // codes is the whole code→(status, sentinel) table, and the reason it is one
@@ -62,6 +63,7 @@ var codes = map[Code]struct {
 	gen.ProblemCodeConflict:             {http.StatusConflict, ErrConflict},
 	gen.ProblemCodeRateLimited:          {http.StatusTooManyRequests, ErrRateLimited},
 	gen.ProblemCodeInternal:             {http.StatusInternalServerError, ErrInternal},
+	gen.ProblemCodePayloadTooLarge:      {http.StatusRequestEntityTooLarge, ErrPayloadTooLarge},
 }
 
 // refinements is the exception to one-status-one-code, and the shape of the

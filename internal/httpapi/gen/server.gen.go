@@ -329,6 +329,24 @@ func (e EngagementStatus) Valid() bool {
 	}
 }
 
+// Defines values for EvidenceSide.
+const (
+	EvidenceSideBlue EvidenceSide = "blue"
+	EvidenceSideRed  EvidenceSide = "red"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceSide enum.
+func (e EvidenceSide) Valid() bool {
+	switch e {
+	case EvidenceSideBlue:
+		return true
+	case EvidenceSideRed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ExecutionDetectionCategory.
 const (
 	ExecutionDetectionCategoryGeneral   ExecutionDetectionCategory = "general"
@@ -520,6 +538,7 @@ const (
 	ProblemCodeMethodNotAllowed     ProblemCode = "method_not_allowed"
 	ProblemCodeMfaEnrolmentRequired ProblemCode = "mfa_enrolment_required"
 	ProblemCodeNotFound             ProblemCode = "not_found"
+	ProblemCodePayloadTooLarge      ProblemCode = "payload_too_large"
 	ProblemCodeRateLimited          ProblemCode = "rate_limited"
 	ProblemCodeUnauthenticated      ProblemCode = "unauthenticated"
 	ProblemCodeValidationFailed     ProblemCode = "validation_failed"
@@ -539,6 +558,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeMfaEnrolmentRequired:
 		return true
 	case ProblemCodeNotFound:
+		return true
+	case ProblemCodePayloadTooLarge:
 		return true
 	case ProblemCodeRateLimited:
 		return true
@@ -1926,6 +1947,37 @@ type EngagementRole string
 // `draft` → `active` → `closed` → `archived`, plus `draft` → `closed`.
 type EngagementStatus string
 
+// Evidence defines model for Evidence.
+type Evidence struct {
+	// BlobSha256 SHA-256 hex digest of the blob content.
+	BlobSha256 string `json:"blobSha256"`
+	Caption    string `json:"caption"`
+
+	// CommentId The comment this evidence is linked to (null when execution-only).
+	CommentId nullable.Nullable[openapi_types.UUID] `json:"commentId,omitempty"`
+
+	// ExecutionId The execution this evidence is linked to.
+	ExecutionId openapi_types.UUID `json:"executionId"`
+	Filename    string             `json:"filename"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Mime Stored MIME type from upload.
+	Mime string `json:"mime"`
+
+	// Side Which side uploaded this evidence.
+	Side EvidenceSide `json:"side"`
+
+	// Size File size in bytes.
+	Size       int       `json:"size"`
+	UploadedAt time.Time `json:"uploadedAt"`
+
+	// UploadedBy User id of the uploader.
+	UploadedBy string `json:"uploadedBy"`
+}
+
+// EvidenceSide Which side uploaded this evidence.
+type EvidenceSide string
+
 // Execution defines model for Execution.
 type Execution struct {
 	// AlertSeverity Alert severity (e.g. "high", "medium", "low").
@@ -2158,6 +2210,18 @@ type MFAState struct {
 
 	// Satisfied A second factor was presented for *this* session.
 	Satisfied bool `json:"satisfied"`
+}
+
+// NewEvidenceRequest defines model for NewEvidenceRequest.
+type NewEvidenceRequest struct {
+	// Caption Optional caption for the evidence.
+	Caption *string `json:"caption,omitempty"`
+
+	// File The evidence file.
+	File openapi_types.File `json:"file"`
+
+	// Side Which side uploaded this evidence.
+	Side EvidenceSide `json:"side"`
 }
 
 // PatchEngagement Every field is optional; only the ones present are changed.
@@ -2935,6 +2999,9 @@ type Cursor = string
 // EngagementId defines model for EngagementId.
 type EngagementId = openapi_types.UUID
 
+// EvidenceId defines model for EvidenceId.
+type EvidenceId = openapi_types.UUID
+
 // ExecutionId defines model for ExecutionId.
 type ExecutionId = openapi_types.UUID
 
@@ -2998,6 +3065,13 @@ type InternalError = Problem
 // Clients switch on `code`. `title` and `detail` are prose for a human and
 // may be reworded at any time.
 type NotFound = Problem
+
+// PayloadTooLarge RFC 9457 problem detail — the only error shape this API produces, served
+// as `application/problem+json` (M0B-007).
+//
+// Clients switch on `code`. `title` and `detail` are prose for a human and
+// may be reworded at any time.
+type PayloadTooLarge = Problem
 
 // TooManyRequests RFC 9457 problem detail — the only error shape this API produces, served
 // as `application/problem+json` (M0B-007).
@@ -3968,6 +4042,44 @@ type SubscribeEventsParams struct {
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
+// DeleteEvidenceParams defines parameters for DeleteEvidence.
+type DeleteEvidenceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// UploadEvidenceParams defines parameters for UploadEvidence.
+type UploadEvidenceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SetMfaPolicyParams defines parameters for SetMfaPolicy.
 type SetMfaPolicyParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -4260,6 +4372,9 @@ type PatchStepJSONRequestBody = PatchStep
 
 // SetEngagementStatusJSONRequestBody defines body for SetEngagementStatus for application/json ContentType.
 type SetEngagementStatusJSONRequestBody = SetEngagementStatus
+
+// UploadEvidenceMultipartRequestBody defines body for UploadEvidence for multipart/form-data ContentType.
+type UploadEvidenceMultipartRequestBody = NewEvidenceRequest
 
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
@@ -4584,6 +4699,21 @@ type ServerInterface interface {
 	// SubscribeEvents Subscribe to server-sent events.
 	// (GET /events)
 	SubscribeEvents(w http.ResponseWriter, r *http.Request, params SubscribeEventsParams)
+	// DeleteEvidence Delete evidence.
+	// (DELETE /evidence/{evidenceId})
+	DeleteEvidence(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId, params DeleteEvidenceParams)
+	// GetEvidence Read evidence metadata.
+	// (GET /evidence/{evidenceId})
+	GetEvidence(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId)
+	// GetEvidenceContent Download evidence file content.
+	// (GET /evidence/{evidenceId}/content)
+	GetEvidenceContent(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId)
+	// ListEvidenceByExecution List evidence for an execution.
+	// (GET /executions/{executionId}/evidence)
+	ListEvidenceByExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId)
+	// UploadEvidence Upload evidence to an execution.
+	// (POST /executions/{executionId}/evidence)
+	UploadEvidence(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params UploadEvidenceParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -5250,6 +5380,36 @@ func (_ Unimplemented) ListEngagementSteps(w http.ResponseWriter, r *http.Reques
 // SubscribeEvents Subscribe to server-sent events.
 // (GET /events)
 func (_ Unimplemented) SubscribeEvents(w http.ResponseWriter, r *http.Request, params SubscribeEventsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteEvidence Delete evidence.
+// (DELETE /evidence/{evidenceId})
+func (_ Unimplemented) DeleteEvidence(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId, params DeleteEvidenceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetEvidence Read evidence metadata.
+// (GET /evidence/{evidenceId})
+func (_ Unimplemented) GetEvidence(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetEvidenceContent Download evidence file content.
+// (GET /evidence/{evidenceId}/content)
+func (_ Unimplemented) GetEvidenceContent(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListEvidenceByExecution List evidence for an execution.
+// (GET /executions/{executionId}/evidence)
+func (_ Unimplemented) ListEvidenceByExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UploadEvidence Upload evidence to an execution.
+// (POST /executions/{executionId}/evidence)
+func (_ Unimplemented) UploadEvidence(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params UploadEvidenceParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9596,6 +9756,184 @@ func (siw *ServerInterfaceWrapper) SubscribeEvents(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteEvidence operation middleware
+func (siw *ServerInterfaceWrapper) DeleteEvidence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "evidenceId" -------------
+	var evidenceId EvidenceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "evidenceId", chi.URLParam(r, "evidenceId"), &evidenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "evidenceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteEvidenceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteEvidence(w, r, evidenceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEvidence operation middleware
+func (siw *ServerInterfaceWrapper) GetEvidence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "evidenceId" -------------
+	var evidenceId EvidenceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "evidenceId", chi.URLParam(r, "evidenceId"), &evidenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "evidenceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEvidence(w, r, evidenceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEvidenceContent operation middleware
+func (siw *ServerInterfaceWrapper) GetEvidenceContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "evidenceId" -------------
+	var evidenceId EvidenceId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "evidenceId", chi.URLParam(r, "evidenceId"), &evidenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "evidenceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEvidenceContent(w, r, evidenceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEvidenceByExecution operation middleware
+func (siw *ServerInterfaceWrapper) ListEvidenceByExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEvidenceByExecution(w, r, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadEvidence operation middleware
+func (siw *ServerInterfaceWrapper) UploadEvidence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadEvidenceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadEvidence(w, r, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -10522,6 +10860,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/engagements/{engagementId}/executions/{executionId}/detection", wrapper.PatchBlueDetection)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/executions/{executionId}/evidence", wrapper.ListEvidenceByExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/executions/{executionId}/evidence", wrapper.UploadEvidence)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/evidence/{evidenceId}", wrapper.DeleteEvidence)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/evidence/{evidenceId}", wrapper.GetEvidence)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/evidence/{evidenceId}/content", wrapper.GetEvidenceContent)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/sources", wrapper.ListContentSources)
 	})
 	r.Group(func(r chi.Router) {
@@ -10687,6 +11040,8 @@ type ForbiddenApplicationProblemPlusJSONResponse Problem
 type InternalErrorApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
+
+type PayloadTooLargeApplicationProblemPlusJSONResponse Problem
 
 type TooManyRequestsResponseHeaders struct {
 	RetryAfter int
@@ -20602,6 +20957,487 @@ func (response SubscribeEvents500ApplicationProblemPlusJSONResponse) VisitSubscr
 	return err
 }
 
+type DeleteEvidenceRequestObject struct {
+	EvidenceId EvidenceId `json:"evidenceId"`
+	Params     DeleteEvidenceParams
+}
+
+type DeleteEvidenceResponseObject interface {
+	VisitDeleteEvidenceResponse(w http.ResponseWriter) error
+}
+
+type DeleteEvidence204Response struct {
+}
+
+func (response DeleteEvidence204Response) VisitDeleteEvidenceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteEvidence401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEvidence401ApplicationProblemPlusJSONResponse) VisitDeleteEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEvidence403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEvidence403ApplicationProblemPlusJSONResponse) VisitDeleteEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEvidence404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEvidence404ApplicationProblemPlusJSONResponse) VisitDeleteEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteEvidence500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteEvidence500ApplicationProblemPlusJSONResponse) VisitDeleteEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidenceRequestObject struct {
+	EvidenceId EvidenceId `json:"evidenceId"`
+}
+
+type GetEvidenceResponseObject interface {
+	VisitGetEvidenceResponse(w http.ResponseWriter) error
+}
+
+type GetEvidence200JSONResponse Evidence
+
+func (response GetEvidence200JSONResponse) VisitGetEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidence401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidence401ApplicationProblemPlusJSONResponse) VisitGetEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidence403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidence403ApplicationProblemPlusJSONResponse) VisitGetEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidence404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidence404ApplicationProblemPlusJSONResponse) VisitGetEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidence500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidence500ApplicationProblemPlusJSONResponse) VisitGetEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidenceContentRequestObject struct {
+	EvidenceId EvidenceId `json:"evidenceId"`
+}
+
+type GetEvidenceContentResponseObject interface {
+	VisitGetEvidenceContentResponse(w http.ResponseWriter) error
+}
+
+type GetEvidenceContent200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetEvidenceContent200ApplicationoctetStreamResponse) VisitGetEvidenceContentResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetEvidenceContent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidenceContent401ApplicationProblemPlusJSONResponse) VisitGetEvidenceContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidenceContent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidenceContent403ApplicationProblemPlusJSONResponse) VisitGetEvidenceContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidenceContent404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidenceContent404ApplicationProblemPlusJSONResponse) VisitGetEvidenceContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEvidenceContent500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetEvidenceContent500ApplicationProblemPlusJSONResponse) VisitGetEvidenceContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvidenceByExecutionRequestObject struct {
+	ExecutionId ExecutionId `json:"executionId"`
+}
+
+type ListEvidenceByExecutionResponseObject interface {
+	VisitListEvidenceByExecutionResponse(w http.ResponseWriter) error
+}
+
+type ListEvidenceByExecution200JSONResponse []Evidence
+
+func (response ListEvidenceByExecution200JSONResponse) VisitListEvidenceByExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvidenceByExecution401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListEvidenceByExecution401ApplicationProblemPlusJSONResponse) VisitListEvidenceByExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvidenceByExecution403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListEvidenceByExecution403ApplicationProblemPlusJSONResponse) VisitListEvidenceByExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvidenceByExecution404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListEvidenceByExecution404ApplicationProblemPlusJSONResponse) VisitListEvidenceByExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvidenceByExecution500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListEvidenceByExecution500ApplicationProblemPlusJSONResponse) VisitListEvidenceByExecutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidenceRequestObject struct {
+	ExecutionId ExecutionId `json:"executionId"`
+	Params      UploadEvidenceParams
+	Body        *multipart.Reader
+}
+
+type UploadEvidenceResponseObject interface {
+	VisitUploadEvidenceResponse(w http.ResponseWriter) error
+}
+
+type UploadEvidence201JSONResponse Evidence
+
+func (response UploadEvidence201JSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence400ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence401ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence403ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence404ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence409ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence413ApplicationProblemPlusJSONResponse struct {
+	PayloadTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence413ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadEvidence500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UploadEvidence500ApplicationProblemPlusJSONResponse) VisitUploadEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -22267,6 +23103,21 @@ type StrictServerInterface interface {
 	// SubscribeEvents Subscribe to server-sent events.
 	// (GET /events)
 	SubscribeEvents(ctx context.Context, request SubscribeEventsRequestObject) (SubscribeEventsResponseObject, error)
+	// DeleteEvidence Delete evidence.
+	// (DELETE /evidence/{evidenceId})
+	DeleteEvidence(ctx context.Context, request DeleteEvidenceRequestObject) (DeleteEvidenceResponseObject, error)
+	// GetEvidence Read evidence metadata.
+	// (GET /evidence/{evidenceId})
+	GetEvidence(ctx context.Context, request GetEvidenceRequestObject) (GetEvidenceResponseObject, error)
+	// GetEvidenceContent Download evidence file content.
+	// (GET /evidence/{evidenceId}/content)
+	GetEvidenceContent(ctx context.Context, request GetEvidenceContentRequestObject) (GetEvidenceContentResponseObject, error)
+	// ListEvidenceByExecution List evidence for an execution.
+	// (GET /executions/{executionId}/evidence)
+	ListEvidenceByExecution(ctx context.Context, request ListEvidenceByExecutionRequestObject) (ListEvidenceByExecutionResponseObject, error)
+	// UploadEvidence Upload evidence to an execution.
+	// (POST /executions/{executionId}/evidence)
+	UploadEvidence(ctx context.Context, request UploadEvidenceRequestObject) (UploadEvidenceResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -25284,6 +26135,145 @@ func (sh *strictHandler) SubscribeEvents(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SubscribeEventsResponseObject); ok {
 		if err := validResponse.VisitSubscribeEventsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteEvidence operation middleware
+func (sh *strictHandler) DeleteEvidence(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId, params DeleteEvidenceParams) {
+	var request DeleteEvidenceRequestObject
+
+	request.EvidenceId = evidenceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteEvidence(ctx, request.(DeleteEvidenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteEvidence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteEvidenceResponseObject); ok {
+		if err := validResponse.VisitDeleteEvidenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEvidence operation middleware
+func (sh *strictHandler) GetEvidence(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId) {
+	var request GetEvidenceRequestObject
+
+	request.EvidenceId = evidenceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEvidence(ctx, request.(GetEvidenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEvidence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEvidenceResponseObject); ok {
+		if err := validResponse.VisitGetEvidenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEvidenceContent operation middleware
+func (sh *strictHandler) GetEvidenceContent(w http.ResponseWriter, r *http.Request, evidenceId EvidenceId) {
+	var request GetEvidenceContentRequestObject
+
+	request.EvidenceId = evidenceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEvidenceContent(ctx, request.(GetEvidenceContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEvidenceContent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEvidenceContentResponseObject); ok {
+		if err := validResponse.VisitGetEvidenceContentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEvidenceByExecution operation middleware
+func (sh *strictHandler) ListEvidenceByExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId) {
+	var request ListEvidenceByExecutionRequestObject
+
+	request.ExecutionId = executionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEvidenceByExecution(ctx, request.(ListEvidenceByExecutionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEvidenceByExecution")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEvidenceByExecutionResponseObject); ok {
+		if err := validResponse.VisitListEvidenceByExecutionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadEvidence operation middleware
+func (sh *strictHandler) UploadEvidence(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params UploadEvidenceParams) {
+	var request UploadEvidenceRequestObject
+
+	request.ExecutionId = executionId
+	request.Params = params
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadEvidence(ctx, request.(UploadEvidenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadEvidence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadEvidenceResponseObject); ok {
+		if err := validResponse.VisitUploadEvidenceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

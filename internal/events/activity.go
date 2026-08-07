@@ -134,7 +134,13 @@ const (
 	// engagement_id names which engagement the execution belongs to.
 	VerbExecutionRedUpdated  Verb = "execution.red_updated"
 	VerbExecutionBlueUpdated Verb = "execution.blue_updated"
+
+	// Evidence blob lifecycle (M3-009). Object is the evidence row;
+	// engagement_id names which engagement the evidence belongs to.
+	VerbEvidenceUploaded Verb = "evidence.uploaded"
+	VerbEvidenceDeleted  Verb = "evidence.deleted"
 )
+
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
@@ -158,6 +164,7 @@ const (
 
 	ObjectExecution = "execution"
 
+	ObjectEvidence = "evidence"
 	ObjectScenario = "scenario"
 
 	ObjectStep = "step"

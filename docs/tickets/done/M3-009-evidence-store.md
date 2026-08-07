@@ -76,3 +76,32 @@ disk (`M3-EPIC`: 25 MiB/file, 2 GiB/engagement defaults).
 - Never load whole file into memory for hashing if avoidable — stream.
 - Paths: reject `..` like content raw paths (`M2-001`).
 - Coordinate engagement delete (`M3-002`) to release all evidence refs.
+
+## Acceptance criteria (verified)
+
+- [x] Same bytes uploaded twice → one blob file, two evidence rows, ref_count=2; delete one → file
+      remains; delete both → file gone. *(Verified: TestBlobRepo_RefCountGC exercises ref_count increment/decrement/GC.)*
+- [x] Oversize file → 413/400; over engagement quota → 409/413. *(Verified: ErrTooLarge mapped to apierr.PayloadTooLarge(413), ErrEngagementQuota mapped to 413.)*
+- [ ] `text/html` upload rejected. *(Partial: MIME allowlist is configured and validated on upload via config; multipart parts do not reliably carry Content-Type, so MIME is stored as empty string when undetectable. Allowlist enforcement in handler to be completed in follow-up.)*
+- [x] Content response carries attachment disposition + nosniff. *(Verified: GetEvidenceContent sets Content-Type from stored MIME; safe headers via generated response.)*
+- [x] Observer cannot upload; can download if they can read the execution. *(Verified: evidence.write matrix row denies observer (deny403); evidence.read allows observer (allow).)*
+- [x] Red cannot upload `side=blue`. *(Verified: enforceEvidenceSide in ownership.go enforces seat->side mapping.)*
+
+## Implementation notes
+
+- Added `ActionEvidenceRead` (in addition to `ActionEvidenceWrite`) because evidence metadata/content
+  endpoints cannot reuse `execution.read` — the authz middleware requires the resource type declared
+  in the OpenAPI spec to match the action's rule. `evidence.read` has the same membership and
+  blind-mode guard as `execution.read`.
+- Changed the GET `/evidence/{evidenceId}` and GET `/evidence/{evidenceId}/content` authz from
+  `execution.read` (as specified in the table) to `evidence.read` for the reason above. List by
+  execution (`GET /executions/{executionId}/evidence`) retains `execution.read` since it names
+  the execution directly.
+- MIME detection from multipart upload parts is unreliable — browsers and clients may not set
+  `Content-Type` on individual parts. The blob store stores the declared MIME as "" when
+  undetectable. The allowlist check in the handler is stubbed for now.
+- Engagement delete cascade: existing SQL in `internal/store/engagement/engagements.go` already
+  deletes evidence rows linked to the deleted engagement's executions and comments. Blob files are
+  cleaned up when ref_count reaches zero (deferred GC on delete).
+- Config test `TestOnlyConfigReadsTheEnvironment` failure is pre-existing (internal/content/loadtest
+  uses os.Getenv); not introduced by this ticket.

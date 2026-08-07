@@ -97,6 +97,8 @@ tags:
     description: Scenarios and the steps that make up an attack chain (M3).
   - name: executions
     description: One step run in one round — red execution, blue detection, evidence (M3).
+  - name: evidence
+    description: Evidence upload, download and management (M3-009).
   - name: activity
     description: Append-only activity log — platform feed and per-engagement timeline (M1-015).
   - name: collaboration
@@ -3085,6 +3087,190 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /executions/{executionId}/evidence:
+    post:
+      operationId: uploadEvidence
+      summary: Upload evidence to an execution.
+      description: |
+        Lead, red, blue and platform administrators. Observer cannot upload.
+        Domain enforces side: red seat → side=red only; blue → blue; lead →
+        either; admin without seat may write either for support.
+
+        File is streamed to a temp file and content-addressed by SHA-256:
+        identical bytes uploaded twice produce one blob on disk with
+        ref_count=2. MIME is validated against the configured allowlist.
+        Default limits: 25 MiB per file, 2 GiB per engagement.
+
+        Closed engagements return 409. Activity: `evidence.uploaded`.
+      tags:
+        - evidence
+        - executions
+      x-authz-action: evidence.write
+      x-authz-resource:
+        type: evidence
+        engagement: executionId
+        param: executionId
+      parameters:
+        - $ref: "#/components/parameters/ExecutionId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/NewEvidenceRequest"
+      responses:
+        "201":
+          description: Evidence metadata for the uploaded file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: listEvidenceByExecution
+      summary: List evidence for an execution.
+      description: |
+        Any engagement member who can read the execution. Evidence on
+        unrevealed steps in blind mode is concealed (same rule as
+        execution.read). Newest first.
+      tags:
+        - evidence
+        - executions
+      x-authz-action: execution.read
+      x-authz-resource:
+        type: execution
+        engagement: executionId
+        param: executionId
+      parameters:
+        - $ref: "#/components/parameters/ExecutionId"
+      responses:
+        "200":
+          description: A list of evidence metadata rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Evidence"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /evidence/{evidenceId}:
+    get:
+      operationId: getEvidence
+      summary: Read evidence metadata.
+      description: |
+        Any engagement member who can read the owning execution. In blind
+        mode, evidence on an unrevealed step is 404-concealed.
+      tags:
+        - evidence
+      x-authz-action: evidence.read
+      x-authz-resource:
+        type: evidence
+        engagement: evidenceId
+        param: evidenceId
+      parameters:
+        - $ref: "#/components/parameters/EvidenceId"
+      responses:
+        "200":
+          description: Evidence metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteEvidence
+      summary: Delete evidence.
+      description: |
+        Uploader, lead or platform administrator. Decrements the blob
+        refcount; if it reaches zero the blob file is removed from disk.
+
+        Closed engagements still allow delete (cleanup), unlike uploads.
+        Activity: `evidence.deleted`.
+      tags:
+        - evidence
+      x-authz-action: evidence.write
+      x-authz-resource:
+        type: evidence
+        engagement: evidenceId
+        param: evidenceId
+      parameters:
+        - $ref: "#/components/parameters/EvidenceId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: Evidence deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /evidence/{evidenceId}/content:
+    get:
+      operationId: getEvidenceContent
+      summary: Download evidence file content.
+      description: |
+        Any engagement member who can read the owning execution. Content-Type
+        is the stored MIME from upload (allowlisted). Content-Disposition:
+        attachment with filename. X-Content-Type-Options: nosniff.
+      tags:
+        - evidence
+      x-authz-action: evidence.read
+      x-authz-resource:
+        type: evidence
+        engagement: evidenceId
+        param: evidenceId
+      parameters:
+        - $ref: "#/components/parameters/EvidenceId"
+      responses:
+        "200":
+          description: The evidence file content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /content/sources:
     get:
       operationId: listContentSources
@@ -5330,6 +5516,15 @@ components:
         type: string
         format: uuid
 
+    EvidenceId:
+      name: evidenceId
+      in: path
+      required: true
+      description: Evidence surrogate id (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
 
     ContentDetectionLevelFilter:
       name: level
@@ -5496,6 +5691,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    PayloadTooLarge:
+      description: The request body exceeds the configured size limit. `code` is `payload_too_large`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     InternalError:
       description: |
         Something failed that the caller cannot act on. `code` is `internal` and
@@ -5590,6 +5791,7 @@ components:
         - method_not_allowed
         - conflict
         - rate_limited
+        - payload_too_large
         - internal
 
     FieldError:
@@ -8982,3 +9184,81 @@ components:
         - high
         - critical
       description: Alert severity level.
+
+    EvidenceSide:
+      type: string
+      enum:
+        - red
+        - blue
+      description: Which side uploaded this evidence.
+
+    Evidence:
+      type: object
+      required:
+        - id
+        - blobSha256
+        - filename
+        - caption
+        - side
+        - executionId
+        - uploadedBy
+        - uploadedAt
+        - size
+        - mime
+      properties:
+        id:
+          type: string
+          format: uuid
+        blobSha256:
+          type: string
+          minLength: 64
+          maxLength: 64
+          description: SHA-256 hex digest of the blob content.
+        filename:
+          type: string
+          maxLength: 255
+        caption:
+          type: string
+          maxLength: 4096
+        side:
+          $ref: "#/components/schemas/EvidenceSide"
+        executionId:
+          type: string
+          format: uuid
+          description: The execution this evidence is linked to.
+        commentId:
+          type: [string, "null"]
+          format: uuid
+          description: The comment this evidence is linked to (null when execution-only).
+        uploadedBy:
+          type: string
+          description: User id of the uploader.
+        uploadedAt:
+          type: string
+          format: date-time
+        size:
+          type: integer
+          minimum: 0
+          description: File size in bytes.
+        mime:
+          type: string
+          maxLength: 255
+          description: Stored MIME type from upload.
+
+    NewEvidenceRequest:
+      type: object
+      required:
+        - file
+        - side
+      properties:
+        file:
+          type: string
+          format: binary
+          description: The evidence file.
+        caption:
+          type: string
+          maxLength: 4096
+          description: Optional caption for the evidence.
+        side:
+          $ref: "#/components/schemas/EvidenceSide"
+      additionalProperties: false

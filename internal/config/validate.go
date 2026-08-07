@@ -96,6 +96,33 @@ func (c *Config) validate() []error {
 	errs = append(errs, c.validateOIDC()...)
 	errs = append(errs, c.validateSAML()...)
 
+	if c.Evidence.MaxUploadBytes < 1 {
+		errs = append(errs, &FieldError{
+			Name: envEvidenceMaxUpload, Value: c.Evidence.MaxUploadBytes.String(),
+			Msg:  "must be at least 1 byte",
+		})
+	}
+	if c.Evidence.MaxEngagementBytes < 1 {
+		errs = append(errs, &FieldError{
+			Name: envEvidenceMaxEngagement, Value: c.Evidence.MaxEngagementBytes.String(),
+			Msg:  "must be at least 1 byte",
+		})
+	}
+	if c.Evidence.MIMEAllowlist != "" {
+		for _, m := range strings.Split(c.Evidence.MIMEAllowlist, ",") {
+			m = strings.TrimSpace(m)
+			if m == "" {
+				continue
+			}
+			if !strings.Contains(m, "/") || strings.HasPrefix(m, "/") || strings.HasSuffix(m, "/") {
+				errs = append(errs, &FieldError{
+					Name: envEvidenceMIMEAllowlist, Value: c.Evidence.MIMEAllowlist,
+					Msg:  fmt.Sprintf("invalid MIME type %q: must be type/subtype", m),
+				})
+			}
+		}
+	}
+
 	if c.Report.ChromePath != "" {
 		if err := checkExecutable(c.Report.ChromePath); err != nil {
 			errs = append(errs, &FieldError{

@@ -71,6 +71,8 @@ a role held elsewhere grants nothing here. A non-member is refused with a 404.
 | `execution.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read an execution and its steps. |
 | `execution.write_red` | ✓ | ✓ | ✓ | · | · | · | `engagements:write` | Write the attack side of an execution: what was run, when, and how. |
 | `execution.write_blue` | ✓ | ✓ | · | ✓ | · | · | `engagements:write` | Write the detection side of an execution: what was seen, alerted and blocked. |
+| `evidence.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read evidence metadata and content. Same membership as execution.read, blind-mode guarded. |
+| `evidence.write` | ✓ | ✓ | ✓ | ✓ | · | · | `engagements:write` | Upload and delete evidence: screenshots, logs, packet captures. Lead, red and blue, not observer. |
 | `comment.write` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:write` | Comment. The one write an observer holds, because reading and commenting is the seat. |
 | `finding.write` | ✓ | ✓ | ✓ | ✓ | · | · | `engagements:write` | Raise and edit findings. |
 | `report.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `reports:read` | Read and export an engagement's reports. |
@@ -84,7 +86,7 @@ still be refused for one of these reasons.
 - **`session-only`** — Available to a signed-in session and never to a service token, whatever scopes the token carries and whatever its owner may do. It guards the actions that change which credentials exist: a token able to mint another one could outlive its own revocation, which neither the scope fence nor the owner's role would catch.
   Applies to: `token.read`, `token.manage`, `token.admin_read`, `token.admin_manage`, `session.read`, `session.manage`.
 - **`blind-mode`** — In a blind engagement, a member in the `blue` seat cannot reach a step that has not been revealed — not even to learn it exists. The same filter is applied in the query layer, so a missing rule still cannot leak one. A platform admin who is *not* a member of the engagement is unaffected; one who has taken the blue seat is held to it.
-  Applies to: `execution.read`, `execution.write_blue`.
+  Applies to: `execution.read`, `execution.write_blue`, `evidence.read`.
 
 ## Service tokens
 
