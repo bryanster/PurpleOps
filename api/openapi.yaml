@@ -107,6 +107,8 @@ tags:
     description: Rollups, coverage, detection timing and round-over-round deltas (M5).
   - name: reports
     description: Report building, rendering and sharing (M6).
+  - name: findings
+    description: Remediation findings tracked per engagement (M3-011).
 
 paths:
   /healthz:
@@ -5282,6 +5284,244 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/findings:
+    get:
+      operationId: listFindings
+      summary: List findings for an engagement.
+      description: |
+        Returns every finding in this engagement, newest first. Any engagement
+        member may read findings. Filters: status, severity, owner.
+      tags:
+        - engagements
+        - findings
+      x-authz-action: engagement.read
+      x-authz-resource:
+        type: engagement
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - name: status
+          in: query
+          description: Filter by finding status.
+          schema:
+            $ref: "#/components/schemas/FindingStatus"
+        - name: severity
+          in: query
+          description: Filter by severity.
+          schema:
+            $ref: "#/components/schemas/FindingSeverity"
+        - name: owner
+          in: query
+          description: Filter by owner user id.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of findings, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Finding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createFinding
+      summary: Raise a new finding in this engagement.
+      description: |
+        Lead, red or blue raise a finding. Observers cannot create findings.
+        Closed engagements return 409; updating status of existing findings
+        to resolved is still permitted on closed engagements.
+        Activity: `finding.created`.
+      tags:
+        - engagements
+        - findings
+      x-authz-action: finding.write
+      x-authz-resource:
+        type: finding
+        engagement: engagementId
+        param: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewFinding"
+      responses:
+        "201":
+          description: The finding as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /findings/{findingId}:
+    get:
+      operationId: getFinding
+      summary: Read a single finding.
+      description: |
+        Any engagement member may read. Returns the finding with its linked
+        step ids.
+      tags:
+        - findings
+      x-authz-action: finding.read
+      x-authz-resource:
+        type: finding
+        engagement: findingId
+        param: findingId
+      parameters:
+        - $ref: "#/components/parameters/FindingId"
+      responses:
+        "200":
+          description: The finding with step ids.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: patchFinding
+      summary: Update a finding.
+      description: |
+        Lead, red or blue may update a finding. Any field not sent stays
+        unchanged. Closed engagements may still update the status field
+        (e.g. to resolved); other fields on a closed engagement return 409.
+        Activity: `finding.updated`.
+      tags:
+        - findings
+      x-authz-action: finding.write
+      x-authz-resource:
+        type: finding
+        engagement: findingId
+        param: findingId
+      parameters:
+        - $ref: "#/components/parameters/FindingId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchFinding"
+      responses:
+        "200":
+          description: The updated finding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteFinding
+      summary: Delete a finding.
+      description: |
+        Lead or platform administrator. Deleting a finding also removes its
+        finding_step join rows. Closed engagements are permitted.
+        Activity: `finding.deleted`.
+      tags:
+        - findings
+      x-authz-action: finding.write
+      x-authz-resource:
+        type: finding
+        engagement: findingId
+        param: findingId
+      parameters:
+        - $ref: "#/components/parameters/FindingId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: Finding deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /findings/{findingId}/steps:
+    put:
+      operationId: setFindingSteps
+      summary: Replace the set of steps linked to a finding.
+      description: |
+        Lead, red or blue may set the steps linked to this finding. The
+        payload is the complete set of step ids; any step not listed is
+        unlinked. All step ids must belong to the same engagement as the
+        finding.
+        Activity: `finding.steps_changed`.
+      tags:
+        - findings
+      x-authz-action: finding.write
+      x-authz-resource:
+        type: finding
+        engagement: findingId
+        param: findingId
+      parameters:
+        - $ref: "#/components/parameters/FindingId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindingStepIds"
+      responses:
+        "204":
+          description: Step set replaced.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     cookieSession:
@@ -5429,6 +5669,14 @@ components:
       in: path
       required: true
       description: The comment being read or edited.
+      schema:
+        type: string
+        format: uuid
+    FindingId:
+      name: findingId
+      in: path
+      required: true
+      description: Finding surrogate id (UUIDv7).
       schema:
         type: string
         format: uuid
@@ -9505,3 +9753,139 @@ components:
         editedAt:
           type: string
           format: date-time
+
+    FindingSeverity:
+      type: string
+      enum:
+        - info
+        - low
+        - medium
+        - high
+        - critical
+      description: Severity of a finding.
+
+    FindingStatus:
+      type: string
+      enum:
+        - open
+        - in_progress
+        - resolved
+        - accepted_risk
+      description: Lifecycle of a remediation finding.
+
+    Finding:
+      type: object
+      required:
+        - id
+        - engagementId
+        - title
+        - description
+        - severity
+        - recommendation
+        - owner
+        - status
+        - createdAt
+        - updatedAt
+        - stepIds
+      properties:
+        id:
+          type: string
+          format: uuid
+        engagementId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 16384
+        severity:
+          $ref: "#/components/schemas/FindingSeverity"
+        recommendation:
+          type: string
+          maxLength: 16384
+        owner:
+          type: string
+          description: User id of the owner, or empty string.
+        status:
+          $ref: "#/components/schemas/FindingStatus"
+        createdFromExecution:
+          type: [string, "null"]
+          format: uuid
+          description: The execution this finding was created from, if any.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        stepIds:
+          type: array
+          description: Step ids linked to this finding.
+          items:
+            type: string
+            format: uuid
+
+    NewFinding:
+      type: object
+      required:
+        - title
+        - description
+        - severity
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 16384
+        severity:
+          $ref: "#/components/schemas/FindingSeverity"
+        recommendation:
+          type: string
+          maxLength: 16384
+        owner:
+          type: string
+          description: User id of the owner; defaults to caller when empty.
+        status:
+          $ref: "#/components/schemas/FindingStatus"
+        createdFromExecution:
+          type: string
+          format: uuid
+          description: Optional execution id this finding originates from.
+      additionalProperties: false
+
+    PatchFinding:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 16384
+        severity:
+          $ref: "#/components/schemas/FindingSeverity"
+        recommendation:
+          type: string
+          maxLength: 16384
+        owner:
+          type: string
+        status:
+          $ref: "#/components/schemas/FindingStatus"
+      additionalProperties: false
+
+    FindingStepIds:
+      type: object
+      required:
+        - stepIds
+      properties:
+        stepIds:
+          type: array
+          description: The complete set of step ids for this finding.
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+      additionalProperties: false

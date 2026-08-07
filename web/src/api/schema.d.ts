@@ -2793,6 +2793,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List findings for an engagement.
+         * @description Returns every finding in this engagement, newest first. Any engagement
+         *     member may read findings. Filters: status, severity, owner.
+         */
+        get: operations["listFindings"];
+        put?: never;
+        /**
+         * Raise a new finding in this engagement.
+         * @description Lead, red or blue raise a finding. Observers cannot create findings.
+         *     Closed engagements return 409; updating status of existing findings
+         *     to resolved is still permitted on closed engagements.
+         *     Activity: `finding.created`.
+         */
+        post: operations["createFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{findingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a single finding.
+         * @description Any engagement member may read. Returns the finding with its linked
+         *     step ids.
+         */
+        get: operations["getFinding"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a finding.
+         * @description Lead or platform administrator. Deleting a finding also removes its
+         *     finding_step join rows. Closed engagements are permitted.
+         *     Activity: `finding.deleted`.
+         */
+        delete: operations["deleteFinding"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a finding.
+         * @description Lead, red or blue may update a finding. Any field not sent stays
+         *     unchanged. Closed engagements may still update the status field
+         *     (e.g. to resolved); other fields on a closed engagement return 409.
+         *     Activity: `finding.updated`.
+         */
+        patch: operations["patchFinding"];
+        trace?: never;
+    };
+    "/findings/{findingId}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the set of steps linked to a finding.
+         * @description Lead, red or blue may set the steps linked to this finding. The
+         *     payload is the complete set of step ids; any step not listed is
+         *     unlinked. All step ids must belong to the same engagement as the
+         *     finding.
+         *     Activity: `finding.steps_changed`.
+         */
+        put: operations["setFindingSteps"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4836,6 +4922,66 @@ export interface components {
             /** Format: date-time */
             editedAt: string;
         };
+        /**
+         * @description Severity of a finding.
+         * @enum {string}
+         */
+        FindingSeverity: "info" | "low" | "medium" | "high" | "critical";
+        /**
+         * @description Lifecycle of a remediation finding.
+         * @enum {string}
+         */
+        FindingStatus: "open" | "in_progress" | "resolved" | "accepted_risk";
+        Finding: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            engagementId: string;
+            title: string;
+            description: string;
+            severity: components["schemas"]["FindingSeverity"];
+            recommendation: string;
+            /** @description User id of the owner, or empty string. */
+            owner: string;
+            status: components["schemas"]["FindingStatus"];
+            /**
+             * Format: uuid
+             * @description The execution this finding was created from, if any.
+             */
+            createdFromExecution?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Step ids linked to this finding. */
+            stepIds: string[];
+        };
+        NewFinding: {
+            title: string;
+            description: string;
+            severity: components["schemas"]["FindingSeverity"];
+            recommendation?: string;
+            /** @description User id of the owner; defaults to caller when empty. */
+            owner?: string;
+            status?: components["schemas"]["FindingStatus"];
+            /**
+             * Format: uuid
+             * @description Optional execution id this finding originates from.
+             */
+            createdFromExecution?: string;
+        };
+        PatchFinding: {
+            title?: string;
+            description?: string;
+            severity?: components["schemas"]["FindingSeverity"];
+            recommendation?: string;
+            owner?: string;
+            status?: components["schemas"]["FindingStatus"];
+        };
+        FindingStepIds: {
+            /** @description The complete set of step ids for this finding. */
+            stepIds: string[];
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -5012,6 +5158,8 @@ export interface components {
         ExecutionId: string;
         /** @description The comment being read or edited. */
         CommentId: string;
+        /** @description Finding surrogate id (UUIDv7). */
+        FindingId: string;
         /** @description Restrict the listing to accounts in this state. */
         UserStatusFilter: components["schemas"]["UserStatus"];
         /** @description Restrict the listing to accounts holding this platform role. */
@@ -9898,6 +10046,261 @@ export interface operations {
                     "application/json": components["schemas"]["CommentRevision"][];
                 };
             };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listFindings: {
+        parameters: {
+            query?: {
+                /** @description Filter by finding status. */
+                status?: components["schemas"]["FindingStatus"];
+                /** @description Filter by severity. */
+                severity?: components["schemas"]["FindingSeverity"];
+                /** @description Filter by owner user id. */
+                owner?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A list of findings, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createFinding: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewFinding"];
+            };
+        };
+        responses: {
+            /** @description The finding as stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Finding surrogate id (UUIDv7). */
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The finding with step ids. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteFinding: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Finding surrogate id (UUIDv7). */
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Finding deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchFinding: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Finding surrogate id (UUIDv7). */
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchFinding"];
+            };
+        };
+        responses: {
+            /** @description The updated finding. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setFindingSteps: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description Finding surrogate id (UUIDv7). */
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingStepIds"];
+            };
+        };
+        responses: {
+            /** @description Step set replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

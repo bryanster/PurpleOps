@@ -74,6 +74,7 @@ const (
 	ActionExecutionWriteBlue
 	ActionCommentWrite
 	ActionFindingWrite
+	ActionFindingRead
 	ActionReportRead
 	ActionReportPublish
 	ActionWorkbookWrite

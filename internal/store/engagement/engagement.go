@@ -371,6 +371,17 @@ type NewFinding struct {
 	CreatedFromExecution string
 }
 
+// PatchFinding is the caller's half of updating a finding. Only non-empty
+// fields are applied; "" means "leave unchanged".
+type PatchFinding struct {
+	Title          string
+	Description    string
+	Severity       string
+	Recommendation string
+	Owner          string
+	Status         string
+}
+
 // EvidenceBlob is one content-addressed file stored on disk.
 type EvidenceBlob struct {
 	SHA256      string

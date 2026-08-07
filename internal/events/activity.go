@@ -144,6 +144,13 @@ const (
 	// engagement_id names which engagement the execution belongs to.
 	VerbCommentCreated Verb = "comment.created"
 	VerbCommentEdited  Verb = "comment.edited"
+
+	// Finding lifecycle (M3-011). Object is the finding row;
+	// engagement_id names which engagement the finding belongs to.
+	VerbFindingCreated      Verb = "finding.created"
+	VerbFindingUpdated      Verb = "finding.updated"
+	VerbFindingDeleted      Verb = "finding.deleted"
+	VerbFindingStepsChanged Verb = "finding.steps_changed"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -168,6 +175,7 @@ const (
 
 	ObjectExecution = "execution"
 
+	ObjectFinding  = "finding"
 	ObjectEvidence = "evidence"
 	ObjectScenario = "scenario"
 

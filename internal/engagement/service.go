@@ -33,10 +33,10 @@ type Service struct {
 	steps       *storengagement.Steps
 	executions  *storengagement.Executions
 	comments    *storengagement.Comments
+	findings    *storengagement.Findings
 	users       UserStore
 }
 
-// Deps is everything a [Service] is built from.
 type Deps struct {
 	Engagements *storengagement.Engagements
 	AttackPin   *attackpin.Service
@@ -46,6 +46,7 @@ type Deps struct {
 	Steps       *storengagement.Steps
 	Executions  *storengagement.Executions
 	Comments    *storengagement.Comments
+	Findings    *storengagement.Findings
 	Users       UserStore // optional; nil skips user validation on add
 }
 
@@ -69,6 +70,7 @@ func New(deps Deps) (*Service, error) {
 		steps:       deps.Steps,
 		executions:  deps.Executions,
 		comments:    deps.Comments,
+		findings:    deps.Findings,
 	}, nil
 }
 

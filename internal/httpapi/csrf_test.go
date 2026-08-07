@@ -574,6 +574,17 @@ var csrfCoverage = map[string]struct {
 	"PATCH " + BasePath + "/engagements/{engagementId}/comments/{commentId}": {
 		body: `{"body":"edited comment"}`,
 	},
+	// Findings (M3-011).
+	"POST " + BasePath + "/engagements/{engagementId}/findings": {
+		body: `{"title":"test finding","description":"desc","severity":"medium"}`,
+	},
+	"PATCH " + BasePath + "/findings/{findingId}": {
+		body: `{"title":"updated"}`,
+	},
+	"DELETE " + BasePath + "/findings/{findingId}": {},
+	"PUT " + BasePath + "/findings/{findingId}/steps": {
+		body: `{"stepIds":["00000000-0000-0000-0000-000000000001"]}`,
+	},
 }
 
 // The two media types the walks send.

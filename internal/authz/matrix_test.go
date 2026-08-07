@@ -521,6 +521,24 @@ var matrix = []row{
 		},
 	},
 	{
+		// finding.read (M3-011): all members can read findings in an
+		// engagement.
+		Action: authz.ActionFindingRead, Resource: authz.ResourceFinding,
+		Scope: authz.TokenScopeEngagementsRead, Token: tokensMayHoldIt,
+		Standard: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindRevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindUnrevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+	},
+	{
 		Action: authz.ActionReportRead, Resource: authz.ResourceReport,
 		Scope: authz.TokenScopeReportsRead, Token: tokensMayHoldIt,
 		Standard: seats{

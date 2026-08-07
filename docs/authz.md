@@ -76,6 +76,7 @@ a role held elsewhere grants nothing here. A non-member is refused with a 404.
 | `comment.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read comments and their revision history. |
 | `comment.write` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:write` | Comment. The one write an observer holds, because reading and commenting is the seat. |
 | `finding.write` | ✓ | ✓ | ✓ | ✓ | · | · | `engagements:write` | Raise and edit findings. |
+| `finding.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read findings in an engagement. Same membership as engagement.read. |
 | `report.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `reports:read` | Read and export an engagement's reports. |
 | `report.publish` | ✓ | ✓ | · | · | · | · | `reports:write` | Publish a report, which is the act that makes it somebody else's evidence. |
 

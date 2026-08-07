@@ -552,6 +552,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	memberships := identity.NewMemberships(deps.Store)
 	users := identity.NewUsers(deps.Store)
 	comments := storengagement.NewComments(deps.Store)
+	findingsRepo := storengagement.NewFindings(deps.Store)
 	engSvc, err := engagement.New(engagement.Deps{
 		Engagements: engagements,
 		AttackPin:   pin,
@@ -561,6 +562,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		Steps:       steps,
 		Executions:  executions,
 		Comments:    comments,
+		Findings:    findingsRepo,
 		Users:       users,
 	})
 

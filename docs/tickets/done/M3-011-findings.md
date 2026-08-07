@@ -56,3 +56,22 @@ status, reports (M6), and operators recreating an assessment later.
 - `created_from_execution` is lineage only; do not cascade-delete finding when execution stays
   (executions aren’t deleted independently often). On step delete, drop join rows (`M3-005`
   cascade).
+
+## Implementation notes
+
+- Added `finding.read` authz action (same as `evidence.read` in M3-009) because
+  `GET /findings/{findingId}` has resource type `finding` which cannot use
+  `engagement.read` — the authz middleware requires matching resource types.
+  `GET /engagements/{engagementId}/findings` still uses `engagement.read` since
+  the resource type is `engagement`.
+- Added store methods: `Update` (COALESCE-based patch), `Delete` (cascades
+  finding_step rows), `SetSteps` (delete-all + re-insert in one txn).
+- Domain service methods on `engagement.Service`: `CreateFinding`,
+  `UpdateFinding`, `DeleteFinding`, `GetFinding`, `ListFindings`,
+  `SetFindingSteps`, `FindingSteps`.
+- Activity verbs: `finding.created`, `finding.updated`, `finding.deleted`,
+  `finding.steps_changed` on `ObjectFinding`.
+- Closed/archived engagements: can still update status (resolved) but cannot
+  create new findings or change other fields.
+- Authz: `finding.write` → lead+red+blue; `finding.read` → all members.
+- CSRF coverage added for all state-changing finding routes.

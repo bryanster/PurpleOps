@@ -449,6 +449,57 @@ func (e ExecutionStatus) Valid() bool {
 	}
 }
 
+// Defines values for FindingSeverity.
+const (
+	FindingSeverityCritical FindingSeverity = "critical"
+	FindingSeverityHigh     FindingSeverity = "high"
+	FindingSeverityInfo     FindingSeverity = "info"
+	FindingSeverityLow      FindingSeverity = "low"
+	FindingSeverityMedium   FindingSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the FindingSeverity enum.
+func (e FindingSeverity) Valid() bool {
+	switch e {
+	case FindingSeverityCritical:
+		return true
+	case FindingSeverityHigh:
+		return true
+	case FindingSeverityInfo:
+		return true
+	case FindingSeverityLow:
+		return true
+	case FindingSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FindingStatus.
+const (
+	FindingStatusAcceptedRisk FindingStatus = "accepted_risk"
+	FindingStatusInProgress   FindingStatus = "in_progress"
+	FindingStatusOpen         FindingStatus = "open"
+	FindingStatusResolved     FindingStatus = "resolved"
+)
+
+// Valid indicates whether the value is a known member of the FindingStatus enum.
+func (e FindingStatus) Valid() bool {
+	switch e {
+	case FindingStatusAcceptedRisk:
+		return true
+	case FindingStatusInProgress:
+		return true
+	case FindingStatusOpen:
+		return true
+	case FindingStatusResolved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthState.
 const (
 	HealthStateError HealthState = "error"
@@ -2101,6 +2152,44 @@ type FieldError struct {
 	Message string `json:"message"`
 }
 
+// Finding defines model for Finding.
+type Finding struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedFromExecution The execution this finding was created from, if any.
+	CreatedFromExecution nullable.Nullable[openapi_types.UUID] `json:"createdFromExecution,omitempty"`
+	Description          string                                `json:"description"`
+	EngagementId         openapi_types.UUID                    `json:"engagementId"`
+	Id                   openapi_types.UUID                    `json:"id"`
+
+	// Owner User id of the owner, or empty string.
+	Owner          string `json:"owner"`
+	Recommendation string `json:"recommendation"`
+
+	// Severity Severity of a finding.
+	Severity FindingSeverity `json:"severity"`
+
+	// Status Lifecycle of a remediation finding.
+	Status FindingStatus `json:"status"`
+
+	// StepIds Step ids linked to this finding.
+	StepIds   []openapi_types.UUID `json:"stepIds"`
+	Title     string               `json:"title"`
+	UpdatedAt time.Time            `json:"updatedAt"`
+}
+
+// FindingSeverity Severity of a finding.
+type FindingSeverity string
+
+// FindingStatus Lifecycle of a remediation finding.
+type FindingStatus string
+
+// FindingStepIds defines model for FindingStepIds.
+type FindingStepIds struct {
+	// StepIds The complete set of step ids for this finding.
+	StepIds []openapi_types.UUID `json:"stepIds"`
+}
+
 // Health Health of the server and of everything it depends on. Reported with a 200
 // when `status` is `ok` and a 503 when it is `error`, so a monitor that only
 // looks at the status code still gets the right answer.
@@ -2257,6 +2346,24 @@ type NewEvidenceRequest struct {
 	Side EvidenceSide `json:"side"`
 }
 
+// NewFinding defines model for NewFinding.
+type NewFinding struct {
+	// CreatedFromExecution Optional execution id this finding originates from.
+	CreatedFromExecution *openapi_types.UUID `json:"createdFromExecution,omitempty"`
+	Description          string              `json:"description"`
+
+	// Owner User id of the owner; defaults to caller when empty.
+	Owner          *string `json:"owner,omitempty"`
+	Recommendation *string `json:"recommendation,omitempty"`
+
+	// Severity Severity of a finding.
+	Severity FindingSeverity `json:"severity"`
+
+	// Status Lifecycle of a remediation finding.
+	Status *FindingStatus `json:"status,omitempty"`
+	Title  string         `json:"title"`
+}
+
 // PatchComment defines model for PatchComment.
 type PatchComment struct {
 	// Body The replacement body. Prior body is saved as a revision.
@@ -2276,6 +2383,20 @@ type PatchEngagement struct {
 	Mode     *EngagementMode     `json:"mode,omitempty"`
 	Name     *string             `json:"name,omitempty"`
 	StartsOn *openapi_types.Date `json:"startsOn,omitempty"`
+}
+
+// PatchFinding defines model for PatchFinding.
+type PatchFinding struct {
+	Description    *string `json:"description,omitempty"`
+	Owner          *string `json:"owner,omitempty"`
+	Recommendation *string `json:"recommendation,omitempty"`
+
+	// Severity Severity of a finding.
+	Severity *FindingSeverity `json:"severity,omitempty"`
+
+	// Status Lifecycle of a remediation finding.
+	Status *FindingStatus `json:"status,omitempty"`
+	Title  *string        `json:"title,omitempty"`
 }
 
 // PatchMember Change a member's engagement role.
@@ -3046,6 +3167,9 @@ type EvidenceId = openapi_types.UUID
 
 // ExecutionId defines model for ExecutionId.
 type ExecutionId = openapi_types.UUID
+
+// FindingId defines model for FindingId.
+type FindingId = openapi_types.UUID
 
 // Limit defines model for Limit.
 type Limit = int
@@ -4108,6 +4232,37 @@ type PatchRedExecutionParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// ListFindingsParams defines parameters for ListFindings.
+type ListFindingsParams struct {
+	// Status Filter by finding status.
+	Status *FindingStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Severity Filter by severity.
+	Severity *FindingSeverity `form:"severity,omitempty" json:"severity,omitempty"`
+
+	// Owner Filter by owner user id.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty"`
+}
+
+// CreateFindingParams defines parameters for CreateFinding.
+type CreateFindingParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SubscribeEventsParams defines parameters for SubscribeEvents.
 type SubscribeEventsParams struct {
 	// Topics One or more topic names to subscribe to. Repeat the parameter
@@ -4143,6 +4298,63 @@ type DeleteEvidenceParams struct {
 
 // UploadEvidenceParams defines parameters for UploadEvidence.
 type UploadEvidenceParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DeleteFindingParams defines parameters for DeleteFinding.
+type DeleteFindingParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// PatchFindingParams defines parameters for PatchFinding.
+type PatchFindingParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// SetFindingStepsParams defines parameters for SetFindingSteps.
+type SetFindingStepsParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
 	// `bl_csrf` cookie, echoed back in this header.
 	//
@@ -4432,6 +4644,9 @@ type PatchBlueDetectionJSONRequestBody = BlueDetectionPatch
 // PatchRedExecutionJSONRequestBody defines body for PatchRedExecution for application/json ContentType.
 type PatchRedExecutionJSONRequestBody = RedExecutionPatch
 
+// CreateFindingJSONRequestBody defines body for CreateFinding for application/json ContentType.
+type CreateFindingJSONRequestBody = NewFinding
+
 // AddEngagementMemberJSONRequestBody defines body for AddEngagementMember for application/json ContentType.
 type AddEngagementMemberJSONRequestBody = AddMember
 
@@ -4461,6 +4676,12 @@ type SetEngagementStatusJSONRequestBody = SetEngagementStatus
 
 // UploadEvidenceMultipartRequestBody defines body for UploadEvidence for multipart/form-data ContentType.
 type UploadEvidenceMultipartRequestBody = NewEvidenceRequest
+
+// PatchFindingJSONRequestBody defines body for PatchFinding for application/json ContentType.
+type PatchFindingJSONRequestBody = PatchFinding
+
+// SetFindingStepsJSONRequestBody defines body for SetFindingSteps for application/json ContentType.
+type SetFindingStepsJSONRequestBody = FindingStepIds
 
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
@@ -4737,6 +4958,12 @@ type ServerInterface interface {
 	// PatchRedExecution Write the red (attack) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 	PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams)
+	// ListFindings List findings for an engagement.
+	// (GET /engagements/{engagementId}/findings)
+	ListFindings(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListFindingsParams)
+	// CreateFinding Raise a new finding in this engagement.
+	// (POST /engagements/{engagementId}/findings)
+	CreateFinding(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateFindingParams)
 	// ListEngagementMembers List the members of an engagement.
 	// (GET /engagements/{engagementId}/members)
 	ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -4812,6 +5039,18 @@ type ServerInterface interface {
 	// UploadEvidence Upload evidence to an execution.
 	// (POST /executions/{executionId}/evidence)
 	UploadEvidence(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params UploadEvidenceParams)
+	// DeleteFinding Delete a finding.
+	// (DELETE /findings/{findingId})
+	DeleteFinding(w http.ResponseWriter, r *http.Request, findingId FindingId, params DeleteFindingParams)
+	// GetFinding Read a single finding.
+	// (GET /findings/{findingId})
+	GetFinding(w http.ResponseWriter, r *http.Request, findingId FindingId)
+	// PatchFinding Update a finding.
+	// (PATCH /findings/{findingId})
+	PatchFinding(w http.ResponseWriter, r *http.Request, findingId FindingId, params PatchFindingParams)
+	// SetFindingSteps Replace the set of steps linked to a finding.
+	// (PUT /findings/{findingId}/steps)
+	SetFindingSteps(w http.ResponseWriter, r *http.Request, findingId FindingId, params SetFindingStepsParams)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -5385,6 +5624,18 @@ func (_ Unimplemented) PatchRedExecution(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListFindings List findings for an engagement.
+// (GET /engagements/{engagementId}/findings)
+func (_ Unimplemented) ListFindings(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListFindingsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateFinding Raise a new finding in this engagement.
+// (POST /engagements/{engagementId}/findings)
+func (_ Unimplemented) CreateFinding(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateFindingParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListEngagementMembers List the members of an engagement.
 // (GET /engagements/{engagementId}/members)
 func (_ Unimplemented) ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
@@ -5532,6 +5783,30 @@ func (_ Unimplemented) ListEvidenceByExecution(w http.ResponseWriter, r *http.Re
 // UploadEvidence Upload evidence to an execution.
 // (POST /executions/{executionId}/evidence)
 func (_ Unimplemented) UploadEvidence(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params UploadEvidenceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteFinding Delete a finding.
+// (DELETE /findings/{findingId})
+func (_ Unimplemented) DeleteFinding(w http.ResponseWriter, r *http.Request, findingId FindingId, params DeleteFindingParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetFinding Read a single finding.
+// (GET /findings/{findingId})
+func (_ Unimplemented) GetFinding(w http.ResponseWriter, r *http.Request, findingId FindingId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchFinding Update a finding.
+// (PATCH /findings/{findingId})
+func (_ Unimplemented) PatchFinding(w http.ResponseWriter, r *http.Request, findingId FindingId, params PatchFindingParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetFindingSteps Replace the set of steps linked to a finding.
+// (PUT /findings/{findingId}/steps)
+func (_ Unimplemented) SetFindingSteps(w http.ResponseWriter, r *http.Request, findingId FindingId, params SetFindingStepsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9374,6 +9649,124 @@ func (siw *ServerInterfaceWrapper) PatchRedExecution(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListFindings operation middleware
+func (siw *ServerInterfaceWrapper) ListFindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFindingsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "severity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "severity", r.URL.Query(), &params.Severity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "severity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "severity", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "owner" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "owner", r.URL.Query(), &params.Owner, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "owner"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "owner", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFindings(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateFinding operation middleware
+func (siw *ServerInterfaceWrapper) CreateFinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateFindingParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateFinding(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListEngagementMembers operation middleware
 func (siw *ServerInterfaceWrapper) ListEngagementMembers(w http.ResponseWriter, r *http.Request) {
 
@@ -10235,6 +10628,182 @@ func (siw *ServerInterfaceWrapper) UploadEvidence(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UploadEvidence(w, r, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteFinding operation middleware
+func (siw *ServerInterfaceWrapper) DeleteFinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "findingId" -------------
+	var findingId FindingId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "findingId", chi.URLParam(r, "findingId"), &findingId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "findingId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteFindingParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteFinding(w, r, findingId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFinding operation middleware
+func (siw *ServerInterfaceWrapper) GetFinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "findingId" -------------
+	var findingId FindingId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "findingId", chi.URLParam(r, "findingId"), &findingId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "findingId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFinding(w, r, findingId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchFinding operation middleware
+func (siw *ServerInterfaceWrapper) PatchFinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "findingId" -------------
+	var findingId FindingId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "findingId", chi.URLParam(r, "findingId"), &findingId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "findingId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchFindingParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchFinding(w, r, findingId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetFindingSteps operation middleware
+func (siw *ServerInterfaceWrapper) SetFindingSteps(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "findingId" -------------
+	var findingId FindingId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "findingId", chi.URLParam(r, "findingId"), &findingId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "findingId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetFindingStepsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetFindingSteps(w, r, findingId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11348,6 +11917,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/comments/{commentId}/revisions", wrapper.ListCommentRevisions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/findings", wrapper.ListFindings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/findings", wrapper.CreateFinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/findings/{findingId}", wrapper.DeleteFinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/findings/{findingId}", wrapper.GetFinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/findings/{findingId}", wrapper.PatchFinding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/findings/{findingId}/steps", wrapper.SetFindingSteps)
 	})
 
 	return r
@@ -19383,6 +19970,229 @@ func (response PatchRedExecution500ApplicationProblemPlusJSONResponse) VisitPatc
 	return err
 }
 
+type ListFindingsRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       ListFindingsParams
+}
+
+type ListFindingsResponseObject interface {
+	VisitListFindingsResponse(w http.ResponseWriter) error
+}
+
+type ListFindings200JSONResponse []Finding
+
+func (response ListFindings200JSONResponse) VisitListFindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFindings400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListFindings400ApplicationProblemPlusJSONResponse) VisitListFindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFindings401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListFindings401ApplicationProblemPlusJSONResponse) VisitListFindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFindings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListFindings403ApplicationProblemPlusJSONResponse) VisitListFindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFindings404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListFindings404ApplicationProblemPlusJSONResponse) VisitListFindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFindings500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListFindings500ApplicationProblemPlusJSONResponse) VisitListFindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFindingRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       CreateFindingParams
+	Body         *CreateFindingJSONRequestBody
+}
+
+type CreateFindingResponseObject interface {
+	VisitCreateFindingResponse(w http.ResponseWriter) error
+}
+
+type CreateFinding201JSONResponse Finding
+
+func (response CreateFinding201JSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFinding400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFinding400ApplicationProblemPlusJSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFinding401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFinding401ApplicationProblemPlusJSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFinding403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFinding403ApplicationProblemPlusJSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFinding404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFinding404ApplicationProblemPlusJSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFinding409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFinding409ApplicationProblemPlusJSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateFinding500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateFinding500ApplicationProblemPlusJSONResponse) VisitCreateFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListEngagementMembersRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -22144,6 +22954,391 @@ func (response UploadEvidence500ApplicationProblemPlusJSONResponse) VisitUploadE
 	return err
 }
 
+type DeleteFindingRequestObject struct {
+	FindingId FindingId `json:"findingId"`
+	Params    DeleteFindingParams
+}
+
+type DeleteFindingResponseObject interface {
+	VisitDeleteFindingResponse(w http.ResponseWriter) error
+}
+
+type DeleteFinding204Response struct {
+}
+
+func (response DeleteFinding204Response) VisitDeleteFindingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteFinding401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteFinding401ApplicationProblemPlusJSONResponse) VisitDeleteFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteFinding403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteFinding403ApplicationProblemPlusJSONResponse) VisitDeleteFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteFinding404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteFinding404ApplicationProblemPlusJSONResponse) VisitDeleteFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteFinding500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteFinding500ApplicationProblemPlusJSONResponse) VisitDeleteFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFindingRequestObject struct {
+	FindingId FindingId `json:"findingId"`
+}
+
+type GetFindingResponseObject interface {
+	VisitGetFindingResponse(w http.ResponseWriter) error
+}
+
+type GetFinding200JSONResponse Finding
+
+func (response GetFinding200JSONResponse) VisitGetFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFinding401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetFinding401ApplicationProblemPlusJSONResponse) VisitGetFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFinding403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetFinding403ApplicationProblemPlusJSONResponse) VisitGetFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFinding404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetFinding404ApplicationProblemPlusJSONResponse) VisitGetFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFinding500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetFinding500ApplicationProblemPlusJSONResponse) VisitGetFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFindingRequestObject struct {
+	FindingId FindingId `json:"findingId"`
+	Params    PatchFindingParams
+	Body      *PatchFindingJSONRequestBody
+}
+
+type PatchFindingResponseObject interface {
+	VisitPatchFindingResponse(w http.ResponseWriter) error
+}
+
+type PatchFinding200JSONResponse Finding
+
+func (response PatchFinding200JSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFinding400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchFinding400ApplicationProblemPlusJSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFinding401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchFinding401ApplicationProblemPlusJSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFinding403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchFinding403ApplicationProblemPlusJSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFinding404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchFinding404ApplicationProblemPlusJSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFinding409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PatchFinding409ApplicationProblemPlusJSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchFinding500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchFinding500ApplicationProblemPlusJSONResponse) VisitPatchFindingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFindingStepsRequestObject struct {
+	FindingId FindingId `json:"findingId"`
+	Params    SetFindingStepsParams
+	Body      *SetFindingStepsJSONRequestBody
+}
+
+type SetFindingStepsResponseObject interface {
+	VisitSetFindingStepsResponse(w http.ResponseWriter) error
+}
+
+type SetFindingSteps204Response struct {
+}
+
+func (response SetFindingSteps204Response) VisitSetFindingStepsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetFindingSteps400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetFindingSteps400ApplicationProblemPlusJSONResponse) VisitSetFindingStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFindingSteps401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetFindingSteps401ApplicationProblemPlusJSONResponse) VisitSetFindingStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFindingSteps403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SetFindingSteps403ApplicationProblemPlusJSONResponse) VisitSetFindingStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFindingSteps404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SetFindingSteps404ApplicationProblemPlusJSONResponse) VisitSetFindingStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFindingSteps500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response SetFindingSteps500ApplicationProblemPlusJSONResponse) VisitSetFindingStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -23761,6 +24956,12 @@ type StrictServerInterface interface {
 	// PatchRedExecution Write the red (attack) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 	PatchRedExecution(ctx context.Context, request PatchRedExecutionRequestObject) (PatchRedExecutionResponseObject, error)
+	// ListFindings List findings for an engagement.
+	// (GET /engagements/{engagementId}/findings)
+	ListFindings(ctx context.Context, request ListFindingsRequestObject) (ListFindingsResponseObject, error)
+	// CreateFinding Raise a new finding in this engagement.
+	// (POST /engagements/{engagementId}/findings)
+	CreateFinding(ctx context.Context, request CreateFindingRequestObject) (CreateFindingResponseObject, error)
 	// ListEngagementMembers List the members of an engagement.
 	// (GET /engagements/{engagementId}/members)
 	ListEngagementMembers(ctx context.Context, request ListEngagementMembersRequestObject) (ListEngagementMembersResponseObject, error)
@@ -23836,6 +25037,18 @@ type StrictServerInterface interface {
 	// UploadEvidence Upload evidence to an execution.
 	// (POST /executions/{executionId}/evidence)
 	UploadEvidence(ctx context.Context, request UploadEvidenceRequestObject) (UploadEvidenceResponseObject, error)
+	// DeleteFinding Delete a finding.
+	// (DELETE /findings/{findingId})
+	DeleteFinding(ctx context.Context, request DeleteFindingRequestObject) (DeleteFindingResponseObject, error)
+	// GetFinding Read a single finding.
+	// (GET /findings/{findingId})
+	GetFinding(ctx context.Context, request GetFindingRequestObject) (GetFindingResponseObject, error)
+	// PatchFinding Update a finding.
+	// (PATCH /findings/{findingId})
+	PatchFinding(ctx context.Context, request PatchFindingRequestObject) (PatchFindingResponseObject, error)
+	// SetFindingSteps Replace the set of steps linked to a finding.
+	// (PUT /findings/{findingId}/steps)
+	SetFindingSteps(ctx context.Context, request SetFindingStepsRequestObject) (SetFindingStepsResponseObject, error)
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -26385,6 +27598,67 @@ func (sh *strictHandler) PatchRedExecution(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ListFindings operation middleware
+func (sh *strictHandler) ListFindings(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListFindingsParams) {
+	var request ListFindingsRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFindings(ctx, request.(ListFindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFindingsResponseObject); ok {
+		if err := validResponse.VisitListFindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateFinding operation middleware
+func (sh *strictHandler) CreateFinding(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateFindingParams) {
+	var request CreateFindingRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	var body CreateFindingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateFinding(ctx, request.(CreateFindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateFinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateFindingResponseObject); ok {
+		if err := validResponse.VisitCreateFindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListEngagementMembers operation middleware
 func (sh *strictHandler) ListEngagementMembers(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
 	var request ListEngagementMembersRequestObject
@@ -27116,6 +28390,127 @@ func (sh *strictHandler) UploadEvidence(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UploadEvidenceResponseObject); ok {
 		if err := validResponse.VisitUploadEvidenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteFinding operation middleware
+func (sh *strictHandler) DeleteFinding(w http.ResponseWriter, r *http.Request, findingId FindingId, params DeleteFindingParams) {
+	var request DeleteFindingRequestObject
+
+	request.FindingId = findingId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteFinding(ctx, request.(DeleteFindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteFinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteFindingResponseObject); ok {
+		if err := validResponse.VisitDeleteFindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetFinding operation middleware
+func (sh *strictHandler) GetFinding(w http.ResponseWriter, r *http.Request, findingId FindingId) {
+	var request GetFindingRequestObject
+
+	request.FindingId = findingId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFinding(ctx, request.(GetFindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFindingResponseObject); ok {
+		if err := validResponse.VisitGetFindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchFinding operation middleware
+func (sh *strictHandler) PatchFinding(w http.ResponseWriter, r *http.Request, findingId FindingId, params PatchFindingParams) {
+	var request PatchFindingRequestObject
+
+	request.FindingId = findingId
+	request.Params = params
+
+	var body PatchFindingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchFinding(ctx, request.(PatchFindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchFinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchFindingResponseObject); ok {
+		if err := validResponse.VisitPatchFindingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetFindingSteps operation middleware
+func (sh *strictHandler) SetFindingSteps(w http.ResponseWriter, r *http.Request, findingId FindingId, params SetFindingStepsParams) {
+	var request SetFindingStepsRequestObject
+
+	request.FindingId = findingId
+	request.Params = params
+
+	var body SetFindingStepsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetFindingSteps(ctx, request.(SetFindingStepsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetFindingSteps")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetFindingStepsResponseObject); ok {
+		if err := validResponse.VisitSetFindingStepsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
