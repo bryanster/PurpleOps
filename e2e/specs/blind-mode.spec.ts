@@ -1,6 +1,9 @@
+import path from 'node:path'
+
 import { type APIRequestContext } from '@playwright/test'
 
 import { adminEmail, adminPassword, seedAdmin, signIn } from '../harness/auth'
+import { repoRoot } from '../harness/paths'
 import { expect, test, type SeedCommand } from '../harness/test'
 
 /**
@@ -15,9 +18,27 @@ const redPassword = 'a red blind passphrase'
 const blueEmail = 'blue-blind@example.test'
 const bluePassword = 'a blue blind passphrase'
 
+const attackSourceID = '01900000-0000-7000-8000-000000000001'
+const attackFixture = path.join(
+  repoRoot,
+  'internal/content/attack/testdata/enterprise-mini-15.1.json',
+)
+
 function seedBlindUsers(): SeedCommand[] {
   return [
     ...seedAdmin(),
+    ['content', 'enable', '--id', attackSourceID],
+    [
+      'content',
+      'import-bundle',
+      '--source',
+      'attack',
+      '--file',
+      attackFixture,
+      '--version',
+      '15.1',
+      '--wait',
+    ],
     {
       args: ['user', 'create', '--email', redEmail, '--name', 'Red Lead'],
       stdin: redPassword,
@@ -28,7 +49,6 @@ function seedBlindUsers(): SeedCommand[] {
     },
   ]
 }
-
 test.use({ seed: { steps: seedBlindUsers() } })
 
 interface IDObject {
@@ -56,21 +76,39 @@ interface PresenceResponse {
   entries: PresenceEntry[]
 }
 
+interface SessionCookies {
+  /** Cookie header value with both bl_session and bl_csrf. */
+  cookie: string
+  /** Raw CSRF token value for the X-CSRF-Token header. */
+  csrfToken: string
+}
+
+/** Headers for state-changing requests (POST, PUT, DELETE). */
+function mutatingHeaders(s: SessionCookies): Record<string, string> {
+  return { cookie: s.cookie, 'x-csrf-token': s.csrfToken, 'content-type': 'application/json' }
+}
+
+/** Headers for read-only requests (GET). */
+function readHeaders(s: SessionCookies): Record<string, string> {
+  return { cookie: s.cookie }
+}
+
 /** Create a blind engagement via API, return its id. */
 async function createBlindEngagement(
   request: APIRequestContext,
-  adminCookie: string,
+  s: SessionCookies,
+  name: string,
 ): Promise<string> {
   const resp = await request.post('/api/v1/engagements', {
-    headers: { cookie: adminCookie, 'content-type': 'application/json' },
+    headers: mutatingHeaders(s),
     data: {
-      name: 'Blind E2E Test',
+      name,
       client: 'E2E Client',
       description: 'Blind mode automated test',
       status: 'active',
       startsOn: '2026-01-01',
       endsOn: '2026-06-01',
-      attackVersion: '16.1',
+      attackVersion: '15.1',
       mode: 'blind',
       autoRevealOnStart: false,
     },
@@ -82,11 +120,11 @@ async function createBlindEngagement(
 /** Create a scenario in an engagement, return its id. */
 async function createScenario(
   request: APIRequestContext,
-  adminCookie: string,
+  s: SessionCookies,
   engagementId: string,
 ): Promise<string> {
   const resp = await request.post(`/api/v1/engagements/${engagementId}/scenarios`, {
-    headers: { cookie: adminCookie, 'content-type': 'application/json' },
+    headers: mutatingHeaders(s),
     data: { name: 'Scenario 1', ordinal: 0 },
   })
   expect(resp.status()).toBe(201)
@@ -96,13 +134,13 @@ async function createScenario(
 /** Add a member to an engagement. */
 async function addMember(
   request: APIRequestContext,
-  adminCookie: string,
+  s: SessionCookies,
   engagementId: string,
   userEmail: string,
   role: string,
 ): Promise<void> {
   const usersResp = await request.get('/api/v1/admin/users', {
-    headers: { cookie: adminCookie },
+    headers: readHeaders(s),
   })
   expect(usersResp.status()).toBe(200)
   const users = (await usersResp.json()) as { items: { id: string; email: string }[] }
@@ -110,30 +148,43 @@ async function addMember(
   if (!user) throw new Error(`user ${userEmail} not found`)
 
   const resp = await request.post(`/api/v1/engagements/${engagementId}/members`, {
-    headers: { cookie: adminCookie, 'content-type': 'application/json' },
+    headers: mutatingHeaders(s),
     data: { userId: user.id, role },
   })
   expect(resp.status()).toBe(201)
 }
 
-/** Sign in and return the session cookie string (name=value only, no attributes). */
-async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
+/** Sign in and return session + CSRF cookies for API requests. */
+async function login(
+  request: APIRequestContext,
+  email: string,
+  password: string,
+): Promise<SessionCookies> {
   const resp = await request.post('/api/v1/auth/login', {
     headers: { 'content-type': 'application/json' },
     data: { email, password },
   })
   expect(resp.status()).toBe(200)
-  const setCookie = resp.headers()['set-cookie']
-  if (!setCookie) throw new Error('no set-cookie header')
-  // Extract just the name=value part: Set-Cookie includes attributes
-  // (HttpOnly; Secure; etc.) which are invalid in a Cookie request header.
-  return setCookie.split(';')[0] ?? ''
+  // Playwright joins multiple Set-Cookie headers with \n.
+  const raw = resp.headers()['set-cookie']
+  if (!raw) throw new Error('no set-cookie header')
+  const lines = raw.split('\n')
+  const sessionLine = lines.find((l) => l.startsWith('bl_session='))
+  if (!sessionLine) throw new Error('no bl_session cookie')
+  const csrfLine = lines.find((l) => l.startsWith('bl_csrf='))
+  if (!csrfLine) throw new Error('no bl_csrf cookie')
+  const sessionPair = sessionLine.split(';')[0] ?? ''
+  const csrfPair = csrfLine.split(';')[0] ?? ''
+  return {
+    cookie: `${sessionPair}; ${csrfPair}`,
+    csrfToken: csrfPair.replace('bl_csrf=', ''),
+  }
 }
 
 /** Create a step via API, return its id. */
 async function createStep(
   request: APIRequestContext,
-  cookie: string,
+  s: SessionCookies,
   engagementId: string,
   scenarioId: string,
   name: string,
@@ -141,7 +192,7 @@ async function createStep(
   const resp = await request.post(
     `/api/v1/engagements/${engagementId}/scenarios/${scenarioId}/steps`,
     {
-      headers: { cookie, 'content-type': 'application/json' },
+      headers: mutatingHeaders(s),
       data: {
         name,
         objective: 'Test objective',
@@ -158,14 +209,14 @@ async function createStep(
 /** Reveal a step to the blue team. */
 async function revealStep(
   request: APIRequestContext,
-  cookie: string,
+  s: SessionCookies,
   engagementId: string,
   scenarioId: string,
   stepId: string,
 ): Promise<void> {
   const resp = await request.post(
     `/api/v1/engagements/${engagementId}/scenarios/${scenarioId}/steps/${stepId}/reveal`,
-    { headers: { cookie } },
+    { headers: mutatingHeaders(s) },
   )
   const bodyText = await resp.text()
   expect(resp.status(), `reveal step: ${bodyText}`).toBe(200)
@@ -177,7 +228,7 @@ test('blue cannot see unrevealed steps in blind engagement, then sees after reve
 }) => {
   // --- Setup: admin creates blind engagement with red+blue ---
   const adminCookie = await login(request, adminEmail, adminPassword)
-  const engagementId = await createBlindEngagement(request, adminCookie)
+  const engagementId = await createBlindEngagement(request, adminCookie, 'Blind Reveal E2E')
   const scenarioId = await createScenario(request, adminCookie, engagementId)
   await addMember(request, adminCookie, engagementId, redEmail, 'red')
   await addMember(request, adminCookie, engagementId, blueEmail, 'blue')
@@ -194,7 +245,7 @@ test('blue cannot see unrevealed steps in blind engagement, then sees after reve
   const blueCookie = await login(request, blueEmail, bluePassword)
   const blueStepResp = await request.get(
     `/api/v1/engagements/${engagementId}/scenarios/${scenarioId}/steps/${stepId}`,
-    { headers: { cookie: blueCookie } },
+    { headers: readHeaders(blueCookie) },
   )
   expect(
     blueStepResp.status(),
@@ -207,7 +258,7 @@ test('blue cannot see unrevealed steps in blind engagement, then sees after reve
   // --- Blue can now see the step ---
   const blueStepAfterResp = await request.get(
     `/api/v1/engagements/${engagementId}/scenarios/${scenarioId}/steps/${stepId}`,
-    { headers: { cookie: blueCookie } },
+    { headers: readHeaders(blueCookie) },
   )
   expect(
     blueStepAfterResp.status(),
@@ -223,7 +274,7 @@ test('blue presence focus stripped for unrevealed steps in blind engagement', as
 }) => {
   // --- Setup ---
   const adminCookie = await login(request, adminEmail, adminPassword)
-  const engagementId = await createBlindEngagement(request, adminCookie)
+  const engagementId = await createBlindEngagement(request, adminCookie, 'Blind Presence E2E')
   const scenarioId = await createScenario(request, adminCookie, engagementId)
   await addMember(request, adminCookie, engagementId, redEmail, 'red')
   await addMember(request, adminCookie, engagementId, blueEmail, 'blue')
@@ -235,7 +286,7 @@ test('blue presence focus stripped for unrevealed steps in blind engagement', as
   // Red sets presence with focus on the unrevealed step.
   const presenceId = crypto.randomUUID()
   await request.put(`/api/v1/engagements/${engagementId}/presence?presenceId=${presenceId}`, {
-    headers: { cookie: redCookie, 'content-type': 'application/json' },
+    headers: mutatingHeaders(redCookie),
     data: {
       presenceId,
       focus: { stepId },
@@ -245,7 +296,7 @@ test('blue presence focus stripped for unrevealed steps in blind engagement', as
   // Blue GETs presence — should see red online but focus stripped.
   const blueCookie = await login(request, blueEmail, bluePassword)
   const presenceResp = await request.get(`/api/v1/engagements/${engagementId}/presence`, {
-    headers: { cookie: blueCookie },
+    headers: readHeaders(blueCookie),
   })
   expect(presenceResp.status()).toBe(200)
   const presence = (await presenceResp.json()) as PresenceResponse
@@ -260,7 +311,7 @@ test('blue presence focus stripped for unrevealed steps in blind engagement', as
 test('blue cannot list unrevealed steps from engagement steps endpoint', async ({ request }) => {
   // --- Setup ---
   const adminCookie = await login(request, adminEmail, adminPassword)
-  const engagementId = await createBlindEngagement(request, adminCookie)
+  const engagementId = await createBlindEngagement(request, adminCookie, 'Blind List E2E')
   const scenarioId = await createScenario(request, adminCookie, engagementId)
   await addMember(request, adminCookie, engagementId, redEmail, 'red')
   await addMember(request, adminCookie, engagementId, blueEmail, 'blue')
@@ -272,7 +323,7 @@ test('blue cannot list unrevealed steps from engagement steps endpoint', async (
   // Blue lists engagement steps — should be empty.
   const blueCookie = await login(request, blueEmail, bluePassword)
   const stepsResp = await request.get(`/api/v1/engagements/${engagementId}/steps`, {
-    headers: { cookie: blueCookie },
+    headers: readHeaders(blueCookie),
   })
   expect(stepsResp.status()).toBe(200)
   const stepsBody = (await stepsResp.json()) as StepList
@@ -280,7 +331,7 @@ test('blue cannot list unrevealed steps from engagement steps endpoint', async (
 
   // Red lists steps — should see the step.
   const redStepsResp = await request.get(`/api/v1/engagements/${engagementId}/steps`, {
-    headers: { cookie: redCookie },
+    headers: readHeaders(redCookie),
   })
   expect(redStepsResp.status()).toBe(200)
   const redStepsBody = (await redStepsResp.json()) as StepList
