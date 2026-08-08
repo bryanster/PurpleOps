@@ -45,15 +45,6 @@ func (s *Service) CreateScenario(ctx context.Context, actor authn.Subject, in Cr
 		return storengagement.Scenario{}, fmt.Errorf("scenario: next ordinal: %w", err)
 	}
 
-	after := storengagement.After(func(ctx context.Context, tx *sql.Tx) error {
-		id := storengagement.AfterEntityID(ctx)
-		s.recordActivity(ctx, actor.UserID, in.EngagementID,
-			events.VerbScenarioCreated, events.ObjectScenario, id,
-			map[string]any{"name": in.Name},
-		)
-		return nil
-	})
-
 	scenario, err := s.scenarios.Create(ctx, storengagement.NewScenario{
 		EngagementID: in.EngagementID,
 		Ordinal:      ord,
@@ -62,10 +53,14 @@ func (s *Service) CreateScenario(ctx context.Context, actor authn.Subject, in Cr
 		Source:       in.Source,
 		ThreatActor:  in.ThreatActor,
 		SourceRef:    in.SourceRef,
-	}, after)
+	})
 	if err != nil {
 		return storengagement.Scenario{}, fmt.Errorf("scenario: create: %w", err)
 	}
+	s.recordActivity(ctx, actor.UserID, in.EngagementID,
+		events.VerbScenarioCreated, events.ObjectScenario, scenario.ID,
+		map[string]any{"name": in.Name},
+	)
 	return scenario, nil
 }
 

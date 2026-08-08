@@ -19,6 +19,7 @@ import (
 	"syscall"
 
 	"github.com/bryanster/blacklight/internal/config"
+	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/httpapi"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/migrate"
@@ -102,6 +103,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err erro
 		return fmt.Errorf("checkpoint after migration: %w", err)
 	}
 
+	presenceReg := presence.New(presence.Options{})
+
 	ui, embedded := web.Dist()
 	if !embedded {
 		// Loud, because the symptom is otherwise a mystery: the API answers,
@@ -111,10 +114,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err erro
 	}
 
 	handler, err := httpapi.NewServer(httpapi.Deps{
-		Config: cfg,
-		Store:  db,
-		Logger: log,
-		UI:     ui,
+		Config:   cfg,
+		Store:    db,
+		Logger:   log,
+		UI:       ui,
+		Presence: presenceReg,
 	})
 	if err != nil {
 		return err

@@ -366,7 +366,7 @@ func stepToWire(s storengagement.Step) (gen.Step, error) {
 
 // stepsToWire converts a slice of store steps, filtering by blind scope.
 func stepsToWire(steps []storengagement.Step, scope blind.Scope) ([]gen.Step, error) {
-	var items []gen.Step
+	var items = make([]gen.Step, 0)
 	for _, s := range steps {
 		// Filter out unrevealed steps for blue in blind mode.
 		if scope.Withholds() && s.RevealedAt == nil {

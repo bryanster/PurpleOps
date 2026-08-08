@@ -139,7 +139,7 @@ async function addMember(
   userEmail: string,
   role: string,
 ): Promise<void> {
-  const usersResp = await request.get('/api/v1/admin/users', {
+  const usersResp = await request.get('/api/v1/users', {
     headers: readHeaders(s),
   })
   expect(usersResp.status()).toBe(200)

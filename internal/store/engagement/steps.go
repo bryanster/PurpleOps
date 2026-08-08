@@ -11,6 +11,10 @@ const stepColumns = `id, scenario_id, ordinal, name, objective, technique_id, su
 
 const selectStep = `SELECT ` + stepColumns + ` FROM app.step `
 
+const stepColumnsQualified = `app.step.id, app.step.scenario_id, app.step.ordinal, app.step.name, app.step.objective, app.step.technique_id, app.step.subtechnique_id, app.step.tactic_id, app.step."procedure", app.step.template_id, app.step.target_asset, app.step.tools, app.step.controls_in_scope, app.step.attack_version, app.step.revealed_at, app.step.created_at, app.step.updated_at`
+
+const selectStepQualified = `SELECT ` + stepColumnsQualified + ` FROM app.step `
+
 const insertStep = `INSERT INTO app.step
 	(id, scenario_id, ordinal, name, objective, technique_id, subtechnique_id, tactic_id, "procedure", template_id, target_asset, tools, controls_in_scope, attack_version, revealed_at, created_at, updated_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -246,22 +250,30 @@ func (r *Steps) NextOrdinal(ctx context.Context, scenarioID string) (int, error)
 
 func scanStep(row interface{ Scan(...any) error }) (Step, error) {
 	var (
-		s          Step
-		revealedAt sql.NullTime
-		procedure  any
-		tools      any
-		controls   any
+		s                 Step
+		revealedAt        sql.NullTime
+		techniqueID       sql.NullString
+		subtechniqueID    sql.NullString
+		tacticID          sql.NullString
+		templateID        sql.NullString
+		procedure         any
+		tools             any
+		controls          any
 	)
 	if err := row.Scan(
 		&s.ID, &s.ScenarioID, &s.Ordinal, &s.Name, &s.Objective,
-		&s.TechniqueID, &s.SubtechniqueID, &s.TacticID,
-		&procedure, &s.TemplateID, &s.TargetAsset,
+		&techniqueID, &subtechniqueID, &tacticID,
+		&procedure, &templateID, &s.TargetAsset,
 		&tools, &controls,
 		&s.AttackVersion, &revealedAt,
 		&s.CreatedAt, &s.UpdatedAt,
 	); err != nil {
 		return Step{}, err
 	}
+	s.TechniqueID = fromNullString(techniqueID)
+	s.SubtechniqueID = fromNullString(subtechniqueID)
+	s.TacticID = fromNullString(tacticID)
+	s.TemplateID = fromNullString(templateID)
 	var err error
 	if s.Procedure, err = jsonBytes(procedure); err != nil {
 		return Step{}, fmt.Errorf("step: procedure: %w", err)
@@ -406,7 +418,7 @@ func (r *Steps) Reveal(ctx context.Context, id string) (Step, error) {
 	return r.ByID(ctx, id)
 }
 
-const listStepsByEngagement = selectStep + `
+const listStepsByEngagement = selectStepQualified + `
 	JOIN app.scenario ON app.step.scenario_id = app.scenario.id
 	WHERE app.scenario.engagement_id = ?
 	ORDER BY app.scenario.ordinal ASC, app.step.ordinal ASC`
@@ -421,7 +433,7 @@ func (r *Steps) ListByEngagement(ctx context.Context, engagementID string) ([]St
 		return nil, fmt.Errorf("step: list by engagement: %w", err)
 	}
 	defer rows.Close()
-	var out []Step
+	var out = make([]Step, 0)
 	for rows.Next() {
 		s, err := scanStep(rows)
 		if err != nil {

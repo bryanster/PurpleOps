@@ -109,15 +109,6 @@ func (s *Service) CreateStep(ctx context.Context, actor authn.Subject, in Create
 		return storengagement.Step{}, fmt.Errorf("step: next ordinal: %w", err)
 	}
 
-	after := storengagement.After(func(ctx context.Context, tx *sql.Tx) error {
-		id := storengagement.AfterEntityID(ctx)
-		recordActivityStep(ctx, s.activity, actor.UserID, scenario.EngagementID,
-			events.VerbStepCreated, id,
-			map[string]any{"name": in.Name},
-		)
-		return nil
-	})
-
 	step, _, err := s.steps.CreateWithExecution(ctx, storengagement.NewStep{
 		ScenarioID:      in.ScenarioID,
 		Ordinal:         ord,
@@ -132,10 +123,14 @@ func (s *Service) CreateStep(ctx context.Context, actor authn.Subject, in Create
 		Tools:           in.Tools,
 		ControlsInScope: in.ControlsInScope,
 		AttackVersion:   attackVersion,
-	}, after)
+	})
 	if err != nil {
 		return storengagement.Step{}, fmt.Errorf("step: create: %w", err)
 	}
+	recordActivityStep(ctx, s.activity, actor.UserID, scenario.EngagementID,
+		events.VerbStepCreated, step.ID,
+		map[string]any{"name": in.Name},
+	)
 	return step, nil
 }
 
