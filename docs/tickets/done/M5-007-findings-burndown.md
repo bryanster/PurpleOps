@@ -53,18 +53,18 @@ ticket's. If the answer turns out to be no, that is a finding to raise, not to f
 
 ## Acceptance criteria
 
-- [ ] The series is derived from `finding_status_history`, and a test proves it by mutating the
+- [x] The series is derived from `finding_status_history`, and a test proves it by mutating the
       activity log and asserting the chart does not move.
-- [ ] Counts at each point are the **state** at that date. A finding that went open → in_progress →
+- [x] Counts at each point are the **state** at that date. A finding that went open → in_progress →
       resolved on three different days appears once per day, in the right bucket, never twice.
-- [ ] Every day between the bounds has a point, including days with no transitions.
-- [ ] A finding resolved and then reopened is open again from the reopen date — the fixture includes
+- [x] Every day between the bounds has a point, including days with no transitions.
+- [x] A finding resolved and then reopened is open again from the reopen date — the fixture includes
       this, because it is the case a naive "count of resolutions" query gets wrong.
-- [ ] `accepted_risk` is excluded from `totalOpen` and still reported in its own bucket.
-- [ ] An engagement whose `ends_on` is in the future stops the series at today, not at `ends_on`.
-- [ ] Past the configured point cap the interval switches to weekly, and the response says which
+- [x] `accepted_risk` is excluded from `totalOpen` and still reported in its own bucket.
+- [x] An engagement whose `ends_on` is in the future stops the series at today, not at `ends_on`.
+- [x] Past the configured point cap the interval switches to weekly, and the response says which
       interval it used — the consumer must not have to infer it from the spacing.
-- [ ] An engagement with no findings returns a full spine of zeroes, not an empty array.
+- [x] An engagement with no findings returns a full spine of zeroes, not an empty array.
 
 ## Tests
 
@@ -84,3 +84,19 @@ ticket's. If the answer turns out to be no, that is a finding to raise, not to f
 - Timezone: everything is UTC (README § Conventions). Day boundaries are UTC day boundaries, and a
   client in Sydney will see a transition on what they call the next day. Document it; do not add a
   timezone parameter.
+
+## Implementation notes
+
+- The burndown query uses DuckDB-specific `GENERATE_SERIES` for the date spine and `QUALIFY` for
+  per-finding first-row selection. Both are documented in `doc.go`'s porting-cost list.
+- `computeBurndown` in the fixture builds hand-computed expectations for 30 days covering all edge
+  cases: open, reopen, accepted_risk, pre-start clamping, post-end clamping.
+- Finding f5 (created May 30, before Jun 1 `starts_on`) and f6 (created Jul 15, after Jun 30
+  `ends_on`) are added to the fixture for clamping tests. f1 was changed to also have `created_at =
+  fhMay30` to test pre-start creation for a finding linked to an execution.
+- The empty-engagement case is handled by a LEFT JOIN from the date spine to the aggregated counts
+  in the `all_dates` CTE, ensuring zeroes are emitted for the entire spine.
+- `DefaultBurndownPointCap` is set to 90 days; `chooseInterval` reads the engagement bounds and
+  selects weekly when the span exceeds the cap.
+- The future-dated engagement (`futureEngID`, `futureStartsOn = Aug 1 2026`, `futureEndsOn = Dec 31
+  2027`) is added to the fixture exclusively for the ends-in-future test.

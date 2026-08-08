@@ -176,8 +176,8 @@ func TestSeedIsDeterministic(t *testing.T) {
 	).Scan(&findingCount); err != nil {
 		t.Fatal(err)
 	}
-	if findingCount != 4 {
-		t.Errorf("findings = %d, want 4", findingCount)
+	if findingCount != 6 {
+		t.Errorf("findings = %d, want 6", findingCount)
 	}
 
 	// Expectation tables are non-empty.

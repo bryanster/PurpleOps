@@ -127,3 +127,73 @@ Findings status changes are tracked in `app.finding_status_history`, written
 in the same transaction as the status change. The burndown is reconstructed
 from the history table, not from `app.activity` — a retention run that prunes
 activity must not silently rewrite the burndown.
+
+### Date spine
+
+The burndown series has a point for every day (or week) between
+`engagement.starts_on` and `min(engagement.ends_on, today)`. Days with no
+transitions are included — a burndown with gaps invites the reader to
+interpolate.
+
+### Day boundaries
+
+Everything is UTC (README § Conventions). Day boundaries are UTC day
+boundaries: a transition at 23:59 belongs to that day. The SQL uses
+`CAST(changed_at AS DATE)` so the boundary is at midnight UTC. A client
+in a non-UTC timezone will see transitions on what they call the next day.
+
+### Status definitions
+
+The burndown counts findings by status at each point:
+
+| Status | Meaning |
+|---|---|
+| `open` | New, unremediated, needs attention. |
+| `in_progress` | Remediation is underway. |
+| `resolved` | Remediation is complete and verified. |
+| `accepted_risk` | The risk is acknowledged and will not be remediated at this time. |
+
+### Terminal statuses
+
+`resolved` and `accepted_risk` are both **closed** for the purposes of
+`totalOpen`. Accepted risk is a decision, not an outstanding item. The
+burndown reports `acceptedRisk` in its own bucket so a viewer can see
+exactly how many findings closed through acceptance rather than remediation.
+
+### totalOpen
+
+`totalOpen = open + inProgress`. Reported in every burndown point alongside
+the individual status counts so no consumer must compute it — the definition
+is sealed in this document.
+
+### Reopen
+
+A finding that was resolved and later reopened appears as `open` from the
+reopen date onward. The burndown does not count a "total resolutions" —
+it counts the state at each point, so a finding that was resolved twice
+and is now resolved contributes exactly one to `resolved` at the current
+date, not two.
+
+### Pre-start and post-end findings
+
+Findings created before `engagement.starts_on` are clamped onto the first
+point. Findings created after `min(engagement.ends_on, today)` are clamped
+onto the last point. A finding never disappears from the series because its
+creation date falls outside the engagement window.
+
+### Point cap and weekly fallback
+
+When the date range from `starts_on` to `min(ends_on, today)` exceeds
+`DefaultBurndownPointCap` days (90 by default), the burndown switches to
+weekly buckets. The interval actually used is reported in the response
+field `interval` — the consumer must not infer it from point spacing.
+The weekly bucket uses ISO weeks grouped by `DATE_TRUNC('week', d)`, with
+the date label being the Monday of each week.
+
+### Severity snapshot
+
+`FindingsBySeverity` returns the current snapshot of finding counts by
+severity × status. Unlike the burndown this is a point-in-time view of
+`app.finding.status`, not a time series derived from history. Every
+severity level present in the engagement appears as a bucket; absent
+severity levels are not emitted as zero rows.

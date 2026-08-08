@@ -7,9 +7,10 @@
 //
 // The fixture seeds a synthetic ATT&CK v99.0 with ~10 techniques, a baseline
 // blind engagement with deliberately covered edge cases, a retest engagement,
-// and findings across all four statuses. The expectation tables live on the
-// returned [Fixture] struct alongside the IDs, so every rollup test's
-// expected values sit beside the data that produces them.
+// findings across all four statuses with rich history for burndown testing,
+// and a future-dated engagement. The expectation tables live on the returned
+// [Fixture] struct alongside the IDs, so every rollup test's expected values
+// sit beside the data that produces them.
 package analyticstest
 
 import (
@@ -34,6 +35,7 @@ type Fixture struct {
 	// Engagement IDs.
 	BaselineID string
 	RetestID   string
+	FutureID   string // Future-dated engagement for ends-in-future test.
 
 	// Scenario IDs (in ordinal order).
 	BaselineScenarioIDs []string
@@ -70,7 +72,6 @@ type Fixture struct {
 	// the blue seat of the blind baseline — unrevealed steps are excluded.
 	BaselineBlueMTTDSeconds []float64
 
-
 	// BaselineOutcomeDistribution maps outcome label → count for the
 	// baseline (all seats, attempted executions only).
 	BaselineOutcomeDistribution map[string]int
@@ -89,6 +90,12 @@ type Fixture struct {
 	// FindingStatusCounts maps finding status → count.
 	FindingStatusCounts map[string]int
 
+	// BurndownSeries is the hand-computed daily burndown for the
+	// baseline engagement (Jun 1–30). Each entry is a day offset from
+	// start: day1 = Jun 1. Contains open, inProgress, resolved,
+	// acceptedRisk, totalOpen.
+	BurndownSeries []BurndownDay
+
 	// --- Cross-engagement comparison ---
 
 	// AddedTechniques are technique external-ids present in retest
@@ -102,6 +109,15 @@ type Fixture struct {
 	// CommonTechniques are technique external-ids present in both
 	// engagements (all seats).
 	CommonTechniques []string
+}
+
+// BurndownDay holds the expected finding counts on a single day.
+type BurndownDay struct {
+	Open         int
+	InProgress   int
+	Resolved     int
+	AcceptedRisk int
+	TotalOpen    int
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +149,7 @@ const (
 	userID        = "01900000-0000-7000-U000-000000000001"
 	baselineEngID = "01900000-0000-7000-E000-000000000001"
 	retestEngID   = "01900000-0000-7000-E000-000000000002"
+	futureEngID   = "01900000-0000-7000-E000-000000000003"
 
 	baselineScenario1ID = "01900000-0000-7000-S000-000000000001"
 	baselineScenario2ID = "01900000-0000-7000-S000-000000000002"
@@ -176,11 +193,22 @@ const (
 	finding2ID = "01900000-0000-7000-F000-000000000002"
 	finding3ID = "01900000-0000-7000-F000-000000000003"
 	finding4ID = "01900000-0000-7000-F000-000000000004"
+	finding5ID = "01900000-0000-7000-F000-000000000005"
+	finding6ID = "01900000-0000-7000-F000-000000000006"
 
-	findingHistory1ID = "01900000-0000-7000-H000-000000000001"
-	findingHistory2ID = "01900000-0000-7000-H000-000000000002"
-	findingHistory3ID = "01900000-0000-7000-H000-000000000003"
-	findingHistory4ID = "01900000-0000-7000-H000-000000000004"
+	findingHistory1ID  = "01900000-0000-7000-H000-000000000001"
+	findingHistory2ID  = "01900000-0000-7000-H000-000000000002"
+	findingHistory3ID  = "01900000-0000-7000-H000-000000000003"
+	findingHistory4ID  = "01900000-0000-7000-H000-000000000004"
+	findingHistory5ID  = "01900000-0000-7000-H000-000000000005"
+	findingHistory6ID  = "01900000-0000-7000-H000-000000000006"
+	findingHistory7ID  = "01900000-0000-7000-H000-000000000007"
+	findingHistory8ID  = "01900000-0000-7000-H000-000000000008"
+	findingHistory9ID  = "01900000-0000-7000-H000-000000000009"
+	findingHistory10ID = "01900000-0000-7000-H000-00000000000A"
+	findingHistory11ID = "01900000-0000-7000-H000-00000000000B"
+	findingHistory12ID = "01900000-0000-7000-H000-00000000000C"
+	findingHistory13ID = "01900000-0000-7000-H000-00000000000D"
 )
 
 // Fixed timestamps — deterministic, UTC, microsecond precision.
@@ -196,8 +224,21 @@ var (
 	baseStartsOn = ts(2026, 6, 1, 0, 0, 0) // date-only in practice
 	baseEndsOn   = ts(2026, 6, 30, 0, 0, 0)
 
+	// Future engagement — ends far in the future for "ends in future" test.
+	futureCreated  = ts(2026, 8, 1, 10, 0, 0)
+	futureStartsOn = ts(2026, 8, 1, 0, 0, 0)
+	futureEndsOn   = ts(2027, 12, 31, 0, 0, 0)
+
 	// Step/execution created at.
 	stepCreated = ts(2026, 6, 1, 11, 0, 0)
+
+	// Finding history dates — various points in June for burndown transitions.
+	fhJun3  = ts(2026, 6, 3, 10, 0, 0)
+	fhJun5  = ts(2026, 6, 5, 10, 0, 0)
+	fhJun7  = ts(2026, 6, 7, 10, 0, 0)
+	fhJun9  = ts(2026, 6, 9, 10, 0, 0)
+	fhMay30 = ts(2026, 5, 30, 10, 0, 0) // Before engagement start
+	fhJul15 = ts(2026, 7, 15, 10, 0, 0) // After engagement end
 
 	// Execution red timestamps.
 	execStarted = ts(2026, 6, 2, 9, 0, 0)  // 09:00
@@ -210,12 +251,58 @@ var (
 
 	// Scoring timestamp.
 	scoredAt = ts(2026, 6, 2, 10, 0, 0)
+
+	// Burndown series for baseline: 30 days (Jun 1–30).
+	// Finding timeline:
+	//   f1: open throughout (NULL→open at fhMay30, clamped to day1)
+	//   f2: open day1→2, in_progress day3 onward (NULL→open at stepCreated, open→in_progress at fhJun3)
+	//   f3: open day1→4, resolved day5→6, open day7→8, resolved day9→30
+	//       (NULL→open at stepCreated, open→resolved at fhJun5,
+	//        resolved→open at fhJun7, open→resolved at fhJun9)
+	//   f4: accepted_risk throughout (NULL→accepted_risk at stepCreated)
+	//   f5: open, created before start at fhMay30 → clamped to day1
+	//   f6: open, created after end at fhJul15 → clamped to day30
+	//
+	// Day-by-day (Jun 1 = day 0 offset):
+	//   Days 1–2:  f1=open, f2=open, f3=open, f4=accepted_risk, f5=open
+	//              → open=3, inProgress=0, resolved=0, acceptedRisk=1, totalOpen=3
+	//   Day 3–4:   f2→in_progress
+	//              → open=2, inProgress=1, resolved=0, acceptedRisk=1, totalOpen=3
+	baselineBurndown = computeBurndown()
 )
+
+// computeBurndown builds the hand-computed burndown series.
+func computeBurndown() []BurndownDay {
+	d := make([]BurndownDay, 30)
+	// Days 1–2 (index 0–1): f1=open, f2=open, f3=open, f4=accepted_risk, f5=open
+	for i := range 2 {
+		d[i] = BurndownDay{Open: 4, InProgress: 0, Resolved: 0, AcceptedRisk: 1, TotalOpen: 4}
+	}
+	// Days 3–4 (index 2–3): f2→in_progress
+	for i := 2; i < 4; i++ {
+		d[i] = BurndownDay{Open: 3, InProgress: 1, Resolved: 0, AcceptedRisk: 1, TotalOpen: 4}
+	}
+	// Days 5–6 (index 4–5): f3→resolved
+	for i := 4; i < 6; i++ {
+		d[i] = BurndownDay{Open: 2, InProgress: 1, Resolved: 1, AcceptedRisk: 1, TotalOpen: 3}
+	}
+	// Days 7–8 (index 6–7): f3→open (reopen)
+	for i := 6; i < 8; i++ {
+		d[i] = BurndownDay{Open: 3, InProgress: 1, Resolved: 0, AcceptedRisk: 1, TotalOpen: 4}
+	}
+	// Days 9–29 (index 8–28): f3→resolved again
+	for i := 8; i < 29; i++ {
+		d[i] = BurndownDay{Open: 2, InProgress: 1, Resolved: 1, AcceptedRisk: 1, TotalOpen: 3}
+	}
+	// Day 30 (index 29): f6 clamped
+	d[29] = BurndownDay{Open: 3, InProgress: 1, Resolved: 1, AcceptedRisk: 1, TotalOpen: 4}
+	return d
+}
 
 // Seed builds a [storetest.Migrated] database and populates it with the
 // synthetic ATT&CK v99.0 matrix, a baseline blind engagement, a retest
-// engagement, and findings. It returns the [Fixture] with all IDs and
-// hand-computed expectation tables.
+// engagement, findings with rich history, and a future-dated engagement.
+// It returns the [Fixture] with all IDs and hand-computed expectation tables.
 func Seed(t testing.TB) Fixture {
 	t.Helper()
 
@@ -238,6 +325,9 @@ func Seed(t testing.TB) Fixture {
 		if err := seedFindings(ctx, tx); err != nil {
 			return err
 		}
+		if err := seedFutureEngagement(ctx, tx); err != nil {
+			return err
+		}
 		return nil
 	}); err != nil {
 		t.Fatalf("analyticstest.Seed: %v", err)
@@ -248,6 +338,7 @@ func Seed(t testing.TB) Fixture {
 		SourceVersionID:     contentSourceVersionID,
 		BaselineID:          baselineEngID,
 		RetestID:            retestEngID,
+		FutureID:            futureEngID,
 		BaselineScenarioIDs: []string{baselineScenario1ID, baselineScenario2ID},
 		RetestScenarioIDs:   []string{retestScenario1ID},
 		BaselineStepIDs: []string{
@@ -268,7 +359,7 @@ func Seed(t testing.TB) Fixture {
 			retestExec1ID, retestExec2ID, retestExec3ID, retestExec4ID,
 			retestExec5ID, retestExec6ID,
 		},
-		FindingIDs: []string{finding1ID, finding2ID, finding3ID, finding4ID},
+		FindingIDs: []string{finding1ID, finding2ID, finding3ID, finding4ID, finding5ID, finding6ID},
 
 		// --- Hand-computed expectations ---
 
@@ -302,7 +393,6 @@ func Seed(t testing.TB) Fixture {
 		//   Remaining detected: Step 1(600s), Step 2(300s), Step 5(180s)
 		// Sorted: 180, 300, 600
 		BaselineBlueMTTDSeconds: []float64{180, 300, 600},
-
 
 		// Baseline outcome distribution (attempted, all seats):
 		//   Step 1: general/blocked → prevented
@@ -344,13 +434,17 @@ func Seed(t testing.TB) Fixture {
 			"TA0005": 3,
 		},
 
-		// Finding status distribution.
+		// Finding status distribution (6 findings total):
+		//   f1=open, f2=in_progress, f3=resolved, f4=accepted_risk,
+		//   f5=open (pre-start), f6=open (post-end)
 		FindingStatusCounts: map[string]int{
-			"open":          1,
+			"open":          3,
 			"in_progress":   1,
 			"resolved":      1,
 			"accepted_risk": 1,
 		},
+
+		BurndownSeries: baselineBurndown,
 
 		// Cross-engagement compare (all seats).
 		//   Baseline attempted: T1059, T1059.001, T1027, T1070, T1190, T1203, T1566
@@ -689,12 +783,15 @@ func seedRetest(ctx context.Context, tx *sql.Tx) error {
 func seedFindings(ctx context.Context, tx *sql.Tx) error {
 	type finding struct {
 		id, status, createdFromExec string
+		createdAt                   time.Time
 	}
 	findings := []finding{
-		{finding1ID, "open", baselineExec1ID},
-		{finding2ID, "in_progress", baselineExec5ID},
-		{finding3ID, "resolved", baselineExec8ID},
-		{finding4ID, "accepted_risk", ""}, // freeform, not from an execution
+		{finding1ID, "open", baselineExec1ID, fhMay30},            // Created before engagement start
+		{finding2ID, "in_progress", baselineExec5ID, stepCreated}, // Normal creation
+		{finding3ID, "resolved", baselineExec8ID, stepCreated},    // Has reopen+reresolve
+		{finding4ID, "accepted_risk", "", stepCreated},            // Freeform
+		{finding5ID, "open", "", fhMay30},                         // Created before start, no exec link
+		{finding6ID, "open", "", fhJul15},                         // Created after engagement end
 	}
 	for _, f := range findings {
 		cfExec := nullIfEmpty(f.createdFromExec)
@@ -704,7 +801,7 @@ func seedFindings(ctx context.Context, tx *sql.Tx) error {
 				 "owner", status, created_from_execution, created_at, updated_at)
 			 VALUES (?, ?, 'Finding ' || ?, '', 'medium', '',
 			        ?, ?, ?, ?, ?)`,
-			f.id, baselineEngID, f.id, userID, f.status, cfExec, stepCreated, stepCreated,
+			f.id, baselineEngID, f.id, userID, f.status, cfExec, f.createdAt, f.createdAt,
 		); err != nil {
 			return fmt.Errorf("seed finding %s: %w", f.id, err)
 		}
@@ -725,32 +822,67 @@ func seedFindings(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 
-	// Status history — one transition per finding (the initial creation).
-	// M5-003 will expand this; for now, record initial status + one transition
-	// for findings that have changed status.
-		historyRows := []struct {
-			id, findingID, fromStatus, toStatus string
-			ts                                  time.Time
-		}{
-			// Creation rows: fromStatus empty → NULL.
-			{findingHistory1ID, finding1ID, "", "open", stepCreated},
-			{findingHistory2ID, finding2ID, "", "open", stepCreated},
-			// Transition: finding2 went from open to in_progress.
-			{findingHistory3ID, finding2ID, "open", "in_progress", ts(2026, 6, 3, 10, 0, 0)},
-			// Creation row for finding3.
-			{findingHistory4ID, finding3ID, "", "open", stepCreated},
-		}
-		for _, h := range historyRows {
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO app.finding_status_history
-					(id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at)
-				 VALUES (?, ?, ?, NULLIF(?, ''), ?, ?, ?)`,
-				h.id, h.findingID, baselineEngID, h.fromStatus, h.toStatus, userID, h.ts,
-			); err != nil {
-				return fmt.Errorf("seed finding_status_history %s: %w", h.id, err)
-			}
-		}
+	// Status history — rich history for burndown testing.
+	// Timeline:
+	//   f1: created May 30 (open), stays open throughout
+	//   f2: created Jun 1 (open) → in_progress Jun 3
+	//   f3: created Jun 1 (open) → resolved Jun 5 → open Jun 7 → resolved Jun 9
+	//   f4: created Jun 1 (accepted_risk), stays accepted_risk
+	//   f5: created May 30 (open), stays open — tests pre-start clamping
+	//   f6: created Jul 15 (open) — tests post-end clamping
+	historyRows := []struct {
+		id, findingID, fromStatus, toStatus string
+		ts                                  time.Time
+	}{
+		// f1: open (created before engagement start)
+		{findingHistory1ID, finding1ID, "", "open", fhMay30},
 
+		// f2: open → in_progress
+		{findingHistory2ID, finding2ID, "", "open", stepCreated},
+		{findingHistory3ID, finding2ID, "open", "in_progress", fhJun3},
+
+		// f3: open → resolved → open → resolved (reopen case)
+		{findingHistory4ID, finding3ID, "", "open", stepCreated},
+		{findingHistory5ID, finding3ID, "open", "resolved", fhJun5},
+		{findingHistory6ID, finding3ID, "resolved", "open", fhJun7},
+		{findingHistory7ID, finding3ID, "open", "resolved", fhJun9},
+
+		// f4: accepted_risk (direct creation)
+		{findingHistory8ID, finding4ID, "", "accepted_risk", stepCreated},
+
+		// f5: open (created before engagement start)
+		{findingHistory9ID, finding5ID, "", "open", fhMay30},
+
+		// f6: open (created after engagement end)
+		{findingHistory10ID, finding6ID, "", "open", fhJul15},
+	}
+	for _, h := range historyRows {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO app.finding_status_history
+				(id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at)
+			 VALUES (?, ?, ?, NULLIF(?, ''), ?, ?, ?)`,
+			h.id, h.findingID, baselineEngID, h.fromStatus, h.toStatus, userID, h.ts,
+		); err != nil {
+			return fmt.Errorf("seed finding_status_history %s: %w", h.id, err)
+		}
+	}
+
+	return nil
+}
+
+func seedFutureEngagement(ctx context.Context, tx *sql.Tx) error {
+	// Minimal engagement with ends_on far in the future —
+	// used by burndown tests to verify the series stops at today.
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO app.engagement
+			(id, name, client, description, status, starts_on, ends_on,
+			 attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+		 VALUES (?, 'Future Engagement', 'TestOrg', 'Ends far in the future.',
+		        'active', ?, ?, '99.0', 'standard', false, ?, ?, ?)`,
+		futureEngID, futureStartsOn, futureEndsOn, userID, futureCreated, futureCreated,
+	); err != nil {
+		return fmt.Errorf("seed future engagement: %w", err)
+	}
 	return nil
 }
 
