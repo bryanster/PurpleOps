@@ -47,6 +47,24 @@ func (e AlertSeverity) Valid() bool {
 	}
 }
 
+// Defines values for BurndownInterval.
+const (
+	BurndownIntervalDaily  BurndownInterval = "daily"
+	BurndownIntervalWeekly BurndownInterval = "weekly"
+)
+
+// Valid indicates whether the value is a known member of the BurndownInterval enum.
+func (e BurndownInterval) Valid() bool {
+	switch e {
+	case BurndownIntervalDaily:
+		return true
+	case BurndownIntervalWeekly:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContentSoftwareType.
 const (
 	ContentSoftwareTypeMalware ContentSoftwareType = "malware"
@@ -899,6 +917,59 @@ type AddMember struct {
 // AlertSeverity Alert severity level.
 type AlertSeverity string
 
+// AnalyticsBurndown defines model for AnalyticsBurndown.
+type AnalyticsBurndown struct {
+	BlindFiltered bool `json:"blindFiltered"`
+
+	// Interval Bucket granularity for the burndown chart.
+	Interval BurndownInterval `json:"interval"`
+	Points   []BurndownPoint  `json:"points"`
+	Severity SeveritySnapshot `json:"severity"`
+}
+
+// AnalyticsCompare defines model for AnalyticsCompare.
+type AnalyticsCompare struct {
+	BaselineBlindFiltered bool         `json:"baselineBlindFiltered"`
+	CurrentBlindFiltered  bool         `json:"currentBlindFiltered"`
+	Improved              int          `json:"improved"`
+	Incomparable          int          `json:"incomparable"`
+	NewlyAttempted        int          `json:"newlyAttempted"`
+	NoLongerAttempted     int          `json:"noLongerAttempted"`
+	PinMismatch           *PinMismatch `json:"pinMismatch,omitempty"`
+	Regressed             int          `json:"regressed"`
+	Rows                  []CompareRow `json:"rows"`
+	Unchanged             int          `json:"unchanged"`
+}
+
+// AnalyticsCoverage defines model for AnalyticsCoverage.
+type AnalyticsCoverage struct {
+	BlindFiltered bool              `json:"blindFiltered"`
+	Tactics       TacticCoverage    `json:"tactics"`
+	Techniques    TechniqueCoverage `json:"techniques"`
+}
+
+// AnalyticsDistribution defines model for AnalyticsDistribution.
+type AnalyticsDistribution struct {
+	BlindFiltered bool               `json:"blindFiltered"`
+	Category      DistributionResult `json:"category"`
+	Modifier      DistributionResult `json:"modifier"`
+	Outcome       DistributionResult `json:"outcome"`
+	Protection    DistributionResult `json:"protection"`
+}
+
+// AnalyticsMttd defines model for AnalyticsMttd.
+type AnalyticsMttd struct {
+	AttemptedCount    int                    `json:"attemptedCount"`
+	BlindFiltered     bool                   `json:"blindFiltered"`
+	DetectedCount     int                    `json:"detectedCount"`
+	Max               nullable.Nullable[int] `json:"max,omitempty"`
+	P50               nullable.Nullable[int] `json:"p50,omitempty"`
+	P90               nullable.Nullable[int] `json:"p90,omitempty"`
+	UndetectedCount   int                    `json:"undetectedCount"`
+	UnmeasurableCount int                    `json:"unmeasurableCount"`
+	UnscoredCount     int                    `json:"unscoredCount"`
+}
+
 // AuthProviders What the login page may offer. It is deliberately a list rather than a
 // set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
 // renders this array needed no change when it arrived.
@@ -947,6 +1018,25 @@ type BlueDetectionPatch struct {
 	Version int `json:"version"`
 }
 
+// BurndownInterval Bucket granularity for the burndown chart.
+type BurndownInterval string
+
+// BurndownPoint defines model for BurndownPoint.
+type BurndownPoint struct {
+	AcceptedRisk int    `json:"acceptedRisk"`
+	Date         string `json:"date"`
+	InProgress   int    `json:"inProgress"`
+	Open         int    `json:"open"`
+	Resolved     int    `json:"resolved"`
+	TotalOpen    int    `json:"totalOpen"`
+}
+
+// CategoryBucket defines model for CategoryBucket.
+type CategoryBucket struct {
+	Category string `json:"category"`
+	Count    int    `json:"count"`
+}
+
 // ChangePasswordRequest Body of `POST /auth/password`. The current password is required even
 // though the caller is signed in: a session left open on a shared machine
 // must not be enough to take the account over.
@@ -986,6 +1076,21 @@ type CommentRevision struct {
 	// EditedBy User id of the editor.
 	EditedBy string             `json:"editedBy"`
 	Id       openapi_types.UUID `json:"id"`
+}
+
+// CompareRow defines model for CompareRow.
+type CompareRow struct {
+	BaselineCategory        string                 `json:"baselineCategory"`
+	BaselineCategoryOrdinal nullable.Nullable[int] `json:"baselineCategoryOrdinal,omitempty"`
+	BaselineProtection      string                 `json:"baselineProtection"`
+	Classification          string                 `json:"classification"`
+	CurrentCategory         string                 `json:"currentCategory"`
+	CurrentCategoryOrdinal  nullable.Nullable[int] `json:"currentCategoryOrdinal,omitempty"`
+	CurrentProtection       string                 `json:"currentProtection"`
+	Name                    string                 `json:"name"`
+	OrdinalDelta            nullable.Nullable[int] `json:"ordinalDelta,omitempty"`
+	SubtechniqueId          string                 `json:"subtechniqueId"`
+	TechniqueId             string                 `json:"techniqueId"`
 }
 
 // ContentAttackVersion One installed ATT&CK release as the pin surface exposes it. The
@@ -1978,6 +2083,18 @@ type DisableTOTPRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 }
 
+// DistributionBucket defines model for DistributionBucket.
+type DistributionBucket struct {
+	Count int    `json:"count"`
+	Label string `json:"label"`
+}
+
+// DistributionResult defines model for DistributionResult.
+type DistributionResult struct {
+	Attempted int                  `json:"attempted"`
+	Buckets   []DistributionBucket `json:"buckets"`
+}
+
 // Engagement defines model for Engagement.
 type Engagement struct {
 	// AttackVersion Pinned ATT&CK version string, e.g. "15.1".
@@ -2498,6 +2615,12 @@ type PatchStep struct {
 	Tools           *[]string `json:"tools,omitempty"`
 }
 
+// PinMismatch defines model for PinMismatch.
+type PinMismatch struct {
+	Baseline string `json:"baseline"`
+	Current  string `json:"current"`
+}
+
 // PlatformRole What somebody may do to this installation: `admin` manages users, content
 // and every engagement; `member` takes part in the engagements they belong
 // to. What they may do *inside* one is `EngagementRole`, and the two are
@@ -2890,6 +3013,21 @@ type SetEngagementStatus struct {
 	Status EngagementStatus `json:"status"`
 }
 
+// SeverityBucket defines model for SeverityBucket.
+type SeverityBucket struct {
+	AcceptedRisk int    `json:"acceptedRisk"`
+	InProgress   int    `json:"inProgress"`
+	Open         int    `json:"open"`
+	Resolved     int    `json:"resolved"`
+	Severity     string `json:"severity"`
+	TotalOpen    int    `json:"totalOpen"`
+}
+
+// SeveritySnapshot defines model for SeveritySnapshot.
+type SeveritySnapshot struct {
+	Buckets []SeverityBucket `json:"buckets"`
+}
+
 // StartContentSyncRequest Optional pin for multi-version sources. Additional properties are
 // rejected so a mistyped field cannot silently no-op.
 type StartContentSyncRequest struct {
@@ -2984,6 +3122,43 @@ type TOTPEnrolment struct {
 	//
 	// Examples: JBSWY3DPEHPK3PXP
 	Secret string `json:"secret"`
+}
+
+// TacticCoverage defines model for TacticCoverage.
+type TacticCoverage struct {
+	Rows []TacticCoverageRow `json:"rows"`
+}
+
+// TacticCoverageRow defines model for TacticCoverageRow.
+type TacticCoverageRow struct {
+	AttemptedTechniques int              `json:"attemptedTechniques"`
+	Categories          []CategoryBucket `json:"categories"`
+	MatrixTechniques    int              `json:"matrixTechniques"`
+	TacticId            string           `json:"tacticId"`
+	TacticName          string           `json:"tacticName"`
+}
+
+// TechniqueCoverage defines model for TechniqueCoverage.
+type TechniqueCoverage struct {
+	Attempted    int                    `json:"attempted"`
+	Matrix       int                    `json:"matrix"`
+	NotAttempted int                    `json:"notAttempted"`
+	Rows         []TechniqueCoverageRow `json:"rows"`
+	Unmatched    int                    `json:"unmatched"`
+}
+
+// TechniqueCoverageRow defines model for TechniqueCoverageRow.
+type TechniqueCoverageRow struct {
+	Attempted           bool                   `json:"attempted"`
+	BestCategory        string                 `json:"bestCategory"`
+	BestCategoryOrdinal nullable.Nullable[int] `json:"bestCategoryOrdinal,omitempty"`
+	BestProtection      string                 `json:"bestProtection"`
+	IsSubtechnique      bool                   `json:"isSubtechnique"`
+	Matched             bool                   `json:"matched"`
+	Name                string                 `json:"name"`
+	ParentTechniqueId   string                 `json:"parentTechniqueId"`
+	StepCount           int                    `json:"stepCount"`
+	TechniqueId         string                 `json:"techniqueId"`
 }
 
 // TokenScope One coarse permission a service token may carry (M1-011). Scopes are few
@@ -4258,6 +4433,18 @@ type ListEngagementActivityParams struct {
 	ObjectId *ActivityObjectId `form:"objectId,omitempty" json:"objectId,omitempty"`
 }
 
+// GetAnalyticsBurndownParams defines parameters for GetAnalyticsBurndown.
+type GetAnalyticsBurndownParams struct {
+	// Interval Bucket granularity. Auto-selected from engagement date range when absent.
+	Interval *BurndownInterval `form:"interval,omitempty" json:"interval,omitempty"`
+}
+
+// GetAnalyticsCompareParams defines parameters for GetAnalyticsCompare.
+type GetAnalyticsCompareParams struct {
+	// Baseline The baseline engagement id to compare against.
+	Baseline openapi_types.UUID `form:"baseline" json:"baseline"`
+}
+
 // PatchCommentParams defines parameters for PatchComment.
 type PatchCommentParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -5101,6 +5288,21 @@ type ServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams)
+	// GetAnalyticsBurndown Return findings burndown series severity snapshot.
+	// (GET /engagements/{engagementId}/analytics/burndown)
+	GetAnalyticsBurndown(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params GetAnalyticsBurndownParams)
+	// GetAnalyticsCompare Cross-engagement technique-by-technique comparison.
+	// (GET /engagements/{engagementId}/analytics/compare)
+	GetAnalyticsCompare(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params GetAnalyticsCompareParams)
+	// GetAnalyticsCoverage Return technique tactic coverage for engagement.
+	// (GET /engagements/{engagementId}/analytics/coverage)
+	GetAnalyticsCoverage(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// GetAnalyticsDistribution Return detection-category count, protection rate, outcome mix, modifier distribution.
+	// (GET /engagements/{engagementId}/analytics/distribution)
+	GetAnalyticsDistribution(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// GetAnalyticsMttd Return MTTD percentiles with detected undetected counts.
+	// (GET /engagements/{engagementId}/analytics/mttd)
+	GetAnalyticsMttd(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
 	// PatchComment Edit a comment's body.
 	// (PATCH /engagements/{engagementId}/comments/{commentId})
 	PatchComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId, params PatchCommentParams)
@@ -5755,6 +5957,36 @@ func (_ Unimplemented) PatchEngagement(w http.ResponseWriter, r *http.Request, e
 // ListEngagementActivity List one engagement's activity log.
 // (GET /engagements/{engagementId}/activity)
 func (_ Unimplemented) ListEngagementActivity(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListEngagementActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAnalyticsBurndown Return findings burndown series severity snapshot.
+// (GET /engagements/{engagementId}/analytics/burndown)
+func (_ Unimplemented) GetAnalyticsBurndown(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params GetAnalyticsBurndownParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAnalyticsCompare Cross-engagement technique-by-technique comparison.
+// (GET /engagements/{engagementId}/analytics/compare)
+func (_ Unimplemented) GetAnalyticsCompare(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params GetAnalyticsCompareParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAnalyticsCoverage Return technique tactic coverage for engagement.
+// (GET /engagements/{engagementId}/analytics/coverage)
+func (_ Unimplemented) GetAnalyticsCoverage(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAnalyticsDistribution Return detection-category count, protection rate, outcome mix, modifier distribution.
+// (GET /engagements/{engagementId}/analytics/distribution)
+func (_ Unimplemented) GetAnalyticsDistribution(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAnalyticsMttd Return MTTD percentiles with detected undetected counts.
+// (GET /engagements/{engagementId}/analytics/mttd)
+func (_ Unimplemented) GetAnalyticsMttd(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9465,6 +9697,168 @@ func (siw *ServerInterfaceWrapper) ListEngagementActivity(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetAnalyticsBurndown operation middleware
+func (siw *ServerInterfaceWrapper) GetAnalyticsBurndown(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAnalyticsBurndownParams
+
+	// ------------- Optional query parameter "interval" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "interval", r.URL.Query(), &params.Interval, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "interval"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "interval", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnalyticsBurndown(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAnalyticsCompare operation middleware
+func (siw *ServerInterfaceWrapper) GetAnalyticsCompare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAnalyticsCompareParams
+
+	// ------------- Required query parameter "baseline" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "baseline", r.URL.Query(), &params.Baseline, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "baseline"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "baseline", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnalyticsCompare(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAnalyticsCoverage operation middleware
+func (siw *ServerInterfaceWrapper) GetAnalyticsCoverage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnalyticsCoverage(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAnalyticsDistribution operation middleware
+func (siw *ServerInterfaceWrapper) GetAnalyticsDistribution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnalyticsDistribution(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAnalyticsMttd operation middleware
+func (siw *ServerInterfaceWrapper) GetAnalyticsMttd(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnalyticsMttd(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PatchComment operation middleware
 func (siw *ServerInterfaceWrapper) PatchComment(w http.ResponseWriter, r *http.Request) {
 
@@ -12375,6 +12769,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/findings/{findingId}/steps", wrapper.SetFindingSteps)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/coverage", wrapper.GetAnalyticsCoverage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/distribution", wrapper.GetAnalyticsDistribution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/mttd", wrapper.GetAnalyticsMttd)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/burndown", wrapper.GetAnalyticsBurndown)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/compare", wrapper.GetAnalyticsCompare)
 	})
 
 	return r
@@ -19578,6 +19987,518 @@ func (response ListEngagementActivity500ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetAnalyticsBurndownRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       GetAnalyticsBurndownParams
+}
+
+type GetAnalyticsBurndownResponseObject interface {
+	VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error
+}
+
+type GetAnalyticsBurndown200JSONResponse AnalyticsBurndown
+
+func (response GetAnalyticsBurndown200JSONResponse) VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsBurndown400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsBurndown400ApplicationProblemPlusJSONResponse) VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsBurndown401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsBurndown401ApplicationProblemPlusJSONResponse) VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsBurndown403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsBurndown403ApplicationProblemPlusJSONResponse) VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsBurndown404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsBurndown404ApplicationProblemPlusJSONResponse) VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsBurndown500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsBurndown500ApplicationProblemPlusJSONResponse) VisitGetAnalyticsBurndownResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCompareRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       GetAnalyticsCompareParams
+}
+
+type GetAnalyticsCompareResponseObject interface {
+	VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error
+}
+
+type GetAnalyticsCompare200JSONResponse AnalyticsCompare
+
+func (response GetAnalyticsCompare200JSONResponse) VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCompare400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCompare400ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCompare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCompare401ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCompare403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCompare403ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCompare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCompare404ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCompare500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCompare500ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCompareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCoverageRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type GetAnalyticsCoverageResponseObject interface {
+	VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error
+}
+
+type GetAnalyticsCoverage200JSONResponse AnalyticsCoverage
+
+func (response GetAnalyticsCoverage200JSONResponse) VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCoverage400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCoverage400ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCoverage401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCoverage401ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCoverage403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCoverage403ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCoverage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCoverage404ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsCoverage500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsCoverage500ApplicationProblemPlusJSONResponse) VisitGetAnalyticsCoverageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsDistributionRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type GetAnalyticsDistributionResponseObject interface {
+	VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error
+}
+
+type GetAnalyticsDistribution200JSONResponse AnalyticsDistribution
+
+func (response GetAnalyticsDistribution200JSONResponse) VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsDistribution400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsDistribution400ApplicationProblemPlusJSONResponse) VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsDistribution401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsDistribution401ApplicationProblemPlusJSONResponse) VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsDistribution403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsDistribution403ApplicationProblemPlusJSONResponse) VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsDistribution404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsDistribution404ApplicationProblemPlusJSONResponse) VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsDistribution500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsDistribution500ApplicationProblemPlusJSONResponse) VisitGetAnalyticsDistributionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsMttdRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type GetAnalyticsMttdResponseObject interface {
+	VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error
+}
+
+type GetAnalyticsMttd200JSONResponse AnalyticsMttd
+
+func (response GetAnalyticsMttd200JSONResponse) VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsMttd400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsMttd400ApplicationProblemPlusJSONResponse) VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsMttd401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsMttd401ApplicationProblemPlusJSONResponse) VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsMttd403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsMttd403ApplicationProblemPlusJSONResponse) VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsMttd404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsMttd404ApplicationProblemPlusJSONResponse) VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsMttd500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsMttd500ApplicationProblemPlusJSONResponse) VisitGetAnalyticsMttdResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PatchCommentRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	CommentId    CommentId    `json:"commentId"`
@@ -25894,6 +26815,21 @@ type StrictServerInterface interface {
 	// ListEngagementActivity List one engagement's activity log.
 	// (GET /engagements/{engagementId}/activity)
 	ListEngagementActivity(ctx context.Context, request ListEngagementActivityRequestObject) (ListEngagementActivityResponseObject, error)
+	// GetAnalyticsBurndown Return findings burndown series severity snapshot.
+	// (GET /engagements/{engagementId}/analytics/burndown)
+	GetAnalyticsBurndown(ctx context.Context, request GetAnalyticsBurndownRequestObject) (GetAnalyticsBurndownResponseObject, error)
+	// GetAnalyticsCompare Cross-engagement technique-by-technique comparison.
+	// (GET /engagements/{engagementId}/analytics/compare)
+	GetAnalyticsCompare(ctx context.Context, request GetAnalyticsCompareRequestObject) (GetAnalyticsCompareResponseObject, error)
+	// GetAnalyticsCoverage Return technique tactic coverage for engagement.
+	// (GET /engagements/{engagementId}/analytics/coverage)
+	GetAnalyticsCoverage(ctx context.Context, request GetAnalyticsCoverageRequestObject) (GetAnalyticsCoverageResponseObject, error)
+	// GetAnalyticsDistribution Return detection-category count, protection rate, outcome mix, modifier distribution.
+	// (GET /engagements/{engagementId}/analytics/distribution)
+	GetAnalyticsDistribution(ctx context.Context, request GetAnalyticsDistributionRequestObject) (GetAnalyticsDistributionResponseObject, error)
+	// GetAnalyticsMttd Return MTTD percentiles with detected undetected counts.
+	// (GET /engagements/{engagementId}/analytics/mttd)
+	GetAnalyticsMttd(ctx context.Context, request GetAnalyticsMttdRequestObject) (GetAnalyticsMttdResponseObject, error)
 	// PatchComment Edit a comment's body.
 	// (PATCH /engagements/{engagementId}/comments/{commentId})
 	PatchComment(ctx context.Context, request PatchCommentRequestObject) (PatchCommentResponseObject, error)
@@ -28320,6 +29256,138 @@ func (sh *strictHandler) ListEngagementActivity(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListEngagementActivityResponseObject); ok {
 		if err := validResponse.VisitListEngagementActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAnalyticsBurndown operation middleware
+func (sh *strictHandler) GetAnalyticsBurndown(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params GetAnalyticsBurndownParams) {
+	var request GetAnalyticsBurndownRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnalyticsBurndown(ctx, request.(GetAnalyticsBurndownRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnalyticsBurndown")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnalyticsBurndownResponseObject); ok {
+		if err := validResponse.VisitGetAnalyticsBurndownResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAnalyticsCompare operation middleware
+func (sh *strictHandler) GetAnalyticsCompare(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params GetAnalyticsCompareParams) {
+	var request GetAnalyticsCompareRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnalyticsCompare(ctx, request.(GetAnalyticsCompareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnalyticsCompare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnalyticsCompareResponseObject); ok {
+		if err := validResponse.VisitGetAnalyticsCompareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAnalyticsCoverage operation middleware
+func (sh *strictHandler) GetAnalyticsCoverage(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request GetAnalyticsCoverageRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnalyticsCoverage(ctx, request.(GetAnalyticsCoverageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnalyticsCoverage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnalyticsCoverageResponseObject); ok {
+		if err := validResponse.VisitGetAnalyticsCoverageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAnalyticsDistribution operation middleware
+func (sh *strictHandler) GetAnalyticsDistribution(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request GetAnalyticsDistributionRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnalyticsDistribution(ctx, request.(GetAnalyticsDistributionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnalyticsDistribution")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnalyticsDistributionResponseObject); ok {
+		if err := validResponse.VisitGetAnalyticsDistributionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAnalyticsMttd operation middleware
+func (sh *strictHandler) GetAnalyticsMttd(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request GetAnalyticsMttdRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnalyticsMttd(ctx, request.(GetAnalyticsMttdRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnalyticsMttd")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnalyticsMttdResponseObject); ok {
+		if err := validResponse.VisitGetAnalyticsMttdResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

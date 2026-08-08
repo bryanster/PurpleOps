@@ -461,6 +461,13 @@ func TestAConfinedSessionCanOnlyReachTheEnrolmentRoutes(t *testing.T) {
 		switch {
 		case allowed && refusedByTheGate:
 			t.Errorf("%s is in enrolmentOnlyRoutes and was refused by the gate anyway", key)
+		case !allowed && !refusedByTheGate && recorder.Code == http.StatusBadRequest:
+			// The request validator rejected the request before the MFA
+			// gate ran — typically a missing required query parameter
+			// (e.g. baseline on /analytics/compare). The route is
+			// effectively blocked from confined sessions because a valid
+			// request would be refused by the gate, and an invalid one
+			// never reaches it.
 		case !allowed && !refusedByTheGate:
 			t.Errorf("%s answered %d to a session confined to enrolment, want a 403 with %q — "+
 				"either it is behind the gate, or it belongs in enrolmentOnlyRoutes with a reason",

@@ -5765,6 +5765,188 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/analytics/coverage:
+    get:
+      operationId: getAnalyticsCoverage
+      summary: Return technique tactic coverage for engagement.
+      description: |
+        Both denominators — attempted (headline) matrix (pinned ATT&CK version) —
+        are named fields. No bare percentage. Sub-techniques their own cells;
+        parent technique counts covered only if step names it directly.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: Technique tactic coverage.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsCoverage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/analytics/distribution:
+    get:
+      operationId: getAnalyticsDistribution
+      summary: Return detection-category count, protection rate, outcome mix, modifier distribution.
+      description: |
+        All four distributions in one payload. Every bucket carries unscored count;
+        modifier counts are non-exclusive — one execution can carry several modifiers.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: All four distributions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsDistribution"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/analytics/mttd:
+    get:
+      operationId: getAnalyticsMttd
+      summary: Return MTTD percentiles with detected undetected counts.
+      description: |
+        p50 / p90 / max over detected executions only. detectedCount undetectedCount
+        mandatory fields — no consumer can render MTTD without denominator.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: MTTD percentiles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsMttd"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/analytics/burndown:
+    get:
+      operationId: getAnalyticsBurndown
+      summary: Return findings burndown series severity snapshot.
+      description: |
+        Burndown from finding_status_history, not activity log — retention-safe.
+        severity snapshot is point-in-time view of current finding counts by severity.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - name: interval
+          in: query
+          required: false
+          description: Bucket granularity. Auto-selected from engagement date range when absent.
+          schema:
+            $ref: "#/components/schemas/BurndownInterval"
+      responses:
+        "200":
+          description: Burndown series.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsBurndown"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/analytics/compare:
+    get:
+      operationId: getAnalyticsCompare
+      summary: Cross-engagement technique-by-technique comparison.
+      description: |
+        Compare current engagement against baseline. Caller must hold report.read
+        on both. Techniques matched on (technique_id, subtechnique_id) then
+        template_id. No baseline_engagement_id column — any two readable
+        engagements can be compared.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - name: baseline
+          in: query
+          required: true
+          description: The baseline engagement id to compare against.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cross-engagement comparison.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsCompare"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     cookieSession:
@@ -10308,3 +10490,371 @@ components:
             format: uuid
           uniqueItems: true
       additionalProperties: false
+
+    BurndownInterval:
+      type: string
+      enum:
+        - daily
+        - weekly
+      description: Bucket granularity for the burndown chart.
+
+    DistributionBucket:
+      type: object
+      required:
+        - label
+        - count
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+      additionalProperties: false
+
+    DistributionResult:
+      type: object
+      required:
+        - attempted
+        - buckets
+      properties:
+        attempted:
+          type: integer
+        buckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistributionBucket"
+      additionalProperties: false
+
+    TechniqueCoverageRow:
+      type: object
+      required:
+        - techniqueId
+        - name
+        - isSubtechnique
+        - parentTechniqueId
+        - matched
+        - attempted
+        - bestCategory
+        - bestProtection
+        - stepCount
+      properties:
+        techniqueId:
+          type: string
+        name:
+          type: string
+        isSubtechnique:
+          type: boolean
+        parentTechniqueId:
+          type: string
+        matched:
+          type: boolean
+        attempted:
+          type: boolean
+        bestCategory:
+          type: string
+        bestCategoryOrdinal:
+          type: [integer, "null"]
+        bestProtection:
+          type: string
+        stepCount:
+          type: integer
+      additionalProperties: false
+
+    TechniqueCoverage:
+      type: object
+      required:
+        - rows
+        - attempted
+        - notAttempted
+        - matrix
+        - unmatched
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TechniqueCoverageRow"
+        attempted:
+          type: integer
+        notAttempted:
+          type: integer
+        matrix:
+          type: integer
+        unmatched:
+          type: integer
+      additionalProperties: false
+
+    CategoryBucket:
+      type: object
+      required:
+        - category
+        - count
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+      additionalProperties: false
+
+    TacticCoverageRow:
+      type: object
+      required:
+        - tacticId
+        - tacticName
+        - attemptedTechniques
+        - matrixTechniques
+        - categories
+      properties:
+        tacticId:
+          type: string
+        tacticName:
+          type: string
+        attemptedTechniques:
+          type: integer
+        matrixTechniques:
+          type: integer
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryBucket"
+      additionalProperties: false
+
+    TacticCoverage:
+      type: object
+      required:
+        - rows
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TacticCoverageRow"
+      additionalProperties: false
+
+    AnalyticsCoverage:
+      type: object
+      required:
+        - techniques
+        - tactics
+        - blindFiltered
+      properties:
+        techniques:
+          $ref: "#/components/schemas/TechniqueCoverage"
+        tactics:
+          $ref: "#/components/schemas/TacticCoverage"
+        blindFiltered:
+          type: boolean
+      additionalProperties: false
+
+    AnalyticsDistribution:
+      type: object
+      required:
+        - category
+        - protection
+        - outcome
+        - modifier
+        - blindFiltered
+      properties:
+        category:
+          $ref: "#/components/schemas/DistributionResult"
+        protection:
+          $ref: "#/components/schemas/DistributionResult"
+        outcome:
+          $ref: "#/components/schemas/DistributionResult"
+        modifier:
+          $ref: "#/components/schemas/DistributionResult"
+        blindFiltered:
+          type: boolean
+      additionalProperties: false
+
+    AnalyticsMttd:
+      type: object
+      required:
+        - detectedCount
+        - undetectedCount
+        - unscoredCount
+        - unmeasurableCount
+        - attemptedCount
+        - blindFiltered
+      properties:
+        p50:
+          type: [integer, "null"]
+        p90:
+          type: [integer, "null"]
+        max:
+          type: [integer, "null"]
+        detectedCount:
+          type: integer
+        undetectedCount:
+          type: integer
+        unscoredCount:
+          type: integer
+        unmeasurableCount:
+          type: integer
+        attemptedCount:
+          type: integer
+        blindFiltered:
+          type: boolean
+      additionalProperties: false
+
+    BurndownPoint:
+      type: object
+      required:
+        - date
+        - open
+        - inProgress
+        - resolved
+        - acceptedRisk
+        - totalOpen
+      properties:
+        date:
+          type: string
+        open:
+          type: integer
+        inProgress:
+          type: integer
+        resolved:
+          type: integer
+        acceptedRisk:
+          type: integer
+        totalOpen:
+          type: integer
+      additionalProperties: false
+
+    SeverityBucket:
+      type: object
+      required:
+        - severity
+        - open
+        - inProgress
+        - resolved
+        - acceptedRisk
+        - totalOpen
+      properties:
+        severity:
+          type: string
+        open:
+          type: integer
+        inProgress:
+          type: integer
+        resolved:
+          type: integer
+        acceptedRisk:
+          type: integer
+        totalOpen:
+          type: integer
+      additionalProperties: false
+
+    SeveritySnapshot:
+      type: object
+      required:
+        - buckets
+      properties:
+        buckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeverityBucket"
+      additionalProperties: false
+
+    AnalyticsBurndown:
+      type: object
+      required:
+        - interval
+        - points
+        - severity
+        - blindFiltered
+      properties:
+        interval:
+          $ref: "#/components/schemas/BurndownInterval"
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/BurndownPoint"
+        severity:
+          $ref: "#/components/schemas/SeveritySnapshot"
+        blindFiltered:
+          type: boolean
+      additionalProperties: false
+
+    CompareRow:
+      type: object
+      required:
+        - techniqueId
+        - subtechniqueId
+        - name
+        - baselineCategory
+        - baselineProtection
+        - currentCategory
+        - currentProtection
+        - classification
+      properties:
+        techniqueId:
+          type: string
+        subtechniqueId:
+          type: string
+        name:
+          type: string
+        baselineCategory:
+          type: string
+        baselineCategoryOrdinal:
+          type: [integer, "null"]
+        baselineProtection:
+          type: string
+        currentCategory:
+          type: string
+        currentCategoryOrdinal:
+          type: [integer, "null"]
+        currentProtection:
+          type: string
+        ordinalDelta:
+          type: [integer, "null"]
+        classification:
+          type: string
+      additionalProperties: false
+
+    PinMismatch:
+      type: object
+      required:
+        - baseline
+        - current
+      properties:
+        baseline:
+          type: string
+        current:
+          type: string
+      additionalProperties: false
+
+    AnalyticsCompare:
+      type: object
+      required:
+        - rows
+        - improved
+        - regressed
+        - unchanged
+        - newlyAttempted
+        - noLongerAttempted
+        - incomparable
+        - baselineBlindFiltered
+        - currentBlindFiltered
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompareRow"
+        improved:
+          type: integer
+        regressed:
+          type: integer
+        unchanged:
+          type: integer
+        newlyAttempted:
+          type: integer
+        noLongerAttempted:
+          type: integer
+        incomparable:
+          type: integer
+        pinMismatch:
+          $ref: "#/components/schemas/PinMismatch"
+        baselineBlindFiltered:
+          type: boolean
+        currentBlindFiltered:
+          type: boolean
+      additionalProperties: false
+

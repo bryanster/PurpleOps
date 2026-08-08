@@ -2993,6 +2993,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/analytics/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return technique tactic coverage for engagement.
+         * @description Both denominators — attempted (headline) matrix (pinned ATT&CK version) —
+         *     are named fields. No bare percentage. Sub-techniques their own cells;
+         *     parent technique counts covered only if step names it directly.
+         */
+        get: operations["getAnalyticsCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/analytics/distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return detection-category count, protection rate, outcome mix, modifier distribution.
+         * @description All four distributions in one payload. Every bucket carries unscored count;
+         *     modifier counts are non-exclusive — one execution can carry several modifiers.
+         */
+        get: operations["getAnalyticsDistribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/analytics/mttd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return MTTD percentiles with detected undetected counts.
+         * @description p50 / p90 / max over detected executions only. detectedCount undetectedCount
+         *     mandatory fields — no consumer can render MTTD without denominator.
+         */
+        get: operations["getAnalyticsMttd"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/analytics/burndown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return findings burndown series severity snapshot.
+         * @description Burndown from finding_status_history, not activity log — retention-safe.
+         *     severity snapshot is point-in-time view of current finding counts by severity.
+         */
+        get: operations["getAnalyticsBurndown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/analytics/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cross-engagement technique-by-technique comparison.
+         * @description Compare current engagement against baseline. Caller must hold report.read
+         *     on both. Techniques matched on (technique_id, subtechnique_id) then
+         *     template_id. No baseline_engagement_id column — any two readable
+         *     engagements can be compared.
+         */
+        get: operations["getAnalyticsCompare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5215,6 +5323,129 @@ export interface components {
         FindingStepIds: {
             /** @description The complete set of step ids for this finding. */
             stepIds: string[];
+        };
+        /**
+         * @description Bucket granularity for the burndown chart.
+         * @enum {string}
+         */
+        BurndownInterval: "daily" | "weekly";
+        DistributionBucket: {
+            label: string;
+            count: number;
+        };
+        DistributionResult: {
+            attempted: number;
+            buckets: components["schemas"]["DistributionBucket"][];
+        };
+        TechniqueCoverageRow: {
+            techniqueId: string;
+            name: string;
+            isSubtechnique: boolean;
+            parentTechniqueId: string;
+            matched: boolean;
+            attempted: boolean;
+            bestCategory: string;
+            bestCategoryOrdinal?: number | null;
+            bestProtection: string;
+            stepCount: number;
+        };
+        TechniqueCoverage: {
+            rows: components["schemas"]["TechniqueCoverageRow"][];
+            attempted: number;
+            notAttempted: number;
+            matrix: number;
+            unmatched: number;
+        };
+        CategoryBucket: {
+            category: string;
+            count: number;
+        };
+        TacticCoverageRow: {
+            tacticId: string;
+            tacticName: string;
+            attemptedTechniques: number;
+            matrixTechniques: number;
+            categories: components["schemas"]["CategoryBucket"][];
+        };
+        TacticCoverage: {
+            rows: components["schemas"]["TacticCoverageRow"][];
+        };
+        AnalyticsCoverage: {
+            techniques: components["schemas"]["TechniqueCoverage"];
+            tactics: components["schemas"]["TacticCoverage"];
+            blindFiltered: boolean;
+        };
+        AnalyticsDistribution: {
+            category: components["schemas"]["DistributionResult"];
+            protection: components["schemas"]["DistributionResult"];
+            outcome: components["schemas"]["DistributionResult"];
+            modifier: components["schemas"]["DistributionResult"];
+            blindFiltered: boolean;
+        };
+        AnalyticsMttd: {
+            p50?: number | null;
+            p90?: number | null;
+            max?: number | null;
+            detectedCount: number;
+            undetectedCount: number;
+            unscoredCount: number;
+            unmeasurableCount: number;
+            attemptedCount: number;
+            blindFiltered: boolean;
+        };
+        BurndownPoint: {
+            date: string;
+            open: number;
+            inProgress: number;
+            resolved: number;
+            acceptedRisk: number;
+            totalOpen: number;
+        };
+        SeverityBucket: {
+            severity: string;
+            open: number;
+            inProgress: number;
+            resolved: number;
+            acceptedRisk: number;
+            totalOpen: number;
+        };
+        SeveritySnapshot: {
+            buckets: components["schemas"]["SeverityBucket"][];
+        };
+        AnalyticsBurndown: {
+            interval: components["schemas"]["BurndownInterval"];
+            points: components["schemas"]["BurndownPoint"][];
+            severity: components["schemas"]["SeveritySnapshot"];
+            blindFiltered: boolean;
+        };
+        CompareRow: {
+            techniqueId: string;
+            subtechniqueId: string;
+            name: string;
+            baselineCategory: string;
+            baselineCategoryOrdinal?: number | null;
+            baselineProtection: string;
+            currentCategory: string;
+            currentCategoryOrdinal?: number | null;
+            currentProtection: string;
+            ordinalDelta?: number | null;
+            classification: string;
+        };
+        PinMismatch: {
+            baseline: string;
+            current: string;
+        };
+        AnalyticsCompare: {
+            rows: components["schemas"]["CompareRow"][];
+            improved: number;
+            regressed: number;
+            unchanged: number;
+            newlyAttempted: number;
+            noLongerAttempted: number;
+            incomparable: number;
+            pinMismatch?: components["schemas"]["PinMismatch"];
+            baselineBlindFiltered: boolean;
+            currentBlindFiltered: boolean;
         };
     };
     responses: {
@@ -10732,6 +10963,152 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAnalyticsCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Technique tactic coverage. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsCoverage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAnalyticsDistribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All four distributions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsDistribution"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAnalyticsMttd: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MTTD percentiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsMttd"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAnalyticsBurndown: {
+        parameters: {
+            query?: {
+                /** @description Bucket granularity. Auto-selected from engagement date range when absent. */
+                interval?: components["schemas"]["BurndownInterval"];
+            };
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Burndown series. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsBurndown"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAnalyticsCompare: {
+        parameters: {
+            query: {
+                /** @description The baseline engagement id to compare against. */
+                baseline: string;
+            };
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cross-engagement comparison. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsCompare"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];

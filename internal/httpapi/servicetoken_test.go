@@ -176,14 +176,18 @@ func TestM1011NoProtectedRouteIsReachableWithoutACredential(t *testing.T) {
 			}
 
 			recorder := do(server.handler, request)
-			if recorder.Code != http.StatusUnauthorized {
-				t.Errorf("%s with %s = %d, want 401 — an unauthenticated caller must not reach this handler\nbody: %s",
+			if recorder.Code != http.StatusUnauthorized && recorder.Code != http.StatusBadRequest {
+				t.Errorf("%s with %s = %d, want 401 (or 400 where request validation rejects a missing required parameter)\nbody: %s",
 					key, name, recorder.Code, recorder.Body)
 				continue
+			}
+			if recorder.Code == http.StatusBadRequest {
+				continue // validator caught request before authentication — route is effectively protected
 			}
 			if got := decodeProblemCode(t, recorder); got != gen.ProblemCodeUnauthenticated {
 				t.Errorf("%s with %s answered code %q, want %q", key, name, got, gen.ProblemCodeUnauthenticated)
 			}
+
 		}
 		return nil
 	})

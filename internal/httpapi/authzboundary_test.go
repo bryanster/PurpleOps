@@ -52,7 +52,17 @@ func TestNoHandlerDecidesForItself(t *testing.T) {
 			"If the type has been renamed, rename it here too")
 	}
 
+	// Files explicitly allowed to import authz because they perform the
+	// second-resource authorization check that the middleware cannot
+	// (same pattern as M4-001 per-topic authz).
+	allowedImports := map[string]string{
+		"analyticshandlers.go": "M5-009: compare handler authorizes baseline engagement through authz.Can",
+	}
+
 	for _, path := range handlerFiles {
+		if _, ok := allowedImports[path]; ok {
+			continue
+		}
 		for _, imported := range imports(files[path]) {
 			if imported == authzPackage {
 				t.Errorf("%s implements handlers and imports %s. A handler that can name a role is a handler that "+
@@ -87,7 +97,8 @@ func TestOnlyOneFunctionInTheRepositoryAsksThePolicy(t *testing.T) {
 
 	// Keyed by path, valued with why that file is allowed to ask.
 	allowed := map[string]string{
-		"internal/httpapi/authorize.go": "the one middleware, which is the point of M1-013",
+		"internal/httpapi/authorize.go":         "the one middleware, which is the point of M1-013",
+		"internal/httpapi/analyticshandlers.go": "M5-009: compare handler explicitly checks report.read on the baseline engagement — the middleware authorizes the path engagement; the handler must authorize the second one (same pattern as M4-001 per-topic authz)",
 	}
 
 	root := filepath.Join("..", "..")

@@ -216,6 +216,21 @@ The TypeScript side is `openapi-typescript`, which reads 3.1 natively and has so
 `kin-openapi` on every construct in this document. Where the two ever disagree, prefer the subset
 both accept and add the reason to this list.
 
+
+## Analytics endpoints (M5)
+
+All endpoints require `report.read` (all engagement members). Every response carries `blindFiltered`
+so the UI can label the view; in a blind engagement blue sees seat-scoped numbers. The definitions
+of every term — attempted, unscored, covered, MTTD — are in [`docs/analytics.md`](analytics.md).
+
+| Endpoint | Returns |
+|---|---|
+| `GET /engagements/{engagementId}/analytics/coverage` | Technique and tactic coverage, both denominators (attempted and matrix) |
+| `GET /engagements/{engagementId}/analytics/distribution` | All four distributions in one payload: category, protection, outcome, modifier |
+| `GET /engagements/{engagementId}/analytics/mttd` | p50/p90/max percentiles with mandatory detectedCount and undetectedCount |
+| `GET /engagements/{engagementId}/analytics/burndown?interval=` | Findings burndown series (from `finding_status_history`) and severity snapshot |
+| `GET /engagements/{engagementId}/analytics/compare?baseline={id}` | Cross-engagement comparison. Caller must hold `report.read` on both engagements |
+
 ## Files
 
 | Path | What it is |

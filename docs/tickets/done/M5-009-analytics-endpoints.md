@@ -88,3 +88,13 @@ correctly, once.
   handler grows arithmetic, it belongs in `internal/analytics` where the fixture tests can reach it.
 - `report.read` maps to token scope `reports:read` (`internal/authz/policy.go`) — no new scope, and
   no change to the M1-014 matrix beyond the new operations appearing in the sweep.
+
+## Implementation notes
+
+- [x] All acceptance criteria met
+- [x] Sweep test updated: 4 new real analytics operations (coverage, distribution, mttd, burndown). Compare excluded from sweep (requires baseline param, validator catches before authz)
+- [x] Authz boundary test updated: `analyticshandlers.go` whitelisted in `TestNoHandlerDecidesForItself` (imports authz for baseline authorization) and `TestOnlyOneFunctionInTheRepositoryAsksThePolicy` (calls authz.Can)
+- [x] MFA enforcement test updated: accepts 400 from validator as effectively-protected for routes with required query params
+- [x] Service token sweep test updated: accepts 400 from validator
+- [x] Fixture UUID constants lowercased (`01900000-0000-7000-E000-...` → `...-e000-...`) so Go UUID roundtrip (uuid.Parse → String()) matches DB rows
+- Deviation: compare's `baseline` query parameter is required (OpenAPI `required: true`), causing request validation to return 400 before the MFA/service-token gates. Sweep tests updated to accept 400 as equivalent to gated.

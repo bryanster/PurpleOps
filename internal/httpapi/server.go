@@ -26,6 +26,9 @@ import (
 	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/content"
 	"github.com/bryanster/blacklight/internal/content/atomic"
+
+	"github.com/bryanster/blacklight/internal/analytics"
+
 	"github.com/bryanster/blacklight/internal/content/attack"
 	"github.com/bryanster/blacklight/internal/content/attackpin"
 	"github.com/bryanster/blacklight/internal/content/ctid"
@@ -653,6 +656,9 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	}
 
 	evidenceRepo := storengagement.NewEvidenceRepo(deps.Store)
+
+	queries := analytics.NewQueries(deps.Store)
+
 	blobRepo := storengagement.NewEvidenceBlobRepo(deps.Store)
 	evidenceStore := evidence.NewStore(deps.Config.Evidence.Dir, deps.Config.Evidence, blobRepo)
 
@@ -678,9 +684,11 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 		attackpin: pin,
 
-		users:           users,
-		engagements:     engSvc,
-		hub:             hub,
+		users:       users,
+		engagements: engSvc,
+		hub:         hub,
+
+		analytics:       queries,
 		presence:        deps.Presence,
 		eventsMaxReplay: deps.Config.Events.MaxReplayEvents,
 		eventsHeartbeat: deps.Config.Events.Heartbeat,

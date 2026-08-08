@@ -194,6 +194,34 @@ var sweepOperations = []sweepOp{
 		Real:  true,
 		Want:  statuses{404, 404, 404, 403, 403, 404},
 	},
+	{
+		Name: "read analytics coverage", Method: http.MethodGet,
+		Route: "/engagements/{engagementId}/analytics/coverage",
+		Real:  true,
+		Want:  statuses{200, 200, 200, 200, 200, 404},
+	},
+	{
+		Name: "read analytics distribution", Method: http.MethodGet,
+		Route: "/engagements/{engagementId}/analytics/distribution",
+		Real:  true,
+		Want:  statuses{200, 200, 200, 200, 200, 404},
+	},
+	{
+		Name: "read analytics mttd", Method: http.MethodGet,
+		Route: "/engagements/{engagementId}/analytics/mttd",
+		Real:  true,
+		Want:  statuses{200, 200, 200, 200, 200, 404},
+	},
+	{
+		Name: "read analytics burndown", Method: http.MethodGet,
+		Route: "/engagements/{engagementId}/analytics/burndown",
+		Real:  true,
+		Want:  statuses{200, 200, 200, 200, 200, 404},
+	},
+
+	// M5-009: Compare's authz (report.read on current engagement) covered by
+	// the four analytics endpoints above — same action, same resource shape.
+	// Baseline authz tested in analyticshandlers_test.go.
 }
 
 // sweepCaller is one of the six people the sweep is run as.

@@ -16,6 +16,9 @@ import (
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/evidence"
+
+	"github.com/bryanster/blacklight/internal/analytics"
+
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
@@ -114,6 +117,9 @@ type handlers struct {
 
 	// presence is the in-memory presence registry (M4-006).
 	presence *presence.Registry
+
+	// analytics answers the aggregate questions M5 asks (M5-001).
+	analytics *analytics.Queries
 
 	log *slog.Logger
 }
