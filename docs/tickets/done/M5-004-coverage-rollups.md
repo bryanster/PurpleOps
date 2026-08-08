@@ -87,3 +87,12 @@ scorecard blocks.
   cover whichever the M3 writers actually do, so read `M3-005` before assuming.
 - Prefer ANSI over DuckDB shorthand where both exist and read the same. Where you use a DuckDB-only
   construct, add it to the package doc's list (`M5-001`).
+
+## Implementation notes
+
+- `TechniqueCoverage` uses a single CTE chain: `workbook_techniques → technique_execs → best → per_technique → SELECT` with subquery columns for summary counts. The blind fence (`stepPredicate`) is injected via `%%s` into the CTE's WHERE clause.
+- `TacticCoverage` uses a separate `fillCategoryDistribution` query because combining tactic-level aggregation with per-category counts in a single statement would require JSON aggregation — and with ~14 tactics, two queries trade one round trip for significantly simpler scan logic. Each query is still one statement.
+- Category ordinals (`CASE te.detection_category WHEN ...`) and protection ordinals (`CASE te.protection WHEN ...`) are inlined in SQL rather than a lookup table because the scoring vocabulary is closed (CHECK constraints on `app.execution`) and DuckDB MAX over CASE expressions is the natural way to do "best of" for a small closed set.
+- `BestCategoryOrdinal` is `*int` — nil means unscored (no attempted + scored execution for this technique).
+- Sub-techniques are separate cells: `T1059.001` does not make `T1059` covered. The fixture has both parent and child steps to prove this.
+- DuckDB-specific: `||` for string concatenation, `BOOL_OR` instead of `MAX`, CASE expressions for ordinal mapping. All named in the package doc exception list.
