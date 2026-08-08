@@ -197,13 +197,21 @@ func TestSubscribingToContentJobsIsFilteredForMembers(t *testing.T) {
 func TestServiceTokenCannotSubscribeToEvents(t *testing.T) {
 	t.Parallel()
 	server := newAuthServer(t)
-	server.seedUser(t)
-	admin := server.signIn(t)
-	tok := server.createToken(t, admin, authz.TokenScopeContentSync)
+	// Seed a non-admin member: the SSE endpoint maps to a self-service
+	// operation, so the auth middleware lets any authenticated caller through
+	// and the handler enforces per-topic authorization. A non-admin token
+	// is refused the content.jobs topic, which returns 400 before any
+	// streaming begins — avoiding a hang on the pipe.
+	server.seedUser(t, func(u *identity.NewUser) {
+		u.PlatformRole = authz.PlatformRoleMember
+		u.Email = "member@example.com"
+	})
+	memberCookie := sessionCookie(t, server.login("member@example.com", testPassword))
+	tok := server.createToken(t, memberCookie, authz.TokenScopeContentSync)
 
 	rec := server.withToken(http.MethodGet, eventsPathTest+"?topics="+events.TopicContentJobs, tok.Token)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("token SSE = %d, want 403\n%s", rec.Code, rec.Body)
+		t.Fatalf("token SSE = %d, want 400\n%s", rec.Code, rec.Body)
 	}
 }
 
