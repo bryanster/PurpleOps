@@ -5947,6 +5947,42 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/analytics/navigator-layer:
+    get:
+      operationId: getAnalyticsNavigatorLayer
+      summary: Export an ATT&CK Navigator layer for this engagement.
+      description: |
+        Returns a Navigator layer document (JSON) keyed to the engagement's
+        pinned ATT&CK version. Scores come from the detection-category ordinal;
+        the colour ramp is documented in docs/analytics.md. The layer is
+        downloadable — Content-Disposition: attachment with the engagement name
+        in the filename.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: Navigator layer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigatorLayer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     cookieSession:
@@ -10858,3 +10894,128 @@ components:
           type: boolean
       additionalProperties: false
 
+    NavigatorLayer:
+      type: object
+      required:
+        - name
+        - description
+        - domain
+        - versions
+        - filters
+        - gradient
+        - legendItems
+        - techniques
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        domain:
+          type: string
+        versions:
+          type: object
+          required:
+            - attack
+            - navigator
+            - layer
+          properties:
+            attack:
+              type: string
+            navigator:
+              type: string
+            layer:
+              type: string
+          additionalProperties: false
+        filters:
+          type: object
+          required:
+            - platforms
+          properties:
+            platforms:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+        gradient:
+          type: object
+          required:
+            - colors
+            - minValue
+            - maxValue
+          properties:
+            colors:
+              type: array
+              items:
+                type: string
+            minValue:
+              type: integer
+            maxValue:
+              type: integer
+          additionalProperties: false
+        legendItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/NavigatorLegendItem"
+        techniques:
+          type: array
+          items:
+            $ref: "#/components/schemas/NavigatorTechnique"
+        showTacticRowBackground:
+          type: boolean
+        tacticRowBackground:
+          type: string
+        selectTechniquesAcrossTactics:
+          type: boolean
+        selectSubtechniquesWithParent:
+          type: boolean
+      additionalProperties: false
+
+    NavigatorLegendItem:
+      type: object
+      required:
+        - label
+        - color
+      properties:
+        label:
+          type: string
+        color:
+          type: string
+      additionalProperties: false
+
+    NavigatorTechnique:
+      type: object
+      required:
+        - techniqueID
+        - score
+        - color
+        - enabled
+      properties:
+        techniqueID:
+          type: string
+        score:
+          type: integer
+        color:
+          type: string
+        comment:
+          type: string
+        enabled:
+          type: boolean
+        metadata:
+          type: array
+          items:
+            $ref: "#/components/schemas/NavigatorMetadata"
+        showSubtechniques:
+          type: boolean
+      additionalProperties: false
+
+    NavigatorMetadata:
+      type: object
+      required:
+        - name
+        - value
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+      additionalProperties: false

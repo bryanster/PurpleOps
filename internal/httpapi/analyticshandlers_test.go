@@ -324,3 +324,52 @@ func testLogger(t *testing.T) *slog.Logger {
 	t.Helper()
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
+
+func TestAnalyticsNavigatorLayerShape(t *testing.T) {
+	t.Parallel()
+
+	fx := analyticstest.Seed(t)
+	h := testHandlers(t, fx)
+
+	resp, err := h.GetAnalyticsNavigatorLayer(authCtx(fx.BaselineID),
+		gen.GetAnalyticsNavigatorLayerRequestObject{EngagementId: toUUID(fx.BaselineID)})
+	if err != nil {
+		t.Fatalf("GetAnalyticsNavigatorLayer: %v", err)
+	}
+
+	nl, ok := resp.(gen.GetAnalyticsNavigatorLayer200JSONResponse)
+	if !ok {
+		t.Fatalf("unexpected response type: %T", resp)
+	}
+
+	if nl.Name == "" {
+		t.Error("layer name is empty")
+	}
+	if nl.Versions.Attack == "" {
+		t.Error("versions.attack is empty")
+	}
+	if nl.Versions.Navigator != analytics.NavigatorSchemaVersion {
+		t.Errorf("versions.navigator = %q, want %q", nl.Versions.Navigator, analytics.NavigatorSchemaVersion)
+	}
+	if nl.Versions.Layer != analytics.NavigatorSchemaVersion {
+		t.Errorf("versions.layer = %q, want %q", nl.Versions.Layer, analytics.NavigatorSchemaVersion)
+	}
+	if nl.Domain != "enterprise-attack" {
+		t.Errorf("domain = %q, want enterprise-attack", nl.Domain)
+	}
+	if len(nl.Techniques) == 0 {
+		t.Error("techniques is empty")
+	}
+	if len(nl.LegendItems) != 5 {
+		t.Errorf("legendItems = %d, want 5", len(nl.LegendItems))
+	}
+	if len(nl.Gradient.Colors) != 5 {
+		t.Errorf("gradient.colors = %d, want 5", len(nl.Gradient.Colors))
+	}
+	if nl.Gradient.MinValue != 0 {
+		t.Errorf("gradient.minValue = %d, want 0", nl.Gradient.MinValue)
+	}
+	if nl.Gradient.MaxValue != 4 {
+		t.Errorf("gradient.maxValue = %d, want 4", nl.Gradient.MaxValue)
+	}
+}

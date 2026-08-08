@@ -197,3 +197,23 @@ severity × status. Unlike the burndown this is a point-in-time view of
 `app.finding.status`, not a time series derived from history. Every
 severity level present in the engagement appears as a bucket; absent
 severity levels are not emitted as zero rows.
+
+## Navigator colour ramp
+
+The detection-category ordinal (0–4) maps to a fixed colour ramp used by
+both the ATT&CK Navigator layer export (M5-010) and the dashboard heatmap
+(M5-013). One ramp, two renderers — a report and a Navigator side by side
+must not disagree about what a colour means.
+
+| Ordinal | Category   | Hex       | Swatch                                                  |
+|---------|------------|-----------|---------------------------------------------------------|
+| 0       | None       | `#aeb3bf` | <span style="color:#aeb3bf">████████</span> grey        |
+| 1       | Telemetry  | `#ffee58` | <span style="color:#ffee58">████████</span> amber       |
+| 2       | General    | `#fca128` | <span style="color:#fca128">████████</span> orange      |
+| 3       | Tactic     | `#d13c3c` | <span style="color:#d13c3c">████████</span> red         |
+| 4       | Technique  | `#862121` | <span style="color:#862121">████████</span> dark red    |
+
+The ramp is defined in `internal/analytics/navigator.go` as
+`NavigatorColourRamp`. The Navigator layer's `gradient.colors` array and
+`legendItems` are built from it, and `M5-013`'s heatmap reads the same
+array.

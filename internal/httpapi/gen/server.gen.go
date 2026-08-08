@@ -2526,6 +2526,55 @@ type MFAState struct {
 	Satisfied bool `json:"satisfied"`
 }
 
+// NavigatorLayer defines model for NavigatorLayer.
+type NavigatorLayer struct {
+	Description string `json:"description"`
+	Domain      string `json:"domain"`
+	Filters     struct {
+		Platforms []string `json:"platforms"`
+	} `json:"filters"`
+	Gradient struct {
+		Colors   []string `json:"colors"`
+		MaxValue int      `json:"maxValue"`
+		MinValue int      `json:"minValue"`
+	} `json:"gradient"`
+	LegendItems                   []NavigatorLegendItem `json:"legendItems"`
+	Name                          string                `json:"name"`
+	SelectSubtechniquesWithParent *bool                 `json:"selectSubtechniquesWithParent,omitempty"`
+	SelectTechniquesAcrossTactics *bool                 `json:"selectTechniquesAcrossTactics,omitempty"`
+	ShowTacticRowBackground       *bool                 `json:"showTacticRowBackground,omitempty"`
+	TacticRowBackground           *string               `json:"tacticRowBackground,omitempty"`
+	Techniques                    []NavigatorTechnique  `json:"techniques"`
+	Versions                      struct {
+		Attack    string `json:"attack"`
+		Layer     string `json:"layer"`
+		Navigator string `json:"navigator"`
+	} `json:"versions"`
+}
+
+// NavigatorLegendItem defines model for NavigatorLegendItem.
+type NavigatorLegendItem struct {
+	Color string `json:"color"`
+	Label string `json:"label"`
+}
+
+// NavigatorMetadata defines model for NavigatorMetadata.
+type NavigatorMetadata struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// NavigatorTechnique defines model for NavigatorTechnique.
+type NavigatorTechnique struct {
+	Color             string               `json:"color"`
+	Comment           *string              `json:"comment,omitempty"`
+	Enabled           bool                 `json:"enabled"`
+	Metadata          *[]NavigatorMetadata `json:"metadata,omitempty"`
+	Score             int                  `json:"score"`
+	ShowSubtechniques *bool                `json:"showSubtechniques,omitempty"`
+	TechniqueID       string               `json:"techniqueID"`
+}
+
 // NewEvidenceRequest defines model for NewEvidenceRequest.
 type NewEvidenceRequest struct {
 	// Caption Optional caption for the evidence.
@@ -5303,6 +5352,9 @@ type ServerInterface interface {
 	// GetAnalyticsMttd Return MTTD percentiles with detected undetected counts.
 	// (GET /engagements/{engagementId}/analytics/mttd)
 	GetAnalyticsMttd(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// GetAnalyticsNavigatorLayer Export an ATT&CK Navigator layer for this engagement.
+	// (GET /engagements/{engagementId}/analytics/navigator-layer)
+	GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
 	// PatchComment Edit a comment's body.
 	// (PATCH /engagements/{engagementId}/comments/{commentId})
 	PatchComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId, params PatchCommentParams)
@@ -5987,6 +6039,12 @@ func (_ Unimplemented) GetAnalyticsDistribution(w http.ResponseWriter, r *http.R
 // GetAnalyticsMttd Return MTTD percentiles with detected undetected counts.
 // (GET /engagements/{engagementId}/analytics/mttd)
 func (_ Unimplemented) GetAnalyticsMttd(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAnalyticsNavigatorLayer Export an ATT&CK Navigator layer for this engagement.
+// (GET /engagements/{engagementId}/analytics/navigator-layer)
+func (_ Unimplemented) GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9859,6 +9917,32 @@ func (siw *ServerInterfaceWrapper) GetAnalyticsMttd(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetAnalyticsNavigatorLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAnalyticsNavigatorLayer(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PatchComment operation middleware
 func (siw *ServerInterfaceWrapper) PatchComment(w http.ResponseWriter, r *http.Request) {
 
@@ -12784,6 +12868,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/compare", wrapper.GetAnalyticsCompare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/navigator-layer", wrapper.GetAnalyticsNavigatorLayer)
 	})
 
 	return r
@@ -20499,6 +20586,108 @@ func (response GetAnalyticsMttd500ApplicationProblemPlusJSONResponse) VisitGetAn
 	return err
 }
 
+type GetAnalyticsNavigatorLayerRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type GetAnalyticsNavigatorLayerResponseObject interface {
+	VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error
+}
+
+type GetAnalyticsNavigatorLayer200JSONResponse NavigatorLayer
+
+func (response GetAnalyticsNavigatorLayer200JSONResponse) VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsNavigatorLayer400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsNavigatorLayer400ApplicationProblemPlusJSONResponse) VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsNavigatorLayer401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsNavigatorLayer401ApplicationProblemPlusJSONResponse) VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsNavigatorLayer403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsNavigatorLayer403ApplicationProblemPlusJSONResponse) VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsNavigatorLayer404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsNavigatorLayer404ApplicationProblemPlusJSONResponse) VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAnalyticsNavigatorLayer500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAnalyticsNavigatorLayer500ApplicationProblemPlusJSONResponse) VisitGetAnalyticsNavigatorLayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PatchCommentRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	CommentId    CommentId    `json:"commentId"`
@@ -26830,6 +27019,9 @@ type StrictServerInterface interface {
 	// GetAnalyticsMttd Return MTTD percentiles with detected undetected counts.
 	// (GET /engagements/{engagementId}/analytics/mttd)
 	GetAnalyticsMttd(ctx context.Context, request GetAnalyticsMttdRequestObject) (GetAnalyticsMttdResponseObject, error)
+	// GetAnalyticsNavigatorLayer Export an ATT&CK Navigator layer for this engagement.
+	// (GET /engagements/{engagementId}/analytics/navigator-layer)
+	GetAnalyticsNavigatorLayer(ctx context.Context, request GetAnalyticsNavigatorLayerRequestObject) (GetAnalyticsNavigatorLayerResponseObject, error)
 	// PatchComment Edit a comment's body.
 	// (PATCH /engagements/{engagementId}/comments/{commentId})
 	PatchComment(ctx context.Context, request PatchCommentRequestObject) (PatchCommentResponseObject, error)
@@ -29388,6 +29580,32 @@ func (sh *strictHandler) GetAnalyticsMttd(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetAnalyticsMttdResponseObject); ok {
 		if err := validResponse.VisitGetAnalyticsMttdResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAnalyticsNavigatorLayer operation middleware
+func (sh *strictHandler) GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request GetAnalyticsNavigatorLayerRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAnalyticsNavigatorLayer(ctx, request.(GetAnalyticsNavigatorLayerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAnalyticsNavigatorLayer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAnalyticsNavigatorLayerResponseObject); ok {
+		if err := validResponse.VisitGetAnalyticsNavigatorLayerResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

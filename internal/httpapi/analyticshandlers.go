@@ -226,6 +226,115 @@ func (h *handlers) GetAnalyticsCompare(ctx context.Context,
 	return gen.GetAnalyticsCompare200JSONResponse(resp), nil
 }
 
+// GetAnalyticsNavigatorLayer returns an ATT&CK Navigator layer document for the engagement.
+func (h *handlers) GetAnalyticsNavigatorLayer(ctx context.Context,
+	request gen.GetAnalyticsNavigatorLayerRequestObject) (gen.GetAnalyticsNavigatorLayerResponseObject, error) {
+
+	scope, _, err := h.analyticsScope(ctx, request.EngagementId.String())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := h.analytics.NavigatorLayer(ctx, scope)
+	if err != nil {
+		return nil, fmt.Errorf("navigator layer: %w", err)
+	}
+
+	return gen.GetAnalyticsNavigatorLayer200JSONResponse(navigatorLayerToWire(result)), nil
+}
+
+// --- navigator conversion helpers ------------------------------------------------
+
+func navigatorLayerToWire(r *analytics.NavigatorLayerResult) gen.NavigatorLayer {
+	selectSub := false
+	selectAcross := true
+	showTactic := true
+	tacticBg := "#dddddd"
+
+	colours := make([]string, 5)
+	for i, c := range analytics.NavigatorColourRamp {
+		colours[i] = c
+	}
+
+	legend := make([]gen.NavigatorLegendItem, 5)
+	for i, label := range analytics.NavigatorLegendLabels {
+		legend[i] = gen.NavigatorLegendItem{
+			Label: label,
+			Color: analytics.NavigatorColourRamp[i],
+		}
+	}
+
+	techniques := make([]gen.NavigatorTechnique, 0, len(r.Techniques))
+	for _, t := range r.Techniques {
+		entry := gen.NavigatorTechnique{
+			TechniqueID: t.TechniqueID,
+			Score:       t.Score,
+			Color:       t.Color,
+			Enabled:     t.Enabled,
+		}
+		if t.Comment != "" {
+			entry.Comment = &t.Comment
+		}
+		if t.StepCount > 0 || t.Protection != "" {
+			var meta []gen.NavigatorMetadata
+			if t.Enabled {
+				meta = append(meta, gen.NavigatorMetadata{
+					Name:  "Steps",
+					Value: fmt.Sprintf("%d", t.StepCount),
+				})
+			}
+			if t.Protection != "" {
+				meta = append(meta, gen.NavigatorMetadata{
+					Name:  "Protection",
+					Value: t.Protection,
+				})
+			}
+			if len(meta) > 0 {
+				entry.Metadata = &meta
+			}
+		}
+		if t.IsSubtechnique {
+			entry.ShowSubtechniques = &selectSub
+		}
+		techniques = append(techniques, entry)
+	}
+
+	return gen.NavigatorLayer{
+		Name:        r.Name,
+		Description: r.Description,
+		Domain:      "enterprise-attack",
+		Versions: struct {
+			Attack    string `json:"attack"`
+			Layer     string `json:"layer"`
+			Navigator string `json:"navigator"`
+		}{
+			Attack:    r.AttackVersion,
+			Layer:     analytics.NavigatorSchemaVersion,
+			Navigator: analytics.NavigatorSchemaVersion,
+		},
+		Filters: struct {
+			Platforms []string `json:"platforms"`
+		}{
+			Platforms: []string{},
+		},
+		Gradient: struct {
+			Colors   []string `json:"colors"`
+			MaxValue int      `json:"maxValue"`
+			MinValue int      `json:"minValue"`
+		}{
+			Colors:   colours,
+			MinValue: 0,
+			MaxValue: 4,
+		},
+		LegendItems:                   legend,
+		ShowTacticRowBackground:       &showTactic,
+		TacticRowBackground:           &tacticBg,
+		SelectTechniquesAcrossTactics: &selectAcross,
+		SelectSubtechniquesWithParent: &selectSub,
+		Techniques:                    techniques,
+	}
+}
+
 // --- conversion helpers -------------------------------------------------------
 
 func distributionToWire(d *analytics.DistributionResult) gen.DistributionResult {

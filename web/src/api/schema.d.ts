@@ -3101,6 +3101,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/analytics/navigator-layer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export an ATT&CK Navigator layer for this engagement.
+         * @description Returns a Navigator layer document (JSON) keyed to the engagement's
+         *     pinned ATT&CK version. Scores come from the detection-category ordinal;
+         *     the colour ramp is documented in docs/analytics.md. The layer is
+         *     downloadable — Content-Disposition: attachment with the engagement name
+         *     in the filename.
+         */
+        get: operations["getAnalyticsNavigatorLayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5446,6 +5470,47 @@ export interface components {
             pinMismatch?: components["schemas"]["PinMismatch"];
             baselineBlindFiltered: boolean;
             currentBlindFiltered: boolean;
+        };
+        NavigatorLayer: {
+            name: string;
+            description: string;
+            domain: string;
+            versions: {
+                attack: string;
+                navigator: string;
+                layer: string;
+            };
+            filters: {
+                platforms: string[];
+            };
+            gradient: {
+                colors: string[];
+                minValue: number;
+                maxValue: number;
+            };
+            legendItems: components["schemas"]["NavigatorLegendItem"][];
+            techniques: components["schemas"]["NavigatorTechnique"][];
+            showTacticRowBackground?: boolean;
+            tacticRowBackground?: string;
+            selectTechniquesAcrossTactics?: boolean;
+            selectSubtechniquesWithParent?: boolean;
+        };
+        NavigatorLegendItem: {
+            label: string;
+            color: string;
+        };
+        NavigatorTechnique: {
+            techniqueID: string;
+            score: number;
+            color: string;
+            comment?: string;
+            enabled: boolean;
+            metadata?: components["schemas"]["NavigatorMetadata"][];
+            showSubtechniques?: boolean;
+        };
+        NavigatorMetadata: {
+            name: string;
+            value: string;
         };
     };
     responses: {
@@ -11108,6 +11173,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsCompare"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getAnalyticsNavigatorLayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Navigator layer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NavigatorLayer"];
                 };
             };
             400: components["responses"]["BadRequest"];
