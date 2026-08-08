@@ -63,24 +63,24 @@ follow are comparatively mechanical.
 
 ## Acceptance criteria
 
-- [ ] `Queries` takes its handle through the constructor; `go vet` and the DoD-5 review find no
+- [x] `Queries` takes its handle through the constructor; `go vet` and the DoD-5 review find no
       package-level DB global.
-- [ ] Every exported rollup signature added later is forced through `Scope` — documented in the
+- [x] Every exported rollup signature added later is forced through `Scope` — documented in the
       package doc as the rule, with the reason (a rollup that took a bare engagement id would compile
       while leaking a blind engagement's totals to blue).
-- [ ] `outcomeCase` agrees with `scoring.DeriveOutcome` for **every** category × protection pair,
+- [x] `outcomeCase` agrees with `scoring.DeriveOutcome` for **every** category × protection pair,
       asserted by a test that enumerates `scoring.AllCategories()` × `scoring.AllProtections()` and
       runs the SQL against the fixture — not by two lists a human compared.
-- [ ] The nil cases agree too: `detection_category IS NULL` or `protection IS NULL` yields the same
+- [x] The nil cases agree too: `detection_category IS NULL` or `protection IS NULL` yields the same
       "unscored" answer in SQL as `scoring.DeriveOutcomePtr` yields in Go.
-- [ ] `analyticstest.Seed` is deterministic — fixed UUIDv7 values and fixed timestamps, no
+- [x] `analyticstest.Seed` is deterministic — fixed UUIDv7 values and fixed timestamps, no
       `time.Now()`, no random ids. A fixture that changes between runs cannot have hand-computed
       expectations.
-- [ ] The fixture's expectation tables are exhaustive enough that `M5-004`…`M5-008` add no new seed
+- [x] The fixture's expectation tables are exhaustive enough that `M5-004`…`M5-008` add no new seed
       rows. If a later rollup needs new data, that is a signal this fixture missed a case — amend it
       here rather than growing a second fixture.
-- [ ] `docs/analytics.md` defines every term before any endpoint uses it.
-- [ ] Package doc names each DuckDB-specific construct used and what porting it would cost.
+- [x] `docs/analytics.md` defines every term before any endpoint uses it.
+- [x] Package doc names each DuckDB-specific construct used and what porting it would cost.
 
 ## Tests
 
@@ -103,3 +103,16 @@ follow are comparatively mechanical.
   `authz.Can`'s business in the one middleware that asks it.
 - Reads use the read pool. Analytics never calls `store.Write` — it takes no locks and blocks no
   war room.
+
+## Implementation notes
+
+- `internal/analytics/analyticstest/fixture.go` creates `app.finding_status_history` via
+  `CREATE TABLE IF NOT EXISTS` because M5-003's migration hasn't shipped yet. Once M5-003
+  lands, the fixture's DDL becomes a no-op.
+- Retest step 4 uses `protection = 'n/a'` to ensure the `n/a` branch of `outcomeCase` has
+  at least one real row in the fixture — added after `TestOutcomeSQLEnumerationComplete`
+  revealed the gap.
+- `attemptedPredicate` is currently referenced only in `sqlfragments_test.go` (linter
+  requirement); M5-004 rollup queries will be the first real consumer.
+- `execID()` derives execution IDs from step IDs via a single-character swap at position 19
+  (`-P-` → `-X-`), matching the deterministic UUIDv7 constant pairs.
