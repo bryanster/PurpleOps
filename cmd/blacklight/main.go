@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"io"
@@ -88,6 +89,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err erro
 
 	if _, err := migrate.Up(ctx, db, migrate.WithLogger(log)); err != nil {
 		return err
+	}
+
+	// Force a DuckDB CHECKPOINT so the WAL is flushed to disk. Without this,
+	// a container restart replays the WAL that recorded migration 0016's
+	// DROP TABLE, and DuckDB v2.10505.0 crashes in
+	// WriteAheadLogDeserializer::ReplayDropTable (SIGSEGV in BindCheckConstraint).
+	if err := db.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "CHECKPOINT")
+		return err
+	}); err != nil {
+		return fmt.Errorf("checkpoint after migration: %w", err)
 	}
 
 	ui, embedded := web.Dist()

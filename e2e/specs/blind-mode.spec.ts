@@ -116,7 +116,7 @@ async function addMember(
   expect(resp.status()).toBe(201)
 }
 
-/** Sign in and return the session cookie string. */
+/** Sign in and return the session cookie string (name=value only, no attributes). */
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const resp = await request.post('/api/v1/auth/login', {
     headers: { 'content-type': 'application/json' },
@@ -125,7 +125,9 @@ async function login(request: APIRequestContext, email: string, password: string
   expect(resp.status()).toBe(200)
   const setCookie = resp.headers()['set-cookie']
   if (!setCookie) throw new Error('no set-cookie header')
-  return setCookie
+  // Extract just the name=value part: Set-Cookie includes attributes
+  // (HttpOnly; Secure; etc.) which are invalid in a Cookie request header.
+  return setCookie.split(';')[0] ?? ''
 }
 
 /** Create a step via API, return its id. */

@@ -55,7 +55,7 @@ function seedContentLibrary(): SeedCommand[] {
 test.use({ seed: { steps: seedContentLibrary() } })
 
 async function openContent(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Content' }).click()
+  await page.getByRole('link', { name: 'Content library' }).click()
   await expect(page).toHaveURL(/\/content$/)
   await expect(page.getByRole('heading', { name: 'Content', level: 1 })).toBeVisible()
 }
