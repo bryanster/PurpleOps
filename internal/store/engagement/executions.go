@@ -14,6 +14,10 @@ import (
 
 const executionColumns = `id, step_id, version, status, executed_by, started_at, ended_at, command_run, source_host, target_host, red_notes, detection_category, detection_modifiers, protection, detected_at, detecting_source, detecting_rule_ref, alert_severity, blue_notes, scored_by, scored_at, created_at, updated_at`
 
+
+const executionColumnsQualified = `app.execution.id, app.execution.step_id, app.execution.version, app.execution.status, app.execution.executed_by, app.execution.started_at, app.execution.ended_at, app.execution.command_run, app.execution.source_host, app.execution.target_host, app.execution.red_notes, app.execution.detection_category, app.execution.detection_modifiers, app.execution.protection, app.execution.detected_at, app.execution.detecting_source, app.execution.detecting_rule_ref, app.execution.alert_severity, app.execution.blue_notes, app.execution.scored_by, app.execution.scored_at, app.execution.created_at, app.execution.updated_at`
+
+const selectExecutionQualified = `SELECT ` + executionColumnsQualified + ` FROM app.execution `
 const selectExecution = `SELECT ` + executionColumns + ` FROM app.execution `
 
 const insertExecution = `INSERT INTO app.execution
@@ -363,7 +367,7 @@ func (r *Executions) PatchBlue(ctx context.Context, id string, expectedVersion i
 // filtered by scenario and/or status. Ordered by scenario ordinal,
 // then step ordinal so the workbook order is stable.
 func (r *Executions) ListByEngagement(ctx context.Context, engagementID string, scenarioID *string, status *ExecutionStatus) ([]Execution, error) {
-	query := selectExecution + `
+	query := selectExecutionQualified + `
 		JOIN app.step ON app.step.id = app.execution.step_id
 		JOIN app.scenario ON app.scenario.id = app.step.scenario_id
 		WHERE app.scenario.engagement_id = ?`

@@ -24,6 +24,7 @@ import (
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/version"
+	"github.com/bryanster/blacklight/internal/store/activity"
 )
 
 // handlers implements the generated interface. Its dependencies arrive through
@@ -94,6 +95,16 @@ type handlers struct {
 
 	// blobRepo manages the evidence_blob rows for refcount GC (M3-009).
 	blobRepo *storengagement.EvidenceBlobRepo
+
+	// domain repos for archive export (M5-012)
+	scenarios  *storengagement.Scenarios
+	steps      *storengagement.Steps
+	executions *storengagement.Executions
+	comments   *storengagement.Comments
+	findings   *storengagement.Findings
+
+	// activityEntries is the append-only activity log repo for archive export.
+	activityEntries *activity.Entries
 	users    membershipUserStore
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit

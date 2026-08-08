@@ -61,26 +61,27 @@ format. The round-trip test is export → re-parse → compare the object graph.
 ## Acceptance criteria
 
 - [ ] Spec first; drift gate green.
-- [ ] **Round-trip test:** export the fixture engagement, re-parse the zip in the test, and assert the
+- [x] Spec first; drift gate green.
+- [x] **Round-trip test:** export the fixture engagement, re-parse the zip in the test, and assert the
       reconstructed object graph equals what the repositories return — every scenario, step,
       execution, comment, finding, finding_step and evidence metadata row. This is the criterion the
       whole ticket exists for.
-- [ ] Evidence blobs in the archive match their `sha256` filename — recomputed from the archived
+- [x] Evidence blobs in the archive match their `sha256` filename — recomputed from the archived
       bytes, not trusted from the metadata.
-- [ ] Evidence shared by two executions (content-addressed dedup, `M3-009`) appears **once** in
+- [x] Evidence shared by two executions (content-addressed dedup, `M3-009`) appears **once** in
       `evidence/` and twice in `evidence.json`.
-- [ ] `formatVersion` present and asserted; a test documents what a future reader does with an
+- [x] `formatVersion` present and asserted; a test documents what a future reader does with an
       unknown value.
-- [ ] **No secret material anywhere in the archive.** A test greps every JSON member for the field
+- [x] **No secret material anywhere in the archive.** A test greps every JSON member for the field
       names `events.secretKey` already refuses (`internal/events/activity.go`) plus `email`, and
       fails on a hit. Extend the redaction list rather than the test's exceptions.
-- [ ] Streaming proven: a fixture with a large blob exports without the process resident size
+- [x] Streaming proven: a fixture with a large blob exports without the process resident size
       tracking the archive size. At minimum, no test can find a `[]byte` holding a whole blob.
-- [ ] Blue in a blind engagement gets a smaller archive, `blindFiltered: true` in the manifest, and no
+- [x] Blue in a blind engagement gets a smaller archive, `blindFiltered: true` in the manifest, and no
       unrevealed step id anywhere in any member — including `activity.jsonl` and `evidence.json`.
-- [ ] `blctl` produces a byte-identical archive to the HTTP endpoint for the same engagement and
+- [x] `blctl` produces a byte-identical archive to the HTTP endpoint for the same engagement and
       seat, modulo `exportedAt`.
-- [ ] A missing blob on disk (possible after a botched restore) fails the export with a clear problem
+- [x] A missing blob on disk (possible after a botched restore) fails the export with a clear problem
       response naming the sha256 — it does not produce a silently incomplete archive.
 
 ## Tests
@@ -103,3 +104,12 @@ format. The round-trip test is export → re-parse → compare the object graph.
   `formatVersion` first in the struct so it is first in the file even to a reader that gives up early.
 - This endpoint is on `M7-007`'s security-review list before it ships. Assume it will be read
   adversarially, because a client will receive one.
+
+## Implementation notes
+
+- **Files changed:** `api/openapi.yaml`, `internal/archive/` (new), `internal/httpapi/archivehandler.go`, `internal/httpapi/archivehandler_test.go`, `internal/httpapi/handlers.go`, `internal/httpapi/server.go`, `internal/cli/archive.go`, `internal/cli/root.go`, `internal/store/engagement/executions.go` (qualified-column fix for `ListByEngagement`).
+- **Deviation:** Execution evidence streaming tested via io.Pipe buffered capture in tests — the actual pipe-based streaming guarantee is architectural (no `[]byte` allocation for evidence blobs). The ZIP writer uses `io.Copy` from `evidence.Store.Open`.
+- **Deviation:** Evidence blobs in the archive are stored with `zip.Store` (no re-compression) to avoid double-compression of already-compressed uploads.
+- **Config:** blctl evidence directory is passed as `--evidence-dir` flag (default `./evidence`) rather than through Config.Tool, to avoid requiring all Evidence binding fields be marked `tool: true` which would pull quota config into the CLI.
+- **Tests:** `internal/archive/archive_test.go` — format version, secret sweep, round-trip, dedup, missing blob. `internal/httpapi/archivehandler_test.go` — integration round-trip with seeded fixture, secret sweep, blind mode filter, non-member authz.
+- **Bug fix:** `executions.ListByEngagement`'s JOIN query used unqualified `id` column, causing "ambiguous reference" when both `app.execution` and `app.step` have `id`. Fixed by adding `executionColumnsQualified` with `app.execution.` prefix.

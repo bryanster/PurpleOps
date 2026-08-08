@@ -661,6 +661,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 	blobRepo := storengagement.NewEvidenceBlobRepo(deps.Store)
 	evidenceStore := evidence.NewStore(deps.Config.Evidence.Dir, deps.Config.Evidence, blobRepo)
+	activityEntries := activity.New(deps.Store)
 
 	h := &handlers{
 		store:          deps.Store,
@@ -669,6 +670,12 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		evidenceStore:  evidenceStore,
 		evidenceRepo:   evidenceRepo,
 		blobRepo:       blobRepo,
+		scenarios:       scenarios,
+		steps:           steps,
+		executions:      executions,
+		comments:        comments,
+		findings:        findingsRepo,
+		activityEntries: activityEntries,
 		sessions:       sessions,
 		challenges:     challenges,
 		oidc:           provider,

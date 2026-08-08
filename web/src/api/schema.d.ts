@@ -3152,6 +3152,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export engagement archive as a versioned ZIP bundle.
+         * @description One versioned, self-contained archive of an engagement: structure, scores,
+         *     findings, comments, activity and evidence files. The response is a streamed
+         *     ZIP (Content-Type: application/zip). Format is documented in docs/archive.md.
+         *
+         *     The archive carries a formatVersion integer at the top of manifest.json;
+         *     a reader that does not recognise it must bail before parsing anything else.
+         *
+         *     Blind scoping: a blue caller in a blind engagement receives a partial
+         *     archive without unrevealed steps, their executions, evidence, or activity.
+         *     The manifest records blindFiltered: true.
+         *
+         *     Export only — there is no import endpoint in v1.
+         */
+        get: operations["exportEngagementArchive"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11262,6 +11293,34 @@ export interface operations {
                 content: {
                     "text/csv": string;
                     "application/json": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    exportEngagementArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The engagement archive ZIP, streamed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
                 };
             };
             400: components["responses"]["BadRequest"];

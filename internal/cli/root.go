@@ -59,6 +59,9 @@ func newRoot(a *app) *cobra.Command {
 		newDBCommand(a),
 		newUserCommand(a),
 		newContentCommand(a),
+		group("engagement", "Manage engagements",
+			newArchiveCommand(a),
+		),
 		newBackupCommand(),
 		newReportCommand(),
 	)

@@ -6043,6 +6043,50 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /engagements/{engagementId}/archive:
+    get:
+      operationId: exportEngagementArchive
+      summary: Export engagement archive as a versioned ZIP bundle.
+      description: |
+        One versioned, self-contained archive of an engagement: structure, scores,
+        findings, comments, activity and evidence files. The response is a streamed
+        ZIP (Content-Type: application/zip). Format is documented in docs/archive.md.
+
+        The archive carries a formatVersion integer at the top of manifest.json;
+        a reader that does not recognise it must bail before parsing anything else.
+
+        Blind scoping: a blue caller in a blind engagement receives a partial
+        archive without unrevealed steps, their executions, evidence, or activity.
+        The manifest records blindFiltered: true.
+
+        Export only — there is no import endpoint in v1.
+      tags:
+        - analytics
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The engagement archive ZIP, streamed.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
 
   securitySchemes:

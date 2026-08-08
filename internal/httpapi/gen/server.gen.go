@@ -5409,6 +5409,9 @@ type ServerInterface interface {
 	// GetAnalyticsNavigatorLayer Export an ATT&CK Navigator layer for this engagement.
 	// (GET /engagements/{engagementId}/analytics/navigator-layer)
 	GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// ExportEngagementArchive Export engagement archive as a versioned ZIP bundle.
+	// (GET /engagements/{engagementId}/archive)
+	ExportEngagementArchive(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
 	// PatchComment Edit a comment's body.
 	// (PATCH /engagements/{engagementId}/comments/{commentId})
 	PatchComment(w http.ResponseWriter, r *http.Request, engagementId EngagementId, commentId CommentId, params PatchCommentParams)
@@ -6102,6 +6105,12 @@ func (_ Unimplemented) GetAnalyticsMttd(w http.ResponseWriter, r *http.Request, 
 // GetAnalyticsNavigatorLayer Export an ATT&CK Navigator layer for this engagement.
 // (GET /engagements/{engagementId}/analytics/navigator-layer)
 func (_ Unimplemented) GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportEngagementArchive Export engagement archive as a versioned ZIP bundle.
+// (GET /engagements/{engagementId}/archive)
+func (_ Unimplemented) ExportEngagementArchive(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10006,6 +10015,32 @@ func (siw *ServerInterfaceWrapper) GetAnalyticsNavigatorLayer(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// ExportEngagementArchive operation middleware
+func (siw *ServerInterfaceWrapper) ExportEngagementArchive(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportEngagementArchive(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PatchComment operation middleware
 func (siw *ServerInterfaceWrapper) PatchComment(w http.ResponseWriter, r *http.Request) {
 
@@ -12992,6 +13027,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/export", wrapper.ExportEngagement)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/archive", wrapper.ExportEngagementArchive)
 	})
 
 	return r
@@ -20809,6 +20847,114 @@ func (response GetAnalyticsNavigatorLayer500ApplicationProblemPlusJSONResponse) 
 	return err
 }
 
+type ExportEngagementArchiveRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type ExportEngagementArchiveResponseObject interface {
+	VisitExportEngagementArchiveResponse(w http.ResponseWriter) error
+}
+
+type ExportEngagementArchive200ApplicationzipResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportEngagementArchive200ApplicationzipResponse) VisitExportEngagementArchiveResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/zip")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportEngagementArchive400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagementArchive400ApplicationProblemPlusJSONResponse) VisitExportEngagementArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagementArchive401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagementArchive401ApplicationProblemPlusJSONResponse) VisitExportEngagementArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagementArchive403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagementArchive403ApplicationProblemPlusJSONResponse) VisitExportEngagementArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagementArchive404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagementArchive404ApplicationProblemPlusJSONResponse) VisitExportEngagementArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagementArchive500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagementArchive500ApplicationProblemPlusJSONResponse) VisitExportEngagementArchiveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PatchCommentRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	CommentId    CommentId    `json:"commentId"`
@@ -27266,6 +27412,9 @@ type StrictServerInterface interface {
 	// GetAnalyticsNavigatorLayer Export an ATT&CK Navigator layer for this engagement.
 	// (GET /engagements/{engagementId}/analytics/navigator-layer)
 	GetAnalyticsNavigatorLayer(ctx context.Context, request GetAnalyticsNavigatorLayerRequestObject) (GetAnalyticsNavigatorLayerResponseObject, error)
+	// ExportEngagementArchive Export engagement archive as a versioned ZIP bundle.
+	// (GET /engagements/{engagementId}/archive)
+	ExportEngagementArchive(ctx context.Context, request ExportEngagementArchiveRequestObject) (ExportEngagementArchiveResponseObject, error)
 	// PatchComment Edit a comment's body.
 	// (PATCH /engagements/{engagementId}/comments/{commentId})
 	PatchComment(ctx context.Context, request PatchCommentRequestObject) (PatchCommentResponseObject, error)
@@ -29853,6 +30002,32 @@ func (sh *strictHandler) GetAnalyticsNavigatorLayer(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetAnalyticsNavigatorLayerResponseObject); ok {
 		if err := validResponse.VisitGetAnalyticsNavigatorLayerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportEngagementArchive operation middleware
+func (sh *strictHandler) ExportEngagementArchive(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ExportEngagementArchiveRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportEngagementArchive(ctx, request.(ExportEngagementArchiveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportEngagementArchive")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportEngagementArchiveResponseObject); ok {
+		if err := validResponse.VisitExportEngagementArchiveResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
