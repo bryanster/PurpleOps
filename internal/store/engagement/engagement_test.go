@@ -126,7 +126,8 @@ func TestTheAppDomainSchemaExists(t *testing.T) {
 
 	tables := []string{
 		"engagement", "scenario", "step", "execution",
-		"finding", "finding_step", "evidence_blob", "evidence",
+		"finding", "finding_step", "finding_status_history",
+		"evidence_blob", "evidence",
 		"comment", "comment_revision",
 	}
 	for _, table := range tables {
@@ -215,6 +216,12 @@ func TestTheSchemaRefusesBadEnumValues(t *testing.T) {
 			col:   "detection_category",
 			bad:   "bogus",
 			stmt:  `INSERT INTO app.execution (id, step_id, version, status, executed_by, command_run, source_host, target_host, red_notes, detection_category, detection_modifiers, detecting_source, detecting_rule_ref, alert_severity, blue_notes, scored_by, created_at, updated_at) VALUES ('x2', 'x2', 1, 'pending', '', '', '', '', '', ?, '[]', '', '', '', '', '', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+		},
+		{
+			table: "finding_status_history",
+			col:   "to_status",
+			bad:   "bogus",
+			stmt:  `INSERT INTO app.finding_status_history (id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at) VALUES ('fsh1', 'f1', 'e1', NULL, ?, 'u1', '2026-01-01 00:00:00')`,
 		},
 	}
 
@@ -521,6 +528,381 @@ func TestFindingStepLinking(t *testing.T) {
 		t.Errorf("expected 1 step after remove, got %d", len(steps))
 	}
 }
+// --- Finding status history -------------------------------------------------
+
+func TestCreateFindingWritesCreationHistoryRow(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateEngagement(t, r)
+
+	f, err := r.Findings.Create(context.Background(), engagement.NewFinding{
+		EngagementID: eng.ID,
+		Title:        "Test finding",
+		Severity:     "Medium",
+		Owner:        "user-1",
+		CreatedBy:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	rows, err := r.Findings.StatusHistoryByEngagement(context.Background(), eng.ID)
+	if err != nil {
+		t.Fatalf("StatusHistoryByEngagement: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 history row, got %d", len(rows))
+	}
+	h := rows[0]
+	if h.FindingID != f.ID {
+		t.Errorf("history FindingID = %q, want %q", h.FindingID, f.ID)
+	}
+	if h.FromStatus != nil {
+		t.Errorf("creation FromStatus = %v, want nil", *h.FromStatus)
+	}
+	if h.ToStatus != engagement.FindingStatusOpen {
+		t.Errorf("creation ToStatus = %v, want %v", h.ToStatus, engagement.FindingStatusOpen)
+	}
+	if h.ChangedBy != "user-1" {
+		t.Errorf("ChangedBy = %q, want %q", h.ChangedBy, "user-1")
+	}
+	if !h.ChangedAt.Equal(f.CreatedAt) {
+		t.Errorf("ChangedAt = %v, want %v", h.ChangedAt, f.CreatedAt)
+	}
+	if !h.ChangedAt.UTC().Equal(h.ChangedAt) {
+		t.Error("ChangedAt should be UTC")
+	}
+}
+
+func TestPatchFindingNonStatusFieldsWriteNoHistory(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateEngagement(t, r)
+
+	f, err := r.Findings.Create(context.Background(), engagement.NewFinding{
+		EngagementID: eng.ID,
+		Title:        "Original title",
+		Severity:     "Medium",
+		Owner:        "user-1",
+		CreatedBy:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	fields := map[string]engagement.PatchFinding{
+		"title":          {Title: "New title", ChangedBy: "user-2"},
+		"description":    {Description: "New desc", ChangedBy: "user-2"},
+		"severity":       {Severity: "High", ChangedBy: "user-2"},
+		"recommendation": {Recommendation: "Fix it", ChangedBy: "user-2"},
+		"owner":          {Owner: "user-2", ChangedBy: "user-2"},
+	}
+	for name, patch := range fields {
+		t.Run(name, func(t *testing.T) {
+			_, err := r.Findings.Update(context.Background(), f.ID, patch)
+			if err != nil {
+				t.Fatalf("Update %s: %v", name, err)
+			}
+		})
+	}
+
+	// Should only have the creation row.
+	rows, err := r.Findings.StatusHistoryByEngagement(context.Background(), eng.ID)
+	if err != nil {
+		t.Fatalf("StatusHistoryByEngagement: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Errorf("expected 1 history row after non-status patches, got %d", len(rows))
+	}
+}
+
+func TestStatusChangeWritesHistoryRow(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateEngagement(t, r)
+
+	f, err := r.Findings.Create(context.Background(), engagement.NewFinding{
+		EngagementID: eng.ID,
+		Title:        "Test finding",
+		Severity:     "Medium",
+		Owner:        "user-1",
+		CreatedBy:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Change status: open → in_progress.
+	_, err = r.Findings.Update(context.Background(), f.ID, engagement.PatchFinding{
+		Status:    "in_progress",
+		ChangedBy: "user-2",
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	rows, err := r.Findings.StatusHistoryByEngagement(context.Background(), eng.ID)
+	if err != nil {
+		t.Fatalf("StatusHistoryByEngagement: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 history rows (create + transition), got %d", len(rows))
+	}
+	// First row: creation.
+	if rows[0].FromStatus != nil {
+		t.Errorf("creation FromStatus = %v, want nil", *rows[0].FromStatus)
+	}
+	// Second row: transition.
+	h := rows[1]
+	if h.FromStatus == nil {
+		t.Fatal("transition FromStatus is nil")
+	}
+	if *h.FromStatus != engagement.FindingStatusOpen {
+		t.Errorf("transition FromStatus = %v, want %v", *h.FromStatus, engagement.FindingStatusOpen)
+	}
+	if h.ToStatus != engagement.FindingStatusInProgress {
+		t.Errorf("transition ToStatus = %v, want %v", h.ToStatus, engagement.FindingStatusInProgress)
+	}
+	if h.ChangedBy != "user-2" {
+		t.Errorf("ChangedBy = %q, want %q", h.ChangedBy, "user-2")
+	}
+}
+
+func TestSameValueStatusChangeWritesNoHistory(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateEngagement(t, r)
+
+	f, err := r.Findings.Create(context.Background(), engagement.NewFinding{
+		EngagementID: eng.ID,
+		Title:        "Test finding",
+		Severity:     "Medium",
+		Owner:        "user-1",
+		CreatedBy:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Patch open → open (same value).
+	_, err = r.Findings.Update(context.Background(), f.ID, engagement.PatchFinding{
+		Status:    "open",
+		ChangedBy: "user-2",
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	rows, err := r.Findings.StatusHistoryByEngagement(context.Background(), eng.ID)
+	if err != nil {
+		t.Fatalf("StatusHistoryByEngagement: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Errorf("expected 1 history row after same-status patch, got %d", len(rows))
+	}
+}
+
+func TestDeleteFindingRemovesHistoryRows(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateEngagement(t, r)
+
+	f, err := r.Findings.Create(context.Background(), engagement.NewFinding{
+		EngagementID: eng.ID,
+		Title:        "Test finding",
+		Severity:     "Medium",
+		Owner:        "user-1",
+		CreatedBy:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	// Add a transition to get two history rows.
+	_, err = r.Findings.Update(context.Background(), f.ID, engagement.PatchFinding{
+		Status:    "resolved",
+		ChangedBy: "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	// Delete the finding.
+	if err := r.Findings.Delete(context.Background(), f.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	// History should be empty.
+	rows, err := r.Findings.StatusHistoryByEngagement(context.Background(), eng.ID)
+	if err != nil {
+		t.Fatalf("StatusHistoryByEngagement: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("expected 0 history rows after delete, got %d", len(rows))
+	}
+}
+
+func TestStatusChangeAndFindingWriteShareTransaction(t *testing.T) {
+	// Use a raw DB to manually exercise the transaction: update the finding,
+	// then force a history insert failure, and confirm both rolled back.
+	db := storetest.Migrated(t)
+	r := repos{
+		Engagements: engagement.NewEngagements(db),
+		Scenarios:   engagement.NewScenarios(db),
+		Steps:       engagement.NewSteps(db),
+		Findings:    engagement.NewFindings(db),
+	}
+	eng := mustCreateEngagement(t, r)
+
+	f, err := r.Findings.Create(context.Background(), engagement.NewFinding{
+		EngagementID: eng.ID,
+		Title:        "Atomic test",
+		Severity:     "Medium",
+		Owner:        "user-1",
+		CreatedBy:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	err = db.Write(context.Background(), func(tx *sql.Tx) error {
+		ts := time.Now().UTC()
+		// Update the finding.
+		_, err := tx.ExecContext(context.Background(),
+			`UPDATE app.finding SET status = ?, updated_at = ? WHERE id = ?`,
+			"in_progress", ts, f.ID,
+		)
+		if err != nil {
+			return err
+		}
+		// Force a history insert that violates the CHECK constraint.
+		_, err = tx.ExecContext(context.Background(),
+			`INSERT INTO app.finding_status_history
+				(id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			"force-fail-id", f.ID, eng.ID, "open", "INVALID_STATUS", "user-1", ts,
+		)
+		return err // expect CHECK violation
+	})
+	if err == nil {
+		t.Fatal("expected CHECK violation to fail the transaction")
+	}
+
+	// The finding update must have rolled back.
+	got, err := r.Findings.ByID(context.Background(), f.ID)
+	if err != nil {
+		t.Fatalf("ByID: %v", err)
+	}
+	if got.Status != engagement.FindingStatusOpen {
+		t.Errorf("status = %v, want %v (should have rolled back)", got.Status, engagement.FindingStatusOpen)
+	}
+}
+// --- Migration backfill ---
+
+func TestMigrationFromEmptyProducesNoBackfillRows(t *testing.T) {
+	db := storetest.Migrated(t)
+
+	var count int
+	if err := db.Read().QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM app.finding_status_history`,
+	).Scan(&count); err != nil {
+		t.Fatalf("counting history rows: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 backfill rows from empty DB, got %d", count)
+	}
+}
+
+func TestBackfillProducesOneRowPerFinding(t *testing.T) {
+	db := storetest.Migrated(t)
+
+	// Seed two findings via raw SQL, bypassing the repository (which would
+	// write history rows via the application path).
+	ts := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	engID := "backfill-eng-1"
+	err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(context.Background(),
+			`INSERT INTO app.engagement (id, name, client, description, status, starts_on, ends_on, attack_version, mode, auto_reveal_on_start, created_by, created_at, updated_at)
+			VALUES (?, ?, ?, ?, 'active', '2026-01-01', '2026-06-01', '99.0', 'standard', false, 'user-1', ?, ?)`,
+			engID, "Backfill Eng", "Test Corp", "desc", ts, ts,
+		)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(context.Background(),
+			`INSERT INTO app.finding (id, engagement_id, title, description, severity, recommendation, "owner", status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"backfill-f1", engID, "Finding 1", "desc", "High", "Fix it", "user-1", "open", ts, ts,
+		)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(context.Background(),
+			`INSERT INTO app.finding (id, engagement_id, title, description, severity, recommendation, "owner", status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"backfill-f2", engID, "Finding 2", "desc", "Medium", "Check it", "user-1", "in_progress", ts, ts,
+		)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed findings: %v", err)
+	}
+
+	// Delete any history rows created by the backfill (none for these new rows
+	// since they were inserted after 0017 ran).
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(context.Background(),
+			`DELETE FROM app.finding_status_history WHERE engagement_id = ?`, engID,
+		)
+		return err
+	}); err != nil {
+		t.Fatalf("clear existing history: %v", err)
+	}
+
+	// Re-run the backfill SQL from 0017.
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(context.Background(),
+			`INSERT INTO app.finding_status_history
+				(id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at)
+			SELECT
+				uuid(), f.id, f.engagement_id, NULL, f.status, 'migration', f.created_at
+			FROM app.finding f WHERE f.engagement_id = ?`, engID,
+		)
+		return err
+	}); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+
+	// Verify two backfill rows, one per finding.
+	rows, err := db.Read().QueryContext(context.Background(),
+		`SELECT id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at
+		FROM app.finding_status_history WHERE engagement_id = ?
+		ORDER BY finding_id ASC`, engID,
+	)
+	if err != nil {
+		t.Fatalf("query history: %v", err)
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		var id, findingID, engID2, toStatus, changedBy string
+		var fromStatus sql.NullString
+		var changedAt time.Time
+		if err := rows.Scan(&id, &findingID, &engID2, &fromStatus, &toStatus, &changedBy, &changedAt); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		if fromStatus.Valid {
+			t.Errorf("backfill from_status for %s = %q, want NULL", findingID, fromStatus.String)
+		}
+		if changedBy != "migration" {
+			t.Errorf("backfill changed_by = %q, want 'migration'", changedBy)
+		}
+		if !changedAt.Equal(ts) {
+			t.Errorf("backfill changed_at = %v, want %v", changedAt, ts)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Errorf("expected 2 backfill rows, got %d", count)
+	}
+}
+
+
 
 func TestCommentRoundTrip(t *testing.T) {
 	r := newRepos(t)

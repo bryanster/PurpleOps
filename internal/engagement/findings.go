@@ -68,6 +68,7 @@ func (s *Service) CreateFinding(ctx context.Context, actor authn.Subject, in Cre
 		Recommendation:       in.Recommendation,
 		Owner:                in.Owner,
 		CreatedFromExecution: in.CreatedFromExecution,
+		CreatedBy:            actor.UserID,
 	})
 	if err != nil {
 		return storengagement.Finding{}, err
@@ -97,7 +98,6 @@ func (s *Service) UpdateFinding(ctx context.Context, actor authn.Subject, id str
 			return storengagement.Finding{}, fmt.Errorf("engagement: only status may be changed on closed/archived engagements")
 		}
 	}
-
 	finding, err := s.findings.Update(ctx, id, storengagement.PatchFinding{
 		Title:          in.Title,
 		Description:    in.Description,
@@ -105,6 +105,7 @@ func (s *Service) UpdateFinding(ctx context.Context, actor authn.Subject, id str
 		Recommendation: in.Recommendation,
 		Owner:          in.Owner,
 		Status:         in.Status,
+		ChangedBy:      actor.UserID,
 	})
 	if err != nil {
 		return storengagement.Finding{}, err

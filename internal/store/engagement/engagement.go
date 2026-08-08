@@ -369,6 +369,9 @@ type NewFinding struct {
 	Recommendation       string
 	Owner                string
 	CreatedFromExecution string
+	// CreatedBy is the user id recorded in the finding_status_history
+	// creation row (NULL → open).
+	CreatedBy string
 }
 
 // PatchFinding is the caller's half of updating a finding. Only non-empty
@@ -380,6 +383,23 @@ type PatchFinding struct {
 	Recommendation string
 	Owner          string
 	Status         string
+	// ChangedBy is the user id recorded in finding_status_history when
+	// this patch changes the status. Ignored when Status is "" or
+	// matches the current value.
+	ChangedBy string
+}
+
+// FindingStatusHistory is one status transition for a finding.
+// Rows are append-only; there is no update or delete path except
+// the cascade that follows a finding deletion.
+type FindingStatusHistory struct {
+	ID           string
+	FindingID    string
+	EngagementID string
+	FromStatus   *FindingStatus // NULL means creation
+	ToStatus     FindingStatus
+	ChangedBy    string
+	ChangedAt    time.Time
 }
 
 // EvidenceBlob is one content-addressed file stored on disk.

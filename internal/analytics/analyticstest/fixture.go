@@ -358,18 +358,9 @@ func Seed(t testing.TB) Fixture {
 // are in later tickets. Each statement uses IF NOT EXISTS so that once the
 // migration ships, this is a no-op.
 func ensureSchema(ctx context.Context, tx *sql.Tx) error {
-	_, err := tx.ExecContext(ctx,
-		`CREATE TABLE IF NOT EXISTS app.finding_status_history (
-			id TEXT NOT NULL PRIMARY KEY,
-			finding_id TEXT NOT NULL REFERENCES app.finding (id) ON DELETE RESTRICT,
-			status TEXT NOT NULL,
-			changed_by TEXT NOT NULL,
-			changed_at TIMESTAMP NOT NULL,
-			CONSTRAINT finding_status_history_status_known
-				CHECK (status IN ('open', 'in_progress', 'resolved', 'accepted_risk'))
-		)`,
-	)
-	return err
+	// M5-003 has shipped — app.finding_status_history is now created by
+	// migration 0017. No temporary tables remain to create.
+	return nil
 }
 
 // Seed helpers
@@ -727,25 +718,28 @@ func seedFindings(ctx context.Context, tx *sql.Tx) error {
 	// Status history — one transition per finding (the initial creation).
 	// M5-003 will expand this; for now, record initial status + one transition
 	// for findings that have changed status.
-	historyRows := []struct {
-		id, findingID, status string
-		ts                    time.Time
-	}{
-		{findingHistory1ID, finding1ID, "open", stepCreated},
-		{findingHistory2ID, finding2ID, "open", stepCreated},
-		{findingHistory3ID, finding2ID, "in_progress", ts(2026, 6, 3, 10, 0, 0)},
-		{findingHistory4ID, finding3ID, "open", stepCreated},
-	}
-	for _, h := range historyRows {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO app.finding_status_history
-				(id, finding_id, status, changed_by, changed_at)
-			 VALUES (?, ?, ?, ?, ?)`,
-			h.id, h.findingID, h.status, userID, h.ts,
-		); err != nil {
-			return fmt.Errorf("seed finding_status_history %s: %w", h.id, err)
+		historyRows := []struct {
+			id, findingID, fromStatus, toStatus string
+			ts                                  time.Time
+		}{
+			// Creation rows: fromStatus empty → NULL.
+			{findingHistory1ID, finding1ID, "", "open", stepCreated},
+			{findingHistory2ID, finding2ID, "", "open", stepCreated},
+			// Transition: finding2 went from open to in_progress.
+			{findingHistory3ID, finding2ID, "open", "in_progress", ts(2026, 6, 3, 10, 0, 0)},
+			// Creation row for finding3.
+			{findingHistory4ID, finding3ID, "", "open", stepCreated},
 		}
-	}
+		for _, h := range historyRows {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO app.finding_status_history
+					(id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at)
+				 VALUES (?, ?, ?, NULLIF(?, ''), ?, ?, ?)`,
+				h.id, h.findingID, baselineEngID, h.fromStatus, h.toStatus, userID, h.ts,
+			); err != nil {
+				return fmt.Errorf("seed finding_status_history %s: %w", h.id, err)
+			}
+		}
 
 	return nil
 }

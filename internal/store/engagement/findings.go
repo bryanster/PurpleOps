@@ -14,6 +14,12 @@ const insertFinding = `INSERT INTO app.finding
 	(id, engagement_id, title, description, severity, recommendation, "owner", status, created_from_execution, created_at, updated_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
+const insertFindingStatusHistory = `INSERT INTO app.finding_status_history
+	(id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+const selectStatusHistory = `SELECT id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at FROM app.finding_status_history `
+
 // Findings reads and writes remediation items. Construct it with [NewFindings].
 type Findings struct {
 	db DB
@@ -22,7 +28,8 @@ type Findings struct {
 // NewFindings returns a repository over db.
 func NewFindings(db DB) *Findings { return &Findings{db: db} }
 
-// Create writes a new finding and returns it as stored.
+// Create writes a new finding and its creation history row (NULL → open) in
+// the same transaction. in.CreatedBy is stored in the history row's changed_by.
 func (r *Findings) Create(ctx context.Context, in NewFinding, after ...After) (Finding, error) {
 	var result Finding
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
@@ -60,6 +67,19 @@ func (r *Findings) Create(ctx context.Context, in NewFinding, after ...After) (F
 		if err != nil {
 			return fmt.Errorf("finding: insert: %w", err)
 		}
+		// Write creation history row (NULL → open) in the same transaction.
+		hid, err := newID()
+		if err != nil {
+			return fmt.Errorf("finding: generate history id: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, insertFindingStatusHistory,
+			hid, result.ID, result.EngagementID,
+			nil, string(FindingStatusOpen),
+			in.CreatedBy, ts,
+		)
+		if err != nil {
+			return fmt.Errorf("finding: insert history: %w", err)
+		}
 		ctx = WithAfterEntity(ctx, id)
 		return runAfter(ctx, tx, after)
 	})
@@ -79,12 +99,34 @@ func (r *Findings) ByID(ctx context.Context, id string) (Finding, error) {
 }
 
 // Update patches a finding. Only non-nil/non-empty fields from [PatchFinding]
-// are applied. The updated_at timestamp is always bumped.
+// are applied. The updated_at timestamp is always bumped. When the status
+// actually changes, a history row is written in the same transaction with
+// in.ChangedBy as the actor.
 func (r *Findings) Update(ctx context.Context, id string, in PatchFinding, after ...After) (Finding, error) {
 	var result Finding
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		// Read current state to detect status change.
+		current, err := scanFinding(tx.QueryRowContext(ctx, selectFinding+`WHERE id = ?`, id))
+		if err != nil {
+			return fmt.Errorf("finding: read before update: %w", err)
+		}
 		ts := now()
-		_, err := tx.ExecContext(ctx,
+		// If status is being changed and differs from current, write history.
+		if in.Status != "" && in.Status != string(current.Status) {
+			hid, err := newID()
+			if err != nil {
+				return fmt.Errorf("finding: generate history id: %w", err)
+			}
+			_, err = tx.ExecContext(ctx, insertFindingStatusHistory,
+				hid, id, current.EngagementID,
+				string(current.Status), in.Status,
+				in.ChangedBy, ts,
+			)
+			if err != nil {
+				return fmt.Errorf("finding: insert history: %w", err)
+			}
+		}
+		_, err = tx.ExecContext(ctx,
 			`UPDATE app.finding SET
 				title = COALESCE(NULLIF(?, ''), title),
 				description = COALESCE(NULLIF(?, ''), description),
@@ -114,10 +156,15 @@ func (r *Findings) Update(ctx context.Context, id string, in PatchFinding, after
 	return result, nil
 }
 
-// Delete removes a finding and its finding_step rows.
+// Delete removes a finding and its history and step rows. Application-enforced
+// cascade: deleting the finding leaves no orphan history.
 func (r *Findings) Delete(ctx context.Context, id string, after ...After) error {
 	return r.db.Write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `DELETE FROM app.finding_step WHERE finding_id = ?`, id)
+		_, err := tx.ExecContext(ctx, `DELETE FROM app.finding_status_history WHERE finding_id = ?`, id)
+		if err != nil {
+			return fmt.Errorf("finding: delete history: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM app.finding_step WHERE finding_id = ?`, id)
 		if err != nil {
 			return fmt.Errorf("finding: delete steps: %w", err)
 		}
@@ -168,6 +215,33 @@ func (r *Findings) ListByEngagement(ctx context.Context, engagementID string) ([
 			return nil, err
 		}
 		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// StatusHistoryByEngagement returns every status transition for an engagement's
+// findings, oldest first — the burndown access path.
+func (r *Findings) StatusHistoryByEngagement(ctx context.Context, engagementID string) ([]FindingStatusHistory, error) {
+	rows, err := r.db.Read().QueryContext(ctx,
+		selectStatusHistory+`WHERE engagement_id = ? ORDER BY changed_at ASC`, engagementID)
+	if err != nil {
+		return nil, fmt.Errorf("finding: status history by engagement: %w", err)
+	}
+	defer rows.Close()
+	var out []FindingStatusHistory
+	for rows.Next() {
+		var h FindingStatusHistory
+		var fromStatus sql.NullString
+		if err := rows.Scan(&h.ID, &h.FindingID, &h.EngagementID, &fromStatus,
+			&h.ToStatus, &h.ChangedBy, &h.ChangedAt); err != nil {
+			return nil, err
+		}
+		if fromStatus.Valid {
+			fs := FindingStatus(fromStatus.String)
+			h.FromStatus = &fs
+		}
+		h.ChangedAt = h.ChangedAt.UTC()
+		out = append(out, h)
 	}
 	return out, rows.Err()
 }
