@@ -91,12 +91,27 @@ pair. The outcome labels:
 ## MTTD
 
 Mean Time To Detect = `detected_at − started_at` for **detected executions
-only** (outcome is `detected` or `prevented`, both timestamps set). Reported
-as p50 / p90 / max.
+only** (category is not `none` and not NULL, both timestamps set). Reported
+as p50 / p90 / max over those executions, in integer seconds.
 
-Every MTTD response carries `detectedCount` and `undetectedCount` so no
-consumer can render MTTD without its denominator. No censored or infinite
-figure in v1.
+Percentiles use DuckDB's `PERCENTILE_CONT` (continuous percentile) with linear
+interpolation. For a single sample all percentiles return that value; for two
+samples p50 is the midpoint. Interpolation is stated here so a report consumer
+can reproduce the numbers independently.
+
+| Field | Meaning |
+|---|---|
+| `p50`, `p90`, `max` | Percentile and maximum MTTD in integer seconds. Absent when nothing was detected (nil, not zero). |
+| `detectedCount` | Executions with a computable MTTD — the percentile denominator. |
+| `undetectedCount` | Attempted executions with `detection_category` set and no `detected_at`, or category `none` even when `detected_at` exists. |
+| `unscoredCount` | Attempted executions blue has not scored (`detection_category IS NULL`). |
+| `unmeasurableCount` | Detected (category ≠ `none`) but `started_at` is NULL, so no duration exists. |
+| `attemptedCount` | The sum of the four component counts above. |
+
+Category `none` counts as undetected even where a stray `detected_at` exists.
+`detected_at` before `started_at` cannot occur by product rules, but the SQL
+guards it — a negative duration is excluded from percentiles and treated as
+unmeasurable.
 
 ## Cross-engagement compare
 

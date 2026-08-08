@@ -66,6 +66,10 @@ type Fixture struct {
 	// detected_at in the baseline (all seats). Used for
 	// percentile calculations.
 	BaselineMTTDSeconds []float64
+	// BaselineBlueMTTDSeconds is the same as BaselineMTTDSeconds but for
+	// the blue seat of the blind baseline — unrevealed steps are excluded.
+	BaselineBlueMTTDSeconds []float64
+
 
 	// BaselineOutcomeDistribution maps outcome label → count for the
 	// baseline (all seats, attempted executions only).
@@ -277,22 +281,28 @@ func Seed(t testing.TB) Fixture {
 		BaselineAttempted: []string{
 			"T1059", "T1059.001", "T1566", "T1190", "T1203", "T1027", "T1070",
 		},
-
 		// Blue seat of blind baseline (steps 8+9 unrevealed):
 		//   Visible attempted: T1190, T1566, T1059.001, T1027, T1070 = 5.
 		BaselineBlueAttempted: []string{
 			"T1059.001", "T1566", "T1190", "T1027", "T1070",
 		},
 
-		// MTTD values (seconds) for detected executions with both timestamps:
+		// MTTD values (seconds) for detected executions with both timestamps
+		// (M5-006 definition: category NOT 'none', both timestamps set):
 		//   Step 1: 10min = 600s
 		//   Step 2: 5min = 300s
 		//   Step 5: 3min = 180s
-		//   Step 6: no started_at → excluded
-		//   Step 8: 30min = 1800s
+		//   Step 6: no started_at → excluded (unmeasurable)
+		//   Step 8: category 'none' → excluded (undetected)
 		//   Step 9: 30min = 1800s
-		// Sorted: 180, 300, 600, 1800, 1800
-		BaselineMTTDSeconds: []float64{180, 300, 600, 1800, 1800},
+		// Sorted: 180, 300, 600, 1800
+		BaselineMTTDSeconds: []float64{180, 300, 600, 1800},
+
+		// Blue seat (steps 8+9 unrevealed, both excluded):
+		//   Remaining detected: Step 1(600s), Step 2(300s), Step 5(180s)
+		// Sorted: 180, 300, 600
+		BaselineBlueMTTDSeconds: []float64{180, 300, 600},
+
 
 		// Baseline outcome distribution (attempted, all seats):
 		//   Step 1: general/blocked → prevented
