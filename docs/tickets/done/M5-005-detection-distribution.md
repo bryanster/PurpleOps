@@ -44,21 +44,21 @@ and this package's SQL. The drift test from `M5-001` is what keeps them one matr
 
 ## Acceptance criteria
 
-- [ ] All four rollups are one statement each.
-- [ ] Expected values hand-computed from `analyticstest`.
-- [ ] Zero-count buckets are present in every response, asserted against the full enum from
+- [x] All four rollups are one statement each.
+- [x] Expected values hand-computed from `analyticstest`.
+- [x] Zero-count buckets are present in every response, asserted against the full enum from
       `scoring.CategoryStrings()` / `ProtectionStrings()` / `ModifierStrings()` rather than a literal
       list a test maintains separately.
-- [ ] `unscored` never appears as `none`: a fixture execution that is `complete` with NULL category
+- [x] `unscored` never appears as `none`: a fixture execution that is `complete` with NULL category
       lands in `unscored` in all three of category, protection and outcome.
-- [ ] `OutcomeMix` agrees with `scoring.DeriveOutcome` applied row-by-row in Go over the same
+- [x] `OutcomeMix` agrees with `scoring.DeriveOutcome` applied row-by-row in Go over the same
       fixture — the drift test, run against real rows and not just against the enum cross-product.
-- [ ] Modifier counts handle: empty array, one modifier, all five, and a duplicate in the stored JSON
+- [x] Modifier counts handle: empty array, one modifier, all five, and a duplicate in the stored JSON
       (`M3-008` collapses duplicates on write, so the SQL must agree rather than double-count if one
       ever survives).
-- [ ] Category counts sum to `attempted`; modifier counts deliberately do not, and a test asserts
+- [x] Category counts sum to `attempted`; modifier counts deliberately do not, and a test asserts
       that non-equality so nobody "fixes" it later.
-- [ ] Blue in the blind fixture gets smaller counts than lead, differing by exactly the unrevealed
+- [x] Blue in the blind fixture gets smaller counts than lead, differing by exactly the unrevealed
       steps.
 
 ## Tests
