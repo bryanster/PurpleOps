@@ -1,0 +1,30 @@
+{
+  "name": "blacklight-e2e",
+  "private": true,
+  "description": "Playwright end-to-end suite. Drives a real blacklight binary against a real DuckDB file.",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "browsers": "playwright install chromium",
+    "browsers:ci": "playwright install --with-deps chromium",
+    "lint": "tsc --noEmit && eslint . && prettier --check .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^26.1.2",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-playwright": "^2.2.2",
+    "globals": "^17.8.0",
+    "prettier": "^3.9.6",
+    "typescript": "~6.0",
+    "typescript-eslint": "^8.65.0"
+  }
+}

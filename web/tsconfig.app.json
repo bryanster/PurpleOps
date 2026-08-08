@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    /* `node` is here for the tests only — src/app/theme/theme-bootstrap.test.ts
+       reads public/theme-bootstrap.js off disk to check it has not drifted.
+       Nothing that ships to the browser may import a node: module. */
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node"],
+
+    /* Vite transpiles; tsc only ever type-checks here. */
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+
+    /* M0B-008 requires strict plus noUncheckedIndexedAccess: an out-of-range
+       array read is `T | undefined` in the type system, which is what it is at
+       runtime. The rest are the checks strict leaves off. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    /* No `exactOptionalPropertyTypes`: the vendored Radix components pass
+       `T | undefined` into props typed `T`, and turning it on would mean
+       editing every shadcn/ui component we install — which M0B-008 explicitly
+       says not to do. */
+
+    /* shadcn/ui generates imports as `@/components/ui/...`; the same alias is
+       declared in vite.config.ts, and the two must not drift. No `baseUrl`:
+       it is deprecated in TypeScript 6, and `paths` has resolved relative to
+       this file's directory since TypeScript 5. */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
+  },
+  "include": ["src"]
+}

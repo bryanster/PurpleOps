@@ -1,0 +1,16 @@
+title: Bash Reverse Shell Indicators
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+status: experimental
+description: Detects common bash reverse shell one-liners.
+tags:
+  - attack.t1059.004
+  - ATTACK.T1059
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: '/bash'
+    CommandLine|contains: '/dev/tcp/'
+  condition: selection
+level: medium

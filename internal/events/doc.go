@@ -1,0 +1,56 @@
+// Package events carries things that happened: the append-only activity log
+// (M1-015) and the server-sent-events hub that fans ephemeral UI progress out
+// to live subscribers (M2-004, extended by M4).
+//
+// # Activity log
+//
+// [Log.Record] writes one row inside the caller's database transaction, so the
+// log can never disagree with the data — if the change rolls back, the row is
+// gone too. That is the central design constraint of M1-015. Events with no
+// sibling mutation (a failed login, a lockout) use [Log.RecordAlone], which
+// opens its own write.
+//
+// Verbs follow `object.past_tense_verb`. The M1 set lives as constants here;
+// M3–M6 extend it. Deltas hold before/after for changed fields and never
+// secrets: password hashes, token secrets, TOTP shared secrets, session
+// tokens, recovery-code plaintext.
+//
+// # SSE hub
+//
+// [Hub] is pure in-process fan-out. It does not touch DuckDB, adapters, or the
+// activity log. Job progress is ephemeral UI; durable audit remains activity
+// rows written by the content runner (M2-003). Do not invent a second durable
+// stream.
+//
+//	ch, unsub, err := hub.Subscribe(ctx, events.Subscription{Topics: []string{events.TopicContentJobs}})
+//	hub.Publish(events.TopicContentJobs, events.Event{Type: events.TypeContentJobProgress, Data: payload})
+//
+// Backpressure: each subscriber has a fixed buffer. On overflow the subscriber
+// is dropped and its channel closed — Publish never blocks on a slow client.
+//
+// # M4 extension points
+//
+// Keep changes additive; M4 should extend, not move, this package:
+//
+//   - Topic prefix: engagement-scoped names via [EngagementTopic] (one
+//     `engagement.{engagementId}`; no per-kind subtopics in M4). [knownTopic]
+//     accepts the UUIDv7 suffix.
+//   - Authz callback: set [Options.TopicAuthz] so Subscribe intersects the
+//     requested topics with what the subject may see (content.sync for
+//     content.jobs; engagement membership for engagement topics).
+//     TopicAuthz is the per-topic half; [Subscription.Allow] is the
+//     per-event half used by blind mode (M4-004).
+//   - Activity → SSE fan-out (M4-002): call [Log.SetHub] after construction
+//     to enable automatic SSE publishing for engagement-scoped activity.
+//     [Log.Record] queues a post-commit callback via [store.PostCommitFanout];
+//     [store.DB.Write] flushes the queue after commit and clears it on
+//     rollback. [Log.RecordAlone] publishes directly since it owns its
+//     transaction. Platform events (empty engagement_id) never fan out.
+//     Event payloads carry id-refs only: engagementId, actorId, verb,
+//     objectType, objectId, plus optional parent refs from [Entry.ParentIDs].
+//     No full resource bodies, no secrets, no deltas.
+//   - Catch-up: accept Last-Event-ID and replay from the activity log. M2
+//     accepts the header and ignores it (best-effort live tail only).
+//   - Presence: a separate in-memory registry can live alongside [Hub]; do not
+//     overload Event.Type for "who is here".
+package events

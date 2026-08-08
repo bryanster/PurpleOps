@@ -1,72 +1,56 @@
-# =============================================================================
-# .dockerignore — Reduce build context size and prevent sensitive files from
-# being sent to the Docker daemon.
+# What never belongs in the build context.
 #
-# The Dockerfile builder stage runs `go mod download` (not `-mod=vendor`),
-# so the vendored module cache is not needed. The final stage only copies
-# compiled binaries, templates/, static/, custom/, and entrypoint.sh.
-# =============================================================================
+# Two reasons to keep this tight. Size: every excluded path is one the daemon
+# does not have to receive before the first instruction runs. Correctness: a
+# host artefact copied into an image silently shadows the one the build was
+# supposed to produce — a stale web/dist embedded instead of the freshly
+# compiled SPA, a host-built binary of the wrong architecture, or a developer's
+# live database shipped to a registry.
+#
+# Patterns are matched against the path from the context root, and `*` does not
+# cross a `/` — so `**/` is used wherever a name can occur at any depth.
 
-# -----------------------------------------------------------------------------
-# Version control
-# -----------------------------------------------------------------------------
-.git/
-.github/
+# Build output. web/dist is rebuilt in the node stage and copied across
+# explicitly; node_modules is reinstalled from package-lock.json, and the host's
+# copy is both large and, on a mac, the wrong platform's binaries.
+bin/
+web/dist/
+**/node_modules/
 
-# -----------------------------------------------------------------------------
-# Go vendor directory — the builder uses `go mod download` instead of
-# `-mod=vendor`, so the local vendor tree is not required in the build context.
-# -----------------------------------------------------------------------------
-vendor/
+# Local runtime state. A developer's database and evidence must never end up in
+# an image — see docs/deploy.md for where the container keeps its own.
+**/*.duckdb
+**/*.duckdb.wal
+**/*.duckdb.tmp/
+evidence/
 
-# -----------------------------------------------------------------------------
-# Pre-built binaries — these are compiled fresh inside the builder stage and
-# should never shadow the build output.
-# -----------------------------------------------------------------------------
-purpleops
-seed
-
-# -----------------------------------------------------------------------------
-# Environment / secrets — never bake credentials into the image.
-# .env.example is safe to keep as documentation reference.
-# -----------------------------------------------------------------------------
+# Local configuration and secrets. The container is configured through the
+# environment; a baked-in .env would override it invisibly.
 .env
 .env.*
 !.env.example
 
-# -----------------------------------------------------------------------------
-# Runtime evidence storage — populated at run-time, not needed at build time.
-# -----------------------------------------------------------------------------
-files/
+# History. The build stamps its version through --build-arg (see the Makefile's
+# docker-build target), so it never needs to run git.
+.git/
+.gitignore
+.gitattributes
+.github/
 
-# -----------------------------------------------------------------------------
-# Development tooling and IDE config
-# -----------------------------------------------------------------------------
-.devcontainer/
+# Test, coverage and editor noise. The end-to-end suite drives the image's
+# binary from outside it; nothing in the image runs Playwright.
+**/*.out
+coverage/
+e2e/
+**/.DS_Store
+**/*.swp
+.idea/
 .vscode/
-.claude/
-.golangci.yml
+.devcontainer/
 
-# -----------------------------------------------------------------------------
-# Documentation and repo meta-files
-# -----------------------------------------------------------------------------
+# Documentation and the backlog: nothing in the image reads them, and a docs
+# edit should not invalidate a build layer. deploy/ is *not* excluded — the
+# entrypoint and health-check scripts are copied from it.
+docs/
 *.md
 LICENSE
-Makefile
-compose.yml
-
-# -----------------------------------------------------------------------------
-# Test helpers and test data (source files ending in _test.go are compiled
-# only during `go test` — excluding them avoids sending them to the daemon,
-# but the Go toolchain will still skip them during a plain `go build`).
-# Exclude any e2e test infrastructure.
-# -----------------------------------------------------------------------------
-**/*_test.go
-e2e/
-sampledata/
-
-# -----------------------------------------------------------------------------
-# Misc data files
-# -----------------------------------------------------------------------------
-*.xlsx
-INITIAL_ADMIN_PASSWORD.TXT

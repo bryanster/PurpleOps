@@ -1,38 +1,90 @@
 {
-  "name": "PurpleOps",
-  "dockerComposeFile": "../compose.yml",
-  "service": "devcontainer",
-  "workspaceFolder": "/workspaces/purpleops",
-  "runServices": ["mongodb"],
-  "dockerComposeRunArgs": ["--profile", "dev"],
-  "shutdownAction": "stopCompose",
-  "remoteUser": "root",
-  "mounts": [
-    "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
-    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
-  ],
-  "remoteEnv": {
-    "SSH_AUTH_SOCK": "/ssh-agent"
+  "name": "Blacklight",
+  // Plain Dockerfile, not docker-compose. v1 needed compose because it needed a
+  // MongoDB container alongside; v2's database is a file inside the process, so
+  // there is nothing left to orchestrate and no `--profile dev` to remember.
+  "build": {
+    "dockerfile": "Dockerfile"
   },
-  "forwardPorts": [8080, 8081, 27017],
-  "postCreateCommand": "go mod download && pre-commit install",
+  "features": {
+    // The container image is the supported artefact, so `make docker-build` and
+    // `make docker-smoke` have to work from in here. Outside-of-docker rather
+    // than docker-in-docker: it hands over the host's daemon, so a build shares
+    // the host's layer cache instead of starting cold in a nested one.
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    },
+    "ghcr.io/devcontainers/features/github-cli":1
+  },
+  // Installs the pinned generators and linter into ./bin and runs `npm ci`.
+  // The one command in the Makefile that needs the network.
+  "postCreateCommand": "make tools",
+  "forwardPorts": [
+    8080, // the server — BLACKLIGHT_ADDR
+    5173 // `npm --prefix web run dev`, which proxies /api to 8080
+  ],
+  // Non-root: matches the vscode user created in the Dockerfile. The docker
+  // feature adds this user to the docker group; updateRemoteUserUID (default
+  // true) aligns the uid with the host so the workspace bind mount is writable.
+  "remoteUser": "vscode",
+  // The local ssh-agent is forwarded automatically by the Dev Containers
+  // extension. Do not bind-mount ${localEnv:SSH_AUTH_SOCK}: agents such as
+  // Secretive keep their socket under ~/Library/Containers, which Docker
+  // Desktop cannot share.
+  "mounts": [
+    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.omp,target=/home/vscode/.omp,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
+    // Named volumes, so a container rebuild does not re-download every module
+    // and recompile every package. Both are caches: deleting them costs time
+    // and nothing else. Paths are under the non-root home / shared GOPATH.
+    "source=blacklight-go-mod,target=/go/pkg/mod,type=volume",
+    "source=blacklight-go-build,target=/home/vscode/.cache/go-build,type=volume"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
         "golang.go",
         "ms-azuretools.vscode-docker",
-        "mongodb.mongodb-vscode"
+        // The v2 frontend: the repo's own eslint and prettier configs, and the
+        // Tailwind v4 class completion that shadcn/ui components rely on.
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
       ],
       "settings": {
         "go.useLanguageServer": true,
         "go.gopath": "/go",
         "go.goroot": "/usr/local/go",
         "go.toolsManagement.checkForUpdates": "local",
+        // The Makefile's own linter, at the Makefile's own pinned version,
+        // rather than whichever one gopls finds first.
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": [
+          "--path-mode=abs"
+        ],
+        "go.alternateTools": {
+          "golangci-lint": "${workspaceFolder}/bin/golangci-lint"
+        },
+        // web/ and e2e/ are separate npm projects inside the Go module; eslint
+        // has to be told, or it looks for a config at the repository root and
+        // finds none.
+        "eslint.workingDirectories": [
+          "web",
+          "e2e"
+        ],
         "[go]": {
           "editor.formatOnSave": true,
           "editor.defaultFormatter": "golang.go"
+        },
+        "[typescript]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescriptreact]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
         }
       }
     }

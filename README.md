@@ -1,159 +1,53 @@
-<h1 align="center">
-  <br>
-  <a href="https://purpleops.app"><img src="static/images/logo.png" alt="PurpleOps Logo" width="200"></a>
-  <br>
-  PurpleOps
-  <br>
-</h1>
+# Blacklight
 
-<h4 align="center">An open-source self-hosted purple team management web application.</h4>
+[![CI](https://github.com/bryanster/blacklight/actions/workflows/ci.yml/badge.svg)](https://github.com/bryanster/blacklight/actions/workflows/ci.yml)
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/Licence-blue?logo=unlicense&logoColor=white">
-  <a href="https://docs.purpleops.app"><img src="https://img.shields.io/badge/Docs-blue?logo=readthedocs&logoColor=white">
-</p>
+Blacklight is a self-hosted purple-team assessment tool. Red and blue work through the same
+engagement — an ordered chain of ATT&CK-mapped scenarios and steps — recording what was executed,
+what was prevented, what was detected and how quickly, and what changed on retest after
+remediation. The output is a report.
 
-<p align="center">
-  <a href="#key-features">Key Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#contact-us">Contact Us</a> •
-  <a href="#credits">Credit</a> •
-  <a href="#license">License</a>
-</p>
+This is the v2 rebuild: a single Go binary that serves an OpenAPI-described API and an embedded
+React SPA, backed by an embedded DuckDB database. See [`PLAN.md`](PLAN.md) for the design and
+[`docs/tickets/`](docs/tickets/) for the backlog.
 
-<p align="center">
-  <img src="static/images/demo.gif">
-</p>
+## Running it
 
-## Key Features
-
-* Template engagements and testcases
-* Framework friendly
-* Role-based Access Control & MFA
-* Inbuilt DOCX reporting + custom template support
-
-How PurpleOps is different:
-
-* No attribution needed
-* Hackable, no "no-reversing" clauses
-* No over complications with tomcat, redis, manual database transplanting and an obtuce permission model
-
-## Installation
-
-### Default
-
-```bash
-# Clone this repository
-$ git clone https://github.com/CyberCX-STA/PurpleOps
-
-# Go into the repository
-$ cd PurpleOps
-
-# Alter PurpleOps settings (if you want to customize anything but should work out the box)
-$ nano .env
-
-# Run the app with docker (add `-d` to run in background)
-$ sudo docker compose up
-
-# PurpleOps should now by available on http://localhost:5000, it is recommended to add a reverse proxy such as nginx or Apache in front of it if you want to expose this to the outside world.
+```sh
+docker compose up --build
 ```
 
-<details>
-  <summary><h3>Kali</h3></summary>
-  
-  ```bash
-  # Install docker-compose
-  sudo apt install docker-compose -y
-  
-  # Clone this repository
-  $ git clone https://github.com/CyberCX-STA/PurpleOps
-  
-  # Go into the repository
-  $ cd PurpleOps
-  
-  # Alter PurpleOps settings (if you want to customize anything but should work out the box)
-  $ nano .env
-  
-  # Run the app with docker (add `-d` to run in background)
-  $ sudo docker-compose up
-  
-  # PurpleOps should now by available on http://localhost:5000, it is recommended to add a reverse proxy such as nginx or Apache in front of it if you want to expose this to the outside world.
-  ```
-</details>
+Then <http://localhost:8080>. Nothing is fetched at first boot, and the image carries the database,
+the UI and the headless Chromium that renders reports. [`docs/deploy.md`](docs/deploy.md) covers
+configuration, where the data lives, and how to back it up.
 
-<details>
-  <summary><h3>Manual</h3></summary>
+From source instead:
 
-  ```bash
-  # Alternatively, build and run the Go binaries
-  $ sudo docker run --name mongodb -d -p 27017:27017 mongo
-  $ go build -o purpleops .
-  $ go build -o seed ./cmd/seed
-  $ MONGO_HOST=localhost ./seed
-  $ MONGO_HOST=localhost ./purpleops
-  ```
-</details>
+```sh
+make tools     # once: install pinned generators into ./bin
+make build     # build the SPA and the binaries
+make run       # build, then start the server
+```
 
-<details>
-  <summary><h3>NGINX Reverse Proxy + Certbot</h3></summary>
+Both builds produce a second binary, `blctl`, which administers a deployment from the command
+line — migrations, database inspection, and the user and content management that arrive with M1 and
+M2. It is in the container image too: `docker compose exec blacklight blctl --help`, and
+[`docs/cli.md`](docs/cli.md) for the rest.
 
-  Replace 2x `purpleops.example.com` with your FQDN and ensure your box is open internet-wide on 80/443.
-  
-  ```bash
-  sudo apt install nginx certbot python3-certbot-nginx -y
-  sudo nano /etc/nginx/sites-available/purpleops # Paste below file
-  sudo ln -s /etc/nginx/sites-available/purpleops /etc/nginx/sites-enabled/
-  sudo certbot --nginx -d purpleops.example.com
-  sudo service nginx restart
-  ```
+`make help` lists every target. There is a dev container with the toolchain already pinned and
+installed — see [`.devcontainer/`](.devcontainer/).
+[`docs/contributing.md`](docs/contributing.md) has the development loop, what CI checks, and the
+branch-protection rules; [`docs/testing.md`](docs/testing.md) has the test layers and how to run and
+debug the end-to-end suite.
 
-  ```
-  server {
-    listen 80;
-    server_name purpleops.example.com;
+> **Status:** v2 is under construction on the `v2` branch and is not yet usable. The full
+> installation and operation guide is rewritten in M7; until then, the ticket backlog is the
+> accurate description of what exists.
 
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-  }
-  ```
-</details>
+## Licence
 
-<details>
-  <summary><h3>IP Whitelisting with ufw</h3></summary>
-  
-  ```bash
-  sudo apt install ufw -y
-  sudo ufw allow 22
-  sudo ufw deny 80
-  sudo ufw deny 443
-  sudo ufw insert 1 allow from 100.100.100.100/24 to any port 443
-  sudo ufw enable
-  ```
-</details>
+Apache 2.0 — see [`LICENSE`](LICENSE).
 
-<details>
-  <summary><h3>Resetting MFA</h3></summary>
-
-  ```bash
-  # Use MongoDB client directly to reset MFA for a user
-  sudo docker exec -it mongodb mongosh
-  use purpleops
-  db.users.updateOne({email: "userto@reset.here"}, {$set: {totp_secret: null}})
-  ```
-</details>
-
-## Contact Us
-
-We would love to hear back from you, if something is broken or have and idea to make it better add a ticket or connect to us on the [PurpleOps Discord](https://discord.gg/2xeA6FB3GJ) or email us at pops@purpleops.app | `@_w_m__` 
-
-## Credits
-
-- Atomic Red Team ([LICENSE](https://github.com/redcanaryco/atomic-red-team/blob/master/LICENSE.txt)) for sample commands
-- [CyberCX](https://cybercx.com.au/) for foundational support
-
-## License
-
-Apache
+Blacklight is an independent rewrite. It began as a fork of
+[PurpleOps](https://github.com/CyberCX-STA/PurpleOps) (Copyright 2023 Willem Mouton & Harrison
+Mitchell, Apache-2.0); no code from that project remains.

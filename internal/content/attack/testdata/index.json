@@ -1,0 +1,21 @@
+{
+  "id": "index-test",
+  "name": "MITRE ATT&CK",
+  "collections": [
+    {
+      "id": "x-mitre-collection--enterprise",
+      "name": "Enterprise ATT&CK",
+      "versions": [
+        {"version": "15.1", "url": "https://example.test/enterprise-attack-15.1.json"},
+        {"version": "14.1", "url": "https://example.test/enterprise-attack-14.1.json"}
+      ]
+    },
+    {
+      "id": "x-mitre-collection--mobile",
+      "name": "Mobile ATT&CK",
+      "versions": [
+        {"version": "15.1", "url": "https://example.test/mobile-attack-15.1.json"}
+      ]
+    }
+  ]
+}

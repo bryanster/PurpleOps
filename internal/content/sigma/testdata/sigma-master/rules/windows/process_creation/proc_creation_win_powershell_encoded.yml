@@ -1,0 +1,26 @@
+title: Encoded PowerShell Command Line
+id: 5d2c185a-6d5a-4f3e-9c1a-0b7e6f4d2a11
+status: test
+description: |
+  Detects PowerShell command lines that use encoded command switches.
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+author: Blacklight Fixtures
+date: 2024/01/01
+tags:
+  - attack.execution
+  - attack.t1059
+  - attack.t1059.001
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\powershell.exe'
+    CommandLine|contains:
+      - ' -enc '
+      - ' -EncodedCommand '
+  condition: selection
+falsepositives:
+  - Administrative scripts
+level: high

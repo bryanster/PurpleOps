@@ -1,0 +1,75 @@
+{
+  "type": "bundle",
+  "id": "bundle--test-14-1",
+  "objects": [
+    {
+      "type": "x-mitre-collection",
+      "id": "x-mitre-collection--enterprise-14-1",
+      "name": "Enterprise ATT&CK",
+      "x_mitre_version": "14.1"
+    },
+    {
+      "type": "x-mitre-tactic",
+      "id": "x-mitre-tactic--execution-14",
+      "name": "Execution",
+      "description": "The adversary is trying to run malicious code (v14.1).",
+      "x_mitre_shortname": "execution",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "TA0002"}
+      ]
+    },
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--t1059-14",
+      "name": "Command and Scripting Interpreter",
+      "description": "v14.1 description of T1059 — distinct from 15.1.",
+      "x_mitre_is_subtechnique": false,
+      "kill_chain_phases": [
+        {"kill_chain_name": "mitre-attack", "phase_name": "execution"}
+      ],
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "T1059"}
+      ]
+    },
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--t1003-14",
+      "name": "OS Credential Dumping",
+      "description": "Only present in the 14.1 fixture.",
+      "x_mitre_is_subtechnique": false,
+      "kill_chain_phases": [
+        {"kill_chain_name": "mitre-attack", "phase_name": "execution"}
+      ],
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "T1003"}
+      ]
+    },
+    {
+      "type": "course-of-action",
+      "id": "course-of-action--m1026-14",
+      "name": "Privileged Account Management",
+      "description": "Manage the creation and modification of privileged accounts.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "M1026"}
+      ]
+    },
+    {
+      "type": "intrusion-set",
+      "id": "intrusion-set--fin7-14",
+      "name": "FIN7",
+      "description": "FIN7 is a financially-motivated threat group.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "G0046"}
+      ]
+    },
+    {
+      "type": "tool",
+      "id": "tool--cmd-14",
+      "name": "cmd",
+      "description": "cmd is the Windows command shell.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "S0106"}
+      ]
+    }
+  ]
+}

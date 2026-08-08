@@ -1,0 +1,28 @@
+{
+  /* Deliberately not an ESM package: Playwright transpiles TypeScript with its
+     own loader, and its CommonJS path is the one that resolves extensionless
+     relative imports. `"type": "module"` would mean writing `./server.js` in
+     every import of a `.ts` file, which reads as a mistake to everyone who has
+     to maintain this. `module: Preserve` keeps `import` syntax legal for tsc
+     while leaving emit to Playwright — nothing here is ever compiled by tsc. */
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "test-results", "playwright-report"]
+}

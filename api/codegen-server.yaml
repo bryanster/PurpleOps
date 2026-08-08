@@ -1,0 +1,33 @@
+# oapi-codegen configuration for the Go server half of openapi.yaml.
+#
+# Run from this directory by the `//go:generate` line in api/spec.go, so every
+# path below is relative to api/. The generator itself is pinned in go.mod via
+# tools/tools.go, which is what keeps the output byte-identical on every machine
+# and lets the codegen-drift gate (M0B-012) mean something.
+package: gen
+output: ../internal/httpapi/gen/server.gen.go
+
+generate:
+  # Strict mode: handlers take a typed request struct and return a typed
+  # response struct. No http.ResponseWriter, no manual binding, and no way to
+  # return a body the spec does not describe.
+  strict-server: true
+  chi-server: true
+  models: true
+  # The spec is embedded by api/spec.go, which is also what the request-validator
+  # middleware loads (M0B-006). A second, gzipped copy inside the generated file
+  # would be a second source of truth that can disagree with the first.
+  embedded-spec: false
+
+compatibility:
+  # Name every enum constant after its type: HealthStateOk, not Ok. Without
+  # this, constants are only prefixed once two enums collide — so adding an enum
+  # with an `ok` value silently renames the constants of an existing one, and
+  # every handler that used them stops compiling.
+  always-prefix-enum-values: true
+
+output-options:
+  # Turns `type: [string, "null"]` into a nullable wrapper rather than a bare
+  # pointer, so "absent" and "explicitly null" stay distinguishable — the
+  # distinction the PATCH endpoints in M3 depend on.
+  nullable-type: true

@@ -1,0 +1,117 @@
+{
+  "type": "bundle",
+  "id": "bundle--test-15-1",
+  "objects": [
+    {
+      "type": "x-mitre-collection",
+      "id": "x-mitre-collection--enterprise-15-1",
+      "name": "Enterprise ATT&CK",
+      "x_mitre_version": "15.1"
+    },
+    {
+      "type": "x-mitre-tactic",
+      "id": "x-mitre-tactic--execution",
+      "name": "Execution",
+      "description": "The adversary is trying to run malicious code.",
+      "x_mitre_shortname": "execution",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "TA0002"}
+      ]
+    },
+    {
+      "type": "x-mitre-tactic",
+      "id": "x-mitre-tactic--persistence",
+      "name": "Persistence",
+      "description": "The adversary is trying to maintain their foothold.",
+      "x_mitre_shortname": "persistence",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "TA0003"}
+      ]
+    },
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--t1059",
+      "name": "Command and Scripting Interpreter",
+      "description": "Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries.",
+      "x_mitre_is_subtechnique": false,
+      "kill_chain_phases": [
+        {"kill_chain_name": "mitre-attack", "phase_name": "execution"}
+      ],
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "T1059"}
+      ]
+    },
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--t1059-001",
+      "name": "PowerShell",
+      "description": "Adversaries may abuse PowerShell commands and scripts for execution.",
+      "x_mitre_is_subtechnique": true,
+      "kill_chain_phases": [
+        {"kill_chain_name": "mitre-attack", "phase_name": "execution"}
+      ],
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "T1059.001"}
+      ]
+    },
+    {
+      "type": "relationship",
+      "id": "relationship--sub-t1059-001",
+      "relationship_type": "subtechnique-of",
+      "source_ref": "attack-pattern--t1059-001",
+      "target_ref": "attack-pattern--t1059"
+    },
+    {
+      "type": "course-of-action",
+      "id": "course-of-action--m1049",
+      "name": "Antivirus/Antimalware",
+      "description": "Use signatures or heuristics to detect malicious software.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "M1049"}
+      ]
+    },
+    {
+      "type": "relationship",
+      "id": "relationship--mit-t1059",
+      "relationship_type": "mitigates",
+      "source_ref": "course-of-action--m1049",
+      "target_ref": "attack-pattern--t1059"
+    },
+    {
+      "type": "intrusion-set",
+      "id": "intrusion-set--apt29",
+      "name": "APT29",
+      "description": "APT29 is threat group that has been attributed to Russia's Foreign Intelligence Service (SVR).",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "G0016"}
+      ]
+    },
+    {
+      "type": "malware",
+      "id": "malware--cobalt",
+      "name": "Cobalt Strike",
+      "description": "Cobalt Strike is a commercial penetration testing tool.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "S0154"}
+      ]
+    },
+    {
+      "type": "tool",
+      "id": "tool--ps",
+      "name": "PowerShell",
+      "description": "PowerShell is a cross-platform command-line shell and scripting language.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "S0194"}
+      ]
+    },
+    {
+      "type": "x-mitre-data-source",
+      "id": "x-mitre-data-source--process",
+      "name": "Process",
+      "description": "Information about running software.",
+      "external_references": [
+        {"source_name": "mitre-attack", "external_id": "DS0009"}
+      ]
+    }
+  ]
+}

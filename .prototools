@@ -1,0 +1,8 @@
+# Toolchain pin for proto (https://moonrepo.dev/proto). One Node version for the
+# repo, CI (M0B-012) and the container image (M0B-011), so "works on my machine"
+# and "works in the pipeline" mean the same thing.
+#
+# 24 is the active LTS. web/package.json states the same requirement as an
+# `engines` range, and web/.nvmrc repeats it for nvm/fnm users — proto reads
+# either, but a developer without proto only ever looks at .nvmrc.
+node = "24.18.1"

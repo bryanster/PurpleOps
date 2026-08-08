@@ -1,0 +1,23 @@
+/**
+ * Engagement routes (M3-014).
+ *
+ * Kept as constants so the route table, the nav, and the engagement list links
+ * all spell the same path.
+ */
+export const ENGAGEMENTS_PATH = '/engagements'
+
+export function engagementPath(engagementId: string): string {
+  return `/engagements/${engagementId}`
+}
+
+export function engagementWorkbookPath(engagementId: string): string {
+  return `/engagements/${engagementId}/workbook`
+}
+
+export function engagementFindingsPath(engagementId: string): string {
+  return `/engagements/${engagementId}/findings`
+}
+
+export function engagementSettingsPath(engagementId: string): string {
+  return `/engagements/${engagementId}/settings`
+}

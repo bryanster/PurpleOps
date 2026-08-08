@@ -1,0 +1,22 @@
+---
+attack_technique: T1003
+display_name: OS Credential Dumping
+atomic_tests:
+- name: macOS Credential Check
+  auto_generated_guid: 44444444-4444-4444-8444-444444444444
+  description: macOS-only test with a dependency block.
+  supported_platforms:
+  - macos
+  dependency_executor_name: sh
+  dependencies:
+  - description: |
+      Require a writable temp directory.
+    prereq_command: |
+      test -d /tmp
+    get_prereq_command: |
+      mkdir -p /tmp
+  executor:
+    name: sh
+    elevation_required: false
+    command: |
+      ls /tmp | head -n 1

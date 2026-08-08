@@ -1,20 +1,27 @@
-# Go binaries
-purpleops
-/seed
+# Build output
+/bin/
+/web/dist/
+/web/node_modules/
+/e2e/node_modules/
 
-# Environment
+# Local runtime state: the embedded database, its WAL, and uploaded evidence.
+*.duckdb*
+/evidence/
+
+# Local configuration and secrets
 .env
+.env.*
+!.env.example
 
-# Dev data
-*.xlsx
-files/
-sampledata/sigma/*
-external/*
-INITIAL_ADMIN_PASSWORD.TXT
-supervisord.pid
+# Test and coverage output
+*.out
+*.test
+/e2e/test-results/
+/e2e/playwright-report/
 
-# E2E tests
-e2e/node_modules/
-e2e/test-results/
-
-/vendor
+# Editor and OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

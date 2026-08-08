@@ -1,0 +1,29 @@
+-- 0010_service_token_revoked_by — record who ended a service token (M1-018).
+--
+-- 0008_service_token left the column out, and gave the reason: the only
+-- endpoints that could revoke one acted on the caller's own rows, so there was
+-- exactly one answer and storing it would have been storing owner_user_id
+-- twice. M1-018 adds the administrative endpoints, and with them a second
+-- answer — an administrator ending somebody else's credential during an
+-- incident — so "who ended this, and were they its owner?" becomes a question
+-- with two possible shapes and no way to tell them apart from the row.
+--
+-- The activity log (M1-015) records the same act, and this column is not a
+-- duplicate of it: that log is prunable by an operator (docs/deploy.md) and is
+-- keyed by time, and this is the durable fact attached to the credential
+-- itself. An incident review reads the row it is holding.
+--
+-- NULL means "not revoked", the same as revoked_at. The two are written
+-- together in one statement and there is no path that sets either alone, so a
+-- row with one and not the other is a row somebody edited by hand.
+--
+-- No foreign key, for the reason 0008 gives at length and 0003_user_updatable
+-- gives in full: under DuckDB a child row makes its parent un-UPDATE-able. The
+-- account is held to a real one inside the write transaction instead.
+--
+-- ALTER TABLE ... ADD COLUMN rather than the recreate-and-copy dance in 0003:
+-- that one existed to *drop* constraints, which DuckDB has no ALTER for. Adding
+-- a nullable column it does support, and rewriting the table would need every
+-- other migration's constraints restated here to survive.
+
+ALTER TABLE app.service_token ADD COLUMN revoked_by TEXT;

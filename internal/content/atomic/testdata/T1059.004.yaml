@@ -1,0 +1,31 @@
+---
+attack_technique: T1059.004
+display_name: Command and Scripting Interpreter - Unix Shell
+atomic_tests:
+- name: Bash Echo
+  auto_generated_guid: 33333333-3333-4333-8333-333333333333
+  description: Linux bash test with cleanup.
+  supported_platforms:
+  - linux
+  input_arguments:
+    message:
+      description: Text to echo
+      type: string
+      default: linux-hi
+  executor:
+    name: bash
+    elevation_required: false
+    command: |
+      echo "#{message}" > /tmp/atomic-echo.txt
+    cleanup_command: |
+      rm -f /tmp/atomic-echo.txt
+- name: Sh uname
+  # no auto_generated_guid — external_id derives as T1059.004/1
+  description: Portable sh test.
+  supported_platforms:
+  - linux
+  - macos
+  executor:
+    name: sh
+    command: |
+      uname -a

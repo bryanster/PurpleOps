@@ -1,0 +1,336 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authn/challenge"
+	"github.com/bryanster/blacklight/internal/authn/servicetoken"
+	"github.com/bryanster/blacklight/internal/authn/throttle"
+	"github.com/bryanster/blacklight/internal/events"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+)
+
+// accountOf names the account a request is presenting a credential for, or ""
+// when it cannot tell. An empty answer is not a hole: the source limiter needs
+// nothing from the request, and it is still counting.
+type accountOf func(*http.Request) string
+
+// credentialAccounts are the endpoints where a caller presents a credential, and
+// how to find the account they are presenting it for.
+//
+// A middleware rather than a check inside each handler, because the point of
+// M1-004 is that v1 had login rate limiting, lost it, and nothing noticed:
+// deleting this from the chain fails seven tests across throttle_test.go and
+// mfa_test.go. It is a table rather than a route registration because the
+// generated router owns the routes (M0B-005): a path is added here, next to the
+// others, instead of somewhere a reader would have to know to look.
+//
+// The two entries need the account from different places, which is why the value
+// is a function rather than a field name. The third credential — a service token
+// (M1-011) — is not in this table at all, because it is not tied to a route:
+// see [credentialAttempt].
+func credentialAccounts(auth *authn.Service) map[string]accountOf {
+	return map[string]accountOf{
+		BasePath + "/auth/login": bodyField("email"),
+
+		// The body here is six digits and names nobody, so the account comes
+		// from the pending state the cookie stands for. It costs two reads on
+		// this one route, and without it a code-guessing attack would be
+		// counted only against the source limiter — which is far too generous,
+		// because it is sized for spraying across every account rather than for
+		// guessing one six-digit number.
+		BasePath + mfaPathPrefix + "/totp/verify": func(r *http.Request) string {
+			return auth.AccountForChallenge(r.Context(), challenge.FromRequest(r))
+		},
+
+		// The other way past a second factor (M1-007), keyed the same way and
+		// against the same budget — deliberately the same budget, because two
+		// counters would mean an attacker who exhausted one could carry on
+		// against the other. A recovery code is 100 bits and not worth guessing,
+		// but the endpoint is on the public path and rationing it costs nothing.
+		BasePath + mfaPathPrefix + "/recovery/verify": func(r *http.Request) string {
+			return auth.AccountForChallenge(r.Context(), challenge.FromRequest(r))
+		},
+	}
+}
+
+// maxCredentialBody is how much of a request body this middleware will read to
+// find the account being attempted. The validator has already held the body to
+// api/openapi.yaml by the time we get here, so anything approaching this is
+// impossible rather than merely unusual; the limit is here so that a change to
+// the specification cannot turn into an unbounded read on a public endpoint.
+const maxCredentialBody = 64 << 10
+
+// throttleCredentials rations failed sign-in attempts. It is step 8 of the
+// chain described in internal/httpapi/server.go.
+//
+// It sits before authentication rather than after it, so that a locked-out
+// source does not reach the session lookup, and so that M1-011 — whose
+// credential *is* checked by the authentication step — is throttled by this
+// middleware rather than by a second one.
+//
+// The outcome is read from the status the handler produced: a 401 is a failed
+// attempt, a 2xx is a successful one, and anything else — a malformed body, the
+// database failing — is neither, because neither says anything about whether the
+// caller knows the password. That is what keeps the rule in one place instead of
+// asking every handler to report itself.
+//
+// The one exception is a handler that answers 2xx without the exchange being
+// over: a login that returns mfa_required has checked a password and issued no
+// session. Counting that as a success would clear the account's failure count,
+// and an attacker who holds the password could then reset their code-guessing
+// budget by signing in again between every guess. Such a handler says so through
+// [markCredentialIncomplete], and the attempt counts as neither.
+func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountOf,
+	activity *events.Log, responder *apierr.Responder, log *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			attempt, guarded := credentialAttempt(r, accounts)
+			if !guarded {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if err := limiter.Check(attempt); err != nil {
+				// Before the handler, so the right password during a lockout is
+				// refused too — a lockout that the right password ends is not a
+				// lockout — and so that a locked-out caller costs no Argon2id
+				// derivation, which is the other half of what throttling is for.
+				log.InfoContext(ctx, "refused a throttled sign-in attempt",
+					slog.String("client_ip", attempt.Source),
+					slog.String("path", r.URL.Path))
+				responder.Write(w, r, err)
+				return
+			}
+
+			outcome := &credentialOutcome{}
+			recorder := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(recorder, r.WithContext(withCredentialOutcome(ctx, outcome)))
+
+			if outcome.incomplete {
+				// The credential was right and the exchange is not over. Neither
+				// counted nor cleared: the failures already against this account
+				// stay where they are until something actually completes.
+				return
+			}
+
+			switch status := outcome.statusOr(statusOf(recorder)); {
+			case status == http.StatusUnauthorized:
+				for _, lockout := range limiter.Failed(attempt) {
+					// Warn, not info: this is the line an operator is looking for
+					// when somebody reports they cannot sign in, and the line that
+					// says an attack is in progress.
+					log.WarnContext(ctx, "locked out after repeated failed sign-in attempts",
+						slog.String("scope", string(lockout.Scope)),
+						slog.String("key", lockout.Key),
+						slog.String("client_ip", attempt.Source),
+						slog.Duration("retry_after", lockout.RetryAfter))
+					recordLoginThrottled(ctx, activity, log, attempt, lockout)
+				}
+			case status >= 200 && status < 300:
+				limiter.Succeeded(attempt)
+			}
+		})
+	}
+}
+
+func recordLoginThrottled(ctx context.Context, activity *events.Log, log *slog.Logger,
+	attempt throttle.Attempt, lockout throttle.Lockout) {
+	if activity == nil {
+		return
+	}
+	if err := activity.RecordAlone(ctx, events.Entry{
+		Verb:       events.VerbLoginThrottled,
+		ObjectType: events.ObjectLogin,
+		ObjectID:   lockout.Key,
+		Delta: events.Delta(map[string]any{
+			"scope":       string(lockout.Scope),
+			"key":         lockout.Key,
+			"ip":          attempt.Source,
+			"retry_after": lockout.RetryAfter.String(),
+		}),
+	}); err != nil {
+		log.WarnContext(ctx, "could not record login.throttled",
+			slog.String("error", err.Error()))
+	}
+}
+
+// credentialAttempt reports what credential this request is presenting, and
+// false when it is presenting none.
+//
+// There are two shapes of answer, and the difference is why this is a function
+// rather than one map lookup:
+//
+//   - A sign-in route from [credentialAccounts], where the account being
+//     attempted is in the body or behind the pending cookie, and the method has
+//     to be POST because that is the only method those routes serve.
+//   - A service token, on *any* route and any method (M1-011). A token is
+//     checked by the authentication step for every request it accompanies, so
+//     rationing failures by route would ration nothing: an attacker guessing
+//     secrets would simply guess them against `GET /version`. The account it is
+//     counted against is the token's prefix, which is the closest thing a token
+//     has to an identity before it has been checked — and which is exactly the
+//     value an attacker would have to vary to escape the count, at which point
+//     the source limiter is what is left holding them.
+//
+// A bearer credential wins over a route entry, which matters for no route
+// today and would matter the moment a sign-in endpoint accepted one.
+func credentialAttempt(r *http.Request, accounts map[string]accountOf) (throttle.Attempt, bool) {
+	source := ClientIP(r.Context())
+
+	if presented, ok := bearerToken(r); ok {
+		return throttle.Attempt{Account: tokenAccount(presented), Source: source}, true
+	}
+
+	account, guarded := accounts[routePath(r)]
+	if !guarded || r.Method != http.MethodPost {
+		return throttle.Attempt{}, false
+	}
+	return throttle.Attempt{Account: account(r), Source: source}, true
+}
+
+// tokenAccount names the account a presented token is an attempt against: its
+// prefix, behind a marker that keeps it out of the same namespace as the email
+// addresses the sign-in routes count.
+//
+// The prefix is the public half of the credential and is safe to key a counter
+// by. The secret is never touched here — the value below is derived from a
+// string this middleware has not validated, so it must not be one that would
+// matter if it were logged.
+func tokenAccount(presented servicetoken.Token) string {
+	raw := presented.Reveal()
+	prefix, _, found := strings.Cut(strings.TrimPrefix(raw, servicetoken.Marker+"_"), "_")
+	if !found {
+		// Not a well-formed token, so there is no prefix to count against and
+		// the empty account leaves the source limiter to do the counting —
+		// which is the right shape anyway: somebody sending rubbish is not
+		// attacking one credential.
+		return ""
+	}
+	return "token:" + prefix
+}
+
+// routePath is the request path with a trailing slash removed, which is the form
+// credentialAccounts is keyed by.
+//
+// "/auth/login/" is not a path this API serves — the validator answers it 404
+// before this middleware runs — but the throttle deciding that for itself is a
+// cheaper thing to be sure of than the two routers agreeing forever.
+func routePath(r *http.Request) string {
+	path := r.URL.Path
+	if len(path) > 1 {
+		path = strings.TrimRight(path, "/")
+	}
+	return path
+}
+
+// bodyField reads one string field out of a JSON request body and puts the body
+// back for the handler.
+//
+// It returns "" for anything it cannot read, and that is not a hole: an
+// unreadable body is one the handler will refuse as well, and the source
+// limiter — which needs nothing from the body — is still counting either way.
+func bodyField(field string) accountOf {
+	return func(r *http.Request) string {
+		if r.Body == nil {
+			return ""
+		}
+
+		raw, err := io.ReadAll(io.LimitReader(r.Body, maxCredentialBody))
+		if err != nil {
+			return ""
+		}
+		// Put it back whatever happened below: this middleware is not the thing
+		// that decides whether the request is valid, so it must not be the thing
+		// that leaves the handler with an empty body.
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+
+		var body map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return ""
+		}
+		var value string
+		if err := json.Unmarshal(body[field], &value); err != nil {
+			return ""
+		}
+		return value
+	}
+}
+
+// credentialOutcome is how a handler tells this middleware that its 2xx does not
+// mean the credential exchange finished. It is a pointer in the context rather
+// than a return value because the handler is several frames below and behind a
+// generated adapter that has no channel back.
+//
+// There is exactly one setter and one reader, both in this package, and the
+// default — an unset flag — is the conservative one: a handler that says nothing
+// is judged on its status, as every handler was before this existed.
+type credentialOutcome struct {
+	incomplete bool
+
+	// verdict is the authentication step's own answer about the credential this
+	// request presented, and is zero when it did not give one.
+	//
+	// It exists because the status a request ends with is not always the news
+	// about its credential (M1-011). A service token that resolved and was then
+	// refused for want of a scope produces a 403, which the status rule would
+	// count as neither — leaving that token's earlier failures pending forever.
+	// A token that did *not* resolve and fell back to a good session cookie
+	// produces whatever that session's request produces, which the status rule
+	// would read as a success and use to clear the failures. Both are wrong in
+	// the direction that matters, and only the authentication step knows
+	// otherwise.
+	verdict int
+}
+
+// statusOr returns the authentication step's verdict about the credential, or
+// the status the response actually carried when it gave none.
+func (o *credentialOutcome) statusOr(status int) int {
+	if o.verdict != 0 {
+		return o.verdict
+	}
+	return status
+}
+
+type credentialOutcomeKey struct{}
+
+func withCredentialOutcome(ctx context.Context, outcome *credentialOutcome) context.Context {
+	return context.WithValue(ctx, credentialOutcomeKey{}, outcome)
+}
+
+// markCredentialIncomplete records that the credential presented on this request
+// was accepted and did not finish the exchange — a password that was right where
+// a second factor is still owed. It is a no-op on a request that did not come
+// through the throttle, which is every request outside the credential routes.
+func markCredentialIncomplete(ctx context.Context) {
+	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
+		outcome.incomplete = true
+	}
+}
+
+// markCredentialAccepted and markCredentialRejected record what the
+// authentication step made of the service token a request presented (M1-011).
+// Both are no-ops on a request that did not come through the throttle, and
+// neither is called for a request that presented no token at all — which is what
+// leaves the sign-in routes judged by their status, as they were.
+func markCredentialAccepted(ctx context.Context) {
+	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
+		outcome.verdict = http.StatusOK
+	}
+}
+
+func markCredentialRejected(ctx context.Context) {
+	if outcome, ok := ctx.Value(credentialOutcomeKey{}).(*credentialOutcome); ok {
+		outcome.verdict = http.StatusUnauthorized
+	}
+}
