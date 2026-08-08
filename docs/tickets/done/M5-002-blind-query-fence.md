@@ -44,19 +44,27 @@ there is no row list left to filter. Fix the fence before building on it.
 
 ## Acceptance criteria
 
-- [ ] `ListByScenario` and `ListByEngagement` cannot be called without a scope — the argument is
+- [x] `ListByScenario` and `ListByEngagement` cannot be called without a scope — the argument is
       required, not optional, so the next repository method added is forced to think about it.
-- [ ] A blue caller in a blind engagement gets unrevealed steps excluded **by the SQL**, proven by a
+- [x] A blue caller in a blind engagement gets unrevealed steps excluded **by the SQL**, proven by a
       store-layer test that calls the repository directly with no HTTP layer above it.
-- [ ] `stepsToWire` is unchanged and still filters. A test asserts belt and braces: with the store
+- [x] `stepsToWire` is unchanged and still filters. A test asserts belt and braces: with the store
       filter disabled in a test double, the wire layer still withholds.
-- [ ] Existing blind tests (`internal/httpapi/blind_integration_test.go`, the M1-014 matrix, M4-009's
+- [x] Existing blind tests (`internal/httpapi/blind_integration_test.go`, the M1-014 matrix, M4-009's
       Playwright spec) stay green with no assertion changes. If one needs changing, the behaviour
       changed and that needs saying out loud.
-- [ ] No doc comment in `internal/engagement/steps.go` claims filtering that the code does not do.
+- [x] No doc comment in `internal/engagement/steps.go` claims filtering that the code does not do.
 
-## Tests
+## Implementation notes
 
+- `ReorderSteps` passes `blind.Scope{}` (zero value = widest scope) to `ListByScenario` for
+  validation, since reorder is a lead-only write operation and needs all steps. The wire layer
+  (`stepsToWire`) provides the second fence on the response path.
+- Audit found no other engagement-scoped lists with the same gap. Scenarios, findings, executions,
+  members, comments, and evidence either do not take a `blind.Scope` or already apply it correctly.
+  Single-step reads (`GetStep`) check blind scope in the handler — correct for single-row reads.
+- The `listStepsByEngagement` constant was split into base + order suffix to allow the blind
+  predicate to be injected between the WHERE clause and ORDER BY.
 - Store-layer: blue + blind sees revealed only; blue + standard sees all; lead/red/observer see all;
   non-member has no seat and the caller above decides, per `blind.Scope`'s zero-value contract.
 - The `Where` / `Permits` agreement property extended to the step repository, matching

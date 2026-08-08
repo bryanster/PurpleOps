@@ -143,13 +143,13 @@ func (s *Service) GetStep(ctx context.Context, id string) (storengagement.Step, 
 // ListSteps returns every step in a scenario, blind-filtered through scope.
 // When scope withholds unrevealed steps, only revealed steps are returned.
 func (s *Service) ListSteps(ctx context.Context, scenarioID string, scope blind.Scope) ([]storengagement.Step, error) {
-	return s.steps.ListByScenario(ctx, scenarioID)
+	return s.steps.ListByScenario(ctx, scenarioID, scope)
 }
 
 // ListEngagementSteps returns every step across all scenarios in an
 // engagement, blind-filtered through scope.
 func (s *Service) ListEngagementSteps(ctx context.Context, engagementID string, scope blind.Scope) ([]storengagement.Step, error) {
-	return s.steps.ListByEngagement(ctx, engagementID)
+	return s.steps.ListByEngagement(ctx, engagementID, scope)
 }
 
 // PatchStepInput is the caller's half of patching a step.
@@ -280,7 +280,7 @@ func (s *Service) ReorderSteps(ctx context.Context, actor authn.Subject, scenari
 		return nil, apierr.Conflict(fmt.Sprintf("engagement is %s", eng.Status))
 	}
 
-	existing, err := s.steps.ListByScenario(ctx, scenarioID)
+	existing, err := s.steps.ListByScenario(ctx, scenarioID, blind.Scope{})
 	if err != nil {
 		return nil, fmt.Errorf("step: reorder: list: %w", err)
 	}
@@ -308,7 +308,7 @@ func (s *Service) ReorderSteps(ctx context.Context, actor authn.Subject, scenari
 		events.VerbStepReordered, scenarioID, delta,
 	)
 
-	return s.steps.ListByScenario(ctx, scenarioID)
+	return s.steps.ListByScenario(ctx, scenarioID, blind.Scope{})
 }
 
 // RevealStep sets revealed_at to now, making the step visible to blue in a

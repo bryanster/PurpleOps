@@ -4,12 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/store"
+	"github.com/bryanster/blacklight/internal/store/blind"
 	"github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/store/storetest"
 )
@@ -754,4 +757,196 @@ func TestTimestampsAreUTC(t *testing.T) {
 	if got.CreatedAt.Location() != time.UTC {
 		t.Errorf("read-back CreatedAt zone = %s, want UTC", got.CreatedAt.Location())
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Blind-mode step list tests (M5-002)
+// ---------------------------------------------------------------------------
+
+// TestBlueReaderOfBlindEngagementSeesOnlyRevealedStepsStoreLayer verifies the
+// query-layer blind fence for steps: a blue caller in a blind engagement gets
+// unrevealed steps excluded by the SQL, proven at the repository layer with
+// no HTTP server above it.
+func TestBlueReaderOfBlindEngagementSeesOnlyRevealedStepsStoreLayer(t *testing.T) {
+	r := newRepos(t)
+
+	// Create a blind engagement.
+	eng := mustCreateBlindEngagement(t, r)
+	sc := mustCreateScenario(t, r, eng.ID, 1, "Blind Scenario")
+
+	// Create three steps; reveal only the first and third.
+	s1, _ := mustCreateStepWithExecution(t, r, sc.ID, 1, "Revealed A")
+	s2, _ := mustCreateStepWithExecution(t, r, sc.ID, 2, "Hidden")
+	s3, _ := mustCreateStepWithExecution(t, r, sc.ID, 3, "Revealed B")
+
+	if _, err := r.Steps.Reveal(context.Background(), s1.ID); err != nil {
+		t.Fatalf("Reveal s1: %v", err)
+	}
+	if _, err := r.Steps.Reveal(context.Background(), s3.ID); err != nil {
+		t.Fatalf("Reveal s3: %v", err)
+	}
+
+	blueScope := blind.Scope{Blind: true, Seat: authz.EngagementRoleBlue}
+
+	// ListByScenario: blue should see only revealed steps.
+	got, err := r.Steps.ListByScenario(context.Background(), sc.ID, blueScope)
+	if err != nil {
+		t.Fatalf("ListByScenario: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("blue blind ListByScenario: got %d steps, want 2", len(got))
+	}
+	for _, s := range got {
+		if s.ID == s2.ID {
+			t.Errorf("blue saw unrevealed step %q", s2.ID)
+		}
+	}
+
+	// ListByEngagement: same filter via the engagement-level query.
+	got2, err := r.Steps.ListByEngagement(context.Background(), eng.ID, blueScope)
+	if err != nil {
+		t.Fatalf("ListByEngagement: %v", err)
+	}
+	if len(got2) != 2 {
+		t.Fatalf("blue blind ListByEngagement: got %d steps, want 2", len(got2))
+	}
+	for _, s := range got2 {
+		if s.ID == s2.ID {
+			t.Errorf("blue saw unrevealed step %q in ListByEngagement", s2.ID)
+		}
+	}
+}
+
+// TestEveryOtherSeatSeesAllSteps confirms the blind filter does not hide rows
+// from any reader who is not the blue seat of a blind engagement.
+func TestEveryOtherSeatSeesAllSteps(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateBlindEngagement(t, r)
+	sc := mustCreateScenario(t, r, eng.ID, 1, "All Seats Scenario")
+
+	// Create a mix: one revealed, one not.
+	s1, _ := mustCreateStepWithExecution(t, r, sc.ID, 1, "Revealed")
+	_, _ = mustCreateStepWithExecution(t, r, sc.ID, 2, "Hidden")
+
+	if _, err := r.Steps.Reveal(context.Background(), s1.ID); err != nil {
+		t.Fatalf("Reveal: %v", err)
+	}
+
+	nonBlueScopes := []blind.Scope{
+		{Blind: true, Seat: authz.EngagementRoleRed},
+		{Blind: true, Seat: authz.EngagementRoleLead},
+		{Blind: true, Seat: authz.EngagementRoleObserver},
+		{Blind: false, Seat: authz.EngagementRoleBlue},
+		{}, // zero value: non-blind engagement, no seat
+	}
+
+	for _, scope := range nonBlueScopes {
+		t.Run(fmt.Sprintf("Blind=%v_Seat=%s", scope.Blind, scope.Seat), func(t *testing.T) {
+			got, err := r.Steps.ListByScenario(context.Background(), sc.ID, scope)
+			if err != nil {
+				t.Fatalf("ListByScenario: %v", err)
+			}
+			if len(got) != 2 {
+				t.Errorf("got %d steps, want 2 (scope=%+v)", len(got), scope)
+			}
+		})
+	}
+}
+
+// TestStepRepoWhereAndPermitsAgree extends the blind package's agreement test
+// to the step repository: the SQL WHERE clause and the Go Permits predicate
+// must produce the same filter for every scope.
+func TestStepRepoWhereAndPermitsAgree(t *testing.T) {
+	r := newRepos(t)
+	eng := mustCreateBlindEngagement(t, r)
+	sc := mustCreateScenario(t, r, eng.ID, 1, "Agreement Scenario")
+
+	s1, _ := mustCreateStepWithExecution(t, r, sc.ID, 1, "Revealed")
+	s2, _ := mustCreateStepWithExecution(t, r, sc.ID, 2, "Hidden")
+
+	var err error
+	if s1, err = r.Steps.Reveal(context.Background(), s1.ID); err != nil {
+		t.Fatalf("Reveal: %v", err)
+	}
+
+	for _, scope := range everyStepScope() {
+		t.Run(fmt.Sprintf("Blind=%v_Seat=%s", scope.Blind, scope.Seat), func(t *testing.T) {
+			// SQL-side filter: ListByScenario applies scope.Where in SQL.
+			sqlSteps, err := r.Steps.ListByScenario(context.Background(), sc.ID, scope)
+			if err != nil {
+				t.Fatalf("ListByScenario: %v", err)
+			}
+
+			// Build the expected set by applying scope.Permits to each row.
+			allSteps := []engagement.Step{s1, s2}
+			var wantIDs []string
+			for _, s := range allSteps {
+				if scope.Permits(s.RevealedAt != nil) {
+					wantIDs = append(wantIDs, s.ID)
+				}
+			}
+
+			var gotIDs []string
+			for _, s := range sqlSteps {
+				gotIDs = append(gotIDs, s.ID)
+			}
+
+			if !stringSetsEqual(gotIDs, wantIDs) {
+				t.Errorf("Where/Permits disagree: scope=%+v\n  SQL (Where)=%v\n  Go (Permits)=%v",
+					scope, gotIDs, wantIDs)
+			}
+		})
+	}
+}
+
+// mustCreateBlindEngagement creates an engagement in blind mode.
+func mustCreateBlindEngagement(t *testing.T, r repos) engagement.Engagement {
+	t.Helper()
+	e, err := r.Engagements.Create(context.Background(), engagement.NewEngagement{
+		Name:              "Blind Engagement",
+		Client:            "Test Corp",
+		Description:       "A blind assessment",
+		StartsOn:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndsOn:            time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		AttackVersion:     "15.1",
+		Mode:              engagement.EngagementModeBlind,
+		AutoRevealOnStart: false,
+		CreatedBy:         "user-1",
+	})
+	if err != nil {
+		t.Fatalf("mustCreateBlindEngagement: %v", err)
+	}
+	return e
+}
+
+// everyStepScope returns every combination of blind flag and seat that matters
+// for the step blind fence.
+func everyStepScope() []blind.Scope {
+	seats := append(authz.EngagementRoles(), "")
+	scopes := make([]blind.Scope, 0, len(seats)*2)
+	for _, seat := range seats {
+		for _, isBlind := range []bool{true, false} {
+			scopes = append(scopes, blind.Scope{Blind: isBlind, Seat: seat})
+		}
+	}
+	return scopes
+}
+
+// stringSetsEqual reports whether a and b contain the same strings, regardless
+// of order.
+func stringSetsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := make(map[string]int, len(a))
+	for _, s := range a {
+		m[s]++
+	}
+	for _, s := range b {
+		m[s]--
+		if m[s] < 0 {
+			return false
+		}
+	}
+	return true
 }

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
+	"github.com/bryanster/blacklight/internal/store/blind"
 )
 
 const stepColumns = `id, scenario_id, ordinal, name, objective, technique_id, subtechnique_id, tactic_id, "procedure", template_id, target_asset, tools, controls_in_scope, attack_version, revealed_at, created_at, updated_at`
@@ -215,10 +217,11 @@ func (r *Steps) ByID(ctx context.Context, id string) (Step, error) {
 	return s, nil
 }
 
-// ListByScenario returns every step in a scenario, ordered by ordinal.
-func (r *Steps) ListByScenario(ctx context.Context, scenarioID string) ([]Step, error) {
+// ListByScenario returns every step in a scenario, blind-filtered through scope,
+// ordered by ordinal.
+func (r *Steps) ListByScenario(ctx context.Context, scenarioID string, scope blind.Scope) ([]Step, error) {
 	rows, err := r.db.Read().QueryContext(ctx,
-		selectStep+`WHERE scenario_id = ? ORDER BY ordinal ASC`, scenarioID)
+		selectStep+`WHERE scenario_id = ? AND `+scope.Where("revealed_at IS NOT NULL")+` ORDER BY ordinal ASC`, scenarioID)
 	if err != nil {
 		return nil, fmt.Errorf("step: list by scenario: %w", err)
 	}
@@ -420,15 +423,15 @@ func (r *Steps) Reveal(ctx context.Context, id string) (Step, error) {
 
 const listStepsByEngagement = selectStepQualified + `
 	JOIN app.scenario ON app.step.scenario_id = app.scenario.id
-	WHERE app.scenario.engagement_id = ?
-	ORDER BY app.scenario.ordinal ASC, app.step.ordinal ASC`
+	WHERE app.scenario.engagement_id = ? AND `
+
+const listStepsByEngagementOrder = ` ORDER BY app.scenario.ordinal ASC, app.step.ordinal ASC`
 
 // ListByEngagement returns every step across all scenarios in an engagement,
-// ordered by scenario ordinal then step ordinal. Callers apply blind filtering
-// via [Scope.Where] by concatenating it into the WHERE clause; this method
-// returns all steps unfiltered so the caller can control what to hide.
-func (r *Steps) ListByEngagement(ctx context.Context, engagementID string) ([]Step, error) {
-	rows, err := r.db.Read().QueryContext(ctx, listStepsByEngagement, engagementID)
+// blind-filtered through scope, ordered by scenario ordinal then step ordinal.
+func (r *Steps) ListByEngagement(ctx context.Context, engagementID string, scope blind.Scope) ([]Step, error) {
+	rows, err := r.db.Read().QueryContext(ctx,
+		listStepsByEngagement+scope.Where("app.step.revealed_at IS NOT NULL")+listStepsByEngagementOrder, engagementID)
 	if err != nil {
 		return nil, fmt.Errorf("step: list by engagement: %w", err)
 	}
