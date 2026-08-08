@@ -46,7 +46,6 @@ export function EngagementLayout(): ReactNode {
     return <PageLoading label="Loading engagement…" />
   }
 
-
   if (engagement.error) {
     return (
       <PageError
@@ -58,14 +57,8 @@ export function EngagementLayout(): ReactNode {
     )
   }
 
-  if (!engagement.data) {
-    return <Navigate to="/engagements" replace />
-  }
-
   const eng = engagement.data
-  const role = isPlatformAdmin(user)
-    ? ('admin' as EngagementRole)
-    : roleInEngagement(eng.id, user)
+  const role = isPlatformAdmin(user) ? ('admin' as EngagementRole) : roleInEngagement(eng.id, user)
 
   if (role === undefined) {
     return <Navigate to="/engagements" replace />
@@ -88,9 +81,7 @@ export function EngagementLayout(): ReactNode {
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold">{eng.name}</h1>
               <StatusBadge status={eng.status} />
-              <Badge variant="outline">
-                {eng.mode === 'blind' ? 'Blind' : 'Standard'}
-              </Badge>
+              <Badge variant="outline">{eng.mode === 'blind' ? 'Blind' : 'Standard'}</Badge>
             </div>
             <p className="text-muted-foreground text-sm">
               {eng.client && <span>{eng.client} · </span>}
@@ -101,7 +92,7 @@ export function EngagementLayout(): ReactNode {
         </div>
 
         <nav className="border-b" aria-label="Engagement sections">
-          <div className="flex gap-1 -mb-px overflow-x-auto">
+          <div className="-mb-px flex gap-1 overflow-x-auto">
             {tabs.map((tab) => (
               <NavLink
                 key={tab.to}
@@ -109,11 +100,11 @@ export function EngagementLayout(): ReactNode {
                 end={tab.to === engagementPath(eng.id)}
                 className={({ isActive }) =>
                   cn(
-                    'border-b-2 px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap',
+                    'border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors',
                     'focus-visible:ring-ring/50 outline-none focus-visible:ring-3',
                     isActive
                       ? 'border-primary text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30',
+                      : 'text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 border-transparent',
                   )
                 }
               >
@@ -123,8 +114,8 @@ export function EngagementLayout(): ReactNode {
           </div>
         </nav>
 
-        <div className="flex flex-1 min-h-0 gap-0">
-          <div className="flex-1 min-w-0">
+        <div className="flex min-h-0 flex-1 gap-0">
+          <div className="min-w-0 flex-1">
             <Outlet />
           </div>
           <ActivityRail />
@@ -134,7 +125,7 @@ export function EngagementLayout(): ReactNode {
   )
 }
 
-// ── Engagement Context ────────────────────────────────────────────────────────
+/* eslint-disable react-refresh/only-export-components -- EngagementCtx and useEngagementContext are consumed co-located with EngagementLayout; separating them into a standalone file would scatter a tightly-coupled API across the feature. */
 
 export interface EngagementContextValue {
   engagementId: string
@@ -142,9 +133,7 @@ export interface EngagementContextValue {
   closed: boolean
 }
 
-export const EngagementCtx = createContext<EngagementContextValue | undefined>(
-  undefined,
-)
+export const EngagementCtx = createContext<EngagementContextValue | undefined>(undefined)
 
 function EngagementContextProvider({
   engagementId,
@@ -152,23 +141,19 @@ function EngagementContextProvider({
   closed,
   children,
 }: EngagementContextValue & { children: ReactNode }): ReactNode {
-  return (
-    <EngagementCtx value={{ engagementId, role, closed }}>
-      {children}
-    </EngagementCtx>
-  )
+  return <EngagementCtx value={{ engagementId, role, closed }}>{children}</EngagementCtx>
 }
 
 /** The engagement identity + caller role for any child component. */
 export function useEngagementContext(): EngagementContextValue {
   const ctx = use(EngagementCtx)
   if (ctx === undefined) {
-    throw new Error(
-      'useEngagementContext must be used inside EngagementLayout',
-    )
+    throw new Error('useEngagementContext must be used inside EngagementLayout')
   }
   return ctx
 }
+
+/* eslint-enable react-refresh/only-export-components */
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -181,11 +166,7 @@ function StatusBadge({ status }: { status: string }): ReactNode {
         : status === 'closed'
           ? 'outline'
           : 'secondary'
-  return (
-    <Badge variant={variant as never}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </Badge>
-  )
+  return <Badge variant={variant}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>
 }
 
 function roleLabel(role: EngagementRole): string {

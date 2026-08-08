@@ -21,15 +21,11 @@ export interface NavSection {
 
 export const NAV_SECTIONS: readonly NavSection[] = [
   {
-    items: [
-      { label: 'Engagements', to: ENGAGEMENTS_PATH },
-    ],
+    items: [{ label: 'Engagements', to: ENGAGEMENTS_PATH }],
   },
   {
     label: 'Content',
-    items: [
-      { label: 'Content library', to: CONTENT_PATH },
-    ],
+    items: [{ label: 'Content library', to: CONTENT_PATH }],
   },
   {
     label: 'Settings',

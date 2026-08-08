@@ -4,11 +4,7 @@ import { useNavigate } from 'react-router'
 import { PageEmpty, PageError } from '@/app/shell/page-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
@@ -29,13 +25,13 @@ function relativeTime(iso: string): string {
   const now = Date.now()
   const seconds = Math.floor((now - then) / 1000)
   if (seconds < 0) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
+  if (seconds < 60) return `${String(seconds)}s ago`
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60) return `${String(minutes)}m ago`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return `${String(hours)}h ago`
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
+  if (days < 7) return `${String(days)}d ago`
   return new Date(iso).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -107,7 +103,9 @@ export function ActivityRail(): ReactNode {
       <Badge
         variant={family === null ? 'default' : 'outline'}
         className="cursor-pointer"
-        onClick={() => setFamily(null)}
+        onClick={() => {
+          setFamily(null)
+        }}
       >
         All
       </Badge>
@@ -116,7 +114,9 @@ export function ActivityRail(): ReactNode {
           key={f}
           variant={family === f ? 'default' : 'outline'}
           className="cursor-pointer"
-          onClick={() => setFamily(family === f ? null : f)}
+          onClick={() => {
+            setFamily(family === f ? null : f)
+          }}
         >
           {familyLabel(f)}
         </Badge>
@@ -128,7 +128,7 @@ export function ActivityRail(): ReactNode {
 
   if (activity.isPending) {
     body = (
-      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center py-8 text-sm">
         Loading…
       </div>
     )
@@ -177,9 +177,13 @@ export function ActivityRail(): ReactNode {
   }
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col border-l w-72 shrink-0">
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="flex w-72 shrink-0 flex-col border-l"
+    >
       {header}
-      <CollapsibleContent className="flex flex-col flex-1 min-h-0">
+      <CollapsibleContent className="flex min-h-0 flex-1 flex-col">
         {filters}
         <Separator />
         <div className="flex-1 overflow-y-auto">{body}</div>
@@ -201,22 +205,22 @@ function ActivityRow({
     <button
       type="button"
       className={cn(
-        'flex flex-col gap-0.5 px-3 py-2 text-left w-full',
+        'flex w-full flex-col gap-0.5 px-3 py-2 text-left',
         'hover:bg-accent hover:text-accent-foreground',
         'focus-visible:bg-accent focus-visible:outline-none',
       )}
-      onClick={() => onClick(entry)}
+      onClick={() => {
+        onClick(entry)
+      }}
     >
       <div className="flex items-center gap-1.5">
         <Badge variant="secondary" className="px-1 py-0 text-[10px] leading-normal font-normal">
           {familyLabel(family)}
         </Badge>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {relativeTime(entry.at)}
-        </span>
+        <span className="text-muted-foreground text-xs tabular-nums">{relativeTime(entry.at)}</span>
       </div>
       <span className="text-sm">{verbLabel(entry.verb)}</span>
-      <span className="text-xs text-muted-foreground truncate">
+      <span className="text-muted-foreground truncate text-xs">
         {entry.objectType}/{entry.objectId.slice(0, 8)}…
       </span>
     </button>

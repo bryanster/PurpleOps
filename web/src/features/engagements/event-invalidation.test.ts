@@ -18,7 +18,7 @@ function keysEqual(
   if (a.length !== b.length) return false
   return a.every((key, i) => {
     const bk = b[i]
-    if (bk === undefined || key.length !== bk.length) return false
+    if (bk?.length !== key.length) return false
     return key.every((v, j) => v === bk[j])
   })
 }

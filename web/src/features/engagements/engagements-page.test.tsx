@@ -2,10 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 
 import type { components } from '@/api/schema'
-import {
-  adminUserFixture,
-  get,
-} from '@/test/msw/handlers'
+import { adminUserFixture, get } from '@/test/msw/handlers'
 import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/render'
 
@@ -14,9 +11,7 @@ import { EngagementsPage } from './engagements-page'
 
 function stubEmptyList(): void {
   server.use(
-    get('/engagements', () =>
-      Response.json({ items: [], nextCursor: undefined }, { status: 200 }),
-    ),
+    get('/engagements', () => Response.json({ items: [], nextCursor: undefined }, { status: 200 })),
   )
 }
 

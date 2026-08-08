@@ -248,14 +248,14 @@ test('blue presence focus stripped for unrevealed steps in blind engagement', as
   expect(presenceResp.status()).toBe(200)
   const presence = (await presenceResp.json()) as PresenceResponse
   expect(presence.entries).toHaveLength(1)
-  expect(presence.entries[0].userId).toBeTruthy()
+  const entry = presence.entries[0]
+  if (!entry) throw new Error('Expected first presence entry')
+  expect(entry.userId).toBeTruthy()
   // Focus must be absent or nil for blue in blind mode.
-  expect(presence.entries[0].focus?.stepId ?? null).toBeNull()
+  expect(entry.focus?.stepId ?? null).toBeNull()
 })
 
-test('blue cannot list unrevealed steps from engagement steps endpoint', async ({
-  request,
-}) => {
+test('blue cannot list unrevealed steps from engagement steps endpoint', async ({ request }) => {
   // --- Setup ---
   const adminCookie = await login(request, adminEmail, adminPassword)
   const engagementId = await createBlindEngagement(request, adminCookie)

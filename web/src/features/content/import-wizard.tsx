@@ -383,7 +383,7 @@ function IssueList({
       </h4>
       <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs">
         {items.map((item, index) => (
-          <li key={`${item.path}-${index}`} className="rounded border px-2 py-1">
+          <li key={`${item.path}-${String(index)}`} className="rounded border px-2 py-1">
             <span className="font-mono">{item.path}</span>
             <span className="text-muted-foreground"> — {item.message}</span>
           </li>

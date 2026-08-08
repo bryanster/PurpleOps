@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageEmpty, PageError, PageLoading } from '@/app/shell/page-state'
@@ -67,7 +67,7 @@ export function FindingsPage(): ReactNode {
     )
   }
 
-  const items = findings.data ?? []
+  const items = findings.data
 
   return (
     <div className="flex flex-col gap-4">
@@ -160,7 +160,7 @@ function SeverityBadge({ severity }: { severity: string }): ReactNode {
         ? 'default'
         : 'secondary'
   return (
-    <Badge variant={variant as never}>
+    <Badge variant={variant}>
       {severity.charAt(0).toUpperCase() + severity.slice(1).replace('_', ' ')}
     </Badge>
   )
@@ -176,7 +176,7 @@ function StatusBadge({ status }: { status: string }): ReactNode {
           ? 'secondary'
           : 'outline'
   return (
-    <Badge variant={variant as never}>
+    <Badge variant={variant}>
       {status === 'in_progress'
         ? 'In Progress'
         : status === 'wont_fix'
@@ -209,7 +209,7 @@ function CreateFindingDialog({
     setSubmitted(false)
   }
 
-  function handleSubmit(event: FormEvent): void {
+  function handleSubmit(event: React.SyntheticEvent): void {
     event.preventDefault()
     if (title.trim().length === 0 || description.trim().length === 0) return
     setSubmitted(true)
@@ -369,7 +369,7 @@ function FindingDetailDialog({
                 </p>
               </div>
             )}
-            {finding.stepIds && finding.stepIds.length > 0 && (
+            {finding.stepIds.length > 0 && (
               <div>
                 <h3 className="text-sm font-medium">Related steps</h3>
                 <div className="mt-1 flex flex-wrap gap-1">

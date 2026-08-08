@@ -75,9 +75,7 @@ export function verbLabel(verb: string): string {
   const dot = verb.lastIndexOf('.')
   if (dot === -1) return verb
   const action = verb.slice(dot + 1)
-  return action
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 /**

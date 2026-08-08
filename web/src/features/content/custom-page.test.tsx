@@ -104,7 +104,9 @@ function renderCustom(user: components['schemas']['CurrentUser'] = adminUserFixt
 /** Toolbar "New procedure" — empty state also renders one with the same name. */
 async function clickNewProcedure(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   const buttons = await screen.findAllByRole('button', { name: 'New procedure' })
-  await user.click(buttons[0]!)
+  const firstButton = buttons[0]
+  if (!firstButton) throw new Error('Expected "New procedure" button')
+  await user.click(firstButton)
 }
 
 afterEach(() => {
@@ -131,20 +133,28 @@ describe('CustomContentPage', () => {
     await clickNewProcedure(user)
     const dialog = await screen.findByRole('dialog')
 
-    await user.type(within(dialog).getAllByLabelText('Name')[0]!, 'Echo twice')
+    const firstNameInput = within(dialog).getAllByLabelText('Name')[0]
+    if (!firstNameInput) throw new Error('Expected name input')
+    await user.type(firstNameInput, 'Echo twice')
     await user.type(within(dialog).getByLabelText('Command'), 'echo "#{one}" "#{two}"')
     await user.click(within(dialog).getByRole('button', { name: 'Add argument' }))
     await user.click(within(dialog).getByRole('button', { name: 'Add argument' }))
 
     const nameFields = within(dialog).getAllByLabelText('Name')
-    await user.clear(nameFields[1]!)
-    await user.type(nameFields[1]!, 'one')
-    await user.clear(nameFields[2]!)
-    await user.type(nameFields[2]!, 'two')
+    const name1 = nameFields[1]
+    const name2 = nameFields[2]
+    if (!name1 || !name2) throw new Error('Expected name fields')
+    await user.clear(name1)
+    await user.type(name1, 'one')
+    await user.clear(name2)
+    await user.type(name2, 'two')
 
     const defaultFields = within(dialog).getAllByLabelText('Default')
-    await user.type(defaultFields[0]!, 'a')
-    await user.type(defaultFields[1]!, 'b')
+    const default0 = defaultFields[0]
+    const default1 = defaultFields[1]
+    if (!default0 || !default1) throw new Error('Expected default fields')
+    await user.type(default0, 'a')
+    await user.type(default1, 'b')
 
     await user.click(within(dialog).getByRole('button', { name: 'Create procedure' }))
 
@@ -184,7 +194,9 @@ describe('CustomContentPage', () => {
 
     await clickNewProcedure(user)
     const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getAllByLabelText('Name')[0]!, 'Bad tech')
+    const firstNameInput = within(dialog).getAllByLabelText('Name')[0]
+    if (!firstNameInput) throw new Error('Expected name input')
+    await user.type(firstNameInput, 'Bad tech')
     await user.type(within(dialog).getByLabelText('Technique ids'), 'not-a-tech')
     await user.click(within(dialog).getByRole('button', { name: 'Create procedure' }))
 
@@ -345,7 +357,9 @@ describe('procedure form patch', () => {
     const row = await screen.findByRole('row', { name: /Echo twice/ })
     await user.click(within(row).getByRole('button', { name: 'Edit' }))
     const dialog = await screen.findByRole('dialog')
-    const nameInput = within(dialog).getAllByLabelText('Name')[0]!
+    const firstNameInput = within(dialog).getAllByLabelText('Name')[0]
+    if (!firstNameInput) throw new Error('Expected name input')
+    const nameInput = firstNameInput
     await user.clear(nameInput)
     await user.type(nameInput, 'Echo thrice')
     await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))

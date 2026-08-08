@@ -186,7 +186,14 @@ function ProceduresSection(): ReactNode {
             title="No custom procedures yet"
             description="Create one, or import a v1 testcases file."
             action={
-              <Button type="button" size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setCreateOpen(true)
+                }}
+              >
                 New procedure
               </Button>
             }
@@ -445,7 +452,13 @@ function DetectionsSection(): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => {
+            setCreateOpen(true)
+          }}
+        >
           New detection
         </Button>
       </div>
@@ -465,7 +478,14 @@ function DetectionsSection(): ReactNode {
             title="No custom detection rules yet"
             description="Create a reference rule, or import from a custom export."
             action={
-              <Button type="button" size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setCreateOpen(true)
+                }}
+              >
                 New detection
               </Button>
             }
@@ -487,7 +507,9 @@ function DetectionsSection(): ReactNode {
                     <button
                       type="button"
                       className="hover:text-foreground focus-visible:ring-ring/50 rounded-sm text-left font-medium outline-none focus-visible:ring-3"
-                      onClick={() => setDetailId(row.id)}
+                      onClick={() => {
+                        setDetailId(row.id)
+                      }}
                     >
                       {row.name}
                     </button>
@@ -506,7 +528,9 @@ function DetectionsSection(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setDetailId(row.id)}
+                        onClick={() => {
+                          setDetailId(row.id)
+                        }}
                       >
                         Open
                       </Button>
@@ -514,7 +538,9 @@ function DetectionsSection(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditTarget(row)}
+                        onClick={() => {
+                          setEditTarget(row)
+                        }}
                       >
                         Edit
                       </Button>
@@ -522,7 +548,9 @@ function DetectionsSection(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setDeleteTarget(row)}
+                        onClick={() => {
+                          setDeleteTarget(row)
+                        }}
                       >
                         Delete
                       </Button>
@@ -571,7 +599,9 @@ function DetectionsSection(): ReactNode {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setDeleteTarget(row)}
+                  onClick={() => {
+                    setDeleteTarget(row)
+                  }}
                 >
                   Delete
                 </Button>
@@ -632,7 +662,13 @@ function NotesSection(): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => {
+            setCreateOpen(true)
+          }}
+        >
           New note
         </Button>
       </div>
@@ -652,7 +688,14 @@ function NotesSection(): ReactNode {
             title="No custom notes yet"
             description="Create a note, or import knowledgebase YAML."
             action={
-              <Button type="button" size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setCreateOpen(true)
+                }}
+              >
                 New note
               </Button>
             }
@@ -674,7 +717,9 @@ function NotesSection(): ReactNode {
                     <button
                       type="button"
                       className="hover:text-foreground focus-visible:ring-ring/50 rounded-sm text-left font-medium outline-none focus-visible:ring-3"
-                      onClick={() => setDetailId(row.id)}
+                      onClick={() => {
+                        setDetailId(row.id)
+                      }}
                     >
                       {row.title}
                     </button>
@@ -699,7 +744,9 @@ function NotesSection(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setDetailId(row.id)}
+                        onClick={() => {
+                          setDetailId(row.id)
+                        }}
                       >
                         Open
                       </Button>
@@ -707,7 +754,9 @@ function NotesSection(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditTarget(row)}
+                        onClick={() => {
+                          setEditTarget(row)
+                        }}
                       >
                         Edit
                       </Button>
@@ -715,7 +764,9 @@ function NotesSection(): ReactNode {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setDeleteTarget(row)}
+                        onClick={() => {
+                          setDeleteTarget(row)
+                        }}
                       >
                         Delete
                       </Button>
@@ -764,7 +815,9 @@ function NotesSection(): ReactNode {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setDeleteTarget(row)}
+                  onClick={() => {
+                    setDeleteTarget(row)
+                  }}
                 >
                   Delete
                 </Button>

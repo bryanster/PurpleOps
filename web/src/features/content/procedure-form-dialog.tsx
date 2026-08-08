@@ -27,7 +27,7 @@ import {
   type ContentProcedureTemplate,
 } from './custom-queries'
 
-type ArgDraft = {
+interface ArgDraft {
   key: string
   name: string
   description: string

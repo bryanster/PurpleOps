@@ -36,27 +36,19 @@ describe('isHubEnvelope', () => {
   })
 
   it('returns true even when data is null', () => {
-    expect(
-      isHubEnvelope({ id: 'abc', type: 'test.ping', data: null }),
-    ).toBe(true)
+    expect(isHubEnvelope({ id: 'abc', type: 'test.ping', data: null })).toBe(true)
   })
 
   it('returns false when id is missing', () => {
-    expect(
-      isHubEnvelope({ type: 'test.ping', data: {} }),
-    ).toBe(false)
+    expect(isHubEnvelope({ type: 'test.ping', data: {} })).toBe(false)
   })
 
   it('returns false when type is missing', () => {
-    expect(
-      isHubEnvelope({ id: 'abc', data: {} }),
-    ).toBe(false)
+    expect(isHubEnvelope({ id: 'abc', data: {} })).toBe(false)
   })
 
   it('returns false when data key is missing', () => {
-    expect(
-      isHubEnvelope({ id: 'abc', type: 'test.ping' }),
-    ).toBe(false)
+    expect(isHubEnvelope({ id: 'abc', type: 'test.ping' })).toBe(false)
   })
 
   it('returns false for a non-object', () => {
@@ -68,9 +60,6 @@ describe('isHubEnvelope', () => {
 
   it('returns false for a flat content job payload (no envelope)', () => {
     // Legacy / non-envelope payloads have flat keys like jobId, not id/type/data.
-    expect(
-      isHubEnvelope({ jobId: 'job-1', phase: 'import', status: 'running' }),
-    ).toBe(false)
+    expect(isHubEnvelope({ jobId: 'job-1', phase: 'import', status: 'running' })).toBe(false)
   })
 })
-

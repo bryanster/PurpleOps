@@ -54,10 +54,6 @@ export function SettingsPage(): ReactNode {
     )
   }
 
-  if (!engagement.data) {
-    return <PageError error={new Error('Engagement not found')} />
-  }
-
   if (!canManage(role)) {
     return (
       <PageEmpty

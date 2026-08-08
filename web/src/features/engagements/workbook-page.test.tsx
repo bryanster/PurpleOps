@@ -562,7 +562,7 @@ describe('M4-005 — live drawer updates', () => {
     await waitFor(
       () => {
         const rows = screen.getAllByRole('row')
-        const flashed = rows.find((r) => r.textContent?.includes('Phishing'))
+        const flashed = rows.find((r) => r.textContent.includes('Phishing'))
         expect(flashed?.className).toContain('animate-flash-update')
       },
       { timeout: 3000, interval: 50 },
@@ -857,10 +857,10 @@ describe('M4-007 — unread badge', () => {
     // The badge shows the comment count inside the row (circle with "1")
     // The UnreadCommentBadge renders a span with rounded-full
     const rows = screen.getAllByRole('row')
-    const phishingRow = rows.find((r) => r.textContent?.includes('Phishing'))
+    const phishingRow = rows.find((r) => r.textContent.includes('Phishing'))
     expect(phishingRow).toBeDefined()
     // Badge content is the comment count
-    expect(phishingRow!.textContent).toContain('1')
+    expect(phishingRow?.textContent).toContain('1')
   })
   test('opening drawer clears unread badge in localStorage', async () => {
     stubScoredWorkbook()
@@ -878,7 +878,9 @@ describe('M4-007 — unread badge', () => {
     // After opening, localStorage should have a recent lastViewedAt.
     // The badge should disappear because newest comment is not newer than lastViewedAt.
     const key = 'bl_comment_unread:' + ENGAGEMENT_ID + ':' + scoredExecution().id
-    const stored = JSON.parse(localStorage.getItem(key)!)
+    const raw = localStorage.getItem(key)
+    if (raw === null) throw new Error('expected stored value')
+    const stored = JSON.parse(raw) as { lastViewedAt: string }
     expect(stored.lastViewedAt).toBeDefined()
 
     // After markRead, newestCommentAt (2025-12-04T10:00:00Z) < lastViewedAt (now)
@@ -888,8 +890,8 @@ describe('M4-007 — unread badge', () => {
 
     await waitFor(() => {
       const rows = screen.getAllByRole('row')
-      const phishingRow = rows.find((r) => r.textContent?.includes('Phishing'))
-      expect(phishingRow).toBeDefined()
+      const _phishingRow = rows.find((r) => r.textContent.includes('Phishing'))
+      expect(_phishingRow).toBeDefined()
       // The badge text (the count number) should not appear as a standalone element
       // in the row — the UnreadCommentBadge returns null
     })

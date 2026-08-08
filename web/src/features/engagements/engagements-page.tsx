@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 
@@ -220,7 +220,7 @@ function StatusBadge({ status }: { status: EngagementStatus }): ReactNode {
         : status === 'closed'
           ? 'outline'
           : 'secondary'
-  return <Badge variant={variant as never}>{statusLabel(status)}</Badge>
+  return <Badge variant={variant}>{statusLabel(status)}</Badge>
 }
 
 function statusLabel(status: EngagementStatus): string {
@@ -254,7 +254,7 @@ function CreateEngagementDialog({
     setSubmitted(false)
   }
 
-  function handleSubmit(event: FormEvent): void {
+  function handleSubmit(event: React.SyntheticEvent): void {
     event.preventDefault()
     if (name.trim().length === 0 || attackVersion === '') return
     setSubmitted(true)

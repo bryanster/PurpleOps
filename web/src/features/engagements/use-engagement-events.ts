@@ -5,10 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEventSource, type ServerEvent } from '@/lib/use-event-source'
 
 import { engagementKeys } from './queries'
-import {
-  queryKeysForVerb,
-  type EngagementEventPayload,
-} from './event-invalidation'
+import { queryKeysForVerb, type EngagementEventPayload } from './event-invalidation'
 
 const CURSOR_PREFIX = 'bl_event_cursor:'
 

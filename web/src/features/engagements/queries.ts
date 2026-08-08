@@ -102,7 +102,7 @@ export function engagementsQueryOptions(filters: {
         params.status = filters.status
       }
       if (pageParam) {
-        params.cursor = pageParam as string
+        params.cursor = pageParam
       }
       return unwrap(
         await api.GET('/engagements', {
@@ -129,13 +129,15 @@ export function useEngagement(engagementId: string | undefined): UseQueryResult<
 export function engagementQueryOptions(engagementId: string | undefined) {
   return queryOptions({
     queryKey: engagementKeys.detail(engagementId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}', {
-          params: { path: { engagementId: engagementId! } },
+          params: { path: { engagementId } },
           signal,
         }),
-      ),
+      )
+    },
     enabled: engagementId !== undefined && engagementId !== '',
   })
 }
@@ -216,20 +218,20 @@ export function useDeleteEngagement(): UseMutationResult<void, Error, { engageme
   })
 }
 
-// ── Members ──────────────────────────────────────────────────────────────────
-
 export function useEngagementMembers(
   engagementId: string | undefined,
 ): UseQueryResult<EngagementMember[]> {
   return useQuery({
     queryKey: engagementKeys.members(engagementId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/members', {
-          params: { path: { engagementId: engagementId! } },
+          params: { path: { engagementId } },
           signal,
         }),
-      ),
+      )
+    },
     enabled: engagementId !== undefined && engagementId !== '',
   })
 }
@@ -298,20 +300,20 @@ export function useRemoveMember(): UseMutationResult<
   })
 }
 
-// ── Scenarios ────────────────────────────────────────────────────────────────
-
 export function useScenarios(
   engagementId: string | undefined,
 ): UseQueryResult<components['schemas']['ScenarioList']> {
   return useQuery({
     queryKey: engagementKeys.scenarios(engagementId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/scenarios', {
-          params: { path: { engagementId: engagementId! } },
+          params: { path: { engagementId } },
           signal,
         }),
-      ),
+      )
+    },
     enabled: engagementId !== undefined && engagementId !== '',
   })
 }
@@ -401,23 +403,23 @@ export function useReorderScenarios(): UseMutationResult<
   })
 }
 
-// ── Steps ────────────────────────────────────────────────────────────────────
-
 export function useSteps(
   engagementId: string | undefined,
   scenarioId: string | undefined,
 ): UseQueryResult<components['schemas']['StepList']> {
   return useQuery({
     queryKey: engagementKeys.steps(engagementId ?? '', scenarioId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId || !scenarioId) throw new Error('engagementId and scenarioId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/scenarios/{scenarioId}/steps', {
           params: {
-            path: { engagementId: engagementId!, scenarioId: scenarioId! },
+            path: { engagementId, scenarioId },
           },
           signal,
         }),
-      ),
+      )
+    },
     enabled:
       engagementId !== undefined &&
       engagementId !== '' &&
@@ -431,13 +433,15 @@ export function useAllEngagementSteps(
 ): UseQueryResult<components['schemas']['StepList']> {
   return useQuery({
     queryKey: engagementKeys.allSteps(engagementId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/steps', {
-          params: { path: { engagementId: engagementId! } },
+          params: { path: { engagementId } },
           signal,
         }),
-      ),
+      )
+    },
     enabled: engagementId !== undefined && engagementId !== '',
   })
 }
@@ -551,20 +555,20 @@ export function useReorderSteps(): UseMutationResult<
   })
 }
 
-// ── Executions ───────────────────────────────────────────────────────────────
-
 export function useEngagementExecutions(
   engagementId: string | undefined,
 ): UseQueryResult<components['schemas']['ExecutionList']> {
   return useQuery({
     queryKey: engagementKeys.executions(engagementId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/executions', {
-          params: { path: { engagementId: engagementId! } },
+          params: { path: { engagementId } },
           signal,
         }),
-      ),
+      )
+    },
     enabled: engagementId !== undefined && engagementId !== '',
   })
 }
@@ -575,15 +579,17 @@ export function useExecution(
 ): UseQueryResult<Execution> {
   return useQuery({
     queryKey: engagementKeys.execution(engagementId ?? '', executionId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId || !executionId) throw new Error('engagementId and executionId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/executions/{executionId}', {
           params: {
-            path: { engagementId: engagementId!, executionId: executionId! },
+            path: { engagementId, executionId },
           },
           signal,
         }),
-      ),
+      )
+    },
     enabled:
       engagementId !== undefined &&
       engagementId !== '' &&
@@ -650,23 +656,23 @@ export function usePatchBlueDetection(): UseMutationResult<
   })
 }
 
-// ── Comments ─────────────────────────────────────────────────────────────────
-
 export function useComments(
   engagementId: string | undefined,
   executionId: string | undefined,
 ): UseQueryResult<Comment[]> {
   return useQuery({
     queryKey: engagementKeys.comments(engagementId ?? '', executionId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId || !executionId) throw new Error('engagementId and executionId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/executions/{executionId}/comments', {
           params: {
-            path: { engagementId: engagementId!, executionId: executionId! },
+            path: { engagementId, executionId },
           },
           signal,
         }),
-      ),
+      )
+    },
     enabled:
       engagementId !== undefined &&
       engagementId !== '' &&
@@ -722,23 +728,23 @@ export function usePatchComment(): UseMutationResult<
   })
 }
 
-// ── Evidence ─────────────────────────────────────────────────────────────────
-
 export function useEvidenceList(
   engagementId: string | undefined,
   executionId: string | undefined,
 ): UseQueryResult<Evidence[]> {
   return useQuery({
     queryKey: engagementKeys.evidence(engagementId ?? '', executionId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!executionId) throw new Error('executionId required')
+      return unwrap(
         await api.GET('/executions/{executionId}/evidence', {
           params: {
-            path: { executionId: executionId! },
+            path: { executionId },
           },
           signal,
         }),
-      ),
+      )
+    },
     enabled:
       engagementId !== undefined &&
       engagementId !== '' &&
@@ -747,18 +753,18 @@ export function useEvidenceList(
   })
 }
 
-// ── Findings ─────────────────────────────────────────────────────────────────
-
 export function useFindings(engagementId: string | undefined): UseQueryResult<Finding[]> {
   return useQuery({
     queryKey: engagementKeys.findings(engagementId ?? ''),
-    queryFn: async ({ signal }) =>
-      unwrap(
+    queryFn: async ({ signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/findings', {
-          params: { path: { engagementId: engagementId! } },
+          params: { path: { engagementId } },
           signal,
         }),
-      ),
+      )
+    },
     enabled: engagementId !== undefined && engagementId !== '',
   })
 }
@@ -857,5 +863,5 @@ export function isEngagementClosed(status: EngagementStatus): boolean {
 
 /** A step is revealed (visible to blue) when revealedAt is set. */
 export function isStepRevealed(step: Step): boolean {
-  return step.revealedAt !== undefined && step.revealedAt !== null
+  return step.revealedAt !== undefined
 }

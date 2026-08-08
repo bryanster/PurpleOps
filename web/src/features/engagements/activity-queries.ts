@@ -1,7 +1,4 @@
-import {
-  useInfiniteQuery,
-  type UseInfiniteQueryResult,
-} from '@tanstack/react-query'
+import { useInfiniteQuery, type UseInfiniteQueryResult } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/api/client'
 import type { components } from '@/api/schema'
@@ -22,22 +19,22 @@ export function useEngagementActivity(
 ): UseInfiniteQueryResult<{ pages: components['schemas']['ActivityPage'][] }> {
   return useInfiniteQuery({
     queryKey: engagementKeys.activity(engagementId ?? '', filters),
-    queryFn: async ({ pageParam, signal }) =>
-      unwrap(
+    queryFn: async ({ pageParam, signal }) => {
+      if (!engagementId) throw new Error('engagementId required')
+      return unwrap(
         await api.GET('/engagements/{engagementId}/activity', {
           params: {
-            path: { engagementId: engagementId! },
+            path: { engagementId },
             query: {
               limit: PAGE_SIZE,
               ...(pageParam === undefined ? {} : { cursor: pageParam }),
-              ...(filters.verb === undefined || filters.verb === ''
-                ? {}
-                : { verb: filters.verb }),
+              ...(filters.verb === undefined || filters.verb === '' ? {} : { verb: filters.verb }),
             },
           },
           signal,
         }),
-      ),
+      )
+    },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: engagementId !== undefined,

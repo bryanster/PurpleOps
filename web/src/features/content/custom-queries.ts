@@ -47,7 +47,7 @@ export type ExportType = 'procedure_templates' | 'detection_rules' | 'notes'
 
 const PAGE_SIZE = 200
 
-export type CustomListFilters = {
+export interface CustomListFilters {
   q?: string
   technique?: string
   platform?: string
@@ -359,7 +359,7 @@ export function useDeleteCustomNote(): UseMutationResult<void, Error, { noteId: 
 export type ImportCustomResult =
   { kind: 'report'; report: ContentImportReport } | { kind: 'job'; job: ContentSyncJob }
 
-export type ImportCustomInput = {
+export interface ImportCustomInput {
   file: File
   format: ImportFormat
   dryRun: boolean
@@ -392,7 +392,7 @@ export function useImportCustomContent(): UseMutationResult<
         bodySerializer: (body) => body as unknown as FormData,
       })
       if (result.error !== undefined) {
-        throw result.error
+        throw result.error instanceof Error ? result.error : new Error('API request failed')
       }
       const data = unwrap(result)
       if (result.response.status === 202) {
@@ -417,6 +417,8 @@ export function useImportCustomContent(): UseMutationResult<
  *
  * Uses plain fetch rather than openapi-fetch so the response body stays a Blob
  * regardless of `application/yaml` vs `application/json` content negotiation.
+ * openapi-fetch consumes the response body during parsing, preventing
+ * subsequent blob extraction needed for client-side file downloads.
  */
 export async function downloadCustomExport(options: {
   format?: 'yaml' | 'json'
@@ -427,6 +429,10 @@ export async function downloadCustomExport(options: {
   if (options.type !== undefined) {
     params.set('type', options.type)
   }
+  /* eslint-disable-next-line no-restricted-globals --
+   * Fetch is required for blob download; the generated openapi-fetch client
+   * consumes the response body during parsing, preventing client-side blob extraction.
+   */
   const response = await fetch(`${API_BASE_URL}/content/custom/export?${params.toString()}`, {
     method: 'GET',
     credentials: 'same-origin',
@@ -489,13 +495,13 @@ export function parsePlatforms(raw: string): string[] {
 export function summarizeImportReport(report: ContentImportReport): string {
   const bits = [
     report.proceduresCreated + report.proceduresUpdated > 0
-      ? `${report.proceduresCreated + report.proceduresUpdated} procedure(s)`
+      ? `${String(report.proceduresCreated + report.proceduresUpdated)} procedure(s)`
       : undefined,
     report.detectionsCreated + report.detectionsUpdated > 0
-      ? `${report.detectionsCreated + report.detectionsUpdated} detection(s)`
+      ? `${String(report.detectionsCreated + report.detectionsUpdated)} detection(s)`
       : undefined,
     report.notesCreated + report.notesUpdated > 0
-      ? `${report.notesCreated + report.notesUpdated} note(s)`
+      ? `${String(report.notesCreated + report.notesUpdated)} note(s)`
       : undefined,
   ].filter((b): b is string => b !== undefined)
   if (bits.length === 0) {

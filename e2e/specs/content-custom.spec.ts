@@ -128,7 +128,8 @@ test('admin creates a procedure with two args and imports v1 fixture for members
   expect(download.suggestedFilename()).toMatch(/\.ya?ml$/i)
   const downloadPath = await download.path()
   expect(downloadPath).toBeTruthy()
-  const stat = await fs.stat(downloadPath!)
+  if (!downloadPath) throw new Error('Download path is null')
+  const stat = await fs.stat(downloadPath)
   expect(stat.size).toBeGreaterThan(0)
 
   // --- Member sees imported + authored templates in the library, no write chrome ---

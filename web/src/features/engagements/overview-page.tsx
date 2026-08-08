@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageEmpty, PageError, PageLoading } from '@/app/shell/page-state'
@@ -84,10 +84,6 @@ export function OverviewPage(): ReactNode {
         }}
       />
     )
-  }
-
-  if (!engagement.data) {
-    return <PageError error={new Error('Engagement not found')} />
   }
 
   return (
@@ -410,7 +406,7 @@ function AddMemberDialog({ engagementId }: { engagementId: string }): ReactNode 
 
   const allUsers = users.data?.pages.flatMap((p) => p.items) ?? []
 
-  function handleSubmit(event: FormEvent): void {
+  function handleSubmit(event: React.SyntheticEvent): void {
     event.preventDefault()
     if (!selectedUserId) return
 
@@ -445,7 +441,13 @@ function AddMemberDialog({ engagementId }: { engagementId: string }): ReactNode 
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          setOpen(true)
+        }}
+      >
         Add member
       </Button>
       <DialogContent className="sm:max-w-md">
@@ -501,7 +503,12 @@ function AddMemberDialog({ engagementId }: { engagementId: string }): ReactNode 
           {/* Role picker */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="member-role">Role</Label>
-            <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as MemberRole)}>
+            <Select
+              value={selectedRole}
+              onValueChange={(v) => {
+                setSelectedRole(v as MemberRole)
+              }}
+            >
               <SelectTrigger id="member-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -519,7 +526,9 @@ function AddMemberDialog({ engagementId }: { engagementId: string }): ReactNode 
             <Button
               type="button"
               variant="outline"
-              onClick={() => handleOpenChange(false)}
+              onClick={() => {
+                handleOpenChange(false)
+              }}
               disabled={addMember.isPending}
             >
               Cancel

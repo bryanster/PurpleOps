@@ -31,7 +31,7 @@ export function queryKeysForVerb(
   verb: string,
   engagementId: string,
   parents: { executionId?: string; scenarioId?: string; stepId?: string },
-): ReadonlyArray<readonly unknown[]> {
+): readonly (readonly unknown[])[] {
   const activityKeys = [engagementKeys.activityPrefix(engagementId)]
 
   switch (verb) {
@@ -69,7 +69,7 @@ export function queryKeysForVerb(
     case 'step.updated':
     case 'step.deleted':
     case 'step.reordered': {
-      const keys: ReadonlyArray<readonly unknown[]> = [
+      const keys: readonly (readonly unknown[])[] = [
         engagementKeys.allSteps(engagementId),
         ...activityKeys,
       ]
@@ -80,7 +80,7 @@ export function queryKeysForVerb(
     }
 
     case 'step.revealed': {
-      const base: ReadonlyArray<readonly unknown[]> = [
+      const base: readonly (readonly unknown[])[] = [
         engagementKeys.allSteps(engagementId),
         ...activityKeys,
       ]
@@ -101,7 +101,7 @@ export function queryKeysForVerb(
     // ── Executions ──────────────────────────────────────────────────────
     case 'execution.red_updated':
     case 'execution.blue_updated': {
-      const keys: ReadonlyArray<readonly unknown[]> = [
+      const keys: readonly (readonly unknown[])[] = [
         engagementKeys.executions(engagementId),
         ...activityKeys,
       ]

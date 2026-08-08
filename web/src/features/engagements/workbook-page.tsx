@@ -1,5 +1,5 @@
 import {
-  type FormEvent,
+  type SyntheticEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -12,7 +12,8 @@ import { isApiError } from '@/api/errors'
 
 import { formatMoment } from '@/lib/time'
 import { useSignedInUser } from '@/features/auth/current-user'
-import { API_BASE_URL } from '@/api/client'
+import { api, API_BASE_URL } from '@/api/client'
+import type { components } from '@/api/schema'
 import { cn } from '@/lib/utils'
 import { useFlashOnChange } from '@/lib/use-flash-on-change'
 import { useQueryClient } from '@tanstack/react-query'
@@ -284,7 +285,12 @@ export function WorkbookPage(): ReactNode {
       {/* Toolbar */}
       {canWriteWorkbook(role) && !closed && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={() => setAddScenarioOpen(true)}>
+          <Button
+            size="sm"
+            onClick={() => {
+              setAddScenarioOpen(true)
+            }}
+          >
             Add Scenario
           </Button>
           <Button
@@ -300,7 +306,13 @@ export function WorkbookPage(): ReactNode {
           >
             Add Step
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setImportCtidOpen(true)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setImportCtidOpen(true)
+            }}
+          >
             Import CTID
           </Button>
           <Button
@@ -333,7 +345,9 @@ export function WorkbookPage(): ReactNode {
               steps={stepsByScenario.get(scenario.id) ?? []}
               executionByStepId={executionByStepId}
               expanded={expandedScenarios.has(scenario.id)}
-              onToggle={() => toggleScenario(scenario.id)}
+              onToggle={() => {
+                toggleScenario(scenario.id)
+              }}
               onSelectStep={openExecution}
               role={role}
               engagementId={engagementId}
@@ -473,7 +487,9 @@ function ScenarioSection({
                       execution={exec}
                       role={role}
                       engagementId={engagementId}
-                      onClick={() => onSelectStep(step)}
+                      onClick={() => {
+                        onSelectStep(step)
+                      }}
                     />
                   )
                 })}
@@ -711,7 +727,7 @@ function RevealButton({
           { engagementId, scenarioId, stepId },
           {
             onSuccess: () => toast.success('Step revealed to blue team'),
-            onError: (err) => toast.error(err?.message ?? 'Failed to reveal step'),
+            onError: (err) => toast.error(err.message),
           },
         )
       }}
@@ -736,16 +752,16 @@ function RedExecutionEditor({
   const patchRed = usePatchRedExecution()
 
   const [status, setStatus] = useState(execution.status)
-  const [commandRun, setCommandRun] = useState(execution.commandRun ?? '')
-  const [sourceHost, setSourceHost] = useState(execution.sourceHost ?? '')
-  const [targetHost, setTargetHost] = useState(execution.targetHost ?? '')
-  const [redNotes, setRedNotes] = useState(execution.redNotes ?? '')
+  const [commandRun, setCommandRun] = useState(execution.commandRun)
+  const [sourceHost, setSourceHost] = useState(execution.sourceHost)
+  const [targetHost, setTargetHost] = useState(execution.targetHost)
+  const [redNotes, setRedNotes] = useState(execution.redNotes)
 
   // Reset local state when the execution version changes (remote update or
   // 409 recovery refetch).  This ensures the editor always reflects the
   // committed server state (M4-005).
   const [version, setVersion] = useState(execution.version)
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional controlled reset on version change
+  /* eslint-disable react-hooks/set-state-in-effect -- syncing local edit state with external data on version change (M4-005) */
   useEffect(() => {
     if (execution.version !== version) {
       setVersion(execution.version)
@@ -756,6 +772,7 @@ function RedExecutionEditor({
       setRedNotes(execution.redNotes)
     }
   }, [execution.version]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const disabled = closed || readOnly
 
@@ -785,7 +802,7 @@ function RedExecutionEditor({
               queryKey: engagementKeys.execution(engagementId, execution.id),
             })
           } else {
-            toast.error(err?.message ?? 'Failed to save')
+            toast.error(err.message)
           }
         },
       },
@@ -800,7 +817,9 @@ function RedExecutionEditor({
           <Label className="text-xs">Status</Label>
           <Select
             value={status}
-            onValueChange={(v) => setStatus(v as Execution['status'])}
+            onValueChange={(v) => {
+              setStatus(v as Execution['status'])
+            }}
             disabled={disabled}
           >
             <SelectTrigger>
@@ -819,7 +838,9 @@ function RedExecutionEditor({
           <Label className="text-xs">Source Host</Label>
           <Input
             value={sourceHost}
-            onChange={(e) => setSourceHost(e.target.value)}
+            onChange={(e) => {
+              setSourceHost(e.target.value)
+            }}
             disabled={disabled}
           />
         </div>
@@ -827,7 +848,9 @@ function RedExecutionEditor({
           <Label className="text-xs">Target Host</Label>
           <Input
             value={targetHost}
-            onChange={(e) => setTargetHost(e.target.value)}
+            onChange={(e) => {
+              setTargetHost(e.target.value)
+            }}
             disabled={disabled}
           />
         </div>
@@ -835,7 +858,9 @@ function RedExecutionEditor({
           <Label className="text-xs">Command Run</Label>
           <Input
             value={commandRun}
-            onChange={(e) => setCommandRun(e.target.value)}
+            onChange={(e) => {
+              setCommandRun(e.target.value)
+            }}
             disabled={disabled}
           />
         </div>
@@ -845,7 +870,9 @@ function RedExecutionEditor({
         <Textarea
           rows={3}
           value={redNotes}
-          onChange={(e) => setRedNotes(e.target.value)}
+          onChange={(e) => {
+            setRedNotes(e.target.value)
+          }}
           disabled={disabled}
         />
       </div>
@@ -873,22 +900,20 @@ function BlueDetectionEditor({
   const patchBlue = usePatchBlueDetection()
 
   const [detectionCategory, setDetectionCategory] = useState(execution.detectionCategory ?? '')
-  const [selectedModifiers, setSelectedModifiers] = useState<string[]>(
-    execution.detectionModifiers ?? [],
-  )
+  const [selectedModifiers, setSelectedModifiers] = useState<string[]>(execution.detectionModifiers)
   const [protection, setProtection] = useState(execution.protection ?? '')
   const [detectedAt, setDetectedAt] = useState(
     execution.detectedAt ? toLocalDatetime(execution.detectedAt) : '',
   )
-  const [detectingSource, setDetectingSource] = useState(execution.detectingSource ?? '')
-  const [detectingRuleRef, setDetectingRuleRef] = useState(execution.detectingRuleRef ?? '')
-  const [alertSeverity, setAlertSeverity] = useState(execution.alertSeverity ?? '')
-  const [blueNotes, setBlueNotes] = useState(execution.blueNotes ?? '')
-  const [advancedOpen, setAdvancedOpen] = useState((execution.detectionModifiers ?? []).length > 0)
+  const [detectingSource, setDetectingSource] = useState(execution.detectingSource)
+  const [detectingRuleRef, setDetectingRuleRef] = useState(execution.detectingRuleRef)
+  const [alertSeverity, setAlertSeverity] = useState(execution.alertSeverity)
+  const [blueNotes, setBlueNotes] = useState(execution.blueNotes)
+  const [advancedOpen, setAdvancedOpen] = useState(execution.detectionModifiers.length > 0)
 
   // Reset local state when the execution version changes (M4-005).
   const [blueVersion, setBlueVersion] = useState(execution.version)
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional controlled reset on version change
+  /* eslint-disable react-hooks/set-state-in-effect -- syncing local edit state with external data on version change (M4-005) */
   useEffect(() => {
     if (execution.version !== blueVersion) {
       setBlueVersion(execution.version)
@@ -903,6 +928,7 @@ function BlueDetectionEditor({
       setAdvancedOpen(execution.detectionModifiers.length > 0)
     }
   }, [execution.version]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const disabled = closed || readOnly
 
@@ -951,7 +977,7 @@ function BlueDetectionEditor({
               queryKey: engagementKeys.execution(engagementId, execution.id),
             })
           } else {
-            toast.error(err?.message ?? 'Failed to save')
+            toast.error(err.message)
           }
         },
       },
@@ -963,11 +989,11 @@ function BlueDetectionEditor({
   const severityOptions = Object.entries(SEVERITY_LABEL)
 
   const categories = [
-    { key: 'none' as const, label: 'None', def: CATEGORY_DEFINITIONS['none']! },
-    { key: 'telemetry' as const, label: 'Telemetry', def: CATEGORY_DEFINITIONS['telemetry']! },
-    { key: 'general' as const, label: 'General', def: CATEGORY_DEFINITIONS['general']! },
-    { key: 'tactic' as const, label: 'Tactic', def: CATEGORY_DEFINITIONS['tactic']! },
-    { key: 'technique' as const, label: 'Technique', def: CATEGORY_DEFINITIONS['technique']! },
+    { key: 'none' as const, label: 'None', def: CATEGORY_DEFINITIONS.none },
+    { key: 'telemetry' as const, label: 'Telemetry', def: CATEGORY_DEFINITIONS.telemetry },
+    { key: 'general' as const, label: 'General', def: CATEGORY_DEFINITIONS.general },
+    { key: 'tactic' as const, label: 'Tactic', def: CATEGORY_DEFINITIONS.tactic },
+    { key: 'technique' as const, label: 'Technique', def: CATEGORY_DEFINITIONS.technique },
   ]
 
   return (
@@ -986,7 +1012,9 @@ function BlueDetectionEditor({
                   <button
                     type="button"
                     disabled={disabled}
-                    onClick={() => setDetectionCategory(cat.key)}
+                    onClick={() => {
+                      setDetectionCategory(cat.key)
+                    }}
                     className={cn(
                       'flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
                       'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
@@ -1033,7 +1061,9 @@ function BlueDetectionEditor({
           <Input
             type="datetime-local"
             value={detectedAt}
-            onChange={(e) => setDetectedAt(e.target.value)}
+            onChange={(e) => {
+              setDetectedAt(e.target.value)
+            }}
             disabled={disabled}
           />
           {execution.mttdSeconds != null && (
@@ -1047,7 +1077,9 @@ function BlueDetectionEditor({
           <Label className="text-xs">Detecting Source</Label>
           <Input
             value={detectingSource}
-            onChange={(e) => setDetectingSource(e.target.value)}
+            onChange={(e) => {
+              setDetectingSource(e.target.value)
+            }}
             disabled={disabled}
           />
         </div>
@@ -1055,7 +1087,9 @@ function BlueDetectionEditor({
           <Label className="text-xs">Detecting Rule Ref</Label>
           <Input
             value={detectingRuleRef}
-            onChange={(e) => setDetectingRuleRef(e.target.value)}
+            onChange={(e) => {
+              setDetectingRuleRef(e.target.value)
+            }}
             disabled={disabled}
           />
         </div>
@@ -1119,7 +1153,9 @@ function BlueDetectionEditor({
         <Textarea
           rows={3}
           value={blueNotes}
-          onChange={(e) => setBlueNotes(e.target.value)}
+          onChange={(e) => {
+            setBlueNotes(e.target.value)
+          }}
           disabled={disabled}
         />
       </div>
@@ -1188,7 +1224,7 @@ function CommentsSection({
     }
   }, [comments.data])
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
     if (!body.trim() || !executionId) return
     createComment.mutate(
@@ -1199,7 +1235,7 @@ function CommentsSection({
           wasAtBottom.current = true
           toast.success('Comment added')
         },
-        onError: (err) => toast.error(err?.message ?? 'Failed to add comment'),
+        onError: (err) => toast.error(err.message),
       },
     )
   }
@@ -1228,7 +1264,7 @@ function CommentsSection({
           setEditBody('')
           toast.success('Comment updated')
         },
-        onError: (err) => toast.error(err?.message ?? 'Failed to update comment'),
+        onError: (err) => toast.error(err.message),
       },
     )
   }
@@ -1263,7 +1299,9 @@ function CommentsSection({
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    onClick={() => startEdit(c)}
+                    onClick={() => {
+                      startEdit(c)
+                    }}
                     aria-label="Edit comment"
                   >
                     <svg
@@ -1288,12 +1326,16 @@ function CommentsSection({
                   <Textarea
                     rows={2}
                     value={editBody}
-                    onChange={(e) => setEditBody(e.target.value)}
+                    onChange={(e) => {
+                      setEditBody(e.target.value)
+                    }}
                   />
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      onClick={() => saveEdit(c.id)}
+                      onClick={() => {
+                        saveEdit(c.id)
+                      }}
                       disabled={patchComment.isPending || !editBody.trim()}
                     >
                       {patchComment.isPending ? 'Saving...' : 'Save'}
@@ -1318,7 +1360,9 @@ function CommentsSection({
           rows={2}
           placeholder="Add a comment..."
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value)
+          }}
         />
         <Button type="submit" size="sm" disabled={createComment.isPending || !body.trim()}>
           {createComment.isPending ? 'Posting...' : 'Post Comment'}
@@ -1356,19 +1400,14 @@ function EvidenceSection({
       const side = canWriteRed(role) ? 'red' : 'blue'
       formData.append('side', side)
 
-      const url = `${API_BASE_URL}/engagements/${engagementId}/executions/${executionId}/evidence`
-      const resp = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-        headers: {
-          'X-CSRF-Token': getCsrfToken(),
-        },
+      const result = await api.POST('/executions/{executionId}/evidence', {
+        params: { path: { executionId } },
+        body: formData as unknown as components['schemas']['NewEvidenceRequest'],
+        bodySerializer: (body) => body as unknown as FormData,
       })
 
-      if (!resp.ok) {
-        const errBody = await resp.text()
-        throw new Error(errBody || `Upload failed (${resp.status})`)
+      if (result.error !== undefined) {
+        throw result.error instanceof Error ? result.error : new Error('Upload failed')
       }
 
       toast.success('Evidence uploaded')
@@ -1422,10 +1461,18 @@ function EvidenceSection({
         <Input
           placeholder="Caption (optional)"
           value={caption}
-          onChange={(e) => setCaption(e.target.value)}
+          onChange={(e) => {
+            setCaption(e.target.value)
+          }}
           className="text-xs"
         />
-        <Button size="sm" onClick={handleUpload} disabled={uploading}>
+        <Button
+          size="sm"
+          onClick={() => {
+            void handleUpload()
+          }}
+          disabled={uploading}
+        >
           {uploading ? 'Uploading...' : 'Upload Evidence'}
         </Button>
       </div>
@@ -1449,7 +1496,7 @@ function AddScenarioDialog({
   const [narrative, setNarrative] = useState('')
   const [threatActor, setThreatActor] = useState('')
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
     if (!name.trim()) return
     createScenario.mutate(
@@ -1471,7 +1518,7 @@ function AddScenarioDialog({
           setThreatActor('')
           onOpenChange(false)
         },
-        onError: (err) => toast.error(err?.message ?? 'Failed to create scenario'),
+        onError: (err) => toast.error(err.message),
       },
     )
   }
@@ -1488,7 +1535,9 @@ function AddScenarioDialog({
             <Label>Name</Label>
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+              }}
               placeholder="Scenario name"
               required
             />
@@ -1497,7 +1546,9 @@ function AddScenarioDialog({
             <Label>Threat Actor</Label>
             <Input
               value={threatActor}
-              onChange={(e) => setThreatActor(e.target.value)}
+              onChange={(e) => {
+                setThreatActor(e.target.value)
+              }}
               placeholder="e.g. APT29"
             />
           </div>
@@ -1506,12 +1557,20 @@ function AddScenarioDialog({
             <Textarea
               rows={3}
               value={narrative}
-              onChange={(e) => setNarrative(e.target.value)}
+              onChange={(e) => {
+                setNarrative(e.target.value)
+              }}
               placeholder="Brief description of the scenario..."
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false)
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={createScenario.isPending || !name.trim()}>
@@ -1552,7 +1611,7 @@ function AddStepDialog({
     onOpenChange(open)
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
     if (!name.trim() || !scenarioId) return
     createStep.mutate(
@@ -1580,7 +1639,7 @@ function AddStepDialog({
           setTargetAsset('')
           onOpenChange(false)
         },
-        onError: (err) => toast.error(err?.message ?? 'Failed to create step'),
+        onError: (err) => toast.error(err.message),
       },
     )
   }
@@ -1612,7 +1671,9 @@ function AddStepDialog({
             <Label>Name</Label>
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+              }}
               placeholder="Step name"
               required
             />
@@ -1621,7 +1682,9 @@ function AddStepDialog({
             <Label>Objective</Label>
             <Input
               value={objective}
-              onChange={(e) => setObjective(e.target.value)}
+              onChange={(e) => {
+                setObjective(e.target.value)
+              }}
               placeholder="What this step accomplishes"
             />
           </div>
@@ -1629,7 +1692,9 @@ function AddStepDialog({
             <Label>Technique ID</Label>
             <Input
               value={techniqueId}
-              onChange={(e) => setTechniqueId(e.target.value)}
+              onChange={(e) => {
+                setTechniqueId(e.target.value)
+              }}
               placeholder="e.g. T1059"
             />
           </div>
@@ -1637,12 +1702,20 @@ function AddStepDialog({
             <Label>Target Asset</Label>
             <Input
               value={targetAsset}
-              onChange={(e) => setTargetAsset(e.target.value)}
+              onChange={(e) => {
+                setTargetAsset(e.target.value)
+              }}
               placeholder="e.g. DC01"
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false)
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={createStep.isPending || !name.trim() || !scenarioId}>
@@ -1673,7 +1746,7 @@ function ImportCtidDialog({
   const [name, setName] = useState('')
   const [startingOrdinal, setStartingOrdinal] = useState('1')
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
     if (!planId) return
     const body: ImportPlanRequest = { planId }
@@ -1686,17 +1759,17 @@ function ImportCtidDialog({
       {
         onSuccess: (data) => {
           toast.success(
-            `Imported ${data.stepCount} step${data.stepCount !== 1 ? 's' : ''} to scenario "${data.scenario.name}"`,
+            `Imported ${String(data.stepCount)} step${data.stepCount !== 1 ? 's' : ''} to scenario "${data.scenario.name}"`,
           )
           if (data.warnings.length > 0) {
-            toast.warning(`${data.warnings.length} technique(s) could not be resolved`)
+            toast.warning(`${String(data.warnings.length)} technique(s) could not be resolved`)
           }
           setPlanId('')
           setName('')
           setStartingOrdinal('1')
           onOpenChange(false)
         },
-        onError: (err) => toast.error(err?.message ?? 'Failed to import plan'),
+        onError: (err) => toast.error(err.message),
       },
     )
   }
@@ -1718,7 +1791,7 @@ function ImportCtidDialog({
                 <SelectValue placeholder="Select a plan..." />
               </SelectTrigger>
               <SelectContent>
-                {plans.data?.items?.map((p) => (
+                {plans.data?.items.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
                   </SelectItem>
@@ -1730,7 +1803,9 @@ function ImportCtidDialog({
             <Label>Override Name (optional)</Label>
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+              }}
               placeholder="Leave blank to use plan name"
             />
           </div>
@@ -1740,11 +1815,19 @@ function ImportCtidDialog({
               type="number"
               min={1}
               value={startingOrdinal}
-              onChange={(e) => setStartingOrdinal(e.target.value)}
+              onChange={(e) => {
+                setStartingOrdinal(e.target.value)
+              }}
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false)
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={importPlan.isPending || !planId}>
@@ -1787,7 +1870,7 @@ function StepFromTemplateDialog({
     onOpenChange(open)
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
     if (!templateId || !scenarioId) return
 
@@ -1822,7 +1905,7 @@ function StepFromTemplateDialog({
           setArgValuesText('')
           onOpenChange(false)
         },
-        onError: (err) => toast.error(err?.message ?? 'Failed to create step from template'),
+        onError: (err) => toast.error(err.message),
       },
     )
   }
@@ -1859,7 +1942,7 @@ function StepFromTemplateDialog({
                 <SelectValue placeholder="Select a template..." />
               </SelectTrigger>
               <SelectContent>
-                {procedures.data?.items?.map((p) => (
+                {procedures.data?.items.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
                   </SelectItem>
@@ -1871,7 +1954,9 @@ function StepFromTemplateDialog({
             <Label>Override Name (optional)</Label>
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+              }}
               placeholder="Leave blank to use template name"
             />
           </div>
@@ -1879,7 +1964,9 @@ function StepFromTemplateDialog({
             <Label>Override Objective (optional)</Label>
             <Input
               value={objective}
-              onChange={(e) => setObjective(e.target.value)}
+              onChange={(e) => {
+                setObjective(e.target.value)
+              }}
               placeholder="Leave blank to use template description"
             />
           </div>
@@ -1887,7 +1974,9 @@ function StepFromTemplateDialog({
             <Label>Target Asset</Label>
             <Input
               value={targetAsset}
-              onChange={(e) => setTargetAsset(e.target.value)}
+              onChange={(e) => {
+                setTargetAsset(e.target.value)
+              }}
               placeholder="e.g. DC01"
             />
           </div>
@@ -1896,7 +1985,9 @@ function StepFromTemplateDialog({
             <Textarea
               rows={4}
               value={argValuesText}
-              onChange={(e) => setArgValuesText(e.target.value)}
+              onChange={(e) => {
+                setArgValuesText(e.target.value)
+              }}
               placeholder={'KEY1=value1\nKEY2=value2'}
             />
             <p className="text-muted-foreground text-xs">
@@ -1904,7 +1995,13 @@ function StepFromTemplateDialog({
             </p>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false)
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -1923,14 +2020,9 @@ function StepFromTemplateDialog({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024) return `${String(bytes)} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/(?:^|;\s*)bl_csrf=([^;]*)/)
-  return match?.[1] ?? ''
 }
 
 /** Convert an ISO 8601 UTC string to a datetime-local value (no timezone suffix). */
@@ -1938,5 +2030,5 @@ function toLocalDatetime(iso: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }

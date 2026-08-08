@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { api } from '@/api/client'
+import { api, API_BASE_URL } from '@/api/client'
 
 const HEARTBEAT_INTERVAL = 15_000 // 15s (server TTL is 45s)
 
@@ -38,11 +38,12 @@ export interface PresenceState {
  */
 export function usePresence(engagementId: string | undefined, enabled: boolean): PresenceState {
   const [users, setUsers] = useState<PresenceUser[]>([])
-  const [connected, setConnected] = useState(false)
   const presenceIdRef = useRef<string>(crypto.randomUUID())
   const focusRef = useRef<PresenceFocus>({})
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const mountedRef = useRef(true)
+
+  const connected = !!engagementId && enabled
 
   const heartbeat = useCallback(
     async (focus: PresenceFocus) => {
@@ -71,20 +72,6 @@ export function usePresence(engagementId: string | undefined, enabled: boolean):
     [engagementId],
   )
 
-  const fetchSnapshot = useCallback(async () => {
-    if (!engagementId) return
-    try {
-      const res = await api.GET('/engagements/{engagementId}/presence', {
-        params: { path: { engagementId } },
-      })
-      if (res.data) {
-        setUsers(res.data.entries ?? [])
-      }
-    } catch {
-      // Snapshot is best-effort.
-    }
-  }, [engagementId])
-
   const setFocus = useCallback((focus: PresenceFocus) => {
     focusRef.current = focus
   }, [])
@@ -94,33 +81,42 @@ export function usePresence(engagementId: string | undefined, enabled: boolean):
 
     mountedRef.current = true
 
-    // Initial heartbeat + snapshot.
-    heartbeat(focusRef.current)
-    fetchSnapshot()
-    setConnected(true)
+    // Initial heartbeat.
+    void heartbeat(focusRef.current)
+
+    // Initial snapshot.
+    void (async () => {
+      try {
+        const res = await api.GET('/engagements/{engagementId}/presence', {
+          params: { path: { engagementId } },
+        })
+        if (res.data) {
+          setUsers(res.data.entries)
+        }
+      } catch {
+        // Snapshot is best-effort.
+      }
+    })()
 
     // Periodic heartbeat.
     intervalRef.current = setInterval(() => {
       if (!mountedRef.current) return
-      heartbeat(focusRef.current)
+      void heartbeat(focusRef.current)
     }, HEARTBEAT_INTERVAL)
 
     return () => {
       mountedRef.current = false
-      setConnected(false)
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
+      clearInterval(intervalRef.current)
 
       // Best-effort cleanup on unmount.
-      const url = `${window.location.origin}/api/v1/engagements/${encodeURIComponent(engagementId)}/presence?presenceId=${encodeURIComponent(presenceIdRef.current)}`
+      const url = `${API_BASE_URL}/engagements/${encodeURIComponent(engagementId)}/presence?presenceId=${encodeURIComponent(presenceIdRef.current)}`
       try {
         navigator.sendBeacon(url, '')
       } catch {
         // sendBeacon is best-effort.
       }
     }
-  }, [engagementId, enabled, heartbeat, fetchSnapshot])
+  }, [engagementId, enabled, heartbeat])
 
   return { users, connected, setFocus }
 }

@@ -90,7 +90,10 @@ describe('AppShell', () => {
       '/engagements',
     )
     // Content is live as of M2-013.
-    expect(within(nav).getByRole('link', { name: 'Content library' })).toHaveAttribute('href', '/content')
+    expect(within(nav).getByRole('link', { name: 'Content library' })).toHaveAttribute(
+      'href',
+      '/content',
+    )
   })
 
   it('navigates between screens from the nav', async () => {

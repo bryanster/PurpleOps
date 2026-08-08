@@ -50,7 +50,9 @@ if (typeof window !== 'undefined') {
 
 function subscribe(cb: () => void): () => void {
   subscribers.add(cb)
-  return () => { subscribers.delete(cb) }
+  return () => {
+    subscribers.delete(cb)
+  }
 }
 
 /**
@@ -70,10 +72,7 @@ export function useCommentUnread(
 
   // useSyncExternalStore snapshot returns a string (stable by value) to
   // avoid the infinite re-render loop that object references would cause.
-  const lastViewedAt = useSyncExternalStore(
-    subscribe,
-    () => (key ? readTimestamp(key) : null),
-  )
+  const lastViewedAt = useSyncExternalStore(subscribe, () => (key ? readTimestamp(key) : null))
 
   const markRead = useCallback(() => {
     if (!key) return
