@@ -122,7 +122,7 @@ func (h *handlers) GetStep(ctx context.Context,
 
 	// Check blind: if scope withholds and step is not revealed, conceal as 404.
 	if scope.Withholds() && step.RevealedAt == nil {
-		return nil, fmt.Errorf("httpapi: get step: not found")
+		return gen.GetStep404ApplicationProblemPlusJSONResponse{}, nil
 	}
 
 	w, err := stepToWire(step)

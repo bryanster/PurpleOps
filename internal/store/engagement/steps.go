@@ -250,15 +250,15 @@ func (r *Steps) NextOrdinal(ctx context.Context, scenarioID string) (int, error)
 
 func scanStep(row interface{ Scan(...any) error }) (Step, error) {
 	var (
-		s                 Step
-		revealedAt        sql.NullTime
-		techniqueID       sql.NullString
-		subtechniqueID    sql.NullString
-		tacticID          sql.NullString
-		templateID        sql.NullString
-		procedure         any
-		tools             any
-		controls          any
+		s              Step
+		revealedAt     sql.NullTime
+		techniqueID    sql.NullString
+		subtechniqueID sql.NullString
+		tacticID       sql.NullString
+		templateID     sql.NullString
+		procedure      any
+		tools          any
+		controls       any
 	)
 	if err := row.Scan(
 		&s.ID, &s.ScenarioID, &s.Ordinal, &s.Name, &s.Objective,
