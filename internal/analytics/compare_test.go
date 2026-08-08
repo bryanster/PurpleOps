@@ -363,6 +363,7 @@ func TestCompare_BlueSeat_BlindLeakPrevention(t *testing.T) {
 		t.Errorf("row count: got %d, want 6", len(result.Rows))
 	}
 }
+
 // ============================================================================
 // Symmetry: swapping baseline and current inverts every improved/regressed
 // ============================================================================

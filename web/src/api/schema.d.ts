@@ -3125,6 +3125,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export engagement data as flat JSON or CSV.
+         * @description Flat, tabular exports of the engagement workbook. One dataset per
+         *     request; JSON and CSV share the same shape — one source, two encoders.
+         *     The response is streamed, not buffered in memory.
+         *
+         *     CSV columns that start with =, +, -, @, tab or CR are escaped with
+         *     a single-quote prefix to prevent formula injection.
+         *
+         *     Times are RFC 3339 UTC; durations are integer seconds.
+         */
+        get: operations["exportEngagement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11201,6 +11228,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NavigatorLayer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    exportEngagement: {
+        parameters: {
+            query: {
+                /** @description Output format — json or csv. */
+                format: "json" | "csv";
+                /** @description Which dataset to export. */
+                dataset: "executions" | "findings" | "coverage";
+            };
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export file, streamed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/json": string;
                 };
             };
             400: components["responses"]["BadRequest"];

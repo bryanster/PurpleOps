@@ -848,6 +848,45 @@ func (e ListEngagementsParamsStatus) Valid() bool {
 	}
 }
 
+// Defines values for ExportEngagementParamsFormat.
+const (
+	ExportEngagementParamsFormatCsv  ExportEngagementParamsFormat = "csv"
+	ExportEngagementParamsFormatJson ExportEngagementParamsFormat = "json"
+)
+
+// Valid indicates whether the value is a known member of the ExportEngagementParamsFormat enum.
+func (e ExportEngagementParamsFormat) Valid() bool {
+	switch e {
+	case ExportEngagementParamsFormatCsv:
+		return true
+	case ExportEngagementParamsFormatJson:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportEngagementParamsDataset.
+const (
+	ExportEngagementParamsDatasetCoverage   ExportEngagementParamsDataset = "coverage"
+	ExportEngagementParamsDatasetExecutions ExportEngagementParamsDataset = "executions"
+	ExportEngagementParamsDatasetFindings   ExportEngagementParamsDataset = "findings"
+)
+
+// Valid indicates whether the value is a known member of the ExportEngagementParamsDataset enum.
+func (e ExportEngagementParamsDataset) Valid() bool {
+	switch e {
+	case ExportEngagementParamsDatasetCoverage:
+		return true
+	case ExportEngagementParamsDatasetExecutions:
+		return true
+	case ExportEngagementParamsDatasetFindings:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActivityEntry One row of the append-only activity log (M1-015). Drives the SSE feed
 // (M4) and the report timeline (M6). There is no update or delete.
 type ActivityEntry struct {
@@ -4579,6 +4618,21 @@ type PatchRedExecutionParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// ExportEngagementParams defines parameters for ExportEngagement.
+type ExportEngagementParams struct {
+	// Format Output format — json or csv.
+	Format ExportEngagementParamsFormat `form:"format" json:"format"`
+
+	// Dataset Which dataset to export.
+	Dataset ExportEngagementParamsDataset `form:"dataset" json:"dataset"`
+}
+
+// ExportEngagementParamsFormat defines parameters for ExportEngagement.
+type ExportEngagementParamsFormat string
+
+// ExportEngagementParamsDataset defines parameters for ExportEngagement.
+type ExportEngagementParamsDataset string
+
 // ListFindingsParams defines parameters for ListFindings.
 type ListFindingsParams struct {
 	// Status Filter by finding status.
@@ -5379,6 +5433,9 @@ type ServerInterface interface {
 	// PatchRedExecution Write the red (attack) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 	PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams)
+	// ExportEngagement Export engagement data as flat JSON or CSV.
+	// (GET /engagements/{engagementId}/export)
+	ExportEngagement(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ExportEngagementParams)
 	// ListFindings List findings for an engagement.
 	// (GET /engagements/{engagementId}/findings)
 	ListFindings(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ListFindingsParams)
@@ -6093,6 +6150,12 @@ func (_ Unimplemented) PatchBlueDetection(w http.ResponseWriter, r *http.Request
 // PatchRedExecution Write the red (attack) side of one execution.
 // (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 func (_ Unimplemented) PatchRedExecution(w http.ResponseWriter, r *http.Request, engagementId EngagementId, executionId ExecutionId, params PatchRedExecutionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportEngagement Export engagement data as flat JSON or CSV.
+// (GET /engagements/{engagementId}/export)
+func (_ Unimplemented) ExportEngagement(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ExportEngagementParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10339,6 +10402,61 @@ func (siw *ServerInterfaceWrapper) PatchRedExecution(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ExportEngagement operation middleware
+func (siw *ServerInterfaceWrapper) ExportEngagement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExportEngagementParams
+
+	// ------------- Required query parameter "format" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "format", r.URL.Query(), &params.Format, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "dataset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "dataset", r.URL.Query(), &params.Dataset, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "dataset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dataset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportEngagement(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListFindings operation middleware
 func (siw *ServerInterfaceWrapper) ListFindings(w http.ResponseWriter, r *http.Request) {
 
@@ -12871,6 +12989,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/analytics/navigator-layer", wrapper.GetAnalyticsNavigatorLayer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/export", wrapper.ExportEngagement)
 	})
 
 	return r
@@ -21520,6 +21641,129 @@ func (response PatchRedExecution500ApplicationProblemPlusJSONResponse) VisitPatc
 	return err
 }
 
+type ExportEngagementRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       ExportEngagementParams
+}
+
+type ExportEngagementResponseObject interface {
+	VisitExportEngagementResponse(w http.ResponseWriter) error
+}
+
+type ExportEngagement200JSONResponse string
+
+func (response ExportEngagement200JSONResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagement200TextcsvResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response ExportEngagement200TextcsvResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/csv")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportEngagement400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagement400ApplicationProblemPlusJSONResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagement401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagement401ApplicationProblemPlusJSONResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagement403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagement403ApplicationProblemPlusJSONResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagement404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagement404ApplicationProblemPlusJSONResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportEngagement500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ExportEngagement500ApplicationProblemPlusJSONResponse) VisitExportEngagementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListFindingsRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 	Params       ListFindingsParams
@@ -27046,6 +27290,9 @@ type StrictServerInterface interface {
 	// PatchRedExecution Write the red (attack) side of one execution.
 	// (PATCH /engagements/{engagementId}/executions/{executionId}/execution)
 	PatchRedExecution(ctx context.Context, request PatchRedExecutionRequestObject) (PatchRedExecutionResponseObject, error)
+	// ExportEngagement Export engagement data as flat JSON or CSV.
+	// (GET /engagements/{engagementId}/export)
+	ExportEngagement(ctx context.Context, request ExportEngagementRequestObject) (ExportEngagementResponseObject, error)
 	// ListFindings List findings for an engagement.
 	// (GET /engagements/{engagementId}/findings)
 	ListFindings(ctx context.Context, request ListFindingsRequestObject) (ListFindingsResponseObject, error)
@@ -29854,6 +30101,33 @@ func (sh *strictHandler) PatchRedExecution(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PatchRedExecutionResponseObject); ok {
 		if err := validResponse.VisitPatchRedExecutionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportEngagement operation middleware
+func (sh *strictHandler) ExportEngagement(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params ExportEngagementParams) {
+	var request ExportEngagementRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportEngagement(ctx, request.(ExportEngagementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportEngagement")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportEngagementResponseObject); ok {
+		if err := validResponse.VisitExportEngagementResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

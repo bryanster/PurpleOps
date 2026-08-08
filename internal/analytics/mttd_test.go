@@ -335,6 +335,7 @@ func TestMTTD_EdgeCases(t *testing.T) {
 		assertSumMatches(t, result)
 	})
 }
+
 // ============================================================================
 // Agreement with scoring.MTTD
 // ============================================================================
@@ -348,11 +349,11 @@ func TestMTTD_SQLAgreesWithScoringMTTD(t *testing.T) {
 
 	// Query the per-execution durations computed by the same SQL logic.
 	type execMTTD struct {
-		stepID        string
-		mttdSeconds   sql.NullFloat64
-		category      sql.NullString
-		detectedAt    sql.NullTime
-		startedAt     sql.NullTime
+		stepID      string
+		mttdSeconds sql.NullFloat64
+		category    sql.NullString
+		detectedAt  sql.NullTime
+		startedAt   sql.NullTime
 	}
 	var rows []execMTTD
 	query := `
@@ -392,7 +393,6 @@ func TestMTTD_SQLAgreesWithScoringMTTD(t *testing.T) {
 	if len(rows) == 0 {
 		t.Fatal("no execution rows returned")
 	}
-
 
 	for _, r := range rows {
 		var goStarted, goDetected *time.Time
@@ -575,17 +575,23 @@ func seedStepExecOrd(t *testing.T, f analyticstest.Fixture, ctx context.Context,
 }
 
 func nullIfNullString(ns sql.NullString) any {
-	if ns.Valid { return ns.String }
+	if ns.Valid {
+		return ns.String
+	}
 	return nil
 }
 
 func nullIfNullTime(nt sql.NullTime) any {
-	if nt.Valid { return nt.Time }
+	if nt.Valid {
+		return nt.Time
+	}
 	return nil
 }
 
 func nilIfTimeStr(s string) any {
 	t, err := time.Parse("2006-01-02 15:04:05", s)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	return t
 }

@@ -5982,6 +5982,9 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+
+components:
+
   /engagements/{engagementId}/export:
     get:
       operationId: exportEngagement
@@ -6042,9 +6045,6 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
-
-components:
-
   securitySchemes:
     cookieSession:
       type: apiKey

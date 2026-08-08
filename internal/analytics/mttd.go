@@ -74,7 +74,7 @@ func (q *Queries) MTTD(ctx context.Context, scope Scope) (*MTTDResult, error) {
 
 	var (
 		detected, undetected, unscored, unmeasurable, attempted int
-		p50, p90, maxMttd                                        sql.NullFloat64
+		p50, p90, maxMttd                                       sql.NullFloat64
 	)
 	if err := q.db.Read().QueryRowContext(ctx, query, scope.EngagementID).Scan(
 		&attempted, &detected, &undetected, &unscored, &unmeasurable,
@@ -84,11 +84,11 @@ func (q *Queries) MTTD(ctx context.Context, scope Scope) (*MTTDResult, error) {
 	}
 
 	r := &MTTDResult{
-		DetectedCount:    detected,
-		UndetectedCount:  undetected,
-		UnscoredCount:    unscored,
+		DetectedCount:     detected,
+		UndetectedCount:   undetected,
+		UnscoredCount:     unscored,
 		UnmeasurableCount: unmeasurable,
-		AttemptedCount:   attempted,
+		AttemptedCount:    attempted,
 	}
 	if p50.Valid {
 		v := int(p50.Float64)

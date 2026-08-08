@@ -528,6 +528,7 @@ func TestFindingStepLinking(t *testing.T) {
 		t.Errorf("expected 1 step after remove, got %d", len(steps))
 	}
 }
+
 // --- Finding status history -------------------------------------------------
 
 func TestCreateFindingWritesCreationHistoryRow(t *testing.T) {
@@ -791,6 +792,7 @@ func TestStatusChangeAndFindingWriteShareTransaction(t *testing.T) {
 		t.Errorf("status = %v, want %v (should have rolled back)", got.Status, engagement.FindingStatusOpen)
 	}
 }
+
 // --- Migration backfill ---
 
 func TestMigrationFromEmptyProducesNoBackfillRows(t *testing.T) {
@@ -901,8 +903,6 @@ func TestBackfillProducesOneRowPerFinding(t *testing.T) {
 		t.Errorf("expected 2 backfill rows, got %d", count)
 	}
 }
-
-
 
 func TestCommentRoundTrip(t *testing.T) {
 	r := newRepos(t)
