@@ -18,13 +18,23 @@ to HTML, and that same HTML as both the shareable live report and the PDF input.
 | M6-002 | Report document model + CRUD | Ordered block instances with per-block params; saved arrangements |
 | M6-003 | Report templates | Save an arrangement for reuse |
 | M6-004 | Branding | Logo, colours, client name |
-| M6-005–012 | Built-in blocks | Cover · executive summary · scope & RoE · coverage heatmap · per-tactic scorecard · detection-category distribution · scenario walkthrough · **round comparison / remediation delta** · detection gaps · findings backlog · MTTD analysis · evidence appendix · free rich text. Group into a few tickets, not one per block |
+| M6-005–012 | Built-in blocks | Cover · executive summary · scope & RoE · coverage heatmap · per-tactic scorecard · detection-category distribution · scenario walkthrough · **engagement comparison / remediation delta** · detection gaps · findings backlog · MTTD analysis · evidence appendix · free rich text. Group into a few tickets, not one per block. Every data block reads an `M5-009` endpoint — no second aggregation path |
 | M6-013 | HTML renderer | The single rendering path |
 | M6-014 | PDF via headless Chromium | `chromedp`, Chromium bundled in the image (`M0B-011`), `CHROME_PATH` for bare metal, documented print-to-PDF fallback |
 | M6-015 | Share links | Signed, expiring, revocable, optional password |
 | M6-016 | Report versioning | Rendered reports immutable, so "the report we sent the client" stays reproducible |
 | M6-017 | Builder UI | Toggle blocks, drag to reorder, configure each (scope to scenarios/rounds, verbosity) |
-| M6-018 | Complete the E2E thesis spec | All seven steps of `PLAN.md` §9, ending with share-link revocation returning 404 |
+| M6-018 | Complete the E2E thesis spec | All seven steps of `PLAN.md` §9 **as rewritten by `M5-EPIC`** — step 6 is "create the retest engagement from the open findings' steps and score them higher", step 7's round-comparison block is the engagement-comparison block — ending with share-link revocation returning 404 |
+
+## Settled by M5 (do not reopen here)
+
+- **Rounds.** Dropped in M3, replaced in M5 by ad-hoc cross-engagement compare (`M5-008`). The
+  comparison block reads that endpoint; there is no round vocabulary anywhere in M6.
+- **Where the numbers come from.** `M5-009`'s endpoints, under `report.read`. A block that computes
+  its own aggregate is a review rejection — the dashboard and the report must not be able to
+  disagree in front of a client.
+- **Definitions and copy.** `docs/analytics.md` is normative for every label a block prints, and for
+  the heatmap colour ramp shared with the Navigator export.
 
 ## Open questions to resolve before writing tickets
 
