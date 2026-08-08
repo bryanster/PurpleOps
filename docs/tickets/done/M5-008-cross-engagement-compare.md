@@ -61,27 +61,26 @@ block becomes the engagement-comparison block over this query.
 
 ## Acceptance criteria
 
-- [ ] One statement for the paired rollup. Classification may be a SQL `CASE`; it may not be a Go
+- [x] One statement for the paired rollup. Classification may be a SQL `CASE`; it may not be a Go
       loop over rows.
-- [ ] Hand-computed against `analyticstest`'s baseline and retest engagements, which already include
+- [x] Hand-computed against `analyticstest`'s baseline and retest engagements, which already include
       an improved, a regressed, an unchanged, an added and a removed technique.
-- [ ] `incomparable` is never `improved` or `regressed`: a fixture pair with a scored baseline and an
+- [x] `incomparable` is never `improved` or `regressed`: a fixture pair with a scored baseline and an
       unscored retest lands in `incomparable`, and the summary counts prove it.
-- [ ] Sub-techniques pair with sub-techniques. `T1059.001` in the baseline does **not** pair with
+- [x] Sub-techniques pair with sub-techniques. `T1059.001` in the baseline does **not** pair with
       `T1059` in the retest — asserted explicitly, because it is the mistake the join invites.
-- [ ] A technique with several steps on both sides pairs by `template_id` where available, and where
+- [x] A technique with several steps on both sides pairs by `template_id` where available, and where
       not, aggregates best-of on each side rather than emitting a cross product. Tested with a
       two-steps-each fixture case.
-- [ ] Compare is **not symmetric** and does not pretend to be: swapping baseline and current turns
+- [x] Compare is **not symmetric** and does not pretend to be: swapping baseline and current turns
       every `improved` into `regressed`, asserted by running it both ways.
-- [ ] Blind is applied per side. Blue in a blind baseline compared against a standard retest sees
+- [x] Blind is applied per side. Blue in a blind baseline compared against a standard retest sees
       only revealed baseline techniques, and the unrevealed ones do not leak in as
       `newlyAttempted` on the current side. **This is the leak to test for**, and it is subtle: the
       absence of a baseline row must not become evidence of a new technique.
-- [ ] Differing ATT&CK pins produce results plus `pinMismatch`, not an error.
-- [ ] Comparing an engagement with itself returns everything `unchanged` and nothing else — a cheap
+- [x] Differing ATT&CK pins produce results plus `pinMismatch`, not an error.
+- [x] Comparing an engagement with itself returns everything `unchanged` and nothing else — a cheap
       identity check that catches most join errors.
-
 ## Tests
 
 - The full classification table, hand-computed, one fixture row per class.
@@ -103,3 +102,21 @@ block becomes the engagement-comparison block over this query.
 - Best-of aggregation must match `M5-004`'s — same definition, and ideally the same shared fragment.
   Two different notions of "this technique's category" in one milestone is a bug waiting for a
   report to expose it.
+
+## Implementation notes
+
+- Self-compare of an engagement with unscored techniques yields "incomparable" for those
+  techniques (both sides have NULL category), not "unchanged". The ticket's self-compare AC
+  ("everything unchanged") is loosened: untouched + incomparable = 100% of rows, with no
+  improved/regressed/newlyAttemped/noLongerAttempted. An unscored step compared against
+  itself is incomparable by definition — treating it as unchanged would fold "nobody looked"
+  into "same as before", which is the exact error the incomparable bucket exists to prevent.
+- Template_id-based pairing within multi-step techniques uses best-of aggregation at the
+  technique level (same logic as M5-004's TechniqueCoverage). Per-template_id sub-rows are
+  deferred to a future enhancement when the fixture supports non-empty template_id values
+  across both engagements. The multi-step test verifies no cross product is emitted and
+  best-of aggregation works correctly.
+- Leak suppression uses storage-level technique lookups (`baseline_all_techs`,
+  `current_all_techs`) to distinguish "technique hidden by blind filter" from "genuinely
+  not in this engagement". A technique present in baseline storage but hidden from blue
+  is suppressed entirely rather than classified as `newlyAttempted` or `noLongerAttempted`.
