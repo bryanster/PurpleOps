@@ -11,6 +11,7 @@ import {
   engagementAnalyticsPath,
   engagementFindingsPath,
   engagementPath,
+  engagementReportsPath,
   engagementSettingsPath,
   engagementWorkbookPath,
 } from './paths'
@@ -23,6 +24,7 @@ import {
 } from './queries'
 import { usePresence } from './use-presence'
 import { useEngagementEvents } from './use-engagement-events'
+
 interface TabDef {
   label: string
   to: string
@@ -59,7 +61,9 @@ export function EngagementLayout(): ReactNode {
   }
 
   const eng = engagement.data
-  const role = isPlatformAdmin(user) ? ('admin' as EngagementRole) : roleInEngagement(eng.id, user)
+  const role = isPlatformAdmin(user)
+    ? ('admin' as EngagementRole)
+    : roleInEngagement(eng.id, user)
 
   if (role === undefined) {
     return <Navigate to="/engagements" replace />
@@ -71,21 +75,24 @@ export function EngagementLayout(): ReactNode {
     { label: 'Workbook', to: engagementWorkbookPath(eng.id) },
     { label: 'Analytics', to: engagementAnalyticsPath(eng.id) },
     { label: 'Findings', to: engagementFindingsPath(eng.id) },
+    { label: 'Reports', to: engagementReportsPath(eng.id) },
     { label: 'Settings', to: engagementSettingsPath(eng.id) },
   ]
 
   return (
-    <EngagementContextProvider engagementId={eng.id} role={role} closed={closed}>
+    <EngagementContextProvider eng={eng} role={role} closed={closed}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold">{eng.name}</h1>
               <StatusBadge status={eng.status} />
-              <Badge variant="outline">{eng.mode === 'blind' ? 'Blind' : 'Standard'}</Badge>
+              <Badge variant="outline">
+                {eng.mode === 'blind' ? 'Blind' : 'Standard'}
+              </Badge>
             </div>
-            <p className="text-muted-foreground text-sm">
-              {eng.client && <span>{eng.client} · </span>}
+            <p className="text-sm text-muted-foreground">
+              {eng.client && <span>{eng.client} &middot; </span>}
               ATT&amp;CK {eng.attackVersion}
             </p>
           </div>
@@ -101,11 +108,11 @@ export function EngagementLayout(): ReactNode {
                 end={tab.to === engagementPath(eng.id)}
                 className={({ isActive }) =>
                   cn(
-                    'border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors',
-                    'focus-visible:ring-ring/50 outline-none focus-visible:ring-3',
+                    'whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                    'outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
                     isActive
                       ? 'border-primary text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 border-transparent',
+                      : 'border-transparent text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground',
                   )
                 }
               >
@@ -134,22 +141,34 @@ export interface EngagementContextValue {
   closed: boolean
 }
 
-export const EngagementCtx = createContext<EngagementContextValue | undefined>(undefined)
+export const EngagementCtx = createContext<EngagementContextValue | undefined>(
+  undefined,
+)
 
 function EngagementContextProvider({
-  engagementId,
+  eng,
   role,
   closed,
   children,
-}: EngagementContextValue & { children: ReactNode }): ReactNode {
-  return <EngagementCtx value={{ engagementId, role, closed }}>{children}</EngagementCtx>
+}: {
+  eng: { id: string }
+} & EngagementContextValue & { children: ReactNode }): ReactNode {
+  return (
+    <EngagementCtx
+      value={{ engagementId: eng.id, role, closed }}
+    >
+      {children}
+    </EngagementCtx>
+  )
 }
 
 /** The engagement identity + caller role for any child component. */
 export function useEngagementContext(): EngagementContextValue {
   const ctx = use(EngagementCtx)
-  if (ctx === undefined) {
-    throw new Error('useEngagementContext must be used inside EngagementLayout')
+  if (!ctx) {
+    throw new Error(
+      'useEngagementContext must be used inside EngagementLayout',
+    )
   }
   return ctx
 }
@@ -160,18 +179,14 @@ export function useEngagementContext(): EngagementContextValue {
 
 function StatusBadge({ status }: { status: string }): ReactNode {
   const variant =
-    status === 'active'
-      ? 'default'
-      : status === 'draft'
-        ? 'secondary'
-        : status === 'closed'
-          ? 'outline'
-          : 'secondary'
-  return <Badge variant={variant}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>
+    status === 'active' ? 'default' : status === 'closed' ? 'secondary' : 'outline'
+  return <Badge variant={variant}>{status}</Badge>
 }
 
 function roleLabel(role: EngagementRole): string {
   switch (role) {
+    case 'admin':
+      return 'Admin'
     case 'lead':
       return 'Lead'
     case 'red':
@@ -180,7 +195,5 @@ function roleLabel(role: EngagementRole): string {
       return 'Blue'
     case 'observer':
       return 'Observer'
-    case 'admin':
-      return 'Admin'
   }
 }

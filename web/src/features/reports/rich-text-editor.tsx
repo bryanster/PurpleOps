@@ -1,6 +1,6 @@
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import LinkExtension from "@tiptap/extension-link";
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import LinkExtension from '@tiptap/extension-link'
 import {
   Bold,
   Italic,
@@ -14,10 +14,10 @@ import {
   Link,
   Undo,
   Redo,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useCallback } from "react";
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { useCallback } from 'react'
 
 /**
  * RichTextEditor is a TipTap-based editor limited to the M6-005 server
@@ -31,21 +31,21 @@ import { useCallback } from "react";
 
 export interface RichTextEditorProps {
   /** Initial HTML content. */
-  content?: string;
+  content?: string
   /** Called on every change with the current HTML. */
-  onChange?: (html: string) => void;
+  onChange?: (html: string) => void
   /** Placeholder text shown when empty. */
-  placeholder?: string;
+  placeholder?: string
   /** When true, the editor is read-only. */
-  readOnly?: boolean;
+  readOnly?: boolean
   /** Additional class names for the outer container. */
-  className?: string;
+  className?: string
 }
 
 export function RichTextEditor({
-  content = "",
+  content = '',
   onChange,
-  placeholder = "Start writing\u2026",
+  placeholder = 'Start writing\u2026',
   readOnly = false,
   className,
 }: RichTextEditorProps) {
@@ -61,7 +61,7 @@ export function RichTextEditor({
       LinkExtension.configure({
         openOnClick: false,
         autolink: false,
-        protocols: ["http", "https", "mailto"],
+        protocols: ['http', 'https', 'mailto'],
       }),
     ],
     content,
@@ -69,48 +69,46 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class: cn(
-          "prose prose-sm dark:prose-invert max-w-none min-h-[8rem] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-          readOnly && "cursor-default",
+          'prose prose-sm dark:prose-invert max-w-none min-h-[8rem] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          readOnly && 'cursor-default',
         ),
       },
     },
     onUpdate: ({ editor: ed }) => {
-      onChange?.(ed.getHTML());
+      onChange?.(ed.getHTML())
     },
-  });
+  })
 
   const setLink = useCallback(() => {
-    if (!editor) return;
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("URL", previousUrl || "https://");
-    if (url === null) return;
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
+    if (!editor) return
+    const previousUrl = editor.getAttributes('link').href
+    const url = window.prompt('URL', previousUrl || 'https://')
+    if (url === null) return
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run()
+      return
     }
     try {
-      const parsed = new URL(url);
-      if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) {
-        window.alert("Only http, https, and mailto links are allowed.");
-        return;
+      const parsed = new URL(url)
+      if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+        window.alert('Only http, https, and mailto links are allowed.')
+        return
       }
     } catch {
-      window.alert("Please enter a valid URL.");
-      return;
+      window.alert('Please enter a valid URL.')
+      return
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [editor]);
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+  }, [editor])
 
-  if (!editor) return null;
+  if (!editor) return null
 
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      {!readOnly && (
-        <Toolbar editor={editor} onSetLink={setLink} />
-      )}
+    <div className={cn('flex flex-col gap-1', className)}>
+      {!readOnly && <Toolbar editor={editor} onSetLink={setLink} />}
       <EditorContent editor={editor} placeholder={placeholder} />
     </div>
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -118,16 +116,16 @@ export function RichTextEditor({
 // ---------------------------------------------------------------------------
 
 interface ToolbarProps {
-  editor: NonNullable<ReturnType<typeof useEditor>>;
-  onSetLink: () => void;
+  editor: NonNullable<ReturnType<typeof useEditor>>
+  onSetLink: () => void
 }
 
 function Toolbar({ editor, onSetLink }: ToolbarProps) {
   const btn =
-    "h-8 w-8 p-0 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground";
+    'h-8 w-8 p-0 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground'
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 rounded-md border bg-muted/40 p-1">
+    <div className="bg-muted/40 flex flex-wrap items-center gap-0.5 rounded-md border p-1">
       <ToolButton
         title="Undo"
         disabled={!editor.can().undo()}
@@ -147,21 +145,21 @@ function Toolbar({ editor, onSetLink }: ToolbarProps) {
 
       <ToolButton
         title="Heading 1"
-        active={editor.isActive("heading", { level: 1 })}
+        active={editor.isActive('heading', { level: 1 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
       >
         <Heading1 className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         title="Heading 2"
-        active={editor.isActive("heading", { level: 2 })}
+        active={editor.isActive('heading', { level: 2 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
       >
         <Heading2 className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         title="Heading 3"
-        active={editor.isActive("heading", { level: 3 })}
+        active={editor.isActive('heading', { level: 3 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
       >
         <Heading3 className="h-4 w-4" />
@@ -171,21 +169,21 @@ function Toolbar({ editor, onSetLink }: ToolbarProps) {
 
       <ToolButton
         title="Bold"
-        active={editor.isActive("bold")}
+        active={editor.isActive('bold')}
         onClick={() => editor.chain().focus().toggleBold().run()}
       >
         <Bold className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         title="Italic"
-        active={editor.isActive("italic")}
+        active={editor.isActive('italic')}
         onClick={() => editor.chain().focus().toggleItalic().run()}
       >
         <Italic className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         title="Inline code"
-        active={editor.isActive("code")}
+        active={editor.isActive('code')}
         onClick={() => editor.chain().focus().toggleCode().run()}
       >
         <Code className="h-4 w-4" />
@@ -195,21 +193,21 @@ function Toolbar({ editor, onSetLink }: ToolbarProps) {
 
       <ToolButton
         title="Bullet list"
-        active={editor.isActive("bulletList")}
+        active={editor.isActive('bulletList')}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
       >
         <List className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         title="Numbered list"
-        active={editor.isActive("orderedList")}
+        active={editor.isActive('orderedList')}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
       >
         <ListOrdered className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         title="Blockquote"
-        active={editor.isActive("blockquote")}
+        active={editor.isActive('blockquote')}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
       >
         <Quote className="h-4 w-4" />
@@ -217,15 +215,11 @@ function Toolbar({ editor, onSetLink }: ToolbarProps) {
 
       <Sep />
 
-      <ToolButton
-        title="Add link"
-        active={editor.isActive("link")}
-        onClick={onSetLink}
-      >
+      <ToolButton title="Add link" active={editor.isActive('link')} onClick={onSetLink}>
         <Link className="h-4 w-4" />
       </ToolButton>
     </div>
-  );
+  )
 }
 
 function ToolButton({
@@ -235,11 +229,11 @@ function ToolButton({
   onClick,
   children,
 }: {
-  title: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  title: string
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: React.ReactNode
 }) {
   return (
     <Button
@@ -247,16 +241,16 @@ function ToolButton({
       size="icon"
       title={title}
       disabled={disabled}
-      data-state={active ? "on" : "off"}
-      className="h-8 w-8 p-0 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+      data-state={active ? 'on' : 'off'}
+      className="text-muted-foreground hover:bg-muted hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground flex h-8 w-8 items-center justify-center rounded-md p-0"
       onClick={onClick}
       type="button"
     >
       {children}
     </Button>
-  );
+  )
 }
 
 function Sep() {
-  return <div className="mx-0.5 h-5 w-px bg-border" />;
+  return <div className="bg-border mx-0.5 h-5 w-px" />
 }

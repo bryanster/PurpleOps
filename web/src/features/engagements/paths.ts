@@ -29,3 +29,13 @@ export function engagementFindingsPath(engagementId: string): string {
 export function engagementSettingsPath(engagementId: string): string {
   return `/engagements/${engagementId}/settings`
 }
+export function engagementReportsPath(engagementId: string): string {
+  return `/engagements/${engagementId}/reports`
+}
+
+export function engagementReportPath(
+  engagementId: string,
+  reportId: string,
+): string {
+  return `/engagements/${engagementId}/reports/${reportId}`
+}

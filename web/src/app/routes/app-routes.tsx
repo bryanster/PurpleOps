@@ -36,6 +36,9 @@ import { HealthPage } from '@/features/system/health-page'
 import { VersionPage } from '@/features/system/version-page'
 import { TokensPage } from '@/features/tokens/tokens-page'
 
+import { BuilderPage } from '@/features/reports/builder-page'
+import { ReportsPage } from '@/features/reports/reports-page'
+
 import { NotFoundPage } from './not-found'
 
 export function AppRoutes(): ReactNode {
@@ -63,6 +66,8 @@ export function AppRoutes(): ReactNode {
             <Route path="analytics/compare" element={<ComparePage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/:reportId" element={<BuilderPage />} />
           </Route>
 
           <Route element={<RequireAdmin />}>
