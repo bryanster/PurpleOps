@@ -661,6 +661,8 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 	// Report templates (M6-003).
 	templateRepo := storereport.NewTemplates(deps.Store)
+
+
 	templateSvc, err := report.NewTemplateService(report.TemplateDeps{
 		Templates: templateRepo,
 		Reports:   reportRepo,
@@ -676,6 +678,20 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	brandingSvc, err := report.NewBrandingSettingsService(settingsStore, deps.Config.Report.BrandingDir)
 	if err != nil {
 		panic("httpapi: report branding: " + err.Error())
+	}
+
+	// Branding resolver + publish service (M6-011).
+	brandingResolver := report.NewBrandingResolver(brandingSvc)
+	versionRepo := storereport.NewVersions(deps.Store)
+	publishSvc, err := report.NewPublishService(report.PublishDeps{
+		Reports:  reportRepo,
+		Versions: versionRepo,
+		Renderer: docRenderer,
+		Resolver: brandingResolver,
+		Activity: activityLog,
+	})
+	if err != nil {
+		panic("httpapi: report publish: " + err.Error())
 	}
 	customSvc, err := content.NewCustom(content.CustomDeps{
 		Sources:      sources,
@@ -789,6 +805,9 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 		attackpin: pin,
 		reports: reportSvc,
+
+		publishSvc: publishSvc,
+		versions:    versionRepo,
 
 		users:       users,
 		engagements: engSvc,

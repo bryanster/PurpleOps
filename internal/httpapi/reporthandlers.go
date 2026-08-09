@@ -2,9 +2,10 @@ package httpapi
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"context"
 
 	"github.com/oapi-codegen/nullable"
 
@@ -420,4 +421,166 @@ func (h *handlers) previewReportData(ctx context.Context, reportID string) (*sto
 	}
 
 	return &rep, blocks, nil
+}
+
+// ── Report publish and versions (M6-011) ────────────────────────────
+
+// PublishReport publishes the report draft as an immutable version.
+func (h *handlers) PublishReport(ctx context.Context,
+	request gen.PublishReportRequestObject) (gen.PublishReportResponseObject, error) {
+
+	actor, ok := authn.SubjectFrom(ctx)
+	if !ok {
+		return gen.PublishReport401ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	includeEvidence := false
+	if request.Body != nil && request.Body.IncludeEvidence != nil {
+		includeEvidence = *request.Body.IncludeEvidence
+	}
+
+	// Build a RenderEnv with engagement context.
+	engagements := storengagement.NewEngagements(h.store)
+	eng, err := engagements.ByID(ctx, request.EngagementId.String())
+	if err != nil {
+		h.log.Error("publish: get engagement", "engagement_id", request.EngagementId, "err", err)
+		return gen.PublishReport404ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	env := report.RenderEnv{
+		EngagementID:      request.EngagementId.String(),
+		EngagementName:    eng.Name,
+		EngagementClient:  eng.Client,
+		EngagementStartsOn: eng.StartsOn,
+		EngagementEndsOn:   eng.EndsOn,
+		Analytics:        h.analytics,
+		Domain: &report.DomainAdapter{
+			Scenarios:  storengagement.NewScenarios(h.store),
+			Steps:      storengagement.NewSteps(h.store),
+			Executions: storengagement.NewExecutions(h.store),
+			Findings:   storengagement.NewFindings(h.store),
+			Evidence:   h.evidenceRepo,
+		},
+		Evidence: &report.EvidenceStorage{Store: h.evidenceStore},
+		Format:   report.FormatHelpers{},
+	}
+
+	result, err := h.publishSvc.Publish(ctx, env, report.PublishInput{
+		ReportID:        request.ReportId.String(),
+		EngagementID:    request.EngagementId.String(),
+		EngagementName:  eng.Name,
+		PublishedBy:     actor.UserID,
+		IncludeEvidence: includeEvidence,
+	})
+	if err != nil {
+		h.log.Error("publish: failed", "report_id", request.ReportId, "err", err)
+		return gen.PublishReport500ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	return gen.PublishReport201JSONResponse(versionToWire(result.Version)), nil
+}
+
+// ListReportVersions lists published versions of a report, newest first.
+func (h *handlers) ListReportVersions(ctx context.Context,
+	request gen.ListReportVersionsRequestObject) (gen.ListReportVersionsResponseObject, error) {
+
+	versions, err := h.versions.ListByReport(ctx, request.ReportId.String())
+	if err != nil {
+		h.log.Error("list versions: failed", "report_id", request.ReportId, "err", err)
+		return gen.ListReportVersions500ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	out := make([]gen.ReportVersion, 0, len(versions))
+	for _, v := range versions {
+		out = append(out, versionToWire(v))
+	}
+
+	return gen.ListReportVersions200JSONResponse(out), nil
+}
+
+// GetReportVersion returns one published version's metadata.
+func (h *handlers) GetReportVersion(ctx context.Context,
+	request gen.GetReportVersionRequestObject) (gen.GetReportVersionResponseObject, error) {
+
+	ver, err := h.versions.ByID(ctx, request.VersionId.String())
+	if err != nil {
+		h.log.Error("get version: failed", "version_id", request.VersionId, "err", err)
+		return gen.GetReportVersion404ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	return gen.GetReportVersion200JSONResponse(versionToWire(ver)), nil
+}
+
+// GetReportVersionHtml returns the frozen HTML of a published version.
+func (h *handlers) GetReportVersionHtml(ctx context.Context,
+	request gen.GetReportVersionHtmlRequestObject) (gen.GetReportVersionHtmlResponseObject, error) {
+
+	ver, err := h.versions.ByID(ctx, request.VersionId.String())
+	if err != nil {
+		h.log.Error("get version html: failed", "version_id", request.VersionId, "err", err)
+		return gen.GetReportVersionHtml404ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	return gen.GetReportVersionHtml200TexthtmlResponse{
+		Body:          strings.NewReader(ver.HTML),
+		ContentLength: int64(len(ver.HTML)),
+	}, nil
+}
+
+// GetReportVersionPdf returns the PDF of a published version.
+// Generates on first access, caches the hash.
+func (h *handlers) GetReportVersionPdf(ctx context.Context,
+	request gen.GetReportVersionPdfRequestObject) (gen.GetReportVersionPdfResponseObject, error) {
+
+	if h.pdfPrinter == nil {
+		return gen.GetReportVersionPdf503Response{}, nil
+	}
+
+	ver, err := h.versions.ByID(ctx, request.VersionId.String())
+	if err != nil {
+		h.log.Error("get version pdf: failed", "version_id", request.VersionId, "err", err)
+		return gen.GetReportVersionPdf404ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	// Generate PDF from frozen HTML.
+	pdfBytes, err := h.pdfPrinter.RenderPDF(ctx, []byte(ver.HTML))
+	if err != nil {
+		h.log.Error("get version pdf: render failed", "version_id", request.VersionId, "err", err)
+		return gen.GetReportVersionPdf500ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	// Cache the PDF hash if not already set.
+	if ver.PDFSHA256 == nil || *ver.PDFSHA256 == "" {
+		pdfHash := storereport.HashBytes(pdfBytes)
+		if err := h.versions.SetPDFSHA256(ctx, ver.ID, pdfHash); err != nil {
+			h.log.Warn("get version pdf: failed to cache hash", "version_id", request.VersionId, "err", err)
+			// Non-fatal: we still serve the PDF.
+		}
+	}
+
+	return gen.GetReportVersionPdf200ApplicationpdfResponse{
+		Body:          bytes.NewReader(pdfBytes),
+		ContentLength: int64(len(pdfBytes)),
+	}, nil
+}
+
+// versionToWire converts a store ReportVersion to the wire format.
+func versionToWire(v storereport.ReportVersion) gen.ReportVersion {
+	r := gen.ReportVersion{
+		Id:              uuid.MustParse(v.ID),
+		ReportId:        uuid.MustParse(v.ReportID),
+		Ordinal:         v.Ordinal,
+		Title:           v.Title,
+		PublishedBy:     v.PublishedBy,
+		PublishedAt:     v.PublishedAt,
+		IncludeEvidence: v.IncludeEvidence,
+		BlindScope:      v.BlindScope,
+	}
+	if v.ContentSHA256 != nil {
+		r.ContentSha256 = nullable.NewNullableWithValue(*v.ContentSHA256)
+	}
+	if v.PDFSHA256 != nil {
+		r.PdfSha256 = nullable.NewNullableWithValue(*v.PDFSHA256)
+	}
+	return r
 }

@@ -160,6 +160,10 @@ const (
 	VerbReportUpdated Verb = "report.updated"
 	VerbReportDeleted Verb = "report.deleted"
 
+	// VerbReportPublished records that a report was published as an immutable
+	// version (M6-011). Object is the report_version row; engagement_id naming
+	VerbReportPublished Verb = "report.published"
+
 	// Report template lifecycle (M6-003). Object is the template row;
 	// engagement_id names which engagement the template belongs to.
 	VerbReportTemplateCreated Verb = "report_template.created"
@@ -197,6 +201,8 @@ const (
 
 	ObjectFinding  = "finding"
 	ObjectEvidence = "evidence"
+
+	ObjectReportVersion = "report_version"
 	ObjectScenario = "scenario"
 
 	ObjectStep = "step"

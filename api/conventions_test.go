@@ -40,8 +40,12 @@ var nonProblemErrorResponses = map[string]string{
 	// would tell it only that something is. The 503 is the endpoint's answer,
 	// not an error.
 	"getHealth 503": "the degraded health report is the point of the endpoint",
-}
 
+	// PDF rendering is unavailable when Chromium is not configured. The 503
+	// tells the caller to try the HTML view instead, not that something is broken.
+	"previewReportPdf 503":    "PDF unavailable — Chromium not configured",
+	"getReportVersionPdf 503": "PDF unavailable — Chromium not configured",
+}
 // declaredCodePattern picks the problem code out of a shared response's
 // description — "`code` is `not_found`" — which is where a reader of the
 // document finds out which code goes with which status.

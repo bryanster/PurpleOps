@@ -24,6 +24,7 @@ import (
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
+	storereport "github.com/bryanster/blacklight/internal/store/report"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/version"
 	"github.com/bryanster/blacklight/internal/store/activity"
@@ -152,6 +153,12 @@ type handlers struct {
 	// not configured — the PDF endpoint returns a clear error in that case
 	// rather than the server refusing to start.
 	pdfPrinter *pdfreport.Printer
+
+	// publishSvc creates immutable published versions (M6-011).
+	publishSvc *report.PublishService
+
+	// versions reads published report versions (M6-011).
+	versions *storereport.Versions
 }
 
 

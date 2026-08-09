@@ -57,6 +57,7 @@ func TestNoHandlerDecidesForItself(t *testing.T) {
 	// (same pattern as M4-001 per-topic authz).
 	allowedImports := map[string]string{
 		"analyticshandlers.go": "M5-009: compare handler authorizes baseline engagement through authz.Can",
+		"reporthandlers.go":    "M6-009: previewReportEnv resolves blind scope seat via authz.EngagementRole",
 	}
 
 	for _, path := range handlerFiles {

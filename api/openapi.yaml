@@ -6513,6 +6513,197 @@ paths:
         "503":
           description: PDF rendering is not configured on this server.
 
+  # ── Report publish and versions (M6-011) ─────────────────────────
+
+  /engagements/{engagementId}/reports/{reportId}/publish:
+    post:
+      operationId: publishReport
+      summary: Publish the report draft as an immutable version.
+      description: |
+        Lead only. Freezes the current draft blocks, resolved branding, and
+        rendered HTML as an immutable published version. Always uses the lead
+        (full) blind scope — published versions never expose blue-seat data.
+
+        The publish fails entirely if any block errors during render.
+        Evidence inclusion is opt-in per publish, defaulting to off.
+      tags:
+        - reports
+      x-authz-action: report.publish
+      x-authz-resource:
+        type: report
+        engagement: reportId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishReport"
+      responses:
+        "201":
+          description: The published version metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportVersion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/versions:
+    get:
+      operationId: listReportVersions
+      summary: List published versions of a report.
+      description: |
+        Members and platform administrators with report.read. Returns versions
+        newest first.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+      responses:
+        "200":
+          description: The report's published versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportVersion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/versions/{versionId}:
+    get:
+      operationId: getReportVersion
+      summary: Return one published version's metadata.
+      description: |
+        Members and platform administrators with report.read.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/VersionId"
+      responses:
+        "200":
+          description: The version metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportVersion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/versions/{versionId}/html:
+    get:
+      operationId: getReportVersionHtml
+      summary: Return the rendered HTML of a published version.
+      description: |
+        Members and platform administrators with report.read. Returns the
+        frozen HTML as rendered at publish time.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/VersionId"
+      responses:
+        "200":
+          description: The frozen report HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/versions/{versionId}/pdf:
+    get:
+      operationId: getReportVersionPdf
+      summary: Return the PDF of a published version.
+      description: |
+        Members and platform administrators with report.read. Generates the
+        PDF on first access and caches it; subsequent calls return the cached
+        bytes. Returns 503 when Chromium is not configured.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/VersionId"
+      responses:
+        "200":
+          description: The PDF file.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: PDF rendering is not configured on this server.
+
   # ── Report templates (M6-003) ────────────────────────────────────
 
   /engagements/{engagementId}/report-templates:
@@ -6942,6 +7133,15 @@ components:
       in: path
       required: true
       description: The template being read or changed.
+      schema:
+        type: string
+        format: uuid
+
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      description: The published version being read.
       schema:
         type: string
         format: uuid
@@ -11985,6 +12185,56 @@ components:
             Defaults are used from the registry when absent.
             HTML content within params (e.g. rich_text body) is limited to
             100 KiB raw and sanitized server-side on write (M6-005).
+      additionalProperties: false
+
+    # ── M6 publish and versions (M6-011) ─────────────────────────────
+
+    PublishReport:
+      type: object
+      properties:
+        includeEvidence:
+          type: boolean
+          default: false
+          description: Include evidence bytes in the published version.
+      additionalProperties: false
+
+    ReportVersion:
+      type: object
+      required:
+        - id
+        - reportId
+        - ordinal
+        - title
+        - publishedBy
+        - publishedAt
+        - includeEvidence
+        - blindScope
+      properties:
+        id:
+          type: string
+          format: uuid
+        reportId:
+          type: string
+          format: uuid
+        ordinal:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        publishedBy:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        includeEvidence:
+          type: boolean
+        blindScope:
+          type: string
+          description: Always 'lead_full' for published versions.
+        contentSha256:
+          type: [string, "null"]
+        pdfSha256:
+          type: [string, "null"]
       additionalProperties: false
     # ── M6 report templates ───────────────────────────────────────────
 

@@ -625,6 +625,11 @@ var csrfCoverage = map[string]struct {
 		body: "",
 	},
 
+	// Report publish (M6-011).
+	"POST " + BasePath + "/engagements/{engagementId}/reports/{reportId}/publish": {
+		body: `{}`,
+	},
+
 	// Report templates (M6-003).
 	"POST " + BasePath + "/engagements/{engagementId}/report-templates": {
 		body: `{"name":"Template"}`,

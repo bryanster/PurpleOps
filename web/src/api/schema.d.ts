@@ -3371,6 +3371,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/reports/{reportId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the report draft as an immutable version.
+         * @description Lead only. Freezes the current draft blocks, resolved branding, and
+         *     rendered HTML as an immutable published version. Always uses the lead
+         *     (full) blind scope — published versions never expose blue-seat data.
+         *
+         *     The publish fails entirely if any block errors during render.
+         *     Evidence inclusion is opt-in per publish, defaulting to off.
+         */
+        post: operations["publishReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List published versions of a report.
+         * @description Members and platform administrators with report.read. Returns versions
+         *     newest first.
+         */
+        get: operations["listReportVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}/versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one published version's metadata.
+         * @description Members and platform administrators with report.read.
+         */
+        get: operations["getReportVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}/versions/{versionId}/html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the rendered HTML of a published version.
+         * @description Members and platform administrators with report.read. Returns the
+         *     frozen HTML as rendered at publish time.
+         */
+        get: operations["getReportVersionHtml"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}/versions/{versionId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the PDF of a published version.
+         * @description Members and platform administrators with report.read. Generates the
+         *     PDF on first access and caches it; subsequent calls return the cached
+         *     bytes. Returns 503 when Chromium is not configured.
+         */
+        get: operations["getReportVersionPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagements/{engagementId}/report-templates": {
         parameters: {
             query?: never;
@@ -5936,6 +6045,29 @@ export interface components {
              */
             params?: Record<string, never>;
         };
+        PublishReport: {
+            /**
+             * @description Include evidence bytes in the published version.
+             * @default false
+             */
+            includeEvidence: boolean;
+        };
+        ReportVersion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            reportId: string;
+            ordinal: number;
+            title: string;
+            publishedBy: string;
+            /** Format: date-time */
+            publishedAt: string;
+            includeEvidence: boolean;
+            /** @description Always 'lead_full' for published versions. */
+            blindScope: string;
+            contentSha256?: string | null;
+            pdfSha256?: string | null;
+        };
         ReportTemplate: {
             /** Format: uuid */
             id: string;
@@ -6154,6 +6286,8 @@ export interface components {
         ReportId: string;
         /** @description The template being read or changed. */
         TemplateId: string;
+        /** @description The published version being read. */
+        VersionId: string;
         /** @description Restrict the listing to accounts in this state. */
         UserStatusFilter: components["schemas"]["UserStatus"];
         /** @description Restrict the listing to accounts holding this platform role. */
@@ -12130,6 +12264,191 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The rendered report as a PDF document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+            /** @description PDF rendering is not configured on this server. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    publishReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PublishReport"];
+            };
+        };
+        responses: {
+            /** @description The published version metadata. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportVersion"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listReportVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report's published versions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportVersion"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getReportVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+                /** @description The published version being read. */
+                versionId: components["parameters"]["VersionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportVersion"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getReportVersionHtml: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+                /** @description The published version being read. */
+                versionId: components["parameters"]["VersionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The frozen report HTML. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getReportVersionPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+                /** @description The published version being read. */
+                versionId: components["parameters"]["VersionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF file. */
             200: {
                 headers: {
                     [name: string]: unknown;
