@@ -86,6 +86,7 @@ export function queryKeysForVerb(
         engagementKeys.analyticsCoverage(engagementId),
         engagementKeys.analyticsDistribution(engagementId),
         engagementKeys.analyticsMttd(engagementId),
+        engagementKeys.analyticsComparePrefix(engagementId),
         ...activityKeys,
       ]
       const withScenario = parents.scenarioId
@@ -108,6 +109,7 @@ export function queryKeysForVerb(
         engagementKeys.executions(engagementId),
         engagementKeys.analyticsCoverage(engagementId),
         engagementKeys.analyticsDistribution(engagementId),
+        engagementKeys.analyticsComparePrefix(engagementId),
         engagementKeys.analyticsMttd(engagementId),
         ...activityKeys,
       ]

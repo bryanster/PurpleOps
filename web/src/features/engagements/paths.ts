@@ -13,6 +13,10 @@ export function engagementAnalyticsPath(engagementId: string): string {
   return `/engagements/${engagementId}/analytics`
 }
 
+export function engagementComparePath(engagementId: string, baselineId: string): string {
+  return `/engagements/${engagementId}/analytics/compare?baseline=${encodeURIComponent(baselineId)}`
+}
+
 
 export function engagementWorkbookPath(engagementId: string): string {
   return `/engagements/${engagementId}/workbook`

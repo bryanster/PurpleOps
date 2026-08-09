@@ -24,6 +24,7 @@ import {
 } from '@/features/auth/paths'
 import { EngagementLayout } from '@/features/engagements/engagement-layout'
 import { EngagementsPage } from '@/features/engagements/engagements-page'
+import { ComparePage } from '@/features/engagements/compare-page'
 import { FindingsPage } from '@/features/engagements/findings-page'
 import { OverviewPage } from '@/features/engagements/overview-page'
 import { SettingsPage } from '@/features/engagements/settings-page'
@@ -59,6 +60,7 @@ export function AppRoutes(): ReactNode {
             <Route index element={<OverviewPage />} />
             <Route path="workbook" element={<WorkbookPage />} />
             <Route path="findings" element={<FindingsPage />} />
+            <Route path="analytics/compare" element={<ComparePage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

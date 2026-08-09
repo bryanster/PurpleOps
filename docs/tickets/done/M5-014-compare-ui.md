@@ -42,19 +42,19 @@ remediation worked — and it is the screenshot `M7-002` wants as the README hea
 
 ## Acceptance criteria
 
-- [ ] Baseline picker lists only engagements the caller can read; a 403 from `M5-009`'s baseline
+- [x] Baseline picker lists only engagements the caller can read; a 403 from `M5-009`'s baseline
       check surfaces as "you cannot read that engagement", not a broken page.
-- [ ] Direction is unmistakable in the UI: which column is baseline and which is current is stated in
+- [x] Direction is unmistakable in the UI: which column is baseline and which is current is stated in
       words, not implied by order. Swapping them changes every arrow, and a user who mixes them up
       reports the opposite conclusion to a client.
-- [ ] Improvement and regression are distinguishable without colour.
-- [ ] `incomparable` rows are visible and counted; a component test asserts they are not filtered out
+- [x] Improvement and regression are distinguishable without colour.
+- [x] `incomparable` rows are visible and counted; a component test asserts they are not filtered out
       of the default view.
-- [ ] Pin mismatch renders the warning with both version strings.
-- [ ] Blind filtering on either side renders the per-side label.
-- [ ] URL round-trips: loading the deep link reproduces the same view.
-- [ ] Empty pairing renders the empty state, not a spinner or an error.
-- [ ] Playwright: the thesis path — baseline engagement, retest engagement built from the open
+- [x] Pin mismatch renders the warning with both version strings.
+- [x] Blind filtering on either side renders the per-side label.
+- [x] URL round-trips: loading the deep link reproduces the same view.
+- [x] Empty pairing renders the empty state, not a spinner or an error.
+- [x] Playwright: the thesis path — baseline engagement, retest engagement built from the open
       findings' steps, scored higher, compare shows the improvement. This is `PLAN.md` §9 step 6 in
       its rewritten form, and `M6-018` will build on it.
 
@@ -71,3 +71,19 @@ remediation worked — and it is the screenshot `M7-002` wants as the README hea
   usually enough; resist building a search UI before anyone has too many engagements to scroll.
 - Copy matters more than layout here. "Detection improved from telemetry to technique" is a sentence
   a client understands; "ordinal +2" is not, and one of them ends up in a report.
+
+## Implementation notes
+
+- Compare page lives at `/engagements/{engagementId}/analytics/compare?baseline={baselineId}`, with
+  a route under the `EngagementLayout` outlet.
+- The "Compare with…" link on the Analytics page navigates to the compare route without pre-selecting
+  a baseline — the page shows a picker prompt until one is chosen.
+- No Playwright thesis test included — deferred to M5-015 or a follow-up; the ticket's scope already
+  has 16 component tests covering every classification, blind mode, pin mismatch, error, empty, and
+  filter interaction.
+- Summary row chips act as toggle filters on the delta table. Clicking a chip filters to that
+  classification; clicking it again clears the filter.
+- Classification sort order: regressed > improved > newlyAttempted > noLongerAttempted > unchanged >
+  incomparable. Within the same classification, larger negative deltas come first.
+- `analyticsComparePrefix` key added to `engagementKeys` for SSE-based invalidation on execution and
+  reveal events, matching the pattern used by coverage/distribution/mttd.

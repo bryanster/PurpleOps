@@ -18,6 +18,9 @@ export type DistributionBucket = components['schemas']['DistributionBucket']
 export type DistributionResult = components['schemas']['DistributionResult']
 export type BurndownPoint = components['schemas']['BurndownPoint']
 export type SeverityBucket = components['schemas']['SeverityBucket']
+export type AnalyticsCompare = components['schemas']['AnalyticsCompare']
+export type CompareRow = components['schemas']['CompareRow']
+export type PinMismatch = components['schemas']['PinMismatch']
 
 // ── Colour ramp ──────────────────────────────────────────────────────────────
 
@@ -138,4 +141,30 @@ export function useAnalyticsBurndown(
   engagementId: string | undefined,
 ): UseQueryResult<AnalyticsBurndown> {
   return useQuery(analyticsBurndownQueryOptions(engagementId))
+}
+
+export function analyticsCompareQueryOptions(engagementId: string | undefined, baselineId: string | undefined) {
+  return queryOptions({
+    queryKey: engagementKeys.analyticsCompare(engagementId ?? '', baselineId ?? ''),
+    queryFn: async ({ signal }) => {
+      if (!engagementId || !baselineId) throw new Error('engagementId and baselineId required')
+      return unwrap(
+        await api.GET('/engagements/{engagementId}/analytics/compare', {
+          params: {
+            path: { engagementId },
+            query: { baseline: baselineId },
+          },
+          signal,
+        }),
+      )
+    },
+    enabled: engagementId !== undefined && baselineId !== undefined,
+  })
+}
+
+export function useAnalyticsCompare(
+  engagementId: string | undefined,
+  baselineId: string | undefined,
+): UseQueryResult<AnalyticsCompare> {
+  return useQuery(analyticsCompareQueryOptions(engagementId, baselineId))
 }

@@ -108,6 +108,7 @@ describe('queryKeysForVerb', () => {
         engagementKeys.analyticsCoverage(ENG),
         engagementKeys.analyticsDistribution(ENG),
         engagementKeys.analyticsMttd(ENG),
+        engagementKeys.analyticsComparePrefix(ENG),
         ACTIVITY,
         engagementKeys.steps(ENG, SCENARIO),
         engagementKeys.step(ENG, SCENARIO, STEP),
@@ -136,6 +137,7 @@ describe('queryKeysForVerb', () => {
         engagementKeys.executions(ENG),
         engagementKeys.analyticsCoverage(ENG),
         engagementKeys.analyticsDistribution(ENG),
+        engagementKeys.analyticsComparePrefix(ENG),
         engagementKeys.analyticsMttd(ENG),
         ACTIVITY,
         engagementKeys.execution(ENG, EXEC),
@@ -150,6 +152,7 @@ describe('queryKeysForVerb', () => {
         engagementKeys.executions(ENG),
         engagementKeys.analyticsCoverage(ENG),
         engagementKeys.analyticsDistribution(ENG),
+        engagementKeys.analyticsComparePrefix(ENG),
         engagementKeys.analyticsMttd(ENG),
         ACTIVITY,
         engagementKeys.execution(ENG, EXEC),
@@ -159,7 +162,7 @@ describe('queryKeysForVerb', () => {
 
   it('execution.red_updated without executionId invalidates executions, analytics, and activity', () => {
     const keys = queryKeysForVerb('execution.red_updated', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.executions(ENG), engagementKeys.analyticsCoverage(ENG), engagementKeys.analyticsDistribution(ENG), engagementKeys.analyticsMttd(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.executions(ENG), engagementKeys.analyticsCoverage(ENG), engagementKeys.analyticsDistribution(ENG), engagementKeys.analyticsComparePrefix(ENG), engagementKeys.analyticsMttd(ENG), ACTIVITY])).toBe(true)
   })
 
   // ── Evidence ──────────────────────────────────────────────────────────

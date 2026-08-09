@@ -93,6 +93,10 @@ export const engagementKeys = {
     [...engagementKeys.all, 'analytics', engagementId, 'mttd'] as const,
   analyticsBurndown: (engagementId: string) =>
     [...engagementKeys.all, 'analytics', engagementId, 'burndown'] as const,
+  analyticsCompare: (engagementId: string, baselineId: string) =>
+    [...engagementKeys.all, 'analytics', engagementId, 'compare', baselineId] as const,
+  analyticsComparePrefix: (engagementId: string) =>
+    [...engagementKeys.all, 'analytics', engagementId, 'compare'] as const,
 }
 
 // ── Engagements ──────────────────────────────────────────────────────────────

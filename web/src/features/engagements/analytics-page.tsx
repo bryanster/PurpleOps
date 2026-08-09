@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo } from 'react'
 
+import { Link } from 'react-router'
 import { PageEmpty, PageError, PageLoading } from '@/app/shell/page-state'
 import { cn } from '@/lib/utils'
 
@@ -538,6 +539,12 @@ export function AnalyticsPage(): ReactNode {
     <div className="space-y-6 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Analytics</h2>
+        <Link
+          to={`/engagements/${engagementId}/analytics/compare`}
+          className="text-primary hover:text-primary/80 text-sm font-medium transition-colors"
+        >
+          Compare with…
+        </Link>
       </div>
 
       {blindFiltered && <BlindBanner />}
