@@ -1,8 +1,15 @@
 package report
+
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math"
+	"strings"
 	"time"
+
+	"github.com/bryanster/blacklight/internal/analytics"
+	"github.com/bryanster/blacklight/internal/store/blind"
 )
 
 // ID is a stable block identifier from the v1 catalogue.
@@ -113,17 +120,23 @@ type RenderEnv struct {
 
 	// BlindScope carries the seat scope for draft previews.
 	// Published versions always use the full/lead scope (M6-EPIC).
-	BlindScope string
+	BlindScope blind.Scope
 
 	// Locale and format helpers (fixed for v1: ISO dates, en-US grouping).
 	// Set in M6-009.
 	Format FormatHelpers
 }
-
 // AnalyticsFacade is the interface report blocks use to read analytics data.
-// Concrete type defined in M6-009; declared here so blocks can reference it.
+// M6-007 fills the concrete methods; *analytics.Queries satisfies it directly.
+// M6-009 sets it on RenderEnv during assembly.
 type AnalyticsFacade interface {
-	// Methods defined by M6-009.
+	TechniqueCoverage(ctx context.Context, scope analytics.Scope) (*analytics.TechniqueCoverageResult, error)
+	TacticCoverage(ctx context.Context, scope analytics.Scope) (*analytics.TacticCoverageResult, error)
+	CategoryDistribution(ctx context.Context, scope analytics.Scope) (*analytics.DistributionResult, error)
+	ProtectionRate(ctx context.Context, scope analytics.Scope) (*analytics.DistributionResult, error)
+	OutcomeMix(ctx context.Context, scope analytics.Scope) (*analytics.DistributionResult, error)
+	MTTD(ctx context.Context, scope analytics.Scope) (*analytics.MTTDResult, error)
+	Compare(ctx context.Context, scope analytics.CompareScope) (*analytics.CompareResult, error)
 }
 
 // EvidenceAccess is the interface report blocks use to read evidence.
@@ -151,8 +164,67 @@ type BrandingConfig struct {
 	ClientName string
 }
 
+
+
 // FormatHelpers provides locale/format functions for report rendering.
-// Concrete type defined in M6-009; declared here so RenderEnv can carry it.
-type FormatHelpers struct {
-	// Methods defined by M6-009.
+// Methods are defined here (M6-007) — fixed for v1: ISO dates, en-US grouping.
+type FormatHelpers struct{}
+
+// Count formats an integer with en-US grouping (thousands separator).
+func (FormatHelpers) Count(n int) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + (len(s)-1)/3)
+	rem := len(s) % 3
+	if rem == 0 {
+		rem = 3
+	}
+	b.WriteString(s[:rem])
+	for i := rem; i < len(s); i += 3 {
+		b.WriteByte(',')
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
+}
+
+// Duration formats an integer number of seconds as a human-readable string.
+// Values < 60s render as "Ns"; >= 60s render as "Xm Ys" with zero seconds
+// omitted. Zero renders as "0s".
+func (FormatHelpers) Duration(sec int) string {
+	if sec == 0 {
+		return "0s"
+	}
+	if sec < 0 {
+		return fmt.Sprintf("-%s", FormatHelpers{}.Duration(-sec))
+	}
+	if sec < 60 {
+		return fmt.Sprintf("%ds", sec)
+	}
+	m := sec / 60
+	s := sec % 60
+	if s == 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return fmt.Sprintf("%dm %ds", m, s)
+}
+
+// Date formats a time as ISO 8601 date (YYYY-MM-DD) in UTC.
+func (FormatHelpers) Date(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.In(time.UTC).Format("2006-01-02")
+}
+
+// Percent formats a fraction as a whole-number percentage string.
+// When denominator is 0 the result is "—".
+func (FormatHelpers) Percent(num, denom int) string {
+	if denom == 0 {
+		return "—"
+	}
+	pct := int(math.Round(float64(num) / float64(denom) * 100))
+	return fmt.Sprintf("%d%%", pct)
 }

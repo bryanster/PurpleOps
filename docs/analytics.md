@@ -217,3 +217,22 @@ The ramp is defined in `internal/analytics/navigator.go` as
 `NavigatorColourRamp`. The Navigator layer's `gradient.colors` array and
 `legendItems` are built from it, and `M5-013`'s heatmap reads the same
 array.
+
+## Detection gaps
+
+A **detection gap** is a technique with either:
+
+1. **Attempted but undetected** — the technique has at least one attempted
+   execution, and its best detection category is `none`. The red operator
+   tested it and blue did not detect it.
+2. **Not attempted** — the technique exists in the pinned ATT&CK version
+   (it is in-scope) but has no attempted execution. Nobody has tested it
+   yet.
+
+The detection gaps report block enumerates both categories separately, with
+counts drawn from `TechniqueCoverage` so the labels match every other coverage
+number in the engagement.
+
+A technique that is attempted and has any detection category other than
+`none` is not a gap — it was detected to some degree. Unscored techniques
+are not gaps because the blue side has not evaluated them yet.

@@ -603,14 +603,27 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	reportRegistry.Register(blocks.PageBreakDef)
 	reportRegistry.SetRenderer(report.IDPageBreak, blocks.PageBreakRenderer{})
 
-	// Remaining blocks — stubs until M6-007 and M6-008.
+	// Analytics blocks with full definitions and renderers (M6-007).
+	reportRegistry.Register(blocks.HeatmapDef)
+	reportRegistry.SetRenderer(report.IDCoverageHeatmap, blocks.HeatmapRenderer{})
+
+	reportRegistry.Register(blocks.ScorecardDef)
+	reportRegistry.SetRenderer(report.IDTacticScorecard, blocks.ScorecardRenderer{})
+
+	reportRegistry.Register(blocks.DistributionDef)
+	reportRegistry.SetRenderer(report.IDDetectionDistribution, blocks.DistributionRenderer{})
+
+	reportRegistry.Register(blocks.GapsDef)
+	reportRegistry.SetRenderer(report.IDDetectionGaps, blocks.GapsRenderer{})
+
+	reportRegistry.Register(blocks.MTTDDef)
+	reportRegistry.SetRenderer(report.IDMTTD, blocks.MTTDRenderer{})
+
+	reportRegistry.Register(blocks.CompareDef)
+	reportRegistry.SetRenderer(report.IDEngagementCompare, blocks.CompareRenderer{})
+
+	// Remaining blocks — stubs until M6-008.
 	stubIDs := []report.ID{
-		report.IDCoverageHeatmap,
-		report.IDTacticScorecard,
-		report.IDDetectionDistribution,
-		report.IDDetectionGaps,
-		report.IDMTTD,
-		report.IDEngagementCompare,
 		report.IDScenarioWalkthrough,
 		report.IDFindingsBacklog,
 		report.IDEvidenceAppendix,

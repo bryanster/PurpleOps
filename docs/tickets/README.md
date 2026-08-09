@@ -253,7 +253,7 @@ Build roughly in this order — the dependency chain is real. **M5-015 is a gate
 | [M6-004](M6-004-branding.md) | Install branding defaults + per-report overrides | M |
 | [M6-005](M6-005-rich-text-sanitization.md) | TipTap + server HTML allowlist (bluemonday) | M |
 | [M6-006](M6-006-narrative-blocks.md) | Narrative blocks: cover, exec summary, scope/RoE, rich text, page break | M |
-| [M6-007](M6-007-analytics-blocks.md) | Analytics blocks: heatmap, scorecard, distribution, gaps, MTTD, compare | L |
+| [M6-007](done/M6-007-analytics-blocks.md) ✅ | Analytics blocks: heatmap, scorecard, distribution, gaps, MTTD, compare | L |
 | [M6-008](M6-008-detail-blocks.md) | Detail blocks: scenario walkthrough, findings backlog, evidence appendix | L |
 | [M6-009](M6-009-html-renderer.md) | Single HTML rendering path + golden files | L |
 | [M6-010](M6-010-pdf-chromedp.md) | PDF via headless Chromium (`chromedp`) | M |
