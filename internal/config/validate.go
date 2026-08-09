@@ -364,6 +364,7 @@ func (c *Config) ensurePaths() []error {
 	}{
 		{envEvidenceDir, c.Evidence.Dir},
 		{envContentDir, c.Content.Dir},
+		{envBrandingDir, c.Report.BrandingDir},
 	} {
 		if err := os.MkdirAll(dir.path, pathDirPerm); err != nil {
 			errs = append(errs, &FieldError{

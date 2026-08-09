@@ -2980,6 +2980,33 @@ type ReportBlockInput struct {
 	Params *map[string]interface{} `json:"params,omitempty"`
 }
 
+// ReportBranding Install-wide default branding for report generation. Every field has a
+// built-in fallback so a fresh deployment produces readable output without
+// configuration. Per-report overrides (client name, logo, colours) take
+// precedence over these defaults; the resolution order is defined in
+// docs/reporting.md.
+type ReportBranding struct {
+	// FirmName The firm or team name displayed in report headers and footers.
+	FirmName string `json:"firmName"`
+
+	// LogoBlobRef Content-addressed blob reference for the logo image. Null means no
+	// logo is configured. Set this via POST /settings/report-branding/logo
+	// which returns the blob reference.
+	LogoBlobRef nullable.Nullable[string] `json:"logoBlobRef,omitempty"`
+
+	// PrimaryColor Primary brand colour as a hex triplet.
+	PrimaryColor string `json:"primaryColor"`
+
+	// SecondaryColor Secondary brand colour as a hex triplet.
+	SecondaryColor string `json:"secondaryColor"`
+}
+
+// ReportBrandingLogo Response from uploading a branding logo.
+type ReportBrandingLogo struct {
+	// BlobRef Content-addressed blob reference for the uploaded logo.
+	BlobRef string `json:"blobRef"`
+}
+
 // ReportTemplate defines model for ReportTemplate.
 type ReportTemplate struct {
 	// Blocks Template blocks in ordinal order. Present in GET /report-templates/{templateId} responses; absent from list endpoints.
@@ -5038,6 +5065,50 @@ type SetMfaPolicyParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// SetReportBrandingParams defines parameters for SetReportBranding.
+type SetReportBrandingParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// UploadReportBrandingLogoMultipartBody defines parameters for UploadReportBrandingLogo.
+type UploadReportBrandingLogoMultipartBody struct {
+	// File Logo image — PNG, JPEG, or WebP, up to 2 MiB.
+	File openapi_types.File `json:"file"`
+}
+
+// UploadReportBrandingLogoParams defines parameters for UploadReportBrandingLogo.
+type UploadReportBrandingLogoParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	// Limit Maximum number of items to return.
@@ -5362,6 +5433,12 @@ type SetFindingStepsJSONRequestBody = FindingStepIds
 
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
+
+// SetReportBrandingJSONRequestBody defines body for SetReportBranding for application/json ContentType.
+type SetReportBrandingJSONRequestBody = ReportBranding
+
+// UploadReportBrandingLogoMultipartRequestBody defines body for UploadReportBrandingLogo for multipart/form-data ContentType.
+type UploadReportBrandingLogoMultipartRequestBody UploadReportBrandingLogoMultipartBody
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
@@ -5815,6 +5892,15 @@ type ServerInterface interface {
 	// SetMfaPolicy Replace the platform-wide multi-factor authentication policy.
 	// (PUT /settings/mfa)
 	SetMfaPolicy(w http.ResponseWriter, r *http.Request, params SetMfaPolicyParams)
+	// GetReportBranding Read the install-wide report branding defaults.
+	// (GET /settings/report-branding)
+	GetReportBranding(w http.ResponseWriter, r *http.Request)
+	// SetReportBranding Replace the install-wide report branding defaults.
+	// (PUT /settings/report-branding)
+	SetReportBranding(w http.ResponseWriter, r *http.Request, params SetReportBrandingParams)
+	// UploadReportBrandingLogo Upload a logo for install-wide report branding.
+	// (POST /settings/report-branding/logo)
+	UploadReportBrandingLogo(w http.ResponseWriter, r *http.Request, params UploadReportBrandingLogoParams)
 	// ListUsers List the accounts on this installation.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -6736,6 +6822,24 @@ func (_ Unimplemented) GetMfaPolicy(w http.ResponseWriter, r *http.Request) {
 // SetMfaPolicy Replace the platform-wide multi-factor authentication policy.
 // (PUT /settings/mfa)
 func (_ Unimplemented) SetMfaPolicy(w http.ResponseWriter, r *http.Request, params SetMfaPolicyParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetReportBranding Read the install-wide report branding defaults.
+// (GET /settings/report-branding)
+func (_ Unimplemented) GetReportBranding(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetReportBranding Replace the install-wide report branding defaults.
+// (PUT /settings/report-branding)
+func (_ Unimplemented) SetReportBranding(w http.ResponseWriter, r *http.Request, params SetReportBrandingParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UploadReportBrandingLogo Upload a logo for install-wide report branding.
+// (POST /settings/report-branding/logo)
+func (_ Unimplemented) UploadReportBrandingLogo(w http.ResponseWriter, r *http.Request, params UploadReportBrandingLogoParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12805,6 +12909,102 @@ func (siw *ServerInterfaceWrapper) SetMfaPolicy(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetReportBranding operation middleware
+func (siw *ServerInterfaceWrapper) GetReportBranding(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReportBranding(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetReportBranding operation middleware
+func (siw *ServerInterfaceWrapper) SetReportBranding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetReportBrandingParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetReportBranding(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadReportBrandingLogo operation middleware
+func (siw *ServerInterfaceWrapper) UploadReportBrandingLogo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadReportBrandingLogoParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadReportBrandingLogo(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -13570,6 +13770,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/mfa", wrapper.SetMfaPolicy)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/report-branding", wrapper.GetReportBranding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/report-branding", wrapper.SetReportBranding)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/settings/report-branding/logo", wrapper.UploadReportBrandingLogo)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/activity", wrapper.ListActivity)
@@ -28248,6 +28457,249 @@ func (response SetMfaPolicy500ApplicationProblemPlusJSONResponse) VisitSetMfaPol
 	return err
 }
 
+type GetReportBrandingRequestObject struct {
+}
+
+type GetReportBrandingResponseObject interface {
+	VisitGetReportBrandingResponse(w http.ResponseWriter) error
+}
+
+type GetReportBranding200JSONResponse ReportBranding
+
+func (response GetReportBranding200JSONResponse) VisitGetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportBranding401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportBranding401ApplicationProblemPlusJSONResponse) VisitGetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportBranding403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportBranding403ApplicationProblemPlusJSONResponse) VisitGetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportBranding500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportBranding500ApplicationProblemPlusJSONResponse) VisitGetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetReportBrandingRequestObject struct {
+	Params SetReportBrandingParams
+	Body   *SetReportBrandingJSONRequestBody
+}
+
+type SetReportBrandingResponseObject interface {
+	VisitSetReportBrandingResponse(w http.ResponseWriter) error
+}
+
+type SetReportBranding200JSONResponse ReportBranding
+
+func (response SetReportBranding200JSONResponse) VisitSetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetReportBranding400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetReportBranding400ApplicationProblemPlusJSONResponse) VisitSetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetReportBranding401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetReportBranding401ApplicationProblemPlusJSONResponse) VisitSetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetReportBranding403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SetReportBranding403ApplicationProblemPlusJSONResponse) VisitSetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetReportBranding500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response SetReportBranding500ApplicationProblemPlusJSONResponse) VisitSetReportBrandingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadReportBrandingLogoRequestObject struct {
+	Params UploadReportBrandingLogoParams
+	Body   *multipart.Reader
+}
+
+type UploadReportBrandingLogoResponseObject interface {
+	VisitUploadReportBrandingLogoResponse(w http.ResponseWriter) error
+}
+
+type UploadReportBrandingLogo201JSONResponse ReportBrandingLogo
+
+func (response UploadReportBrandingLogo201JSONResponse) VisitUploadReportBrandingLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadReportBrandingLogo400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UploadReportBrandingLogo400ApplicationProblemPlusJSONResponse) VisitUploadReportBrandingLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadReportBrandingLogo401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UploadReportBrandingLogo401ApplicationProblemPlusJSONResponse) VisitUploadReportBrandingLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadReportBrandingLogo403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UploadReportBrandingLogo403ApplicationProblemPlusJSONResponse) VisitUploadReportBrandingLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadReportBrandingLogo500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UploadReportBrandingLogo500ApplicationProblemPlusJSONResponse) VisitUploadReportBrandingLogoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -29838,6 +30290,15 @@ type StrictServerInterface interface {
 	// SetMfaPolicy Replace the platform-wide multi-factor authentication policy.
 	// (PUT /settings/mfa)
 	SetMfaPolicy(ctx context.Context, request SetMfaPolicyRequestObject) (SetMfaPolicyResponseObject, error)
+	// GetReportBranding Read the install-wide report branding defaults.
+	// (GET /settings/report-branding)
+	GetReportBranding(ctx context.Context, request GetReportBrandingRequestObject) (GetReportBrandingResponseObject, error)
+	// SetReportBranding Replace the install-wide report branding defaults.
+	// (PUT /settings/report-branding)
+	SetReportBranding(ctx context.Context, request SetReportBrandingRequestObject) (SetReportBrandingResponseObject, error)
+	// UploadReportBrandingLogo Upload a logo for install-wide report branding.
+	// (POST /settings/report-branding/logo)
+	UploadReportBrandingLogo(ctx context.Context, request UploadReportBrandingLogoRequestObject) (UploadReportBrandingLogoResponseObject, error)
 	// ListUsers List the accounts on this installation.
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -34137,6 +34598,96 @@ func (sh *strictHandler) SetMfaPolicy(w http.ResponseWriter, r *http.Request, pa
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetMfaPolicyResponseObject); ok {
 		if err := validResponse.VisitSetMfaPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReportBranding operation middleware
+func (sh *strictHandler) GetReportBranding(w http.ResponseWriter, r *http.Request) {
+	var request GetReportBrandingRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReportBranding(ctx, request.(GetReportBrandingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReportBranding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportBrandingResponseObject); ok {
+		if err := validResponse.VisitGetReportBrandingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetReportBranding operation middleware
+func (sh *strictHandler) SetReportBranding(w http.ResponseWriter, r *http.Request, params SetReportBrandingParams) {
+	var request SetReportBrandingRequestObject
+
+	request.Params = params
+
+	var body SetReportBrandingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetReportBranding(ctx, request.(SetReportBrandingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetReportBranding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetReportBrandingResponseObject); ok {
+		if err := validResponse.VisitSetReportBrandingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadReportBrandingLogo operation middleware
+func (sh *strictHandler) UploadReportBrandingLogo(w http.ResponseWriter, r *http.Request, params UploadReportBrandingLogoParams) {
+	var request UploadReportBrandingLogoRequestObject
+
+	request.Params = params
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadReportBrandingLogo(ctx, request.(UploadReportBrandingLogoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadReportBrandingLogo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadReportBrandingLogoResponseObject); ok {
+		if err := validResponse.VisitUploadReportBrandingLogoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

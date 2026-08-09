@@ -70,6 +70,7 @@ const (
 	envLogLevel        = prefix + "LOG_LEVEL"
 	envLogFormat       = prefix + "LOG_FORMAT"
 	envChromePath      = prefix + "CHROME_PATH"
+	envBrandingDir = prefix + "BRANDING_DIR"
 )
 
 // Config is the whole configuration of a Blacklight process. It is grouped by
@@ -427,6 +428,10 @@ type Report struct {
 	// ChromePath is the Chromium/Chrome binary used to render PDFs. Empty
 	// means PDF rendering is unavailable; the rest of the server runs.
 	ChromePath string
+
+	// BrandingDir is the directory for content-addressed branding logo files.
+	// Created at startup if absent. Defaults to ./branding.
+	BrandingDir string
 }
 
 // Tool is the configuration of an administrative process — blctl, which
@@ -522,6 +527,7 @@ func (c *Config) bindings() []binding {
 				"http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"},
 		{name: envSAMLRoleMap, target: &c.SAML.RoleMap},
 		{name: envSAMLProvision, target: &c.SAML.AutoProvision, def: "false"},
+		{name: envBrandingDir, target: &c.Report.BrandingDir, def: "./branding"},
 		{name: envSAMLIDPInit, target: &c.SAML.AllowIDPInitiated, def: "true"},
 		{name: envSAMLClockSkew, target: &c.SAML.ClockSkew, def: "2m"},
 		{name: envAccountFailures, target: &c.Throttle.AccountFailures, def: "5"},

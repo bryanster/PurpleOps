@@ -140,6 +140,9 @@ type handlers struct {
 	templates *report.TemplateService
 
 	log *slog.Logger
+
+	// brandingSettings is the install-wide report branding service (M6-004).
+	brandingSettings *report.BrandingSettingsService
 }
 
 // The compiler is what keeps this in step with api/openapi.yaml: adding an

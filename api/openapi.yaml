@@ -1905,6 +1905,116 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+
+  /settings/report-branding:
+    get:
+      operationId: getReportBranding
+      summary: Read the install-wide report branding defaults.
+      description: |
+        Administrators only. Returns the install-wide branding that reports fall
+        back to when no per-report override is set. Every field has a built-in
+        fallback so a fresh deployment returns sensible values without
+        configuration.
+      tags:
+        - settings
+      x-authz-action: settings.read
+      x-authz-resource:
+        type: platform
+      responses:
+        "200":
+          description: The current branding defaults.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportBranding"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: setReportBranding
+      summary: Replace the install-wide report branding defaults.
+      description: |
+        Administrators only. A whole replacement rather than a patch: all fields
+        are required, so two administrators editing at once cannot each change
+        the half they were thinking about and silently keep the other's.
+      tags:
+        - settings
+      x-authz-action: settings.manage
+      x-authz-resource:
+        type: platform
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportBranding"
+      responses:
+        "200":
+          description: The branding as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportBranding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /settings/report-branding/logo:
+    post:
+      operationId: uploadReportBrandingLogo
+      summary: Upload a logo for install-wide report branding.
+      description: |
+        Administrators only. Accepts a single image file — PNG, JPEG, or WebP,
+        up to 2 MiB. Returns a content-addressed blob reference suitable for
+        setting in the branding defaults or per-report overrides.
+
+        The logo is stored content-addressed under the branding directory. The
+        returned blob reference is the SHA-256 hex digest of the file content.
+      tags:
+        - settings
+      x-authz-action: settings.manage
+      x-authz-resource:
+        type: platform
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Logo image — PNG, JPEG, or WebP, up to 2 MiB.
+      responses:
+        "201":
+          description: Logo stored and blob reference returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportBrandingLogo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /activity:
     get:
       operationId: listActivity
@@ -7996,6 +8106,53 @@ components:
             Every account with the `admin` platform role must hold one. Implied
             by `requiredForAll`; the two are stored separately so that turning
             the wider one off does not silently release administrators too.
+
+
+    ReportBranding:
+      type: object
+      description: |
+        Install-wide default branding for report generation. Every field has a
+        built-in fallback so a fresh deployment produces readable output without
+        configuration. Per-report overrides (client name, logo, colours) take
+        precedence over these defaults; the resolution order is defined in
+        docs/reporting.md.
+      required:
+        - firmName
+        - primaryColor
+        - secondaryColor
+      properties:
+        firmName:
+          type: string
+          description: The firm or team name displayed in report headers and footers.
+          maxLength: 200
+        primaryColor:
+          type: string
+          description: Primary brand colour as a hex triplet.
+          pattern: "^#[0-9a-fA-F]{6}$"
+          example: "#1a1a2e"
+        secondaryColor:
+          type: string
+          description: Secondary brand colour as a hex triplet.
+          pattern: "^#[0-9a-fA-F]{6}$"
+          example: "#16213e"
+        logoBlobRef:
+          type: [string, "null"]
+          description: |
+            Content-addressed blob reference for the logo image. Null means no
+            logo is configured. Set this via POST /settings/report-branding/logo
+            which returns the blob reference.
+      additionalProperties: false
+
+    ReportBrandingLogo:
+      type: object
+      description: Response from uploading a branding logo.
+      required:
+        - blobRef
+      properties:
+        blobRef:
+          type: string
+          description: Content-addressed blob reference for the uploaded logo.
+      additionalProperties: false
 
     ChangePasswordRequest:
       type: object

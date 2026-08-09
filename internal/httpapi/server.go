@@ -615,6 +615,13 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: report templates: " + err.Error())
 	}
+
+	// Report branding (M6-004).
+	settingsStore := settings.New(deps.Store)
+	brandingSvc, err := report.NewBrandingSettingsService(settingsStore, deps.Config.Report.BrandingDir)
+	if err != nil {
+		panic("httpapi: report branding: " + err.Error())
+	}
 	customSvc, err := content.NewCustom(content.CustomDeps{
 		Sources:      sources,
 		Procedures:   procedures,
@@ -731,6 +738,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		engagements: engSvc,
 		hub:         hub,
 
+		brandingSettings: brandingSvc,
 		analytics:       queries,
 		presence:        deps.Presence,
 		eventsMaxReplay: deps.Config.Events.MaxReplayEvents,

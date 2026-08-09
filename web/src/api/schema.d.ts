@@ -1131,6 +1131,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/report-branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the install-wide report branding defaults.
+         * @description Administrators only. Returns the install-wide branding that reports fall
+         *     back to when no per-report override is set. Every field has a built-in
+         *     fallback so a fresh deployment returns sensible values without
+         *     configuration.
+         */
+        get: operations["getReportBranding"];
+        /**
+         * Replace the install-wide report branding defaults.
+         * @description Administrators only. A whole replacement rather than a patch: all fields
+         *     are required, so two administrators editing at once cannot each change
+         *     the half they were thinking about and silently keep the other's.
+         */
+        put: operations["setReportBranding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/report-branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a logo for install-wide report branding.
+         * @description Administrators only. Accepts a single image file — PNG, JPEG, or WebP,
+         *     up to 2 MiB. Returns a content-addressed blob reference suitable for
+         *     setting in the branding defaults or per-report overrides.
+         *
+         *     The logo is stored content-addressed under the branding directory. The
+         *     returned blob reference is the SHA-256 hex digest of the file content.
+         */
+        post: operations["uploadReportBrandingLogo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity": {
         parameters: {
             query?: never;
@@ -3932,6 +3986,38 @@ export interface components {
              *     the wider one off does not silently release administrators too.
              */
             requiredForAdmins: boolean;
+        };
+        /**
+         * @description Install-wide default branding for report generation. Every field has a
+         *     built-in fallback so a fresh deployment produces readable output without
+         *     configuration. Per-report overrides (client name, logo, colours) take
+         *     precedence over these defaults; the resolution order is defined in
+         *     docs/reporting.md.
+         */
+        ReportBranding: {
+            /** @description The firm or team name displayed in report headers and footers. */
+            firmName: string;
+            /**
+             * @description Primary brand colour as a hex triplet.
+             * @example #1a1a2e
+             */
+            primaryColor: string;
+            /**
+             * @description Secondary brand colour as a hex triplet.
+             * @example #16213e
+             */
+            secondaryColor: string;
+            /**
+             * @description Content-addressed blob reference for the logo image. Null means no
+             *     logo is configured. Set this via POST /settings/report-branding/logo
+             *     which returns the blob reference.
+             */
+            logoBlobRef?: string | null;
+        };
+        /** @description Response from uploading a branding logo. */
+        ReportBrandingLogo: {
+            /** @description Content-addressed blob reference for the uploaded logo. */
+            blobRef: string;
         };
         /**
          * @description Body of `POST /auth/password`. The current password is required even
@@ -7581,6 +7667,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MFAPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getReportBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current branding defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportBranding"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setReportBranding: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportBranding"];
+            };
+        };
+        responses: {
+            /** @description The branding as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportBranding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadReportBrandingLogo: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description Logo image — PNG, JPEG, or WebP, up to 2 MiB.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Logo stored and blob reference returned. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportBrandingLogo"];
                 };
             };
             400: components["responses"]["BadRequest"];

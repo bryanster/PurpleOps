@@ -629,6 +629,14 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/engagements/{engagementId}/report-templates/from-report": {
 		body: `{"reportId":"00000000-0000-0000-0000-000000000001","name":"From Report"}`,
 	},
+
+	// Report branding (M6-004).
+	"PUT " + BasePath + "/settings/report-branding": {
+		body: `{"firmName":"Test Firm","primaryColor":"#ff0000","secondaryColor":"#00ff00"}`,
+	},
+	"POST " + BasePath + "/settings/report-branding/logo": {
+		mediaType: "multipart/form-data; boundary=walk",
+	},
 }
 
 // The two media types the walks send.

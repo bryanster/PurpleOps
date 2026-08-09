@@ -104,6 +104,12 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (storer
 	if err != nil {
 		return storereport.Report{}, err
 	}
+	// Validate per-report colour overrides (M6-004).
+	if in.Colours != nil && len(*in.Colours) > 0 {
+		if err := validateColoursJSON(*in.Colours); err != nil {
+			return storereport.Report{}, err
+		}
+	}
 
 	changes := storereport.ReportUpdate{
 		Title:       in.Title,
@@ -297,4 +303,34 @@ func applyDefaults(schema ParamSchema, defaults json.RawMessage, provided json.R
 		return provided
 	}
 	return json.RawMessage(result)
+}
+
+
+// validateColoursJSON checks that a colours JSON object contains valid
+// hex colour values. Both "primary" and "secondary" are optional; when
+// present they must match #RRGGBB.
+func validateColoursJSON(raw json.RawMessage) error {
+	var c struct {
+		Primary   string `json:"primary"`
+		Secondary string `json:"secondary"`
+	}
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return apierr.Validation(apierr.FieldError{
+			Field:   "colours",
+			Message: fmt.Sprintf("invalid JSON: %v", err),
+		})
+	}
+	if c.Primary != "" && !isHexColor(c.Primary) {
+		return apierr.Validation(apierr.FieldError{
+			Field:   "colours.primary",
+			Message: fmt.Sprintf("%q is not a valid hex colour (expected #RRGGBB)", c.Primary),
+		})
+	}
+	if c.Secondary != "" && !isHexColor(c.Secondary) {
+		return apierr.Validation(apierr.FieldError{
+			Field:   "colours.secondary",
+			Message: fmt.Sprintf("%q is not a valid hex colour (expected #RRGGBB)", c.Secondary),
+		})
+	}
+	return nil
 }
