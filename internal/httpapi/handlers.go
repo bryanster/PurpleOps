@@ -136,6 +136,9 @@ type handlers struct {
 	// reports is the report building and drafting service (M6-002).
 	reports *report.Service
 
+	// templates is the report template service (M6-003).
+	templates *report.TemplateService
+
 	log *slog.Logger
 }
 

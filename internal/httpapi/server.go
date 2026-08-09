@@ -603,6 +603,18 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: report: " + err.Error())
 	}
+
+	// Report templates (M6-003).
+	templateRepo := storereport.NewTemplates(deps.Store)
+	templateSvc, err := report.NewTemplateService(report.TemplateDeps{
+		Templates: templateRepo,
+		Reports:   reportRepo,
+		Registry:  reportRegistry,
+		Activity:  activityLog,
+	})
+	if err != nil {
+		panic("httpapi: report templates: " + err.Error())
+	}
 	customSvc, err := content.NewCustom(content.CustomDeps{
 		Sources:      sources,
 		Procedures:   procedures,
@@ -701,6 +713,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		sessions:       sessions,
 		challenges:     challenges,
 		oidc:           provider,
+		templates:    templateSvc,
 		saml:           federation,
 		activity:       activityLog,
 		content:        registry,

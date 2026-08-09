@@ -159,7 +159,17 @@ const (
 	VerbReportCreated Verb = "report.created"
 	VerbReportUpdated Verb = "report.updated"
 	VerbReportDeleted Verb = "report.deleted"
+
+	// Report template lifecycle (M6-003). Object is the template row;
+	// engagement_id names which engagement the template belongs to.
+	VerbReportTemplateCreated Verb = "report_template.created"
+	VerbReportTemplateUpdated Verb = "report_template.updated"
+	VerbReportTemplateDeleted Verb = "report_template.deleted"
+
+	// VerbReportTemplateApplied records that a template was applied to a report draft.
+	VerbReportTemplateApplied Verb = "report.template_applied"
 )
+
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
@@ -192,7 +202,10 @@ const (
 	ObjectStep = "step"
 
 	ObjectComment = "comment"
+
+	ObjectReportTemplate = "report_template"
 )
+
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not
 // belong in Delta — see [Delta] and the redaction helpers below.

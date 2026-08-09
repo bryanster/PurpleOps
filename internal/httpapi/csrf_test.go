@@ -614,6 +614,21 @@ var csrfCoverage = map[string]struct {
 	"PUT " + BasePath + "/engagements/{engagementId}/reports/{reportId}/blocks": {
 		body: `{"blocks":[]}`,
 	},
+
+	// Report templates (M6-003).
+	"POST " + BasePath + "/engagements/{engagementId}/report-templates": {
+		body: `{"name":"Template"}`,
+	},
+	"PATCH " + BasePath + "/engagements/{engagementId}/report-templates/{templateId}": {
+		body: `{"name":"Updated"}`,
+	},
+	"DELETE " + BasePath + "/engagements/{engagementId}/report-templates/{templateId}": {},
+	"POST " + BasePath + "/engagements/{engagementId}/reports/{reportId}/apply-template": {
+		body: `{"templateId":"00000000-0000-0000-0000-000000000001"}`,
+	},
+	"POST " + BasePath + "/engagements/{engagementId}/report-templates/from-report": {
+		body: `{"reportId":"00000000-0000-0000-0000-000000000001","name":"From Report"}`,
+	},
 }
 
 // The two media types the walks send.

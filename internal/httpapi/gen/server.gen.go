@@ -1009,6 +1009,11 @@ type AnalyticsMttd struct {
 	UnscoredCount     int                    `json:"unscoredCount"`
 }
 
+// ApplyTemplate defines model for ApplyTemplate.
+type ApplyTemplate struct {
+	TemplateId openapi_types.UUID `json:"templateId"`
+}
+
 // AuthProviders What the login page may offer. It is deliberately a list rather than a
 // set of booleans: SAML sits beside OIDC in it (M1-010), and a page that
 // renders this array needed no change when it arrived.
@@ -1913,6 +1918,11 @@ type CreateReport struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// CreateReportTemplate defines model for CreateReportTemplate.
+type CreateReportTemplate struct {
+	Name string `json:"name"`
+}
+
 // CreateScenario defines model for CreateScenario.
 type CreateScenario struct {
 	Name      string  `json:"name"`
@@ -1980,6 +1990,12 @@ type CreateStepFromTemplate struct {
 
 	// TemplateId Content catalog surrogate id of the procedure template.
 	TemplateId openapi_types.UUID `json:"templateId"`
+}
+
+// CreateTemplateFromReport defines model for CreateTemplateFromReport.
+type CreateTemplateFromReport struct {
+	Name     string             `json:"name"`
+	ReportId openapi_types.UUID `json:"reportId"`
 }
 
 // CreateUserRequest Body of `POST /users`. The identifier, the timestamps and the invite
@@ -2700,6 +2716,11 @@ type PatchReport struct {
 	Title       *string                                   `json:"title,omitempty"`
 }
 
+// PatchReportTemplate defines model for PatchReportTemplate.
+type PatchReportTemplate struct {
+	Name *string `json:"name,omitempty"`
+}
+
 // PatchScenario Every field is optional; only the ones present are changed.
 type PatchScenario struct {
 	Name        *string `json:"name,omitempty"`
@@ -2957,6 +2978,28 @@ type ReportBlockInput struct {
 
 	// Params Block parameters. Defaults used from registry when absent.
 	Params *map[string]interface{} `json:"params,omitempty"`
+}
+
+// ReportTemplate defines model for ReportTemplate.
+type ReportTemplate struct {
+	// Blocks Template blocks in ordinal order. Present in GET /report-templates/{templateId} responses; absent from list endpoints.
+	Blocks       *[]ReportTemplateBlock `json:"blocks,omitempty"`
+	CreatedAt    time.Time              `json:"createdAt"`
+	CreatedBy    string                 `json:"createdBy"`
+	EngagementId openapi_types.UUID     `json:"engagementId"`
+	Id           openapi_types.UUID     `json:"id"`
+	Name         string                 `json:"name"`
+	UpdatedAt    time.Time              `json:"updatedAt"`
+}
+
+// ReportTemplateBlock defines model for ReportTemplateBlock.
+type ReportTemplateBlock struct {
+	// BlockId Stable block id from the catalogue (e.g. "cover", "rich_text").
+	BlockId string `json:"blockId"`
+	Ordinal int    `json:"ordinal"`
+
+	// Params Block parameters, validated against the registry's ParamSchema.
+	Params map[string]interface{} `json:"params"`
 }
 
 // ReprocessContentSourceRequest Optional pin for which raw snapshot to reprocess. Additional properties
@@ -3611,6 +3654,9 @@ type ScenarioId = openapi_types.UUID
 
 // StepId defines model for StepId.
 type StepId = openapi_types.UUID
+
+// TemplateId defines model for TemplateId.
+type TemplateId = openapi_types.UUID
 
 // UserId defines model for UserId.
 type UserId = openapi_types.UUID
@@ -4763,6 +4809,101 @@ type PutEngagementPresenceParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// CreateReportTemplateParams defines parameters for CreateReportTemplate.
+type CreateReportTemplateParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// CreateReportTemplateFromReportParams defines parameters for CreateReportTemplateFromReport.
+type CreateReportTemplateFromReportParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// DeleteReportTemplateParams defines parameters for DeleteReportTemplate.
+type DeleteReportTemplateParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// PatchReportTemplateParams defines parameters for PatchReportTemplate.
+type PatchReportTemplateParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// ApplyReportTemplateParams defines parameters for ApplyReportTemplate.
+type ApplyReportTemplateParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SubscribeEventsParams defines parameters for SubscribeEvents.
 type SubscribeEventsParams struct {
 	// Topics One or more topic names to subscribe to. Repeat the parameter
@@ -5165,11 +5306,23 @@ type PatchEngagementMemberJSONRequestBody = PatchMember
 // PutEngagementPresenceJSONRequestBody defines body for PutEngagementPresence for application/json ContentType.
 type PutEngagementPresenceJSONRequestBody = PresenceHeartbeat
 
+// CreateReportTemplateJSONRequestBody defines body for CreateReportTemplate for application/json ContentType.
+type CreateReportTemplateJSONRequestBody = CreateReportTemplate
+
+// CreateReportTemplateFromReportJSONRequestBody defines body for CreateReportTemplateFromReport for application/json ContentType.
+type CreateReportTemplateFromReportJSONRequestBody = CreateTemplateFromReport
+
+// PatchReportTemplateJSONRequestBody defines body for PatchReportTemplate for application/json ContentType.
+type PatchReportTemplateJSONRequestBody = PatchReportTemplate
+
 // CreateReportJSONRequestBody defines body for CreateReport for application/json ContentType.
 type CreateReportJSONRequestBody = CreateReport
 
 // PatchReportJSONRequestBody defines body for PatchReport for application/json ContentType.
 type PatchReportJSONRequestBody = PatchReport
+
+// ApplyReportTemplateJSONRequestBody defines body for ApplyReportTemplate for application/json ContentType.
+type ApplyReportTemplateJSONRequestBody = ApplyTemplate
 
 // PutReportBlocksJSONRequestBody defines body for PutReportBlocks for application/json ContentType.
 type PutReportBlocksJSONRequestBody = PutReportBlocks
@@ -5536,6 +5689,24 @@ type ServerInterface interface {
 	// PutEngagementPresence Report this user's presence in an engagement.
 	// (PUT /engagements/{engagementId}/presence)
 	PutEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params PutEngagementPresenceParams)
+	// ListReportTemplates List report templates for an engagement.
+	// (GET /engagements/{engagementId}/report-templates)
+	ListReportTemplates(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// CreateReportTemplate Create a new report template in an engagement.
+	// (POST /engagements/{engagementId}/report-templates)
+	CreateReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateReportTemplateParams)
+	// CreateReportTemplateFromReport Create a template from a report's current draft blocks.
+	// (POST /engagements/{engagementId}/report-templates/from-report)
+	CreateReportTemplateFromReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateReportTemplateFromReportParams)
+	// DeleteReportTemplate Delete a template and its blocks.
+	// (DELETE /engagements/{engagementId}/report-templates/{templateId})
+	DeleteReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId, params DeleteReportTemplateParams)
+	// GetReportTemplate Return one report template with its blocks.
+	// (GET /engagements/{engagementId}/report-templates/{templateId})
+	GetReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId)
+	// PatchReportTemplate Patch report template fields.
+	// (PATCH /engagements/{engagementId}/report-templates/{templateId})
+	PatchReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId, params PatchReportTemplateParams)
 	// ListReports List reports for an engagement.
 	// (GET /engagements/{engagementId}/reports)
 	ListReports(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -5551,6 +5722,9 @@ type ServerInterface interface {
 	// PatchReport Patch report fields.
 	// (PATCH /engagements/{engagementId}/reports/{reportId})
 	PatchReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
+	// ApplyReportTemplate Apply a template to a report draft.
+	// (POST /engagements/{engagementId}/reports/{reportId}/apply-template)
+	ApplyReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params ApplyReportTemplateParams)
 	// PutReportBlocks Replace the complete ordered list of draft blocks.
 	// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
 	PutReportBlocks(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
@@ -6313,6 +6487,42 @@ func (_ Unimplemented) PutEngagementPresence(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListReportTemplates List report templates for an engagement.
+// (GET /engagements/{engagementId}/report-templates)
+func (_ Unimplemented) ListReportTemplates(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateReportTemplate Create a new report template in an engagement.
+// (POST /engagements/{engagementId}/report-templates)
+func (_ Unimplemented) CreateReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateReportTemplateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateReportTemplateFromReport Create a template from a report's current draft blocks.
+// (POST /engagements/{engagementId}/report-templates/from-report)
+func (_ Unimplemented) CreateReportTemplateFromReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateReportTemplateFromReportParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteReportTemplate Delete a template and its blocks.
+// (DELETE /engagements/{engagementId}/report-templates/{templateId})
+func (_ Unimplemented) DeleteReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId, params DeleteReportTemplateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetReportTemplate Return one report template with its blocks.
+// (GET /engagements/{engagementId}/report-templates/{templateId})
+func (_ Unimplemented) GetReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchReportTemplate Patch report template fields.
+// (PATCH /engagements/{engagementId}/report-templates/{templateId})
+func (_ Unimplemented) PatchReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId, params PatchReportTemplateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListReports List reports for an engagement.
 // (GET /engagements/{engagementId}/reports)
 func (_ Unimplemented) ListReports(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
@@ -6340,6 +6550,12 @@ func (_ Unimplemented) GetReport(w http.ResponseWriter, r *http.Request, engagem
 // PatchReport Patch report fields.
 // (PATCH /engagements/{engagementId}/reports/{reportId})
 func (_ Unimplemented) PatchReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ApplyReportTemplate Apply a template to a report draft.
+// (POST /engagements/{engagementId}/reports/{reportId}/apply-template)
+func (_ Unimplemented) ApplyReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params ApplyReportTemplateParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11018,6 +11234,285 @@ func (siw *ServerInterfaceWrapper) PutEngagementPresence(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListReportTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListReportTemplates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReportTemplates(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateReportTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateReportTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateReportTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReportTemplate(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateReportTemplateFromReport operation middleware
+func (siw *ServerInterfaceWrapper) CreateReportTemplateFromReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateReportTemplateFromReportParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReportTemplateFromReport(w, r, engagementId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteReportTemplate operation middleware
+func (siw *ServerInterfaceWrapper) DeleteReportTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId TemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteReportTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteReportTemplate(w, r, engagementId, templateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReportTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetReportTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId TemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReportTemplate(w, r, engagementId, templateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchReportTemplate operation middleware
+func (siw *ServerInterfaceWrapper) PatchReportTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId TemplateId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchReportTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchReportTemplate(w, r, engagementId, templateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListReports operation middleware
 func (siw *ServerInterfaceWrapper) ListReports(w http.ResponseWriter, r *http.Request) {
 
@@ -11166,6 +11661,65 @@ func (siw *ServerInterfaceWrapper) PatchReport(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PatchReport(w, r, engagementId, reportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyReportTemplate operation middleware
+func (siw *ServerInterfaceWrapper) ApplyReportTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyReportTemplateParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyReportTemplate(w, r, engagementId, reportId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13361,6 +13915,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}/blocks", wrapper.PutReportBlocks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/report-templates", wrapper.ListReportTemplates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/report-templates", wrapper.CreateReportTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/engagements/{engagementId}/report-templates/{templateId}", wrapper.DeleteReportTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/report-templates/{templateId}", wrapper.GetReportTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/report-templates/{templateId}", wrapper.PatchReportTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}/apply-template", wrapper.ApplyReportTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/report-templates/from-report", wrapper.CreateReportTemplateFromReport)
 	})
 
 	return r
@@ -23320,6 +23895,622 @@ func (response PutEngagementPresence500ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ListReportTemplatesRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type ListReportTemplatesResponseObject interface {
+	VisitListReportTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListReportTemplates200JSONResponse []ReportTemplate
+
+func (response ListReportTemplates200JSONResponse) VisitListReportTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportTemplates400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportTemplates400ApplicationProblemPlusJSONResponse) VisitListReportTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportTemplates401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportTemplates401ApplicationProblemPlusJSONResponse) VisitListReportTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportTemplates403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportTemplates403ApplicationProblemPlusJSONResponse) VisitListReportTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportTemplates404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportTemplates404ApplicationProblemPlusJSONResponse) VisitListReportTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportTemplates500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportTemplates500ApplicationProblemPlusJSONResponse) VisitListReportTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       CreateReportTemplateParams
+	Body         *CreateReportTemplateJSONRequestBody
+}
+
+type CreateReportTemplateResponseObject interface {
+	VisitCreateReportTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateReportTemplate201JSONResponse ReportTemplate
+
+func (response CreateReportTemplate201JSONResponse) VisitCreateReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplate400ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplate401ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplate403ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplate404ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplate500ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateFromReportRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Params       CreateReportTemplateFromReportParams
+	Body         *CreateReportTemplateFromReportJSONRequestBody
+}
+
+type CreateReportTemplateFromReportResponseObject interface {
+	VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error
+}
+
+type CreateReportTemplateFromReport201JSONResponse ReportTemplate
+
+func (response CreateReportTemplateFromReport201JSONResponse) VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateFromReport400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplateFromReport400ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateFromReport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplateFromReport401ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateFromReport403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplateFromReport403ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateFromReport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplateFromReport404ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportTemplateFromReport500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportTemplateFromReport500ApplicationProblemPlusJSONResponse) VisitCreateReportTemplateFromReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReportTemplateRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	TemplateId   TemplateId   `json:"templateId"`
+	Params       DeleteReportTemplateParams
+}
+
+type DeleteReportTemplateResponseObject interface {
+	VisitDeleteReportTemplateResponse(w http.ResponseWriter) error
+}
+
+type DeleteReportTemplate204Response struct {
+}
+
+func (response DeleteReportTemplate204Response) VisitDeleteReportTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteReportTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReportTemplate400ApplicationProblemPlusJSONResponse) VisitDeleteReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReportTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReportTemplate401ApplicationProblemPlusJSONResponse) VisitDeleteReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReportTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReportTemplate403ApplicationProblemPlusJSONResponse) VisitDeleteReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReportTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReportTemplate404ApplicationProblemPlusJSONResponse) VisitDeleteReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReportTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReportTemplate500ApplicationProblemPlusJSONResponse) VisitDeleteReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportTemplateRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	TemplateId   TemplateId   `json:"templateId"`
+}
+
+type GetReportTemplateResponseObject interface {
+	VisitGetReportTemplateResponse(w http.ResponseWriter) error
+}
+
+type GetReportTemplate200JSONResponse ReportTemplate
+
+func (response GetReportTemplate200JSONResponse) VisitGetReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportTemplate400ApplicationProblemPlusJSONResponse) VisitGetReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportTemplate401ApplicationProblemPlusJSONResponse) VisitGetReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportTemplate403ApplicationProblemPlusJSONResponse) VisitGetReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportTemplate404ApplicationProblemPlusJSONResponse) VisitGetReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportTemplate500ApplicationProblemPlusJSONResponse) VisitGetReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportTemplateRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	TemplateId   TemplateId   `json:"templateId"`
+	Params       PatchReportTemplateParams
+	Body         *PatchReportTemplateJSONRequestBody
+}
+
+type PatchReportTemplateResponseObject interface {
+	VisitPatchReportTemplateResponse(w http.ResponseWriter) error
+}
+
+type PatchReportTemplate200JSONResponse ReportTemplate
+
+func (response PatchReportTemplate200JSONResponse) VisitPatchReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReportTemplate400ApplicationProblemPlusJSONResponse) VisitPatchReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReportTemplate401ApplicationProblemPlusJSONResponse) VisitPatchReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReportTemplate403ApplicationProblemPlusJSONResponse) VisitPatchReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReportTemplate404ApplicationProblemPlusJSONResponse) VisitPatchReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReportTemplate500ApplicationProblemPlusJSONResponse) VisitPatchReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListReportsRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -23818,6 +25009,111 @@ type PatchReport500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PatchReport500ApplicationProblemPlusJSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyReportTemplateRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+	Params       ApplyReportTemplateParams
+	Body         *ApplyReportTemplateJSONRequestBody
+}
+
+type ApplyReportTemplateResponseObject interface {
+	VisitApplyReportTemplateResponse(w http.ResponseWriter) error
+}
+
+type ApplyReportTemplate200JSONResponse Report
+
+func (response ApplyReportTemplate200JSONResponse) VisitApplyReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyReportTemplate400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyReportTemplate400ApplicationProblemPlusJSONResponse) VisitApplyReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyReportTemplate401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyReportTemplate401ApplicationProblemPlusJSONResponse) VisitApplyReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyReportTemplate403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyReportTemplate403ApplicationProblemPlusJSONResponse) VisitApplyReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyReportTemplate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyReportTemplate404ApplicationProblemPlusJSONResponse) VisitApplyReportTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyReportTemplate500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyReportTemplate500ApplicationProblemPlusJSONResponse) VisitApplyReportTemplateResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -28416,6 +29712,24 @@ type StrictServerInterface interface {
 	// PutEngagementPresence Report this user's presence in an engagement.
 	// (PUT /engagements/{engagementId}/presence)
 	PutEngagementPresence(ctx context.Context, request PutEngagementPresenceRequestObject) (PutEngagementPresenceResponseObject, error)
+	// ListReportTemplates List report templates for an engagement.
+	// (GET /engagements/{engagementId}/report-templates)
+	ListReportTemplates(ctx context.Context, request ListReportTemplatesRequestObject) (ListReportTemplatesResponseObject, error)
+	// CreateReportTemplate Create a new report template in an engagement.
+	// (POST /engagements/{engagementId}/report-templates)
+	CreateReportTemplate(ctx context.Context, request CreateReportTemplateRequestObject) (CreateReportTemplateResponseObject, error)
+	// CreateReportTemplateFromReport Create a template from a report's current draft blocks.
+	// (POST /engagements/{engagementId}/report-templates/from-report)
+	CreateReportTemplateFromReport(ctx context.Context, request CreateReportTemplateFromReportRequestObject) (CreateReportTemplateFromReportResponseObject, error)
+	// DeleteReportTemplate Delete a template and its blocks.
+	// (DELETE /engagements/{engagementId}/report-templates/{templateId})
+	DeleteReportTemplate(ctx context.Context, request DeleteReportTemplateRequestObject) (DeleteReportTemplateResponseObject, error)
+	// GetReportTemplate Return one report template with its blocks.
+	// (GET /engagements/{engagementId}/report-templates/{templateId})
+	GetReportTemplate(ctx context.Context, request GetReportTemplateRequestObject) (GetReportTemplateResponseObject, error)
+	// PatchReportTemplate Patch report template fields.
+	// (PATCH /engagements/{engagementId}/report-templates/{templateId})
+	PatchReportTemplate(ctx context.Context, request PatchReportTemplateRequestObject) (PatchReportTemplateResponseObject, error)
 	// ListReports List reports for an engagement.
 	// (GET /engagements/{engagementId}/reports)
 	ListReports(ctx context.Context, request ListReportsRequestObject) (ListReportsResponseObject, error)
@@ -28431,6 +29745,9 @@ type StrictServerInterface interface {
 	// PatchReport Patch report fields.
 	// (PATCH /engagements/{engagementId}/reports/{reportId})
 	PatchReport(ctx context.Context, request PatchReportRequestObject) (PatchReportResponseObject, error)
+	// ApplyReportTemplate Apply a template to a report draft.
+	// (POST /engagements/{engagementId}/reports/{reportId}/apply-template)
+	ApplyReportTemplate(ctx context.Context, request ApplyReportTemplateRequestObject) (ApplyReportTemplateResponseObject, error)
 	// PutReportBlocks Replace the complete ordered list of draft blocks.
 	// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
 	PutReportBlocks(ctx context.Context, request PutReportBlocksRequestObject) (PutReportBlocksResponseObject, error)
@@ -31573,6 +32890,190 @@ func (sh *strictHandler) PutEngagementPresence(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// ListReportTemplates operation middleware
+func (sh *strictHandler) ListReportTemplates(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ListReportTemplatesRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListReportTemplates(ctx, request.(ListReportTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListReportTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListReportTemplatesResponseObject); ok {
+		if err := validResponse.VisitListReportTemplatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateReportTemplate operation middleware
+func (sh *strictHandler) CreateReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateReportTemplateParams) {
+	var request CreateReportTemplateRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	var body CreateReportTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateReportTemplate(ctx, request.(CreateReportTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateReportTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateReportTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateReportTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateReportTemplateFromReport operation middleware
+func (sh *strictHandler) CreateReportTemplateFromReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params CreateReportTemplateFromReportParams) {
+	var request CreateReportTemplateFromReportRequestObject
+
+	request.EngagementId = engagementId
+	request.Params = params
+
+	var body CreateReportTemplateFromReportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateReportTemplateFromReport(ctx, request.(CreateReportTemplateFromReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateReportTemplateFromReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateReportTemplateFromReportResponseObject); ok {
+		if err := validResponse.VisitCreateReportTemplateFromReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteReportTemplate operation middleware
+func (sh *strictHandler) DeleteReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId, params DeleteReportTemplateParams) {
+	var request DeleteReportTemplateRequestObject
+
+	request.EngagementId = engagementId
+	request.TemplateId = templateId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteReportTemplate(ctx, request.(DeleteReportTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteReportTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteReportTemplateResponseObject); ok {
+		if err := validResponse.VisitDeleteReportTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReportTemplate operation middleware
+func (sh *strictHandler) GetReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId) {
+	var request GetReportTemplateRequestObject
+
+	request.EngagementId = engagementId
+	request.TemplateId = templateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReportTemplate(ctx, request.(GetReportTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReportTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportTemplateResponseObject); ok {
+		if err := validResponse.VisitGetReportTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchReportTemplate operation middleware
+func (sh *strictHandler) PatchReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, templateId TemplateId, params PatchReportTemplateParams) {
+	var request PatchReportTemplateRequestObject
+
+	request.EngagementId = engagementId
+	request.TemplateId = templateId
+	request.Params = params
+
+	var body PatchReportTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchReportTemplate(ctx, request.(PatchReportTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchReportTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchReportTemplateResponseObject); ok {
+		if err := validResponse.VisitPatchReportTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListReports operation middleware
 func (sh *strictHandler) ListReports(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
 	var request ListReportsRequestObject
@@ -31713,6 +33214,41 @@ func (sh *strictHandler) PatchReport(w http.ResponseWriter, r *http.Request, eng
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PatchReportResponseObject); ok {
 		if err := validResponse.VisitPatchReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyReportTemplate operation middleware
+func (sh *strictHandler) ApplyReportTemplate(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params ApplyReportTemplateParams) {
+	var request ApplyReportTemplateRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+	request.Params = params
+
+	var body ApplyReportTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyReportTemplate(ctx, request.(ApplyReportTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyReportTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyReportTemplateResponseObject); ok {
+		if err := validResponse.VisitApplyReportTemplateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

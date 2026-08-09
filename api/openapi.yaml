@@ -6307,6 +6307,261 @@ paths:
           $ref: "#/components/responses/InternalError"
 
 
+  # ── Report templates (M6-003) ────────────────────────────────────
+
+  /engagements/{engagementId}/report-templates:
+    get:
+      operationId: listReportTemplates
+      summary: List report templates for an engagement.
+      description: |
+        Members and platform administrators. Returns every template in the
+        engagement.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The engagement's templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createReportTemplate
+      summary: Create a new report template in an engagement.
+      description: |
+        Every member of the engagement and platform administrators.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportTemplate"
+      responses:
+        "201":
+          description: The created template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/report-templates/{templateId}:
+    get:
+      operationId: getReportTemplate
+      summary: Return one report template with its blocks.
+      description: |
+        Members and platform administrators. A non-member receives 404.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: templateId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/TemplateId"
+      responses:
+        "200":
+          description: The template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: patchReportTemplate
+      summary: Patch report template fields.
+      description: |
+        Every member of the engagement and platform administrators.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: templateId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/TemplateId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchReportTemplate"
+      responses:
+        "200":
+          description: The patched template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteReportTemplate
+      summary: Delete a template and its blocks.
+      description: |
+        Every member of the engagement and platform administrators.
+        Cascades to all template_block rows.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: templateId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/TemplateId"
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The template and its blocks are deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/apply-template:
+    post:
+      operationId: applyReportTemplate
+      summary: Apply a template to a report draft.
+      description: |
+        Replaces the report's draft blocks with a copy of the template blocks
+        (params deep-copied). Title and branding are left alone.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: reportId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyTemplate"
+      responses:
+        "200":
+          description: The report with template blocks applied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/report-templates/from-report:
+    post:
+      operationId: createReportTemplateFromReport
+      summary: Create a template from a report's current draft blocks.
+      description: |
+        Snapshots the report's current draft blocks into a new template.
+        The report is not modified.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateFromReport"
+      responses:
+        "201":
+          description: The created template with the report's blocks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
 
   securitySchemes:
@@ -6472,6 +6727,15 @@ components:
       in: path
       required: true
       description: The report being read or changed.
+      schema:
+        type: string
+        format: uuid
+
+    TemplateId:
+      name: templateId
+      in: path
+      required: true
+      description: The template being read or changed.
       schema:
         type: string
         format: uuid
@@ -11464,5 +11728,100 @@ components:
         params:
           type: object
           description: Block parameters. Defaults used from registry when absent.
+      additionalProperties: false
+    # ── M6 report templates ───────────────────────────────────────────
+
+    ReportTemplate:
+      type: object
+      required:
+        - id
+        - engagementId
+        - name
+        - createdBy
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        engagementId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 200
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        blocks:
+          type: array
+          description: Template blocks in ordinal order. Present in GET /report-templates/{templateId} responses; absent from list endpoints.
+          items:
+            $ref: "#/components/schemas/ReportTemplateBlock"
+      additionalProperties: false
+
+    ReportTemplateBlock:
+      type: object
+      required:
+        - ordinal
+        - blockId
+        - params
+      properties:
+        ordinal:
+          type: integer
+          minimum: 0
+        blockId:
+          type: string
+          description: Stable block id from the catalogue (e.g. "cover", "rich_text").
+        params:
+          type: object
+          description: Block parameters, validated against the registry's ParamSchema.
+      additionalProperties: false
+
+    CreateReportTemplate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 200
+      additionalProperties: false
+
+    PatchReportTemplate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+      additionalProperties: false
+
+    ApplyTemplate:
+      type: object
+      required:
+        - templateId
+      properties:
+        templateId:
+          type: string
+          format: uuid
+      additionalProperties: false
+
+    CreateTemplateFromReport:
+      type: object
+      required:
+        - reportId
+        - name
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 200
       additionalProperties: false
 
