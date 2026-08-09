@@ -27,6 +27,8 @@ import { EngagementsPage } from '@/features/engagements/engagements-page'
 import { FindingsPage } from '@/features/engagements/findings-page'
 import { OverviewPage } from '@/features/engagements/overview-page'
 import { SettingsPage } from '@/features/engagements/settings-page'
+import { AnalyticsPage } from '@/features/engagements/analytics-page'
+
 import { WorkbookPage } from '@/features/engagements/workbook-page'
 import { ENGAGEMENTS_PATH } from '@/features/engagements/paths'
 import { HealthPage } from '@/features/system/health-page'
@@ -57,6 +59,7 @@ export function AppRoutes(): ReactNode {
             <Route index element={<OverviewPage />} />
             <Route path="workbook" element={<WorkbookPage />} />
             <Route path="findings" element={<FindingsPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

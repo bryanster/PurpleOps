@@ -80,23 +80,24 @@ describe('queryKeysForVerb', () => {
   })
 
   // ── Steps ─────────────────────────────────────────────────────────────
-  it('step.created invalidates allSteps, scenario steps, and activity', () => {
+  it('step.created invalidates allSteps, analytics coverage, scenario steps, and activity', () => {
     const keys = queryKeysForVerb('step.created', ENG, { scenarioId: SCENARIO })
     expect(
       keysEqual(keys, [
         engagementKeys.allSteps(ENG),
+        engagementKeys.analyticsCoverage(ENG),
         ACTIVITY,
         engagementKeys.steps(ENG, SCENARIO),
       ]),
     ).toBe(true)
   })
 
-  it('step.created without scenarioId invalidates allSteps and activity', () => {
+  it('step.created without scenarioId invalidates allSteps, analytics coverage, and activity', () => {
     const keys = queryKeysForVerb('step.created', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.allSteps(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.allSteps(ENG), engagementKeys.analyticsCoverage(ENG), ACTIVITY])).toBe(true)
   })
 
-  it('step.revealed invalidates allSteps, scenario steps, step, executions, and activity', () => {
+  it('step.revealed invalidates allSteps, analytics, scenario steps, step, executions, and activity', () => {
     const keys = queryKeysForVerb('step.revealed', ENG, {
       scenarioId: SCENARIO,
       stepId: STEP,
@@ -104,6 +105,9 @@ describe('queryKeysForVerb', () => {
     expect(
       keysEqual(keys, [
         engagementKeys.allSteps(ENG),
+        engagementKeys.analyticsCoverage(ENG),
+        engagementKeys.analyticsDistribution(ENG),
+        engagementKeys.analyticsMttd(ENG),
         ACTIVITY,
         engagementKeys.steps(ENG, SCENARIO),
         engagementKeys.step(ENG, SCENARIO, STEP),
@@ -112,11 +116,12 @@ describe('queryKeysForVerb', () => {
     ).toBe(true)
   })
 
-  it('step.reordered invalidates allSteps, scenario steps, and activity', () => {
+  it('step.reordered invalidates allSteps, analytics coverage, scenario steps, and activity', () => {
     const keys = queryKeysForVerb('step.reordered', ENG, { scenarioId: SCENARIO })
     expect(
       keysEqual(keys, [
         engagementKeys.allSteps(ENG),
+        engagementKeys.analyticsCoverage(ENG),
         ACTIVITY,
         engagementKeys.steps(ENG, SCENARIO),
       ]),
@@ -124,31 +129,37 @@ describe('queryKeysForVerb', () => {
   })
 
   // ── Executions ────────────────────────────────────────────────────────
-  it('execution.red_updated invalidates executions, detail, and activity', () => {
+  it('execution.red_updated invalidates executions, analytics, detail, and activity', () => {
     const keys = queryKeysForVerb('execution.red_updated', ENG, { executionId: EXEC })
     expect(
       keysEqual(keys, [
         engagementKeys.executions(ENG),
+        engagementKeys.analyticsCoverage(ENG),
+        engagementKeys.analyticsDistribution(ENG),
+        engagementKeys.analyticsMttd(ENG),
         ACTIVITY,
         engagementKeys.execution(ENG, EXEC),
       ]),
     ).toBe(true)
   })
 
-  it('execution.blue_updated invalidates executions, detail, and activity', () => {
+  it('execution.blue_updated invalidates executions, analytics, detail, and activity', () => {
     const keys = queryKeysForVerb('execution.blue_updated', ENG, { executionId: EXEC })
     expect(
       keysEqual(keys, [
         engagementKeys.executions(ENG),
+        engagementKeys.analyticsCoverage(ENG),
+        engagementKeys.analyticsDistribution(ENG),
+        engagementKeys.analyticsMttd(ENG),
         ACTIVITY,
         engagementKeys.execution(ENG, EXEC),
       ]),
     ).toBe(true)
   })
 
-  it('execution.red_updated without executionId invalidates executions and activity', () => {
+  it('execution.red_updated without executionId invalidates executions, analytics, and activity', () => {
     const keys = queryKeysForVerb('execution.red_updated', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.executions(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.executions(ENG), engagementKeys.analyticsCoverage(ENG), engagementKeys.analyticsDistribution(ENG), engagementKeys.analyticsMttd(ENG), ACTIVITY])).toBe(true)
   })
 
   // ── Evidence ──────────────────────────────────────────────────────────
@@ -179,24 +190,24 @@ describe('queryKeysForVerb', () => {
   })
 
   // ── Findings ──────────────────────────────────────────────────────────
-  it('finding.created invalidates findings and activity', () => {
+  it('finding.created invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.created', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
   })
 
-  it('finding.updated invalidates findings and activity', () => {
+  it('finding.updated invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.updated', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
   })
 
-  it('finding.deleted invalidates findings and activity', () => {
+  it('finding.deleted invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.deleted', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
   })
 
-  it('finding.steps_changed invalidates findings and activity', () => {
+  it('finding.steps_changed invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.steps_changed', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), ACTIVITY])).toBe(true)
+    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
   })
 
   // ── Unknown ───────────────────────────────────────────────────────────

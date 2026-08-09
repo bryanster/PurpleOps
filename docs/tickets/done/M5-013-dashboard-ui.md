@@ -51,24 +51,23 @@ war room to notice will report it as a data bug.
 
 ## Acceptance criteria
 
-- [ ] Every percentage on the page states its denominator in visible text.
-- [ ] `unscored`, `none` and `not attempted` are distinguishable **without colour** — pattern, label
+- [x] Every percentage on the page states its denominator in visible text.
+- [x] `unscored`, `none` and `not attempted` are distinguishable **without colour** — pattern, label
       or position — and the heatmap legend names all three.
-- [ ] Colour ramp values come from one shared constant, and a test asserts they match the values
+- [x] Colour ramp values come from one shared constant, and a test asserts they match the values
       `docs/analytics.md` documents for `M5-010`. Two ramps drifting is a client-visible defect.
-- [ ] MTTD cannot render without its undetected count. Enforced in the component, not by convention —
+- [x] MTTD cannot render without its undetected count. Enforced in the component, not by convention —
       the props make the count required, mirroring the API shape.
-- [ ] `blindFiltered: true` renders the banner; a component test asserts it, and asserts nothing on
+- [x] `blindFiltered: true` renders the banner; a component test asserts it, and asserts nothing on
       the page displays a count of what was withheld.
-- [ ] Keyboard-navigable heatmap with accessible cell labels; `axe` clean at the level the rest of
+- [x] Keyboard-navigable heatmap with accessible cell labels; `axe` clean at the level the rest of
       the app is held to (`M3-014` precedent).
-- [ ] Panels fail independently: a 500 from burndown does not blank the coverage card.
-- [ ] Observer seat sees the whole page — `report.read` is all-members, and an observer who cannot
+- [x] Panels fail independently: a 500 from burndown does not blank the coverage card.
+- [x] Observer seat sees the whole page — `report.read` is all-members, and an observer who cannot
       see the numbers has no reason to be in the engagement.
-- [ ] Playwright: a red and a blue browser on one blind engagement, side by side, showing different
+- [x] Playwright: a red and a blue browser on one blind engagement, side by side, showing different
       totals and blue showing the banner. This is the epic decision made visible, and it belongs in
       the E2E suite rather than only in unit tests.
-
 ## Tests
 
 - Component tests per panel: loaded, empty, error, blind-filtered.
@@ -84,3 +83,20 @@ war room to notice will report it as a data bug.
 - Charts: keep them boring and legible. This screenshot ends up in `M7-002`'s README.
 - The heatmap can be wide. It scrolls inside its own container; the page body does not scroll
   horizontally.
+
+## Implementation notes
+
+- Heatmap uses a simple technique-row layout with tactic summary bars above rather than a full
+  tactic×technique matrix, because the `TechniqueCoverageRow` API shape does not carry a `tacticId`
+  field — technique→tactic mapping lives in `TacticCoverageRow` only. The technique list is grouped
+  by parent/sub-technique and coloured by detection-category ordinal.
+- Charts are hand-crafted SVG (no chart library dependency). The burndown uses an inline `<svg>`
+  element and the detection distribution uses a CSS stacked-bar.
+- Colour ramp lives in `web/src/features/engagements/analytics-queries.ts` as `COLOUR_RAMP` and
+  matches `internal/analytics.NavigatorColourRamp` and `docs/analytics.md`. A test (`analytics-page.test.tsx`)
+  asserts the exact hex values.
+- Blind comparison Playwright test is in `e2e/specs/analytics-blind.spec.ts`, extending M4-009's
+  fixture pattern.
+- Route: `GET /engagements/{engagementId}/analytics` renders the page via the new Analytics tab
+  between Workbook and Findings.
+- Observer seat: `report.read` is all-members per M5-EPIC — no additional auth check needed.

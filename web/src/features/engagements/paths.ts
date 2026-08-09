@@ -9,6 +9,10 @@ export const ENGAGEMENTS_PATH = '/engagements'
 export function engagementPath(engagementId: string): string {
   return `/engagements/${engagementId}`
 }
+export function engagementAnalyticsPath(engagementId: string): string {
+  return `/engagements/${engagementId}/analytics`
+}
+
 
 export function engagementWorkbookPath(engagementId: string): string {
   return `/engagements/${engagementId}/workbook`

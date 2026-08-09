@@ -71,6 +71,7 @@ export function queryKeysForVerb(
     case 'step.reordered': {
       const keys: readonly (readonly unknown[])[] = [
         engagementKeys.allSteps(engagementId),
+        engagementKeys.analyticsCoverage(engagementId),
         ...activityKeys,
       ]
       if (parents.scenarioId) {
@@ -82,6 +83,9 @@ export function queryKeysForVerb(
     case 'step.revealed': {
       const base: readonly (readonly unknown[])[] = [
         engagementKeys.allSteps(engagementId),
+        engagementKeys.analyticsCoverage(engagementId),
+        engagementKeys.analyticsDistribution(engagementId),
+        engagementKeys.analyticsMttd(engagementId),
         ...activityKeys,
       ]
       const withScenario = parents.scenarioId
@@ -97,12 +101,14 @@ export function queryKeysForVerb(
       }
       return withScenario
     }
-
     // ── Executions ──────────────────────────────────────────────────────
     case 'execution.red_updated':
     case 'execution.blue_updated': {
       const keys: readonly (readonly unknown[])[] = [
         engagementKeys.executions(engagementId),
+        engagementKeys.analyticsCoverage(engagementId),
+        engagementKeys.analyticsDistribution(engagementId),
+        engagementKeys.analyticsMttd(engagementId),
         ...activityKeys,
       ]
       if (parents.executionId) {
@@ -110,7 +116,6 @@ export function queryKeysForVerb(
       }
       return keys
     }
-
     // ── Evidence ────────────────────────────────────────────────────────
     case 'evidence.uploaded':
     case 'evidence.deleted': {
@@ -134,7 +139,7 @@ export function queryKeysForVerb(
     case 'finding.updated':
     case 'finding.deleted':
     case 'finding.steps_changed':
-      return [engagementKeys.findings(engagementId), ...activityKeys]
+      return [engagementKeys.findings(engagementId), engagementKeys.analyticsBurndown(engagementId), ...activityKeys]
 
     default:
       // Unknown verb — no invalidation.  Caller may log a dev warning.

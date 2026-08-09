@@ -85,6 +85,14 @@ export const engagementKeys = {
     [...engagementKeys.all, 'activity', engagementId] as const,
   activity: (engagementId: string, filters: { verb?: string }) =>
     [...engagementKeys.all, 'activity', engagementId, filters] as const,
+  analyticsCoverage: (engagementId: string) =>
+    [...engagementKeys.all, 'analytics', engagementId, 'coverage'] as const,
+  analyticsDistribution: (engagementId: string) =>
+    [...engagementKeys.all, 'analytics', engagementId, 'distribution'] as const,
+  analyticsMttd: (engagementId: string) =>
+    [...engagementKeys.all, 'analytics', engagementId, 'mttd'] as const,
+  analyticsBurndown: (engagementId: string) =>
+    [...engagementKeys.all, 'analytics', engagementId, 'burndown'] as const,
 }
 
 // ── Engagements ──────────────────────────────────────────────────────────────

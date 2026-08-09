@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 
 import { ActivityRail } from './activity-rail'
 import {
+  engagementAnalyticsPath,
   engagementFindingsPath,
   engagementPath,
   engagementSettingsPath,
@@ -65,10 +66,10 @@ export function EngagementLayout(): ReactNode {
   }
 
   const closed = isEngagementClosed(eng.status)
-
   const tabs: TabDef[] = [
     { label: 'Overview', to: engagementPath(eng.id) },
     { label: 'Workbook', to: engagementWorkbookPath(eng.id) },
+    { label: 'Analytics', to: engagementAnalyticsPath(eng.id) },
     { label: 'Findings', to: engagementFindingsPath(eng.id) },
     { label: 'Settings', to: engagementSettingsPath(eng.id) },
   ]
