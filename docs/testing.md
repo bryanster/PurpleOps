@@ -317,6 +317,63 @@ SSE through buffering proxies breaks live UX. Deploy docs note
 through the compose/deploy path, not only Vite dev.
 
 
+
+## Analytics query budget (M5-015)
+
+Every analytics rollup (coverage, MTTD, burndown, compare, Navigator) and every
+export path must stay responsive under concurrent write load — the same queries
+that feed the dashboard (M5-013) and reports (M6). `internal/analytics/loadtest`
+proves queries stay within budget and the archive path holds constant memory.
+**This is the gate before M6.**
+
+### CI (always on)
+
+```sh
+go test ./internal/analytics/loadtest/
+```
+
+| Test | What it proves |
+|---|---|
+| `TestAnalyticsQueryBudget` | 200 techniques, 5 scenarios × 10 steps, 50 findings, 3 concurrent writers, 10s: every rollup and endpoint measured. **All p95 ≤ 250ms**, max ≤ 1s, dashboard set ≤ 1s, write p95 ≤ 200ms. Archive memory delta ≤ 50 MiB. |
+| `TestAnalyticsQueryBudgetDetectsRegression` | Same fixture, but TechniqueCoverage is replaced with a per-technique Go loop (an N+1 rewrite of the single-statement rollup, run 20× to simulate repeated calls). The broken query **exceeds** the 250ms budget — proves the gate catches a regression that text diffs would miss. |
+| `TestArchiveExportMemory` | Archive export streams to a ZIP via `io.Pipe`; heap sampled before and after. Growth ≤ 50 MiB — the archive is streamed, not buffered. |
+
+All three ride along with `make test` / `make test-race`. A budget failure on
+the first means a rollup is too slow — fix the query, add an index, or fix a
+join before the N+1 bites in M6's PDF render. A failure on the second means the
+mutation detector itself regressed: the broken loop no longer exceeds budget.
+A memory failure means the archive path is buffering where it should stream.
+
+### Full developer load
+
+```sh
+BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/analytics/loadtest/ -run TestAnalyticsQueryLoad
+```
+
+Runs **800 techniques**, **10 scenarios × 50 steps**, **200 findings** with
+**1000 status-history rows**, **100 evidence blobs**, and **5 concurrent
+writers** for 15 seconds. Pass/fail uses the same budgets. Ballpark on a local
+SSD / arm64 devcontainer: ~20s, all rollups well under budget.
+
+### When a budget fails
+
+1. **Check the query.** Is it still one statement? A Go loop over `rows` for an
+   aggregate is an N+1 regression — `M5-EPIC` bans it.
+2. **Check the indexes.** `EXPLAIN` the failing query. DuckDB's default indexes
+   are good for primary-key joins; a join on an unindexed column on a large
+   table (e.g. `finding_status_history.changed_at`) will table-scan.
+3. **Check the join shape.** A `CROSS JOIN` or a missing `WHERE` clause
+   produces a cartesian product that grows with the fixture — rebuild the
+   fixture at full scale to reproduce.
+4. **Do not add a cache.** Materialized views, rollup tables, and in-process
+   caches add staleness. `M5-EPIC` defers caching until this test proves it is
+   needed, and the test hasn't done that.
+5. **Do not raise the budget.** The budget reflects the M6 PDF render timeout.
+   If a query cannot meet it, the query must change — not the budget.
+
+Assumptions: single process, local NVMe/SSD, no competing writers. Not a
+multi-node test and not the M6 Chromium render path (measured in M7-008).
+
 ## What CI runs
 
 Every job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), on every pull request; see

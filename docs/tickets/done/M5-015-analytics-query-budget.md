@@ -82,3 +82,52 @@ budgets, and a rule about what to do when it fails.
   budget number.
 - Generate the ATT&CK fixture rather than checking in 800 techniques of real content, unless the M2
   adapter fixtures already give you one cheaply.
+
+
+## Completion notes
+
+**Date:** 2026-08-09
+
+### CI gate results (200 techniques, 50 steps, 50 findings, 3 writers, 10s)
+
+| Rollup | p50 | p95 | max | samples |
+|---|---:|---:|---:|---:|
+| TechniqueCoverage | 7.3ms | 11.2ms | 45.4ms | 137 |
+| TacticCoverage | 11.2ms | 15.9ms | 18.4ms | 137 |
+| CategoryDistribution | 3.5ms | 6.6ms | 39.2ms | 137 |
+| ProtectionRate | 2.9ms | 6.9ms | 27.4ms | 137 |
+| OutcomeMix | 3.0ms | 7.3ms | 128.8ms | 137 |
+| ModifierDistribution | 4.8ms | 8.3ms | 134.8ms | 137 |
+| MTTD | 3.2ms | 5.7ms | 19.7ms | 137 |
+| Burndown | 7.6ms | 11.7ms | 39.5ms | 137 |
+| FindingsBySeverity | 1.4ms | 4.0ms | 6.9ms | 137 |
+| Compare | 12.0ms | 16.5ms | 45.2ms | 136 |
+| Navigator | 8.0ms | 12.5ms | 27.8ms | 136 |
+| ExecutionsExport | 3.6ms | 6.1ms | 14.3ms | 136 |
+| FindingsExport | 6.7ms | 10.6ms | 14.0ms | 136 |
+| DashboardSet (concurrent) | — | 9.6ms | — | 136 |
+
+Write probe: p95=10.5ms, max=123ms, 198 samples (budget: p95≤200ms)
+
+Archive memory: heap delta 835 KiB (budget: ≤50 MiB)
+
+### Mutation test
+
+Baseline TechniqueCoverage: 7.2ms. Broken N+1 Go loop (per-technique query, 20×):
+879.5ms — exceeds the 250ms budget. Gate correctly catches the regression.
+
+### Budget decisions
+
+Starting budgets held without adjustment: all rollups are 20× under the p95
+budget at CI scale. No indexes were added; all queries are single-statement.
+No cache was added — the no-cache decision holds.
+
+### Run command
+
+```
+# CI (always on)
+go test ./internal/analytics/loadtest/
+
+# Full developer load
+BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/analytics/loadtest/ -run TestAnalyticsQueryLoad
+```
