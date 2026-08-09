@@ -18,6 +18,7 @@ import (
 	"github.com/bryanster/blacklight/internal/evidence"
 
 	"github.com/bryanster/blacklight/internal/report"
+	pdfreport "github.com/bryanster/blacklight/internal/report/pdf"
 	"github.com/bryanster/blacklight/internal/analytics"
 
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -146,6 +147,11 @@ type handlers struct {
 
 	// docRenderer is the HTML report renderer (M6-009).
 	docRenderer *report.DocumentRenderer
+
+	// pdfPrinter converts report HTML to PDF (M6-010). Nil when Chromium is
+	// not configured — the PDF endpoint returns a clear error in that case
+	// rather than the server refusing to start.
+	pdfPrinter *pdfreport.Printer
 }
 
 

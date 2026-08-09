@@ -3320,6 +3320,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/reports/{reportId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render the draft report as HTML.
+         * @description Members and platform administrators. Renders the current draft blocks
+         *     into a self-contained HTML document. The output is the same rendering
+         *     path used for published versions, share views, and PDF input.
+         *
+         *     Seat-scoped for blind engagements: blue members see a labelled partial
+         *     view.
+         */
+        post: operations["previewReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}/preview.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render the draft report as a PDF.
+         * @description Members and platform administrators. Renders the current draft blocks
+         *     into a self-contained HTML document, then converts it to PDF via
+         *     headless Chromium. Requires BLACKLIGHT_CHROME_PATH to be configured;
+         *     returns 503 if PDF rendering is unavailable.
+         *
+         *     Seat-scoped for blind engagements: blue members see a labelled partial
+         *     view.
+         */
+        post: operations["previewReportPdf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagements/{engagementId}/report-templates": {
         parameters: {
             query?: never;
@@ -11990,6 +12041,115 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    previewReport: {
+        parameters: {
+            query?: {
+                /** @description Include evidence blocks in the output. */
+                includeEvidence?: boolean;
+            };
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rendered report as a self-contained HTML document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    previewReportPdf: {
+        parameters: {
+            query?: {
+                /** @description Include evidence blocks in the output. */
+                includeEvidence?: boolean;
+            };
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rendered report as a PDF document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+            /** @description PDF rendering is not configured on this server. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listReportTemplates: {

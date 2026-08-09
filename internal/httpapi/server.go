@@ -38,6 +38,7 @@ import (
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/report"
 	"github.com/bryanster/blacklight/internal/report/blocks"
+	pdfreport "github.com/bryanster/blacklight/internal/report/pdf"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -631,6 +632,21 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	reportRegistry.Register(blocks.EvidenceDef)
 	reportRegistry.SetRenderer(report.IDEvidenceAppendix, blocks.EvidenceRenderer{})
 
+
+	// PDF printer (M6-010). Nil when Chrome is not configured — the server
+	// starts without it, and the endpoint returns a clear error.
+	var pdfPrinter *pdfreport.Printer
+	if deps.Config.Report.ChromePath != "" {
+		var err error
+		pdfPrinter, err = pdfreport.New(deps.Config.Report.ChromePath, 0) // default timeout
+		if err != nil {
+			log.Warn("PDF printer unavailable; /preview.pdf will return 503",
+				"chrome_path", deps.Config.Report.ChromePath,
+				"err", err,
+			)
+			pdfPrinter = nil
+		}
+	}
 	docRenderer := report.NewDocumentRenderer(reportRegistry)
 
 	reportRepo := storereport.NewReports(deps.Store)
@@ -765,6 +781,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		content:        registry,
 		runner:         runner,
 		objects:        objects,
+		pdfPrinter:     pdfPrinter,
 		procedures:     procedures,
 		detections:     detections,
 		emulationPlans: emulationPlans,
@@ -799,6 +816,5 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		},
 	)
 
-	apiRouter.Post("/engagements/{engagementId}/reports/{reportId}/preview", h.previewReport)
 	return handler
 }

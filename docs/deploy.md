@@ -364,9 +364,10 @@ above exists is that rolling *back* is the case that is not supported.
 
 ## Chromium and PDF rendering
 
-The image carries Chromium so that M6's PDF reports work without a second container or a runtime
-download. `BLACKLIGHT_CHROME_PATH` already points at it. Nothing renders PDFs yet — M6 builds that —
-but the packaging is in place and tested now, on purpose, rather than discovered at the end.
+The image carries Chromium for PDF report rendering via `chromedp` (M6-010).
+`BLACKLIGHT_CHROME_PATH` already points at it. Draft PDFs are available at
+`POST /api/v1/engagements/{id}/reports/{id}/preview.pdf` (authenticated,
+`report.read` scope).
 
 **The sandbox is left on.** Chromium's renderer sandbox needs to create a user namespace, and
 Docker's *default* seccomp profile blocks that, so on a stock Docker host the sandbox cannot start
@@ -387,6 +388,20 @@ this deployment generated, so the exposure is bounded, but it is the option to r
 `docker compose` does not set any of these. Two settings it does set, both for Chromium: `init: true`,
 because Chromium leaves zombie children and PID 1 in a container reaps nothing by default; and
 `shm_size: 512mb`, because the 64 MB default starves Chromium's renderers and they crash mid-render.
+
+
+### Bare metal without Chromium
+
+If Chromium cannot be installed or the binary is not at `BLACKLIGHT_CHROME_PATH`,
+the server starts without PDF support — the PDF endpoint returns `503` with a
+clear message naming the variable. The server log records the reason at startup.
+
+**Operator fallback:** open the HTML preview
+(`POST /api/v1/engagements/{id}/reports/{id}/preview`) in any Chromium-based
+browser and use **File → Print → Save as PDF**. Set paper size to A4 and enable
+"Background graphics" so heatmap colours and branding survive. The HTML is
+self-contained and prints identically to the server-generated PDF — it is the
+same rendering path.
 
 ### Hardening that conflicts with it
 

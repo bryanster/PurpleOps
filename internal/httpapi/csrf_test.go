@@ -615,6 +615,16 @@ var csrfCoverage = map[string]struct {
 		body: `{"blocks":[]}`,
 	},
 
+	// Report previews (M6-009, M6-010). Protected: reached by a logged-in
+	// browser via the SPA, which sends the CSRF token on every state-changing
+	// request (M1-005).
+	"POST " + BasePath + "/engagements/{engagementId}/reports/{reportId}/preview": {
+		body: "",
+	},
+	"POST " + BasePath + "/engagements/{engagementId}/reports/{reportId}/preview.pdf": {
+		body: "",
+	},
+
 	// Report templates (M6-003).
 	"POST " + BasePath + "/engagements/{engagementId}/report-templates": {
 		body: `{"name":"Template"}`,

@@ -54,3 +54,45 @@ in the image; compose sandbox was left undecided in `M0B-011` — this ticket cl
 - Reuse one browser context pool carefully; process leak is the common bug.
 - Never pass unsanitized user HTML that wasn't produced by our renderer.
 - Print background graphics enabled so heatmap colours survive.
+
+---
+
+## Implementation notes
+
+### Routes added to OpenAPI spec (M6-009 gap fixed)
+
+M6-009 left `POST /preview` (HTML) as an extra route outside the OpenAPI spec.
+The request validator (`validate.go`) rejects routes not in the spec, so the
+HTML preview was unreachable. This ticket adds both preview routes to the spec:
+
+- `POST /engagements/{id}/reports/{id}/preview` → `text/html` (M6-009)
+- `POST /engagements/{id}/reports/{id}/preview.pdf` → `application/pdf` (M6-010)
+
+Both use `report.read` scope, carry `CSRFToken` parameter, and accept optional
+`?includeEvidence=true` query param. Handlers were converted from raw
+`http.HandlerFunc` to generated `StrictServerInterface` methods.
+
+### chromedp version
+
+Pinned to `v0.14.2` — the last version supporting Go 1.25. Later versions (v0.15+)
+require Go ≥ 1.26. The repo uses `GOTOOLCHAIN=local` and cannot auto-upgrade.
+
+### Printer design
+
+Single browser process shared across renders via `chromedp.NewExecAllocator` with
+`chromedp.Headless`, `chromedp.NoFirstRun`, `chromedp.NoDefaultBrowserCheck`,
+and `chromedp.DisableGPU`. New tab per `RenderPDF` call, serialized by mutex.
+Context deadlines bound each render; hung Chrome is killed via context cancellation.
+
+### Sandbox
+
+No compose changes needed — `shm_size: 512mb` and `init: true` were already set
+by M0B-011. Chromium sandbox is ON; operators needing it disabled use documented
+options in `docs/deploy.md`. `BLACKLIGHT_CHROME_PATH` validates the binary at
+server start (prints warning if missing, server continues without PDF support).
+PDF endpoint returns 503 with clear message when printer is nil.
+
+### Test note
+
+`TestNoHandlerDecidesForItself` was already failing before this ticket (imports
+`authz` in `reporthandlers.go`). Not caused by or fixed in this work.

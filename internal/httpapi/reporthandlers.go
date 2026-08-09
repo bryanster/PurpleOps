@@ -1,12 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/bryanster/blacklight/internal/authn"
@@ -19,7 +18,6 @@ import (
 	"github.com/bryanster/blacklight/internal/store/blind"
 	"github.com/google/uuid"
 )
-
 // Report CRUD + blocks handlers (M6-002).
 
 // ListReports returns every report in an engagement.
@@ -292,55 +290,80 @@ func nullableToStringPtr(ns nullable.Nullable[string]) *string {
 	}
 	return &v
 }
-
-// previewReport renders the draft HTML for a report (M6-009).
-// This endpoint is registered as an extra route because the OpenAPI spec
-// does not yet define a preview operation.
-func (h *handlers) previewReport(w http.ResponseWriter, r *http.Request) {
-	engagementID := chi.URLParam(r, "engagementId")
-	reportID := chi.URLParam(r, "reportId")
-
-	ctx := r.Context()
-
-	// Load the report.
-	rep, err := h.reports.Get(ctx, reportID)
-	if err != nil {
-		h.log.Error("preview: get report", "report_id", reportID, "err", err)
-		http.Error(w, "Report not found", http.StatusNotFound)
-		return
+// PreviewReport renders the draft report as HTML (M6-009).
+func (h *handlers) PreviewReport(ctx context.Context, request gen.PreviewReportRequestObject) (gen.PreviewReportResponseObject, error) {
+	env, errResp := h.previewReportEnv(ctx, request.EngagementId.String(), request.ReportId.String(), request.Params.IncludeEvidence)
+	if errResp != nil {
+		return errResp, nil
 	}
 
-	// Load blocks.
-	blocks, err := h.reports.Blocks(ctx, reportID)
-	if err != nil {
-		h.log.Error("preview: get blocks", "report_id", reportID, "err", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
-		return
+	rep, blocks, errResp := h.previewReportData(ctx, request.ReportId.String())
+	if errResp != nil {
+		return errResp, nil
 	}
 
-	// Load engagement for name, client, dates, blind mode.
+	doc := h.docRenderer.RenderDocument(ctx, *rep, blocks, *env)
+
+	return gen.PreviewReport200TexthtmlResponse{
+		Body: bytes.NewReader(doc.HTML),
+	}, nil
+}
+
+// PreviewReportPdf renders draft report as PDF via Chromium (M6-010).
+func (h *handlers) PreviewReportPdf(ctx context.Context, request gen.PreviewReportPdfRequestObject) (gen.PreviewReportPdfResponseObject, error) {
+	if h.pdfPrinter == nil {
+		return gen.PreviewReportPdf503Response{}, nil
+	}
+
+	env, errResp := h.previewReportEnv(ctx, request.EngagementId.String(), request.ReportId.String(), request.Params.IncludeEvidence)
+	if errResp != nil {
+		return gen.PreviewReportPdf500ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	rep, blocks, errResp := h.previewReportData(ctx, request.ReportId.String())
+	if errResp != nil {
+		return gen.PreviewReportPdf500ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	doc := h.docRenderer.RenderDocument(ctx, *rep, blocks, *env)
+
+	pdf, err := h.pdfPrinter.RenderPDF(ctx, doc.HTML)
+	if err != nil {
+		h.log.Error("preview-pdf: render", "report_id", request.ReportId, "err", err)
+		return gen.PreviewReportPdf500ApplicationProblemPlusJSONResponse{}, nil
+	}
+
+	return gen.PreviewReportPdf200ApplicationpdfResponse{
+		Body: bytes.NewReader(pdf),
+	}, nil
+}
+
+// previewReportEnv loads the engagement, resolves branding, determines blind
+// scope, and constructs the RenderEnv for preview handlers.
+func (h *handlers) previewReportEnv(ctx context.Context, engagementID, reportID string, includeEvidence *bool) (*report.RenderEnv, gen.PreviewReportResponseObject) {
 	engagements := storengagement.NewEngagements(h.store)
 	eng, err := engagements.ByID(ctx, engagementID)
 	if err != nil {
 		h.log.Error("preview: get engagement", "engagement_id", engagementID, "err", err)
-		http.Error(w, "Engagement not found", http.StatusNotFound)
-		return
+		return nil, gen.PreviewReport404ApplicationProblemPlusJSONResponse{}
 	}
 
-	// Resolve branding.
+	rep, err := h.reports.Get(ctx, reportID)
+	if err != nil {
+		h.log.Error("preview: get report", "report_id", reportID, "err", err)
+		return nil, gen.PreviewReport404ApplicationProblemPlusJSONResponse{}
+	}
+
 	resolver := report.NewBrandingResolver(h.brandingSettings)
 	branding, err := resolver.Resolve(ctx, rep)
 	if err != nil {
 		h.log.Error("preview: branding", "report_id", reportID, "err", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
-		return
+		return nil, gen.PreviewReport500ApplicationProblemPlusJSONResponse{}
 	}
 
-	// Determine blind scope from the caller's seat.
 	scope := blind.Scope{}
 	if eng.Mode == storengagement.EngagementModeBlind {
 		scope.Blind = true
-		// Determine seat from the caller's membership.
 		if subj, ok := authn.SubjectFrom(ctx); ok {
 			memberships := identity.NewMemberships(h.store)
 			list, err := memberships.ListByUser(ctx, subj.UserID)
@@ -355,14 +378,12 @@ func (h *handlers) previewReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Determine includeEvidence from query param, default true for members
-	// with evidence.read.
-	includeEvidence := true
-	if r.URL.Query().Get("includeEvidence") == "false" {
-		includeEvidence = false
+	ev := true
+	if includeEvidence != nil {
+		ev = *includeEvidence
 	}
 
-	env := report.RenderEnv{
+	return &report.RenderEnv{
 		EngagementID:       eng.ID,
 		EngagementName:     eng.Name,
 		EngagementClient:   eng.Client,
@@ -378,15 +399,25 @@ func (h *handlers) previewReport(w http.ResponseWriter, r *http.Request) {
 			Evidence:   h.evidenceRepo,
 		},
 		Evidence:        &report.EvidenceStorage{Store: h.evidenceStore},
-		IncludeEvidence: includeEvidence,
+		IncludeEvidence: ev,
 		BlindScope:      scope,
 		Format:          report.FormatHelpers{},
+	}, nil
+}
+
+// previewReportData fetches the report and its blocks.
+func (h *handlers) previewReportData(ctx context.Context, reportID string) (*storereport.Report, []storereport.ReportBlock, gen.PreviewReportResponseObject) {
+	rep, err := h.reports.Get(ctx, reportID)
+	if err != nil {
+		h.log.Error("preview: get report", "report_id", reportID, "err", err)
+		return nil, nil, gen.PreviewReport404ApplicationProblemPlusJSONResponse{}
 	}
 
-	doc := h.docRenderer.RenderDocument(ctx, rep, blocks, env)
+	blocks, err := h.reports.Blocks(ctx, reportID)
+	if err != nil {
+		h.log.Error("preview: get blocks", "report_id", reportID, "err", err)
+		return nil, nil, gen.PreviewReport500ApplicationProblemPlusJSONResponse{}
+	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Prevent the SPA from framing the report (defense in depth).
-	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	w.Write(doc.HTML)
+	return &rep, blocks, nil
 }

@@ -6417,6 +6417,102 @@ paths:
           $ref: "#/components/responses/InternalError"
 
 
+  # ── Report previews (M6-009, M6-010) ─────────────────────────────
+
+  /engagements/{engagementId}/reports/{reportId}/preview:
+    post:
+      operationId: previewReport
+      summary: Render the draft report as HTML.
+      description: |
+        Members and platform administrators. Renders the current draft blocks
+        into a self-contained HTML document. The output is the same rendering
+        path used for published versions, share views, and PDF input.
+
+        Seat-scoped for blind engagements: blue members see a labelled partial
+        view.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: includeEvidence
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Include evidence blocks in the output.
+      responses:
+        "200":
+          description: The rendered report as a self-contained HTML document.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/preview.pdf:
+    post:
+      operationId: previewReportPdf
+      summary: Render the draft report as a PDF.
+      description: |
+        Members and platform administrators. Renders the current draft blocks
+        into a self-contained HTML document, then converts it to PDF via
+        headless Chromium. Requires BLACKLIGHT_CHROME_PATH to be configured;
+        returns 503 if PDF rendering is unavailable.
+
+        Seat-scoped for blind engagements: blue members see a labelled partial
+        view.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: includeEvidence
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Include evidence blocks in the output.
+      responses:
+        "200":
+          description: The rendered report as a PDF document.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: PDF rendering is not configured on this server.
+
   # ── Report templates (M6-003) ────────────────────────────────────
 
   /engagements/{engagementId}/report-templates:

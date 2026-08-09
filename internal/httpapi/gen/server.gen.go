@@ -4934,6 +4934,50 @@ type ApplyReportTemplateParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// PreviewReportParams defines parameters for PreviewReport.
+type PreviewReportParams struct {
+	// IncludeEvidence Include evidence blocks in the output.
+	IncludeEvidence *bool `form:"includeEvidence,omitempty" json:"includeEvidence,omitempty"`
+
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// PreviewReportPdfParams defines parameters for PreviewReportPdf.
+type PreviewReportPdfParams struct {
+	// IncludeEvidence Include evidence blocks in the output.
+	IncludeEvidence *bool `form:"includeEvidence,omitempty" json:"includeEvidence,omitempty"`
+
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SubscribeEventsParams defines parameters for SubscribeEvents.
 type SubscribeEventsParams struct {
 	// Topics One or more topic names to subscribe to. Repeat the parameter
@@ -5808,6 +5852,12 @@ type ServerInterface interface {
 	// PutReportBlocks Replace the complete ordered list of draft blocks.
 	// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
 	PutReportBlocks(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
+	// PreviewReport Render the draft report as HTML.
+	// (POST /engagements/{engagementId}/reports/{reportId}/preview)
+	PreviewReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params PreviewReportParams)
+	// PreviewReportPdf Render the draft report as a PDF.
+	// (POST /engagements/{engagementId}/reports/{reportId}/preview.pdf)
+	PreviewReportPdf(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params PreviewReportPdfParams)
 	// ListScenarios List every scenario in an engagement.
 	// (GET /engagements/{engagementId}/scenarios)
 	ListScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -6651,6 +6701,18 @@ func (_ Unimplemented) ApplyReportTemplate(w http.ResponseWriter, r *http.Reques
 // PutReportBlocks Replace the complete ordered list of draft blocks.
 // (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
 func (_ Unimplemented) PutReportBlocks(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewReport Render the draft report as HTML.
+// (POST /engagements/{engagementId}/reports/{reportId}/preview)
+func (_ Unimplemented) PreviewReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params PreviewReportParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewReportPdf Render the draft report as a PDF.
+// (POST /engagements/{engagementId}/reports/{reportId}/preview.pdf)
+func (_ Unimplemented) PreviewReportPdf(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params PreviewReportPdfParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11871,6 +11933,150 @@ func (siw *ServerInterfaceWrapper) PutReportBlocks(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewReport operation middleware
+func (siw *ServerInterfaceWrapper) PreviewReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewReportParams
+
+	// ------------- Optional query parameter "includeEvidence" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeEvidence", r.URL.Query(), &params.IncludeEvidence, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeEvidence"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeEvidence", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewReport(w, r, engagementId, reportId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewReportPdf operation middleware
+func (siw *ServerInterfaceWrapper) PreviewReportPdf(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewReportPdfParams
+
+	// ------------- Optional query parameter "includeEvidence" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeEvidence", r.URL.Query(), &params.IncludeEvidence, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeEvidence"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeEvidence", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewReportPdf(w, r, engagementId, reportId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListScenarios operation middleware
 func (siw *ServerInterfaceWrapper) ListScenarios(w http.ResponseWriter, r *http.Request) {
 
@@ -14127,6 +14333,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}/blocks", wrapper.PutReportBlocks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}/preview", wrapper.PreviewReport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}/preview.pdf", wrapper.PreviewReportPdf)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/report-templates", wrapper.ListReportTemplates)
@@ -25441,6 +25653,234 @@ func (response PutReportBlocks500ApplicationProblemPlusJSONResponse) VisitPutRep
 	return err
 }
 
+type PreviewReportRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+	Params       PreviewReportParams
+}
+
+type PreviewReportResponseObject interface {
+	VisitPreviewReportResponse(w http.ResponseWriter) error
+}
+
+type PreviewReport200TexthtmlResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response PreviewReport200TexthtmlResponse) VisitPreviewReportResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/html")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type PreviewReport400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReport400ApplicationProblemPlusJSONResponse) VisitPreviewReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReport401ApplicationProblemPlusJSONResponse) VisitPreviewReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReport403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReport403ApplicationProblemPlusJSONResponse) VisitPreviewReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReport404ApplicationProblemPlusJSONResponse) VisitPreviewReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReport500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReport500ApplicationProblemPlusJSONResponse) VisitPreviewReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReportPdfRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+	Params       PreviewReportPdfParams
+}
+
+type PreviewReportPdfResponseObject interface {
+	VisitPreviewReportPdfResponse(w http.ResponseWriter) error
+}
+
+type PreviewReportPdf200ApplicationpdfResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response PreviewReportPdf200ApplicationpdfResponse) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type PreviewReportPdf400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReportPdf400ApplicationProblemPlusJSONResponse) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReportPdf401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReportPdf401ApplicationProblemPlusJSONResponse) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReportPdf403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReportPdf403ApplicationProblemPlusJSONResponse) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReportPdf404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReportPdf404ApplicationProblemPlusJSONResponse) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReportPdf500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewReportPdf500ApplicationProblemPlusJSONResponse) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewReportPdf503Response struct {
+}
+
+func (response PreviewReportPdf503Response) VisitPreviewReportPdfResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
 type ListScenariosRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -30206,6 +30646,12 @@ type StrictServerInterface interface {
 	// PutReportBlocks Replace the complete ordered list of draft blocks.
 	// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
 	PutReportBlocks(ctx context.Context, request PutReportBlocksRequestObject) (PutReportBlocksResponseObject, error)
+	// PreviewReport Render the draft report as HTML.
+	// (POST /engagements/{engagementId}/reports/{reportId}/preview)
+	PreviewReport(ctx context.Context, request PreviewReportRequestObject) (PreviewReportResponseObject, error)
+	// PreviewReportPdf Render the draft report as a PDF.
+	// (POST /engagements/{engagementId}/reports/{reportId}/preview.pdf)
+	PreviewReportPdf(ctx context.Context, request PreviewReportPdfRequestObject) (PreviewReportPdfResponseObject, error)
 	// ListScenarios List every scenario in an engagement.
 	// (GET /engagements/{engagementId}/scenarios)
 	ListScenarios(ctx context.Context, request ListScenariosRequestObject) (ListScenariosResponseObject, error)
@@ -33747,6 +34193,62 @@ func (sh *strictHandler) PutReportBlocks(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutReportBlocksResponseObject); ok {
 		if err := validResponse.VisitPutReportBlocksResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewReport operation middleware
+func (sh *strictHandler) PreviewReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params PreviewReportParams) {
+	var request PreviewReportRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewReport(ctx, request.(PreviewReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewReportResponseObject); ok {
+		if err := validResponse.VisitPreviewReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewReportPdf operation middleware
+func (sh *strictHandler) PreviewReportPdf(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId, params PreviewReportPdfParams) {
+	var request PreviewReportPdfRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewReportPdf(ctx, request.(PreviewReportPdfRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewReportPdf")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewReportPdfResponseObject); ok {
+		if err := validResponse.VisitPreviewReportPdfResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
