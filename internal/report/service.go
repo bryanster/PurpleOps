@@ -8,6 +8,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
+	"github.com/bryanster/blacklight/internal/report/sanitize"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
 )
 
@@ -188,13 +189,16 @@ type BlockInput struct {
 	Params  json.RawMessage
 }
 
-// Soft limits from M6-002.
+// Soft limits from M6-002 and M6-005.
 const (
 	MaxBlocks      = 50
 	MaxParamsBytes = 32 * 1024
+
+	// MaxHTMLBytes is the maximum raw HTML length before sanitization
+	// (100 KiB, per M6-005).
+	MaxHTMLBytes = 100 * 1024
 )
 
-// ReplaceBlocks validates and replaces every block in a report draft.
 func (s *Service) ReplaceBlocks(ctx context.Context, in ReplaceBlocksInput) (storereport.Report, error) {
 	if len(in.Blocks) > MaxBlocks {
 		return storereport.Report{}, apierr.Validation(
@@ -237,6 +241,11 @@ func (s *Service) ReplaceBlocks(ctx context.Context, in ReplaceBlocksInput) (sto
 	for i, bi := range in.Blocks {
 		def, _ := s.registry.Get(ID(bi.BlockID))
 		params := applyDefaults(def.ParamsSchema, def.DefaultParams, bi.Params)
+		var err error
+		params, err = sanitizeHTMLParams(ID(bi.BlockID), def, params)
+		if err != nil {
+			return storereport.Report{}, err
+		}
 		newBlocks[i] = storereport.NewBlock{
 			BlockID: bi.BlockID,
 			Params:  params,
@@ -305,6 +314,54 @@ func applyDefaults(schema ParamSchema, defaults json.RawMessage, provided json.R
 	return json.RawMessage(result)
 }
 
+// sanitizeHTMLParams applies HTML sanitization to params for blocks that
+// declare HTMLParamKeys. It walks each declared key, checks it is a string,
+// enforces MaxHTMLBytes, and replaces the value with sanitized output.
+// Returns the (possibly modified) params and any validation error.
+func sanitizeHTMLParams(blockID ID, def Definition, params json.RawMessage) (json.RawMessage, error) {
+	if len(def.HTMLParamKeys) == 0 {
+		return params, nil
+	}
+
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(params, &m); err != nil {
+		return params, nil // not an object; leave alone
+	}
+
+	for _, key := range def.HTMLParamKeys {
+		raw, ok := m[key]
+		if !ok || len(raw) == 0 {
+			continue
+		}
+
+		// Unmarshal as string.
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			continue // not a string; leave alone
+		}
+
+		// Enforce max HTML length.
+		if len(s) > MaxHTMLBytes {
+			return nil, apierr.Validation(apierr.FieldError{
+				Field:   fmt.Sprintf("params.%s", key),
+				Message: fmt.Sprintf("HTML content exceeds maximum of %d bytes", MaxHTMLBytes),
+			})
+		}
+
+		sanitized := sanitize.Sanitize(s)
+		encoded, err := json.Marshal(sanitized)
+		if err != nil {
+			return nil, fmt.Errorf("report: marshal sanitized html: %w", err)
+		}
+		m[key] = json.RawMessage(encoded)
+	}
+
+	result, err := json.Marshal(m)
+	if err != nil {
+		return params, fmt.Errorf("report: marshal sanitized params: %w", err)
+	}
+	return json.RawMessage(result), nil
+}
 
 // validateColoursJSON checks that a colours JSON object contains valid
 // hex colour values. Both "primary" and "secondary" are optional; when

@@ -518,3 +518,66 @@ presence focus stripping, hub-level Allow filter, standard-engagement passthroug
 
 `e2e/specs/blind-mode.spec.ts` — end-to-end: blue cannot GET unrevealed steps, cannot list
 them, cannot see red's focus on them, and can see them after reveal.
+
+
+---
+
+## Report HTML sanitization
+
+User-authored rich text reaches a **client-facing published page** (M6-011 publish,
+M6-012 share). The server is the control plane — client-side sanitization (TipTap
+extension allowlist, DOMPurify in the builder preview) is convenience, not safety.
+
+### Threat model
+
+**Stored XSS via share.** An engagement member drafts a report containing malicious
+HTML in a `rich_text`, `executive_summary`, or `scope_roe` block. The report is
+published. A client or guest opens the share page. If the HTML were served
+un-sanitized, the attacker's script executes in the viewer's browser under the
+deployment's origin — reading the rendered report, exfiltrating it, or
+impersonating the viewer.
+
+**Defense in depth.** Three layers, all required:
+
+1. **Editor allowlist (client).** The TipTap editor (`web/src/features/reports/rich-text-editor.tsx`)
+   loads only the extensions corresponding to the server allowlist: headings,
+   bold/italic/code, lists, blockquote, and links. No image, table, or HTML-paste
+   extensions.
+2. **Write-time sanitization (server).** `internal/report/sanitize/Sanitize` runs
+   on every block write via `ReplaceBlocks` for any block whose `Definition`
+   declares `HTMLParamKeys`. Dirty HTML is stripped, never rejected.
+3. **Render-time sanitization (server).** The same policy is applied again when
+   rendering a published version (M6-009). If the database were ever edited
+   outside the application, the rendered page is still safe.
+
+### Policy
+
+| Element | Decision |
+|---|---|
+| **Allowed** | `p`, `h1`–`h3`, `ul`, `ol`, `li`, `strong`, `em`, `code`, `pre`, `blockquote`, `br` |
+| **Links** | `a[href]` — `http`, `https`, `mailto` only; `rel="noopener noreferrer nofollow"` forced |
+| **Denied** | `script`, `style`, `iframe`, `object`, `embed`, `form`, `img`, `video`, `audio`, `svg`, `canvas`, `input`, `button`, `select`, `textarea`, `link`, `meta` |
+| **Attributes** | Only `href` on `a`. No `style`, `class`, `id`, `data-*`, `on*` event handlers |
+| **URL schemes** | Only `http`, `https`, `mailto`. `javascript:`, `data:`, `vbscript:` stripped |
+
+The policy is defined in a single place (`internal/report/sanitize/sanitize.go`).
+Adding a new element to the report HTML surface requires a deliberate change to
+that policy — the default is deny.
+
+### Limits
+
+- **100 KiB** raw HTML per field before sanitization (`MaxHTMLBytes`). Larger
+  input is rejected with `validation_failed`.
+- CSP (`docs/http.md`) already forbids inline scripts via `script-src`. Report HTML
+  does not require weakening CSP.
+
+### Tests
+
+`internal/report/sanitize/sanitize_test.go`:
+
+- **22 malicious payloads** stripped: script tags, img onerror, javascript href,
+  iframe, inline style, SVG, object/embed, form inputs, data URLs, event handlers,
+  CSS expressions, meta refresh, nested attacks.
+- **12 safe HTML fixtures** pass through idempotently.
+- **8 link scheme tests** — http/https/mailto preserved, javascript/data/vbscript/empty stripped.
+- **Fuzz test** — never panics, never contains forbidden tag/attribute patterns.

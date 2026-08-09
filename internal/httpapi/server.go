@@ -586,12 +586,22 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 	// Report drafting (M6-002).
 	reportRegistry := report.NewRegistry()
+	// HTML-storing blocks (M6-005): param keys whose values are
+	// sanitized on write. M6-006 replaces these stubs with full
+	// definitions including ParamSchema.
+	htmlParamKeys := map[report.ID][]string{
+		report.IDRichText:         {"html"},
+		report.IDExecutiveSummary: {"body"},
+		report.IDScopeRoE:         {"body"},
+	}
 	for _, id := range report.AllBlockIDs() {
-		// Register stub blocks — concrete definitions arrive in M6-006–M6-008.
-		// Until then every block id is known but has an empty param schema.
+		// Register stub blocks — concrete definitions arrive in
+		// M6-006–M6-008. Until then every block id is known but
+		// has an empty param schema.
 		reportRegistry.Register(report.Definition{
-			ID:    id,
-			Title: string(id),
+			ID:            id,
+			Title:         string(id),
+			HTMLParamKeys: htmlParamKeys[id],
 		})
 	}
 	reportRepo := storereport.NewReports(deps.Store)

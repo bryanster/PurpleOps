@@ -2976,7 +2976,10 @@ type ReportBlock struct {
 type ReportBlockInput struct {
 	BlockId string `json:"blockId"`
 
-	// Params Block parameters. Defaults used from registry when absent.
+	// Params Block parameters, validated against the registry's ParamSchema.
+	// Defaults are used from the registry when absent.
+	// HTML content within params (e.g. rich_text body) is limited to
+	// 100 KiB raw and sanitized server-side on write (M6-005).
 	Params *map[string]interface{} `json:"params,omitempty"`
 }
 

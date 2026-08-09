@@ -5877,7 +5877,12 @@ export interface components {
         };
         ReportBlockInput: {
             blockId: string;
-            /** @description Block parameters. Defaults used from registry when absent. */
+            /**
+             * @description Block parameters, validated against the registry's ParamSchema.
+             *     Defaults are used from the registry when absent.
+             *     HTML content within params (e.g. rich_text body) is limited to
+             *     100 KiB raw and sanitized server-side on write (M6-005).
+             */
             params?: Record<string, never>;
         };
         ReportTemplate: {

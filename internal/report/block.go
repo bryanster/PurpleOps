@@ -38,6 +38,11 @@ type Definition struct {
 	// NeedsEvidenceOptIn controls whether this block must respect the
 	// publish-time evidence-inclusion flag (M6-011).
 	NeedsEvidenceOptIn bool
+
+	// HTMLParamKeys lists the param keys whose values are HTML and
+	// must be sanitized on write (M6-005). An empty slice means
+	// no params contain HTML.
+	HTMLParamKeys []string
 }
 
 // DataDep names a data dependency a block needs at render time.
