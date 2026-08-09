@@ -38,6 +38,10 @@ import { TokensPage } from '@/features/tokens/tokens-page'
 
 import { BuilderPage } from '@/features/reports/builder-page'
 import { ReportsPage } from '@/features/reports/reports-page'
+import { ClaimPage } from '@/features/reports/claim/claim-page'
+import { ViewPage } from '@/features/reports/claim/view-page'
+import { CLAIM_PATH, VIEW_PATH } from '@/features/reports/paths'
+
 
 import { NotFoundPage } from './not-found'
 
@@ -46,6 +50,10 @@ export function AppRoutes(): ReactNode {
     <Routes>
       <Route path={LOGIN_PATH} element={<LoginPage />} />
       <Route path={MFA_CHALLENGE_PATH} element={<MfaChallengePage />} />
+
+      <Route path={CLAIM_PATH} element={<ClaimPage />} />
+      <Route path={VIEW_PATH} element={<ViewPage />} />
+
 
       <Route element={<RequireAuth />}>
         <Route path={ENROLMENT_PATH} element={<EnrolmentPage />} />

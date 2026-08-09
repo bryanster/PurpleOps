@@ -40,10 +40,10 @@ links, copy claim URL once, confirm password/expiry.
 
 ## Acceptance criteria
 
-- [ ] Non-lead does not see active Publish as succeeding control.
-- [ ] Evidence default off visible in dialog.
-- [ ] After revoke, opening claim/view URL shows not-found page (404), not forbidden.
-- [ ] Claim URL copy works; secret not present in subsequent GET share list API.
+- [x] Non-lead does not see active Publish as succeeding control.
+- [x] Evidence default off visible in dialog.
+- [x] After revoke, opening claim/view URL shows not-found page (404), not forbidden.
+- [x] Claim URL copy works; secret not present in subsequent GET share list API.
 
 ## Tests
 
@@ -55,3 +55,14 @@ links, copy claim URL once, confirm password/expiry.
 
 - Second browser context must not reuse the lead session (Playwright storageState isolation).
 - Sanitize any user-facing error detail from claim failures (generic messages).
+
+
+## Implementation notes
+
+- Used `useCurrentUser()` (not `useSignedInUser()`) in ClaimPage since it runs outside the `RequireAuth` guard. `useSignedInUser()` throws when called outside the guard.
+- SharePanel manages token visibility: the share token is shown once via local state (`resultToken`, `resultUrl`), dismissed on user action, and never exposed through the share list API (the server never returns the token after creation).
+- Version HTML/PDF download links use `API_BASE_URL` constant (not raw `/api/v1/...` strings) to satisfy the `no-restricted-syntax` ESLint rule.
+- Claim and view routes (`/claim/:token`, `/view/:token`) are added outside `RequireAuth` since share endpoints use `security: []`; the claim page handles its own auth gate via `useCurrentUser()`.
+- The publish dialog's `handlePublished` callback refetches the report query to keep version count current. VersionsPanel and SharePanel use separate query keys to avoid cross-contamination with the draft report cache.
+- Component test covers: publish button presence, evidence checkbox default-off state, non-lead disable, closed-engagement disable, full-data statement visibility.
+- Playwright e2e test (`reports-share.spec.ts`) exercises the publish → share → claim → view → revoke → 404 path as specified. It is a thin precursor to M6-015 (full E2E thesis).

@@ -29,6 +29,16 @@ export type PatchReportTemplate = components['schemas']['PatchReportTemplate']
 export type ApplyTemplate = components['schemas']['ApplyTemplate']
 export type CreateTemplateFromReport = components['schemas']['CreateTemplateFromReport']
 export type ReportBranding = components['schemas']['ReportBranding']
+export type ReportVersion = components['schemas']['ReportVersion']
+export type PublishReport = components['schemas']['PublishReport']
+export type ReportShare = components['schemas']['ReportShare']
+export type ReportShareGrant = components['schemas']['ReportShareGrant']
+export type CreateReportShareBody = components['schemas']['CreateReportShare']
+export type CreateReportShareResult = components['schemas']['CreateReportShareResult']
+export type ReportShareInfo = components['schemas']['ReportShareInfo']
+export type ClaimReportShareBody = components['schemas']['ClaimReportShare']
+export type ClaimReportShareResult = components['schemas']['ClaimReportShareResult']
+
 
 // ── Query keys ───────────────────────────────────────────────────────────────
 
@@ -43,6 +53,13 @@ export const reportKeys = {
   branding: () => ['settings', 'report-branding'] as const,
   preview: (engagementId: string, reportId: string) =>
     [...reportKeys.detail(engagementId, reportId), 'preview'] as const,
+  versions: (engagementId: string, reportId: string) =>
+    [...reportKeys.list(engagementId), reportId, 'versions'] as const,
+  versionDetail: (engagementId: string, reportId: string, versionId: string) =>
+    [...reportKeys.versions(engagementId, reportId), versionId] as const,
+  shares: (versionId: string) => ['report-versions', versionId, 'shares'] as const,
+  shareInfo: (token: string) => ['report-views', token, 'info'] as const,
+  shareHtml: (token: string) => ['report-views', token, 'html'] as const,
 }
 
 // ── Reports ──────────────────────────────────────────────────────────────────
@@ -332,4 +349,249 @@ export function brandingQueryOptions() {
 
 export function useReportBranding(): UseQueryResult<ReportBranding> {
   return useQuery(brandingQueryOptions())
+}
+
+// ── Publish (M6-011) ─────────────────────────────────────────────────────────
+
+export function usePublishReport(): UseMutationResult<
+  ReportVersion,
+  Error,
+  { engagementId: string; reportId: string; body: PublishReport }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ engagementId, reportId, body }) =>
+      unwrap(
+        await api.POST('/engagements/{engagementId}/reports/{reportId}/publish', {
+          params: { path: { engagementId, reportId } },
+          body,
+        }),
+      ),
+    onSuccess: (_data, { engagementId, reportId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: reportKeys.versions(engagementId, reportId),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: reportKeys.detail(engagementId, reportId),
+      })
+    },
+  })
+}
+
+// ── Versions (M6-011) ────────────────────────────────────────────────────────
+
+export function versionsQueryOptions(engagementId: string | undefined, reportId: string | undefined) {
+  return queryOptions({
+    queryKey:
+      engagementId && reportId
+        ? reportKeys.versions(engagementId, reportId)
+        : reportKeys.all(''),
+    enabled: Boolean(engagementId && reportId),
+    queryFn: async () => {
+      if (!engagementId || !reportId) throw new Error('engagementId and reportId required')
+      return unwrap(
+        await api.GET('/engagements/{engagementId}/reports/{reportId}/versions', {
+          params: { path: { engagementId, reportId } },
+        }),
+      )
+    },
+  })
+}
+
+export function useVersions(
+  engagementId: string | undefined,
+  reportId: string | undefined,
+): UseQueryResult<ReportVersion[]> {
+  return useQuery(versionsQueryOptions(engagementId, reportId))
+}
+
+export function versionQueryOptions(
+  engagementId: string | undefined,
+  reportId: string | undefined,
+  versionId: string | undefined,
+) {
+  return queryOptions({
+    queryKey:
+      engagementId && reportId && versionId
+        ? reportKeys.versionDetail(engagementId, reportId, versionId)
+        : reportKeys.all(''),
+    enabled: Boolean(engagementId && reportId && versionId),
+    queryFn: async () => {
+      if (!engagementId || !reportId || !versionId)
+        throw new Error('engagementId, reportId, and versionId required')
+      return unwrap(
+        await api.GET('/engagements/{engagementId}/reports/{reportId}/versions/{versionId}', {
+          params: { path: { engagementId, reportId, versionId } },
+        }),
+      )
+    },
+  })
+}
+
+export function useVersion(
+  engagementId: string | undefined,
+  reportId: string | undefined,
+  versionId: string | undefined,
+): UseQueryResult<ReportVersion> {
+  return useQuery(versionQueryOptions(engagementId, reportId, versionId))
+}
+
+// ── Shares (M6-012) ──────────────────────────────────────────────────────────
+
+export function sharesQueryOptions(versionId: string | undefined) {
+  return queryOptions({
+    queryKey: versionId ? reportKeys.shares(versionId) : ['report-versions', ''],
+    enabled: Boolean(versionId),
+    queryFn: async () => {
+      if (!versionId) throw new Error('versionId required')
+      return unwrap(
+        await api.GET('/report-versions/{versionId}/shares', {
+          params: { path: { versionId } },
+        }),
+      )
+    },
+  })
+}
+
+export function useShares(versionId: string | undefined): UseQueryResult<ReportShare[]> {
+  return useQuery(sharesQueryOptions(versionId))
+}
+
+export function useCreateShare(): UseMutationResult<
+  CreateReportShareResult,
+  Error,
+  { versionId: string; body: CreateReportShareBody }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ versionId, body }) =>
+      unwrap(
+        await api.POST('/report-versions/{versionId}/shares', {
+          params: { path: { versionId } },
+          body,
+        }),
+      ),
+    onSuccess: (_data, { versionId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: reportKeys.shares(versionId),
+      })
+    },
+  })
+}
+
+export function useRevokeShare(): UseMutationResult<
+  void,
+  Error,
+  { shareId: string; versionId: string }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ shareId }) => {
+      unwrap(
+        await api.DELETE('/report-shares/{shareId}', {
+          params: { path: { shareId } },
+        }),
+      )
+    },
+    onSuccess: (_data, { versionId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: reportKeys.shares(versionId),
+      })
+    },
+  })
+}
+
+export function useRevokeGrant(): UseMutationResult<
+  void,
+  Error,
+  { shareId: string; grantId: string; versionId: string }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ shareId, grantId }) => {
+      unwrap(
+        await api.DELETE('/report-shares/{shareId}/grants/{grantId}', {
+          params: { path: { shareId, grantId } },
+        }),
+      )
+    },
+    onSuccess: (_data, { versionId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: reportKeys.shares(versionId),
+      })
+    },
+  })
+}
+
+// ── Share Views (public-ish) ─────────────────────────────────────────────────
+
+export function shareInfoQueryOptions(token: string | undefined) {
+  return queryOptions({
+    queryKey: token ? reportKeys.shareInfo(token) : ['report-views', '', 'info'],
+    enabled: Boolean(token),
+    queryFn: async () => {
+      if (!token) throw new Error('token required')
+      return unwrap(
+        await api.GET('/report-views/{token}', {
+          params: { path: { token } },
+        }),
+      )
+    },
+  })
+}
+
+export function useShareInfo(token: string | undefined): UseQueryResult<ReportShareInfo> {
+  return useQuery(shareInfoQueryOptions(token))
+}
+
+export function useClaimShare(): UseMutationResult<
+  ClaimReportShareResult,
+  Error,
+  { token: string; body?: ClaimReportShareBody }
+> {
+  return useMutation({
+    mutationFn: async ({ token, body }) =>
+      unwrap(
+        await api.POST('/report-views/{token}/claim', {
+          params: { path: { token } },
+          body: body ?? ({})
+        }),
+      ),
+  })
+}
+
+export function useVerifySharePassword(): UseMutationResult<
+  void,
+  Error,
+  { token: string; password: string }
+> {
+  return useMutation({
+    mutationFn: async ({ token, password }) => {
+      unwrap(
+        await api.POST('/report-views/{token}/password', {
+          params: { path: { token } },
+          body: { password },
+        }),
+      )
+    },
+  })
+}
+
+export function shareHtmlQueryOptions(token: string | undefined) {
+  return queryOptions({
+    queryKey: token ? reportKeys.shareHtml(token) : ['report-views', '', 'html'],
+    enabled: Boolean(token),
+    queryFn: async () => {
+      if (!token) throw new Error('token required')
+      return unwrap(
+        await api.GET('/report-views/{token}/html', {
+          params: { path: { token } },
+        }),
+      )
+    },
+  })
+}
+
+export function useShareHtml(token: string | undefined): UseQueryResult<string> {
+  return useQuery(shareHtmlQueryOptions(token))
 }

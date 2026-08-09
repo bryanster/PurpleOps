@@ -62,8 +62,13 @@ import {
   useTemplates,
   type Report,
   type ReportBlockInput,
+  type ReportVersion,
+
 } from './queries'
 import { ReportSettingsPanel } from './report-settings-panel'
+import { PublishDialog } from './publish/publish-dialog'
+import { VersionsPanel } from './publish/versions-panel'
+
 
 export function BuilderPage(): ReactNode {
   const { engagementId, reportId } = useParams<{
@@ -154,6 +159,13 @@ export function BuilderPage(): ReactNode {
     }
   }, [eid, rid, localBlocks, putBlocks])
 
+  const handlePublished = useCallback(
+    (_version: ReportVersion) => {
+      void report.refetch()
+    },
+    [report],
+  )
+
   if (report.isPending) return <PageLoading label="Loading report…" />
   if (report.error) {
     return (
@@ -193,6 +205,12 @@ export function BuilderPage(): ReactNode {
             )}
             {showPreview ? 'Hide preview' : 'Preview'}
           </Button>
+          <PublishDialog
+            report={reportData}
+            engagementId={eid}
+            onPublished={handlePublished}
+          />
+          <VersionsPanel engagementId={eid} reportId={rid} />
           <Button
             size="sm"
             onClick={() => {
