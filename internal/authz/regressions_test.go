@@ -134,6 +134,14 @@ func TestRegression_ObserverCannotWrite(t *testing.T) {
 		t.Errorf("an observer cannot comment: %s\nReading and commenting is the seat; a seat that cannot "+
 			"comment is not the one this role was for.", decision.Reason)
 	}
+
+	// Observer also holds report.write (M6-002): drafting a report is exactly
+	// the kind of contribution an observer seat is for.
+	if decision := authz.Can(t.Context(),
+		sessionSubject(authz.PlatformRoleMember, authz.EngagementRoleObserver),
+		authz.ActionReportWrite, resourceFor(t, authz.ActionReportWrite)); !decision.Allowed {
+		t.Errorf("an observer cannot write a report draft: %s\nDrafting reports is a seat for every member.", decision.Reason)
+	}
 }
 
 // TestRegression_BlueCannotWriteRedFields is v1's two contradictory definitions

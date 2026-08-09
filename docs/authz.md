@@ -79,6 +79,7 @@ a role held elsewhere grants nothing here. A non-member is refused with a 404.
 | `finding.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `engagements:read` | Read findings in an engagement. Same membership as engagement.read. |
 | `report.read` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `reports:read` | Read and export an engagement's reports. |
 | `report.publish` | ✓ | ✓ | · | · | · | · | `reports:write` | Publish a report, which is the act that makes it somebody else's evidence. |
+| `report.write` | ✓ | ✓ | ✓ | ✓ | ✓ | · | `reports:write` | Create and edit report drafts. Every member of the engagement may draft. |
 
 ## Guards
 

@@ -277,6 +277,9 @@ var rules = []Rule{
 	{Action: ActionReportPublish, Name: "report.publish", Resource: ResourceReport,
 		Platform: admins, Engagement: leadOnly, Token: TokenScopeReportsWrite,
 		Summary: "Publish a report, which is the act that makes it somebody else's evidence."},
+	{Action: ActionReportWrite, Name: "report.write", Resource: ResourceReport,
+		Platform: admins, Engagement: allMembers, Token: TokenScopeReportsWrite,
+		Summary: "Create and edit report drafts. Every member of the engagement may draft."},
 }
 
 // Rules returns the permission model. docs/authz.md and the permission matrix

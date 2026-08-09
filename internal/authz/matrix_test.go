@@ -572,6 +572,23 @@ var matrix = []row{
 	},
 
 	{
+		Action: authz.ActionReportWrite, Resource: authz.ResourceReport,
+		Scope: authz.TokenScopeReportsWrite, Token: tokensMayHoldIt,
+		Standard: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindRevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+		BlindUnrevealed: seats{
+			Admin:  bySeat{allow, allow, allow, allow, allow},
+			Member: bySeat{deny404, allow, allow, allow, allow},
+		},
+	},
+
+	{
 		// workbook.write (M3-004): lead + red write the workbook (scenarios,
 		// steps and their contents). Blue and observer do not.
 		Action: authz.ActionWorkbookWrite, Resource: authz.ResourceEngagement,

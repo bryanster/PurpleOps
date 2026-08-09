@@ -153,6 +153,12 @@ const (
 	VerbFindingUpdated      Verb = "finding.updated"
 	VerbFindingDeleted      Verb = "finding.deleted"
 	VerbFindingStepsChanged Verb = "finding.steps_changed"
+
+	// Report lifecycle (M6-002). Object is the report row;
+	// engagement_id names which engagement the report belongs to.
+	VerbReportCreated Verb = "report.created"
+	VerbReportUpdated Verb = "report.updated"
+	VerbReportDeleted Verb = "report.deleted"
 )
 
 // Object types naming what a verb acted on. Kept as constants so a typo is a
@@ -176,6 +182,8 @@ const (
 	ObjectMember = "member"
 
 	ObjectExecution = "execution"
+
+	ObjectReport = "report"
 
 	ObjectFinding  = "finding"
 	ObjectEvidence = "evidence"

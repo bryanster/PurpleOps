@@ -602,6 +602,18 @@ var csrfCoverage = map[string]struct {
 		body: `{"presenceId":"00000000-0000-0000-0000-000000000001"}`,
 	},
 	"DELETE " + BasePath + "/engagements/{engagementId}/presence": {},
+
+	// Reports (M6-002).
+	"POST " + BasePath + "/engagements/{engagementId}/reports": {
+		body: `{}`,
+	},
+	"PATCH " + BasePath + "/engagements/{engagementId}/reports/{reportId}": {
+		body: `{"title":"Updated"}`,
+	},
+	"DELETE " + BasePath + "/engagements/{engagementId}/reports/{reportId}": {},
+	"PUT " + BasePath + "/engagements/{engagementId}/reports/{reportId}/blocks": {
+		body: `{"blocks":[]}`,
+	},
 }
 
 // The two media types the walks send.

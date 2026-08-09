@@ -130,14 +130,16 @@ func TestTheRegressionsAreAbsences(t *testing.T) {
 		}
 	}
 
-	// The Spectator fall-through: observer holds exactly one write, and it is
-	// commenting.
+	// The Spectator fall-through: observer holds exactly two writes, and they
+	// are commenting and report drafting.
 	for _, rule := range authz.Rules() {
 		if !grantsEngagement(rule, authz.EngagementRoleObserver) {
 			continue
 		}
-		if isWrite(rule.Name) && rule.Action != authz.ActionCommentWrite {
-			t.Errorf("%s grants to observer — an observer reads and comments and writes nothing else", rule.Name)
+		if isWrite(rule.Name) &&
+			rule.Action != authz.ActionCommentWrite &&
+			rule.Action != authz.ActionReportWrite {
+			t.Errorf("%s grants to observer — an observer reads, comments, and drafts reports", rule.Name)
 		}
 	}
 

@@ -6087,6 +6087,226 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  # ── Reports (M6) ──────────────────────────────────────────────
+
+  /engagements/{engagementId}/reports:
+    get:
+      operationId: listReports
+      summary: List reports for an engagement.
+      description: |
+        Members and platform administrators. Returns every report in the
+        engagement.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      responses:
+        "200":
+          description: The engagement's reports.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createReport
+      summary: Create a new report draft in an engagement.
+      description: |
+        Every member of the engagement and platform administrators.
+        The draft starts empty (no blocks); blocks are added via the
+        blocks endpoint.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: engagementId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReport"
+      responses:
+        "201":
+          description: The created report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}:
+    get:
+      operationId: getReport
+      summary: Return one report.
+      description: |
+        Members and platform administrators. A non-member receives 404.
+      tags:
+        - reports
+      x-authz-action: report.read
+      x-authz-resource:
+        type: report
+        engagement: reportId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: patchReport
+      summary: Patch report fields.
+      description: |
+        Every member of the engagement and platform administrators.
+        Every field is optional; only the ones present are changed.
+        Branding fields override install defaults (M6-004); explicit null
+        clears the override.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: reportId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchReport"
+      responses:
+        "200":
+          description: The patched report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteReport
+      summary: Delete a report and its draft blocks.
+      description: |
+        Every member of the engagement and platform administrators.
+        Cascades to all report_block rows.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: reportId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+      responses:
+        "204":
+          description: The report and its blocks are deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /engagements/{engagementId}/reports/{reportId}/blocks:
+    put:
+      operationId: putReportBlocks
+      summary: Replace the complete ordered list of draft blocks.
+      description: |
+        Every member of the engagement and platform administrators.
+        The request body is a complete ordered replacement of blocks
+        for the draft. An empty array is valid (clear all blocks).
+        Block ids are validated against the server's block registry;
+        unknown ids return 400. Params are validated per-block.
+      tags:
+        - reports
+      x-authz-action: report.write
+      x-authz-resource:
+        type: report
+        engagement: reportId
+      parameters:
+        - $ref: "#/components/parameters/EngagementId"
+        - $ref: "#/components/parameters/ReportId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutReportBlocks"
+      responses:
+        "200":
+          description: The report with its blocks set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
 components:
 
   securitySchemes:
@@ -6243,6 +6463,15 @@ components:
       in: path
       required: true
       description: Finding surrogate id (UUIDv7).
+      schema:
+        type: string
+        format: uuid
+
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      description: The report being read or changed.
       schema:
         type: string
         format: uuid
@@ -11124,3 +11353,116 @@ components:
         value:
           type: string
       additionalProperties: false
+
+    # ── M6 reports ───────────────────────────────────────────────
+
+    ReportBlock:
+      type: object
+      required:
+        - id
+        - ordinal
+        - blockId
+        - params
+      properties:
+        id:
+          type: string
+          format: uuid
+        ordinal:
+          type: integer
+          minimum: 0
+        blockId:
+          type: string
+          description: Stable block id from the catalogue (e.g. "cover", "rich_text").
+        params:
+          type: object
+          description: Block parameters, validated against the registry's ParamSchema.
+      additionalProperties: false
+
+    Report:
+      type: object
+      required:
+        - id
+        - engagementId
+        - title
+        - createdBy
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        engagementId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 500
+        clientName:
+          type: [string, "null"]
+        logoBlobRef:
+          type: [string, "null"]
+        colours:
+          type: [object, "null"]
+          description: Nullable JSON object with optional primary/secondary hex colours.
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: [string, "null"]
+        updatedAt:
+          type: string
+          format: date-time
+        blocks:
+          type: array
+          description: Draft blocks in ordinal order. Present in GET /reports/{reportId} responses; absent from list endpoints.
+          items:
+            $ref: "#/components/schemas/ReportBlock"
+      additionalProperties: false
+
+    CreateReport:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+      additionalProperties: false
+
+    PatchReport:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        clientName:
+          type: [string, "null"]
+        logoBlobRef:
+          type: [string, "null"]
+        colours:
+          type: [object, "null"]
+      additionalProperties: false
+
+    PutReportBlocks:
+      type: object
+      required:
+        - blocks
+      properties:
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportBlockInput"
+      additionalProperties: false
+
+    ReportBlockInput:
+      type: object
+      required:
+        - blockId
+      properties:
+        blockId:
+          type: string
+        params:
+          type: object
+          description: Block parameters. Defaults used from registry when absent.
+      additionalProperties: false
+

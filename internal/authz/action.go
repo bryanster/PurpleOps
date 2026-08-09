@@ -77,6 +77,8 @@ const (
 	ActionFindingRead
 	ActionReportRead
 	ActionReportPublish
+
+	ActionReportWrite
 	ActionWorkbookWrite
 
 	ActionEvidenceRead

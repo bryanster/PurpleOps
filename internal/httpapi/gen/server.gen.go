@@ -1908,6 +1908,11 @@ type CreateEngagement struct {
 	StartsOn *openapi_types.Date `json:"startsOn,omitempty"`
 }
 
+// CreateReport defines model for CreateReport.
+type CreateReport struct {
+	Title *string `json:"title,omitempty"`
+}
+
 // CreateScenario defines model for CreateScenario.
 type CreateScenario struct {
 	Name      string  `json:"name"`
@@ -2687,6 +2692,14 @@ type PatchMember struct {
 	Role EngagementRole `json:"role"`
 }
 
+// PatchReport defines model for PatchReport.
+type PatchReport struct {
+	ClientName  nullable.Nullable[string]                 `json:"clientName,omitempty"`
+	Colours     nullable.Nullable[map[string]interface{}] `json:"colours,omitempty"`
+	LogoBlobRef nullable.Nullable[string]                 `json:"logoBlobRef,omitempty"`
+	Title       *string                                   `json:"title,omitempty"`
+}
+
 // PatchScenario Every field is optional; only the ones present are changed.
 type PatchScenario struct {
 	Name        *string `json:"name,omitempty"`
@@ -2825,6 +2838,11 @@ type ProblemCode string
 // Protection Blue-side prevention rating.
 type Protection string
 
+// PutReportBlocks defines model for PutReportBlocks.
+type PutReportBlocks struct {
+	Blocks []ReportBlockInput `json:"blocks"`
+}
+
 // RecoveryCodeRequest Body of `POST /auth/mfa/recovery/verify`: one recovery code, as the
 // person has it written down.
 type RecoveryCodeRequest struct {
@@ -2902,6 +2920,43 @@ type ReorderScenarios struct {
 type ReorderSteps struct {
 	// Ids Ordered list of step ids. Every step in the scenario must appear exactly once. Ordinals are reassigned 1..N to match this order.
 	Ids []openapi_types.UUID `json:"ids"`
+}
+
+// Report defines model for Report.
+type Report struct {
+	// Blocks Draft blocks in ordinal order. Present in GET /reports/{reportId} responses; absent from list endpoints.
+	Blocks     *[]ReportBlock            `json:"blocks,omitempty"`
+	ClientName nullable.Nullable[string] `json:"clientName,omitempty"`
+
+	// Colours Nullable JSON object with optional primary/secondary hex colours.
+	Colours      nullable.Nullable[map[string]interface{}] `json:"colours,omitempty"`
+	CreatedAt    time.Time                                 `json:"createdAt"`
+	CreatedBy    string                                    `json:"createdBy"`
+	EngagementId openapi_types.UUID                        `json:"engagementId"`
+	Id           openapi_types.UUID                        `json:"id"`
+	LogoBlobRef  nullable.Nullable[string]                 `json:"logoBlobRef,omitempty"`
+	Title        string                                    `json:"title"`
+	UpdatedAt    time.Time                                 `json:"updatedAt"`
+	UpdatedBy    nullable.Nullable[string]                 `json:"updatedBy,omitempty"`
+}
+
+// ReportBlock defines model for ReportBlock.
+type ReportBlock struct {
+	// BlockId Stable block id from the catalogue (e.g. "cover", "rich_text").
+	BlockId string             `json:"blockId"`
+	Id      openapi_types.UUID `json:"id"`
+	Ordinal int                `json:"ordinal"`
+
+	// Params Block parameters, validated against the registry's ParamSchema.
+	Params map[string]interface{} `json:"params"`
+}
+
+// ReportBlockInput defines model for ReportBlockInput.
+type ReportBlockInput struct {
+	BlockId string `json:"blockId"`
+
+	// Params Block parameters. Defaults used from registry when absent.
+	Params *map[string]interface{} `json:"params,omitempty"`
 }
 
 // ReprocessContentSourceRequest Optional pin for which raw snapshot to reprocess. Additional properties
@@ -3547,6 +3602,9 @@ type FindingId = openapi_types.UUID
 
 // Limit defines model for Limit.
 type Limit = int
+
+// ReportId defines model for ReportId.
+type ReportId = openapi_types.UUID
 
 // ScenarioId defines model for ScenarioId.
 type ScenarioId = openapi_types.UUID
@@ -5107,6 +5165,15 @@ type PatchEngagementMemberJSONRequestBody = PatchMember
 // PutEngagementPresenceJSONRequestBody defines body for PutEngagementPresence for application/json ContentType.
 type PutEngagementPresenceJSONRequestBody = PresenceHeartbeat
 
+// CreateReportJSONRequestBody defines body for CreateReport for application/json ContentType.
+type CreateReportJSONRequestBody = CreateReport
+
+// PatchReportJSONRequestBody defines body for PatchReport for application/json ContentType.
+type PatchReportJSONRequestBody = PatchReport
+
+// PutReportBlocksJSONRequestBody defines body for PutReportBlocks for application/json ContentType.
+type PutReportBlocksJSONRequestBody = PutReportBlocks
+
 // CreateScenarioJSONRequestBody defines body for CreateScenario for application/json ContentType.
 type CreateScenarioJSONRequestBody = CreateScenario
 
@@ -5469,6 +5536,24 @@ type ServerInterface interface {
 	// PutEngagementPresence Report this user's presence in an engagement.
 	// (PUT /engagements/{engagementId}/presence)
 	PutEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params PutEngagementPresenceParams)
+	// ListReports List reports for an engagement.
+	// (GET /engagements/{engagementId}/reports)
+	ListReports(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// CreateReport Create a new report draft in an engagement.
+	// (POST /engagements/{engagementId}/reports)
+	CreateReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
+	// DeleteReport Delete a report and its draft blocks.
+	// (DELETE /engagements/{engagementId}/reports/{reportId})
+	DeleteReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
+	// GetReport Return one report.
+	// (GET /engagements/{engagementId}/reports/{reportId})
+	GetReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
+	// PatchReport Patch report fields.
+	// (PATCH /engagements/{engagementId}/reports/{reportId})
+	PatchReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
+	// PutReportBlocks Replace the complete ordered list of draft blocks.
+	// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
+	PutReportBlocks(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId)
 	// ListScenarios List every scenario in an engagement.
 	// (GET /engagements/{engagementId}/scenarios)
 	ListScenarios(w http.ResponseWriter, r *http.Request, engagementId EngagementId)
@@ -6225,6 +6310,42 @@ func (_ Unimplemented) GetEngagementPresence(w http.ResponseWriter, r *http.Requ
 // PutEngagementPresence Report this user's presence in an engagement.
 // (PUT /engagements/{engagementId}/presence)
 func (_ Unimplemented) PutEngagementPresence(w http.ResponseWriter, r *http.Request, engagementId EngagementId, params PutEngagementPresenceParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListReports List reports for an engagement.
+// (GET /engagements/{engagementId}/reports)
+func (_ Unimplemented) ListReports(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateReport Create a new report draft in an engagement.
+// (POST /engagements/{engagementId}/reports)
+func (_ Unimplemented) CreateReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteReport Delete a report and its draft blocks.
+// (DELETE /engagements/{engagementId}/reports/{reportId})
+func (_ Unimplemented) DeleteReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetReport Return one report.
+// (GET /engagements/{engagementId}/reports/{reportId})
+func (_ Unimplemented) GetReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PatchReport Patch report fields.
+// (PATCH /engagements/{engagementId}/reports/{reportId})
+func (_ Unimplemented) PatchReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutReportBlocks Replace the complete ordered list of draft blocks.
+// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
+func (_ Unimplemented) PutReportBlocks(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10897,6 +11018,198 @@ func (siw *ServerInterfaceWrapper) PutEngagementPresence(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListReports operation middleware
+func (siw *ServerInterfaceWrapper) ListReports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReports(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateReport operation middleware
+func (siw *ServerInterfaceWrapper) CreateReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReport(w, r, engagementId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteReport operation middleware
+func (siw *ServerInterfaceWrapper) DeleteReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteReport(w, r, engagementId, reportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReport operation middleware
+func (siw *ServerInterfaceWrapper) GetReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReport(w, r, engagementId, reportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchReport operation middleware
+func (siw *ServerInterfaceWrapper) PatchReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchReport(w, r, engagementId, reportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutReportBlocks operation middleware
+func (siw *ServerInterfaceWrapper) PutReportBlocks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "engagementId" -------------
+	var engagementId EngagementId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "engagementId", chi.URLParam(r, "engagementId"), &engagementId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "engagementId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "reportId" -------------
+	var reportId ReportId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reportId", chi.URLParam(r, "reportId"), &reportId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reportId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutReportBlocks(w, r, engagementId, reportId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListScenarios operation middleware
 func (siw *ServerInterfaceWrapper) ListScenarios(w http.ResponseWriter, r *http.Request) {
 
@@ -13030,6 +13343,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/engagements/{engagementId}/archive", wrapper.ExportEngagementArchive)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/reports", wrapper.ListReports)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/engagements/{engagementId}/reports", wrapper.CreateReport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}", wrapper.DeleteReport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}", wrapper.GetReport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}", wrapper.PatchReport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/engagements/{engagementId}/reports/{reportId}/blocks", wrapper.PutReportBlocks)
 	})
 
 	return r
@@ -22989,6 +23320,619 @@ func (response PutEngagementPresence500ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ListReportsRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+}
+
+type ListReportsResponseObject interface {
+	VisitListReportsResponse(w http.ResponseWriter) error
+}
+
+type ListReports200JSONResponse []Report
+
+func (response ListReports200JSONResponse) VisitListReportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReports400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListReports400ApplicationProblemPlusJSONResponse) VisitListReportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReports401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListReports401ApplicationProblemPlusJSONResponse) VisitListReportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReports403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListReports403ApplicationProblemPlusJSONResponse) VisitListReportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReports404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListReports404ApplicationProblemPlusJSONResponse) VisitListReportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReports500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListReports500ApplicationProblemPlusJSONResponse) VisitListReportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	Body         *CreateReportJSONRequestBody
+}
+
+type CreateReportResponseObject interface {
+	VisitCreateReportResponse(w http.ResponseWriter) error
+}
+
+type CreateReport201JSONResponse Report
+
+func (response CreateReport201JSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReport400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReport400ApplicationProblemPlusJSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReport401ApplicationProblemPlusJSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReport403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReport403ApplicationProblemPlusJSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReport404ApplicationProblemPlusJSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReport500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReport500ApplicationProblemPlusJSONResponse) VisitCreateReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReportRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+}
+
+type DeleteReportResponseObject interface {
+	VisitDeleteReportResponse(w http.ResponseWriter) error
+}
+
+type DeleteReport204Response struct {
+}
+
+func (response DeleteReport204Response) VisitDeleteReportResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteReport400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReport400ApplicationProblemPlusJSONResponse) VisitDeleteReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReport401ApplicationProblemPlusJSONResponse) VisitDeleteReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReport403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReport403ApplicationProblemPlusJSONResponse) VisitDeleteReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReport404ApplicationProblemPlusJSONResponse) VisitDeleteReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteReport500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteReport500ApplicationProblemPlusJSONResponse) VisitDeleteReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+}
+
+type GetReportResponseObject interface {
+	VisitGetReportResponse(w http.ResponseWriter) error
+}
+
+type GetReport200JSONResponse Report
+
+func (response GetReport200JSONResponse) VisitGetReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReport400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetReport400ApplicationProblemPlusJSONResponse) VisitGetReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetReport401ApplicationProblemPlusJSONResponse) VisitGetReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReport403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetReport403ApplicationProblemPlusJSONResponse) VisitGetReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetReport404ApplicationProblemPlusJSONResponse) VisitGetReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReport500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReport500ApplicationProblemPlusJSONResponse) VisitGetReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReportRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+	Body         *PatchReportJSONRequestBody
+}
+
+type PatchReportResponseObject interface {
+	VisitPatchReportResponse(w http.ResponseWriter) error
+}
+
+type PatchReport200JSONResponse Report
+
+func (response PatchReport200JSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReport400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReport400ApplicationProblemPlusJSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReport401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReport401ApplicationProblemPlusJSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReport403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReport403ApplicationProblemPlusJSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReport404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReport404ApplicationProblemPlusJSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PatchReport500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PatchReport500ApplicationProblemPlusJSONResponse) VisitPatchReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutReportBlocksRequestObject struct {
+	EngagementId EngagementId `json:"engagementId"`
+	ReportId     ReportId     `json:"reportId"`
+	Body         *PutReportBlocksJSONRequestBody
+}
+
+type PutReportBlocksResponseObject interface {
+	VisitPutReportBlocksResponse(w http.ResponseWriter) error
+}
+
+type PutReportBlocks200JSONResponse Report
+
+func (response PutReportBlocks200JSONResponse) VisitPutReportBlocksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutReportBlocks400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response PutReportBlocks400ApplicationProblemPlusJSONResponse) VisitPutReportBlocksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutReportBlocks401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response PutReportBlocks401ApplicationProblemPlusJSONResponse) VisitPutReportBlocksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutReportBlocks403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PutReportBlocks403ApplicationProblemPlusJSONResponse) VisitPutReportBlocksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutReportBlocks404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PutReportBlocks404ApplicationProblemPlusJSONResponse) VisitPutReportBlocksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutReportBlocks500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response PutReportBlocks500ApplicationProblemPlusJSONResponse) VisitPutReportBlocksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListScenariosRequestObject struct {
 	EngagementId EngagementId `json:"engagementId"`
 }
@@ -27472,6 +28416,24 @@ type StrictServerInterface interface {
 	// PutEngagementPresence Report this user's presence in an engagement.
 	// (PUT /engagements/{engagementId}/presence)
 	PutEngagementPresence(ctx context.Context, request PutEngagementPresenceRequestObject) (PutEngagementPresenceResponseObject, error)
+	// ListReports List reports for an engagement.
+	// (GET /engagements/{engagementId}/reports)
+	ListReports(ctx context.Context, request ListReportsRequestObject) (ListReportsResponseObject, error)
+	// CreateReport Create a new report draft in an engagement.
+	// (POST /engagements/{engagementId}/reports)
+	CreateReport(ctx context.Context, request CreateReportRequestObject) (CreateReportResponseObject, error)
+	// DeleteReport Delete a report and its draft blocks.
+	// (DELETE /engagements/{engagementId}/reports/{reportId})
+	DeleteReport(ctx context.Context, request DeleteReportRequestObject) (DeleteReportResponseObject, error)
+	// GetReport Return one report.
+	// (GET /engagements/{engagementId}/reports/{reportId})
+	GetReport(ctx context.Context, request GetReportRequestObject) (GetReportResponseObject, error)
+	// PatchReport Patch report fields.
+	// (PATCH /engagements/{engagementId}/reports/{reportId})
+	PatchReport(ctx context.Context, request PatchReportRequestObject) (PatchReportResponseObject, error)
+	// PutReportBlocks Replace the complete ordered list of draft blocks.
+	// (PUT /engagements/{engagementId}/reports/{reportId}/blocks)
+	PutReportBlocks(ctx context.Context, request PutReportBlocksRequestObject) (PutReportBlocksResponseObject, error)
 	// ListScenarios List every scenario in an engagement.
 	// (GET /engagements/{engagementId}/scenarios)
 	ListScenarios(ctx context.Context, request ListScenariosRequestObject) (ListScenariosResponseObject, error)
@@ -30604,6 +31566,187 @@ func (sh *strictHandler) PutEngagementPresence(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutEngagementPresenceResponseObject); ok {
 		if err := validResponse.VisitPutEngagementPresenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListReports operation middleware
+func (sh *strictHandler) ListReports(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request ListReportsRequestObject
+
+	request.EngagementId = engagementId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListReports(ctx, request.(ListReportsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListReports")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListReportsResponseObject); ok {
+		if err := validResponse.VisitListReportsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateReport operation middleware
+func (sh *strictHandler) CreateReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId) {
+	var request CreateReportRequestObject
+
+	request.EngagementId = engagementId
+
+	var body CreateReportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateReport(ctx, request.(CreateReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateReportResponseObject); ok {
+		if err := validResponse.VisitCreateReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteReport operation middleware
+func (sh *strictHandler) DeleteReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	var request DeleteReportRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteReport(ctx, request.(DeleteReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteReportResponseObject); ok {
+		if err := validResponse.VisitDeleteReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReport operation middleware
+func (sh *strictHandler) GetReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	var request GetReportRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReport(ctx, request.(GetReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportResponseObject); ok {
+		if err := validResponse.VisitGetReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchReport operation middleware
+func (sh *strictHandler) PatchReport(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	var request PatchReportRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+
+	var body PatchReportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchReport(ctx, request.(PatchReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchReportResponseObject); ok {
+		if err := validResponse.VisitPatchReportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutReportBlocks operation middleware
+func (sh *strictHandler) PutReportBlocks(w http.ResponseWriter, r *http.Request, engagementId EngagementId, reportId ReportId) {
+	var request PutReportBlocksRequestObject
+
+	request.EngagementId = engagementId
+	request.ReportId = reportId
+
+	var body PutReportBlocksJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutReportBlocks(ctx, request.(PutReportBlocksRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutReportBlocks")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutReportBlocksResponseObject); ok {
+		if err := validResponse.VisitPutReportBlocksResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

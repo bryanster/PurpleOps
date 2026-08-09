@@ -17,6 +17,7 @@ import (
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/evidence"
 
+	"github.com/bryanster/blacklight/internal/report"
 	"github.com/bryanster/blacklight/internal/analytics"
 
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -131,6 +132,9 @@ type handlers struct {
 
 	// analytics answers the aggregate questions M5 asks (M5-001).
 	analytics *analytics.Queries
+
+	// reports is the report building and drafting service (M6-002).
+	reports *report.Service
 
 	log *slog.Logger
 }

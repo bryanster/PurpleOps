@@ -3183,6 +3183,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagements/{engagementId}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List reports for an engagement.
+         * @description Members and platform administrators. Returns every report in the
+         *     engagement.
+         */
+        get: operations["listReports"];
+        put?: never;
+        /**
+         * Create a new report draft in an engagement.
+         * @description Every member of the engagement and platform administrators.
+         *     The draft starts empty (no blocks); blocks are added via the
+         *     blocks endpoint.
+         */
+        post: operations["createReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one report.
+         * @description Members and platform administrators. A non-member receives 404.
+         */
+        get: operations["getReport"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a report and its draft blocks.
+         * @description Every member of the engagement and platform administrators.
+         *     Cascades to all report_block rows.
+         */
+        delete: operations["deleteReport"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch report fields.
+         * @description Every member of the engagement and platform administrators.
+         *     Every field is optional; only the ones present are changed.
+         *     Branding fields override install defaults (M6-004); explicit null
+         *     clears the override.
+         */
+        patch: operations["patchReport"];
+        trace?: never;
+    };
+    "/engagements/{engagementId}/reports/{reportId}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the complete ordered list of draft blocks.
+         * @description Every member of the engagement and platform administrators.
+         *     The request body is a complete ordered replacement of blocks
+         *     for the draft. An empty array is valid (clear all blocks).
+         *     Block ids are validated against the server's block registry;
+         *     unknown ids return 400. Params are validated per-block.
+         */
+        put: operations["putReportBlocks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5570,6 +5653,51 @@ export interface components {
             name: string;
             value: string;
         };
+        ReportBlock: {
+            /** Format: uuid */
+            id: string;
+            ordinal: number;
+            /** @description Stable block id from the catalogue (e.g. "cover", "rich_text"). */
+            blockId: string;
+            /** @description Block parameters, validated against the registry's ParamSchema. */
+            params: Record<string, never>;
+        };
+        Report: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            engagementId: string;
+            title: string;
+            clientName?: string | null;
+            logoBlobRef?: string | null;
+            /** @description Nullable JSON object with optional primary/secondary hex colours. */
+            colours?: Record<string, never> | null;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            updatedBy?: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Draft blocks in ordinal order. Present in GET /reports/{reportId} responses; absent from list endpoints. */
+            blocks?: components["schemas"]["ReportBlock"][];
+        };
+        CreateReport: {
+            title?: string;
+        };
+        PatchReport: {
+            title?: string;
+            clientName?: string | null;
+            logoBlobRef?: string | null;
+            colours?: Record<string, never> | null;
+        };
+        PutReportBlocks: {
+            blocks: components["schemas"]["ReportBlockInput"][];
+        };
+        ReportBlockInput: {
+            blockId: string;
+            /** @description Block parameters. Defaults used from registry when absent. */
+            params?: Record<string, never>;
+        };
     };
     responses: {
         /** @description The request does not match this specification. `code` is `validation_failed`. */
@@ -5748,6 +5876,8 @@ export interface components {
         CommentId: string;
         /** @description Finding surrogate id (UUIDv7). */
         FindingId: string;
+        /** @description The report being read or changed. */
+        ReportId: string;
         /** @description Restrict the listing to accounts in this state. */
         UserStatusFilter: components["schemas"]["UserStatus"];
         /** @description Restrict the listing to accounts holding this platform role. */
@@ -11321,6 +11451,192 @@ export interface operations {
                 };
                 content: {
                     "application/zip": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listReports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The engagement's reports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReport"];
+            };
+        };
+        responses: {
+            /** @description The created report. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report and its blocks are deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patchReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchReport"];
+            };
+        };
+        responses: {
+            /** @description The patched report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putReportBlocks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The engagement whose activity is being listed. */
+                engagementId: components["parameters"]["EngagementId"];
+                /** @description The report being read or changed. */
+                reportId: components["parameters"]["ReportId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutReportBlocks"];
+            };
+        };
+        responses: {
+            /** @description The report with its blocks set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
                 };
             };
             400: components["responses"]["BadRequest"];

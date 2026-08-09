@@ -36,6 +36,8 @@ import (
 	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/events/presence"
+	"github.com/bryanster/blacklight/internal/report"
+	storereport "github.com/bryanster/blacklight/internal/store/report"
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
@@ -581,6 +583,26 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: engagement: " + err.Error())
 	}
+
+	// Report drafting (M6-002).
+	reportRegistry := report.NewRegistry()
+	for _, id := range report.AllBlockIDs() {
+		// Register stub blocks — concrete definitions arrive in M6-006–M6-008.
+		// Until then every block id is known but has an empty param schema.
+		reportRegistry.Register(report.Definition{
+			ID:    id,
+			Title: string(id),
+		})
+	}
+	reportRepo := storereport.NewReports(deps.Store)
+	reportSvc, err := report.New(report.Deps{
+		Reports:  reportRepo,
+		Registry: reportRegistry,
+		Activity: activityLog,
+	})
+	if err != nil {
+		panic("httpapi: report: " + err.Error())
+	}
 	customSvc, err := content.NewCustom(content.CustomDeps{
 		Sources:      sources,
 		Procedures:   procedures,
@@ -690,6 +712,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		custom:         customSvc,
 
 		attackpin: pin,
+		reports: reportSvc,
 
 		users:       users,
 		engagements: engSvc,
