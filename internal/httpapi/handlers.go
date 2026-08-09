@@ -143,7 +143,11 @@ type handlers struct {
 
 	// brandingSettings is the install-wide report branding service (M6-004).
 	brandingSettings *report.BrandingSettingsService
+
+	// docRenderer is the HTML report renderer (M6-009).
+	docRenderer *report.DocumentRenderer
 }
+
 
 // The compiler is what keeps this in step with api/openapi.yaml: adding an
 // operation to the spec and regenerating breaks this line until it is

@@ -4,12 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/nullable"
 
+	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/report"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
+	identity "github.com/bryanster/blacklight/internal/store/identity"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
+	"github.com/bryanster/blacklight/internal/store/blind"
 	"github.com/google/uuid"
 )
 
@@ -284,4 +291,102 @@ func nullableToStringPtr(ns nullable.Nullable[string]) *string {
 		return nil
 	}
 	return &v
+}
+
+// previewReport renders the draft HTML for a report (M6-009).
+// This endpoint is registered as an extra route because the OpenAPI spec
+// does not yet define a preview operation.
+func (h *handlers) previewReport(w http.ResponseWriter, r *http.Request) {
+	engagementID := chi.URLParam(r, "engagementId")
+	reportID := chi.URLParam(r, "reportId")
+
+	ctx := r.Context()
+
+	// Load the report.
+	rep, err := h.reports.Get(ctx, reportID)
+	if err != nil {
+		h.log.Error("preview: get report", "report_id", reportID, "err", err)
+		http.Error(w, "Report not found", http.StatusNotFound)
+		return
+	}
+
+	// Load blocks.
+	blocks, err := h.reports.Blocks(ctx, reportID)
+	if err != nil {
+		h.log.Error("preview: get blocks", "report_id", reportID, "err", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Load engagement for name, client, dates, blind mode.
+	engagements := storengagement.NewEngagements(h.store)
+	eng, err := engagements.ByID(ctx, engagementID)
+	if err != nil {
+		h.log.Error("preview: get engagement", "engagement_id", engagementID, "err", err)
+		http.Error(w, "Engagement not found", http.StatusNotFound)
+		return
+	}
+
+	// Resolve branding.
+	resolver := report.NewBrandingResolver(h.brandingSettings)
+	branding, err := resolver.Resolve(ctx, rep)
+	if err != nil {
+		h.log.Error("preview: branding", "report_id", reportID, "err", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Determine blind scope from the caller's seat.
+	scope := blind.Scope{}
+	if eng.Mode == storengagement.EngagementModeBlind {
+		scope.Blind = true
+		// Determine seat from the caller's membership.
+		if subj, ok := authn.SubjectFrom(ctx); ok {
+			memberships := identity.NewMemberships(h.store)
+			list, err := memberships.ListByUser(ctx, subj.UserID)
+			if err == nil {
+				for _, m := range list {
+					if m.EngagementID == engagementID {
+						scope.Seat = authz.EngagementRole(m.Role)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Determine includeEvidence from query param, default true for members
+	// with evidence.read.
+	includeEvidence := true
+	if r.URL.Query().Get("includeEvidence") == "false" {
+		includeEvidence = false
+	}
+
+	env := report.RenderEnv{
+		EngagementID:       eng.ID,
+		EngagementName:     eng.Name,
+		EngagementClient:   eng.Client,
+		EngagementStartsOn: eng.StartsOn,
+		EngagementEndsOn:   eng.EndsOn,
+		Branding:           branding,
+		Analytics:          h.analytics,
+		Domain: &report.DomainAdapter{
+			Scenarios:  h.scenarios,
+			Steps:      h.steps,
+			Executions: h.executions,
+			Findings:   h.findings,
+			Evidence:   h.evidenceRepo,
+		},
+		Evidence:        &report.EvidenceStorage{Store: h.evidenceStore},
+		IncludeEvidence: includeEvidence,
+		BlindScope:      scope,
+		Format:          report.FormatHelpers{},
+	}
+
+	doc := h.docRenderer.RenderDocument(ctx, rep, blocks, env)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Prevent the SPA from framing the report (defense in depth).
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Write(doc.HTML)
 }

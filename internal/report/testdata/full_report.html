@@ -1,0 +1,283 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Baseline Assessment — Assessment Report</title><style>:root{--bl-primary:#1a1a2e;--bl-secondary:#16213e;--bl-primary-fg:#ffffff;}/* Blacklight Report Stylesheet — v1
+ *
+ * This is the single stylesheet for all report blocks. Keep it boring and
+ * print-friendly. No viewport-only units (vw/vh), no animations, no web fonts
+ * beyond system stacks. Color variables are injected by the renderer from
+ * resolved branding.
+ *
+ * Namespace: bl-report__* — never conflict with the host SPA chrome.
+ */
+
+/* ------------------------------------------------------------------ */
+/* RESET (within report container only)                               */
+/* ------------------------------------------------------------------ */
+
+.bl-report {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.6;
+  color: #1a1a2e;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.bl-report *,
+.bl-report *::before,
+.bl-report *::after {
+  box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------------ */
+/* TYPOGRAPHY                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-report h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report p {
+  margin: 0 0 0.75rem;
+  orphans: 2;
+  widows: 2;
+}
+
+.bl-report ul,
+.bl-report ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.bl-report li {
+  margin-bottom: 0.25rem;
+}
+
+.bl-report strong {
+  font-weight: 600;
+}
+
+.bl-report em {
+  font-style: italic;
+}
+
+.bl-report code {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #f7fafc;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+.bl-report pre {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 0.75rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.bl-report blockquote {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid var(--bl-primary, #4a6fa5);
+  background: #f7fafc;
+  font-style: italic;
+}
+
+.bl-report a {
+  color: var(--bl-primary, #4a6fa5);
+  text-decoration: underline;
+}
+
+.bl-report a[rel~="noopener"] {
+  /* matches sanitize policy output */
+}
+
+/* ------------------------------------------------------------------ */
+/* COVER PAGE                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-report__cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  text-align: center;
+  padding: 3rem 2rem;
+  page-break-after: page;
+  break-after: page;
+}
+
+.bl-report__cover-logo {
+  max-width: 200px;
+  max-height: 80px;
+  margin-bottom: 2rem;
+  object-fit: contain;
+}
+
+.bl-report__cover-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bl-primary, #1a1a2e);
+  margin: 0 0 0.5rem;
+}
+
+.bl-report__cover-subtitle {
+  font-size: 1.15rem;
+  color: #64748b;
+  margin: 0 0 2rem;
+}
+
+.bl-report__cover-meta {
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+.bl-report__cover-meta-item {
+  margin: 0.25rem 0;
+}
+
+.bl-report__cover-meta-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+/* ------------------------------------------------------------------ */
+/* SECTION HEADER                                                     */
+/* ------------------------------------------------------------------ */
+
+.bl-report__section {
+  margin: 0 0 1.5rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.bl-report__section-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--bl-primary, #1a1a2e);
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--bl-primary, #4a6fa5);
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report__section-body {
+  /* rich text body */
+}
+
+/* ------------------------------------------------------------------ */
+/* PAGE BREAK                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-report__page-break {
+  page-break-after: page;
+  break-after: page;
+  /* zero-height, no visible marker */
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* PRINT                                                              */
+/* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* BLIND BANNER                                                        */
+/* ------------------------------------------------------------------ */
+
+.bl-report__blind-banner {
+  background: var(--bl-secondary, #2563eb);
+  color: var(--bl-primary-fg, #ffffff);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ERROR CALLOUT                                                       */
+/* ------------------------------------------------------------------ */
+
+.bl-report__error-callout {
+  background: #fef2f2;
+  border: 1px solid #d13c3c;
+  border-left: 4px solid #d13c3c;
+  color: #991b1b;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  border-radius: 2px;
+}
+
+.bl-report__error-callout strong {
+  color: #7f1d1d;
+}
+
+@media print {
+  .bl-report {
+    font-size: 10pt;
+    max-width: none;
+    margin: 0;
+  }
+
+  .bl-report__cover {
+    min-height: 90vh;
+  }
+
+  .bl-report a {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  /* Avoid orphans/widows on headings and short blocks. */
+  .bl-report h1,
+  .bl-report h2,
+  .bl-report h3,
+  .bl-report__section-title {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .bl-report p,
+  .bl-report li,
+  .bl-report blockquote {
+    orphans: 2;
+    widows: 2;
+  }
+}
+</style></head><body><div class="bl-report"><div class="bl-report__cover"><h1 class="bl-report__cover-title">Baseline Security Assessment</h1><p class="bl-report__cover-subtitle">Purple Team Exercise</p><div class="bl-report__cover-meta"><p class="bl-report__cover-meta-item"><span class="bl-report__cover-meta-label">Prepared for:</span> TestOrg</p><p class="bl-report__cover-meta-item"><span class="bl-report__cover-meta-label">Prepared by:</span> Blacklight Security</p><p class="bl-report__cover-meta-item"><span class="bl-report__cover-meta-label">Assessment window:</span> 2026-06-01 – 2026-06-30</p></div></div><section class="bl-report__section"><h2 class="bl-report__section-title">Executive Summary</h2><div class="bl-report__section-body"><p>This assessment evaluated detection coverage across the ATT&amp;CK matrix.</p></div></section><section class="bl-report__section"><h2 class="bl-report__section-title">Scope &amp; Rules of Engagement</h2><div class="bl-report__section-body"><p>Testing conducted against production systems.</p></div><h3>In-Scope Systems</h3><ul><li>dc01.corp.example.com</li><li>dc02.corp.example.com</li></ul></section><section class="bl-report__section"><h2 class="bl-report__section-title">Coverage Heatmap</h2><div class="bl-report__section-body"><div class="bl-report__heatmap-legend"><span class="bl-report__heatmap-legend-label">Detection:</span><span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:#aeb3bf"></span> None</span><span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:#ffee58"></span> Telemetry</span><span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:#fca128"></span> General</span><span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:#d13c3c"></span> Tactic</span><span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:#862121"></span> Technique</span></div><div class="bl-report__heatmap-summary"><p>Techniques attempted: <strong>7</strong> / 10 (70%)</p></div><h3 class="bl-report__heatmap-tactic">Initial Access <span class="bl-report__heatmap-tactic-count">(2 / 3)</span></h3><div class="bl-report__heatmap-grid"><div class="bl-report__heatmap-cell" style="background:#fca128;color:#fff" title="Obfuscated Files or Information — general">T1027</div><div class="bl-report__heatmap-cell" style="background:#d13c3c;color:#fff" title="Command and Scripting Interpreter — tactic">T1059</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="PowerShell — not attempted">T1059.001</div><div class="bl-report__heatmap-cell" style="background:#862121;color:#fff" title="Indicator Removal — technique">T1070</div><div class="bl-report__heatmap-cell" style="background:#fca128;color:#fff" title="Exploit Public-Facing Application — general">T1190</div><div class="bl-report__heatmap-cell" style="background:#aeb3bf;color:#333" title="Exploitation for Client Execution — none">T1203</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="Boot or Logon Autostart Execution — not attempted">T1547</div><div class="bl-report__heatmap-cell" style="background:#ffee58;color:#333" title="Phishing — telemetry">T1566</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="Spearphishing Attachment — not attempted">T1566.001</div></div><h3 class="bl-report__heatmap-tactic">Execution <span class="bl-report__heatmap-tactic-count">(3 / 5)</span></h3><div class="bl-report__heatmap-grid"><div class="bl-report__heatmap-cell" style="background:#fca128;color:#fff" title="Obfuscated Files or Information — general">T1027</div><div class="bl-report__heatmap-cell" style="background:#d13c3c;color:#fff" title="Command and Scripting Interpreter — tactic">T1059</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="PowerShell — not attempted">T1059.001</div><div class="bl-report__heatmap-cell" style="background:#862121;color:#fff" title="Indicator Removal — technique">T1070</div><div class="bl-report__heatmap-cell" style="background:#fca128;color:#fff" title="Exploit Public-Facing Application — general">T1190</div><div class="bl-report__heatmap-cell" style="background:#aeb3bf;color:#333" title="Exploitation for Client Execution — none">T1203</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="Boot or Logon Autostart Execution — not attempted">T1547</div><div class="bl-report__heatmap-cell" style="background:#ffee58;color:#333" title="Phishing — telemetry">T1566</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="Spearphishing Attachment — not attempted">T1566.001</div></div><h3 class="bl-report__heatmap-tactic">Defense Evasion <span class="bl-report__heatmap-tactic-count">(3 / 3)</span></h3><div class="bl-report__heatmap-grid"><div class="bl-report__heatmap-cell" style="background:#fca128;color:#fff" title="Obfuscated Files or Information — general">T1027</div><div class="bl-report__heatmap-cell" style="background:#d13c3c;color:#fff" title="Command and Scripting Interpreter — tactic">T1059</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="PowerShell — not attempted">T1059.001</div><div class="bl-report__heatmap-cell" style="background:#862121;color:#fff" title="Indicator Removal — technique">T1070</div><div class="bl-report__heatmap-cell" style="background:#fca128;color:#fff" title="Exploit Public-Facing Application — general">T1190</div><div class="bl-report__heatmap-cell" style="background:#aeb3bf;color:#333" title="Exploitation for Client Execution — none">T1203</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="Boot or Logon Autostart Execution — not attempted">T1547</div><div class="bl-report__heatmap-cell" style="background:#ffee58;color:#333" title="Phishing — telemetry">T1566</div><div class="bl-report__heatmap-cell" style="background:#e8eaed" title="Spearphishing Attachment — not attempted">T1566.001</div></div></div></section><section class="bl-report__section"><h2 class="bl-report__section-title">Mean Time to Detect (MTTD)</h2><div class="bl-report__section-body"><div class="bl-report__mttd-percentiles"><div class="bl-report__mttd-card"><span class="bl-report__mttd-card-label">p50</span><span class="bl-report__mttd-card-value">7m 30s</span></div><div class="bl-report__mttd-card"><span class="bl-report__mttd-card-label">p90</span><span class="bl-report__mttd-card-value">24m</span></div><div class="bl-report__mttd-card"><span class="bl-report__mttd-card-label">max</span><span class="bl-report__mttd-card-value">30m</span></div></div><table class="bl-report__table bl-report__mttd-table"><thead><tr><th>Component</th><th>Count</th><th>Description</th></tr></thead><tbody><tr><td>Detected</td><td class="bl-report__num">4</td><td>Executions with a computable MTTD — the percentile denominator</td></tr><tr><td>Undetected</td><td class="bl-report__num">1</td><td>Attempted executions with category &ldquo;none&rdquo; or no detected_at</td></tr><tr><td>Unscored</td><td class="bl-report__num">1</td><td>Attempted executions blue has not scored</td></tr><tr><td>Unmeasurable</td><td class="bl-report__num">1</td><td>Detected but no started_at timestamp</td></tr><tr class="bl-report__mttd-total"><td>Attempted</td><td class="bl-report__num">7</td><td>All attempted executions</td></tr></tbody></table></div></section><section class="bl-report__section"><h2 class="bl-report__section-title">Findings Backlog</h2><table class="bl-report__table"><thead><tr><th>Severity</th><th>Title</th><th>Status</th><th>Techniques</th></tr></thead><tbody><tr><td class="bl-report__cell-sev bl-report__cell-sev--medium">medium</td><td>Finding 01900000-0000-7000-F000-000000000006</td><td><span class="bl-report__status bl-report__status--open">Open</span></td><td class="bl-report__cell-mono">—</td></tr><tr><td class="bl-report__cell-sev bl-report__cell-sev--medium">medium</td><td>Finding 01900000-0000-7000-F000-000000000002</td><td><span class="bl-report__status bl-report__status--in_progress">In Progress</span></td><td class="bl-report__cell-mono">T1027</td></tr><tr><td class="bl-report__cell-sev bl-report__cell-sev--medium">medium</td><td>Finding 01900000-0000-7000-F000-000000000001</td><td><span class="bl-report__status bl-report__status--open">Open</span></td><td class="bl-report__cell-mono">T1190</td></tr><tr><td class="bl-report__cell-sev bl-report__cell-sev--medium">medium</td><td>Finding 01900000-0000-7000-F000-000000000005</td><td><span class="bl-report__status bl-report__status--open">Open</span></td><td class="bl-report__cell-mono">—</td></tr></tbody></table></section></div></body></html>

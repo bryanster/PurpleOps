@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"io"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -147,10 +148,12 @@ type AnalyticsFacade interface {
 	Compare(ctx context.Context, scope analytics.CompareScope) (*analytics.CompareResult, error)
 }
 
-// EvidenceAccess is the interface report blocks use to read evidence.
-// Concrete type defined in M6-009; declared here so blocks can reference it.
+// EvidenceAccess provides read access to evidence blobs.
+// Methods are defined by M6-009.
 type EvidenceAccess interface {
-	// Methods defined by M6-009.
+	// OpenEvidence returns a reader for the blob identified by its SHA-256
+	// hex digest. The caller must close the reader.
+	OpenEvidence(sha256hex string) (io.ReadCloser, error)
 }
 
 // DomainFacade is the interface report blocks use to read engagement domain

@@ -264,7 +264,7 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		requireMFAEnrolment(responder, log),
 		authorized,
 	)
-	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, provider, federation, activityLog, log, responder),
+	gen.HandlerWithOptions(strictHandler(deps, auth, sessions, challenges, provider, federation, activityLog, log, responder, apiRouter),
 		gen.ChiServerOptions{
 			BaseRouter: apiRouter,
 			// Reached when the generated wrapper cannot bind a parameter. The
@@ -525,7 +525,7 @@ func signInURL(cfg config.Config) string {
 //nolint:contextcheck // boots the process-scoped content runner with Background
 func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	challenges *challenge.Manager, provider *oidc.Provider, federation *saml.Provider,
-	activityLog *events.Log, log *slog.Logger, responder *apierr.Responder) gen.ServerInterface {
+	activityLog *events.Log, log *slog.Logger, responder *apierr.Responder, apiRouter chi.Router) gen.ServerInterface {
 	paths := storecontent.NewPaths(deps.Config.Content.Dir)
 	sources := storecontent.NewSources(deps.Store)
 	versions := storecontent.NewVersions(deps.Store, paths)
@@ -630,6 +630,9 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 	reportRegistry.Register(blocks.EvidenceDef)
 	reportRegistry.SetRenderer(report.IDEvidenceAppendix, blocks.EvidenceRenderer{})
+
+	docRenderer := report.NewDocumentRenderer(reportRegistry)
+
 	reportRepo := storereport.NewReports(deps.Store)
 	reportSvc, err := report.New(report.Deps{
 		Reports:  reportRepo,
@@ -775,6 +778,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		hub:         hub,
 
 		brandingSettings: brandingSvc,
+		docRenderer:     docRenderer,
 		analytics:       queries,
 		presence:        deps.Presence,
 		eventsMaxReplay: deps.Config.Events.MaxReplayEvents,
@@ -786,7 +790,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	// M4-004: wire the RevealLookup for step-scoped event data.
 	activityLog.SetRevealLookup(h)
 
-	return gen.NewStrictHandlerWithOptions(
+	handler := gen.NewStrictHandlerWithOptions(
 		h,
 		nil, // No strict middleware: the chain is chi's, so there is one of them.
 		gen.StrictHTTPServerOptions{
@@ -794,4 +798,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 			ResponseErrorHandlerFunc: responder.Write,
 		},
 	)
+
+	apiRouter.Post("/engagements/{engagementId}/reports/{reportId}/preview", h.previewReport)
+	return handler
 }
