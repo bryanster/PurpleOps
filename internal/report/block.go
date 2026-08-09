@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"strings"
 	"time"
 
@@ -100,8 +101,10 @@ type RenderEnv struct {
 	// EngagementStartsOn is the engagement start date.
 	EngagementStartsOn time.Time
 
+
 	// EngagementEndsOn is the engagement end date.
 	EngagementEndsOn time.Time
+
 	// Branding holds the resolved branding (install defaults merged with
 	// per-report overrides).
 	Branding BrandingConfig
@@ -113,6 +116,11 @@ type RenderEnv struct {
 
 	// Evidence provides access to evidence blobs. Set in M6-009.
 	Evidence EvidenceAccess
+
+	// Domain provides access to engagement domain data: scenarios, steps,
+	// executions, findings, and evidence. Blocks MUST read through this
+	// facade only — no direct DB access. Set in M6-009.
+	Domain DomainFacade
 
 	// IncludeEvidence is the publish-time evidence opt-in flag. When false,
 	// blocks that depend on evidence must omit binary content.
@@ -143,6 +151,19 @@ type AnalyticsFacade interface {
 // Concrete type defined in M6-009; declared here so blocks can reference it.
 type EvidenceAccess interface {
 	// Methods defined by M6-009.
+}
+
+// DomainFacade is the interface report blocks use to read engagement domain
+// data: scenarios, steps, executions, findings, and evidence metadata.
+// The concrete type wraps the engagement store repositories.
+// Set in M6-009.
+type DomainFacade interface {
+	ListScenarios(ctx context.Context, engagementID string) ([]storengagement.Scenario, error)
+	ListSteps(ctx context.Context, engagementID string, scope blind.Scope) ([]storengagement.Step, error)
+	ListExecutions(ctx context.Context, engagementID string) ([]storengagement.Execution, error)
+	ListFindings(ctx context.Context, engagementID string) ([]storengagement.Finding, error)
+	FindingSteps(ctx context.Context, findingID string) ([]storengagement.Step, error)
+	ListEvidence(ctx context.Context, executionID string) ([]storengagement.Evidence, error)
 }
 
 // BrandingConfig holds the resolved branding for a report.

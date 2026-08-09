@@ -622,18 +622,14 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	reportRegistry.Register(blocks.CompareDef)
 	reportRegistry.SetRenderer(report.IDEngagementCompare, blocks.CompareRenderer{})
 
-	// Remaining blocks — stubs until M6-008.
-	stubIDs := []report.ID{
-		report.IDScenarioWalkthrough,
-		report.IDFindingsBacklog,
-		report.IDEvidenceAppendix,
-	}
-	for _, id := range stubIDs {
-		reportRegistry.Register(report.Definition{
-			ID:    id,
-			Title: string(id),
-		})
-	}
+	reportRegistry.Register(blocks.WalkthroughDef)
+	reportRegistry.SetRenderer(report.IDScenarioWalkthrough, blocks.WalkthroughRenderer{})
+
+	reportRegistry.Register(blocks.FindingsDef)
+	reportRegistry.SetRenderer(report.IDFindingsBacklog, blocks.FindingsRenderer{})
+
+	reportRegistry.Register(blocks.EvidenceDef)
+	reportRegistry.SetRenderer(report.IDEvidenceAppendix, blocks.EvidenceRenderer{})
 	reportRepo := storereport.NewReports(deps.Store)
 	reportSvc, err := report.New(report.Deps{
 		Reports:  reportRepo,
