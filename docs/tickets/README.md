@@ -70,7 +70,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M3 — Core domain | ✅ done — 16/16 | [16 tickets](#m3--core-domain) · [`M3-EPIC.md`](done/M3-EPIC.md) |
 | M4 — Collaboration | ✅ done — 10/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](done/M4-EPIC.md) |
 | M5 — Analytics | refined — 0/15 | [15 tickets](#m5--analytics) · [`M5-EPIC.md`](M5-EPIC.md) |
-| M6 — Reporting | epic, needs refinement | [`M6-EPIC.md`](M6-EPIC.md) |
+| M6 — Reporting | refined — 0/15 | [15 tickets](#m6--reporting) · [`M6-EPIC.md`](M6-EPIC.md) |
 | M7 — Cutover | epic, needs refinement | [`M7-EPIC.md`](M7-EPIC.md) |
 
 > **M0a note:** the working tree is clean (only `PLAN.md` and `.devcontainer/` remain), but
@@ -233,3 +233,32 @@ Build roughly in this order — the dependency chain is real. **M5-015 is a gate
 | [M5-013](M5-013-dashboard-ui.md) | Dashboard UI: heatmap and scorecards | L |
 | [M5-014](M5-014-compare-ui.md) | Cross-engagement compare UI | M |
 | [M5-015](M5-015-analytics-query-budget.md) | Analytics query budget (**gate before M6**) | M |
+
+
+## M6 — Reporting
+
+Goal: section-picker report builder over a **block registry**, one HTML rendering path shared by
+draft preview, immutable published versions, login-required share views, and PDF (`PLAN.md` §5, §8).
+M6 is the usability bar — the branch is mergeable once it lands. Decisions are locked in
+[`M6-EPIC.md`](M6-EPIC.md).
+
+Build roughly in this order — the dependency chain is real. **M5-015 is a gate before M6.**
+**M6-015** (PLAN.md §9 E2E thesis, M5 rewrite) is the M6 exit gate.
+
+| ID | Title | Size |
+|---|---|---|
+| [M6-001](M6-001-block-registry.md) | Block registry (id, params schema, data deps, renderer hook) | M |
+| [M6-002](M6-002-report-document-model.md) | Report document model, draft CRUD, `report.write` | L |
+| [M6-003](M6-003-report-templates.md) | Engagement-scoped report templates | M |
+| [M6-004](M6-004-branding.md) | Install branding defaults + per-report overrides | M |
+| [M6-005](M6-005-rich-text-sanitization.md) | TipTap + server HTML allowlist (bluemonday) | M |
+| [M6-006](M6-006-narrative-blocks.md) | Narrative blocks: cover, exec summary, scope/RoE, rich text, page break | M |
+| [M6-007](M6-007-analytics-blocks.md) | Analytics blocks: heatmap, scorecard, distribution, gaps, MTTD, compare | L |
+| [M6-008](M6-008-detail-blocks.md) | Detail blocks: scenario walkthrough, findings backlog, evidence appendix | L |
+| [M6-009](M6-009-html-renderer.md) | Single HTML rendering path + golden files | L |
+| [M6-010](M6-010-pdf-chromedp.md) | PDF via headless Chromium (`chromedp`) | M |
+| [M6-011](M6-011-publish-and-versioning.md) | Publish, immutable versions, evidence opt-in, lead scope | L |
+| [M6-012](M6-012-share-links.md) | Share links, grants/guests, password gate, revoke → 404 | L |
+| [M6-013](M6-013-builder-ui.md) | Builder UI: blocks, reorder, params, HTML preview | L |
+| [M6-014](M6-014-publish-share-ui.md) | Publish / versions / share & guest-grant UI | M |
+| [M6-015](M6-015-e2e-thesis.md) | Complete PLAN.md §9 E2E thesis (M5 rewrite) | L |
