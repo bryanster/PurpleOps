@@ -1,0 +1,248 @@
+/* Blacklight Report Stylesheet — v1
+ *
+ * This is the single stylesheet for all report blocks. Keep it boring and
+ * print-friendly. No viewport-only units (vw/vh), no animations, no web fonts
+ * beyond system stacks. Color variables are injected by the renderer from
+ * resolved branding.
+ *
+ * Namespace: bl-report__* — never conflict with the host SPA chrome.
+ */
+
+/* ------------------------------------------------------------------ */
+/* RESET (within report container only)                               */
+/* ------------------------------------------------------------------ */
+
+.bl-report {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.6;
+  color: #1a1a2e;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.bl-report *,
+.bl-report *::before,
+.bl-report *::after {
+  box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------------ */
+/* TYPOGRAPHY                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-report h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report p {
+  margin: 0 0 0.75rem;
+  orphans: 2;
+  widows: 2;
+}
+
+.bl-report ul,
+.bl-report ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.bl-report li {
+  margin-bottom: 0.25rem;
+}
+
+.bl-report strong {
+  font-weight: 600;
+}
+
+.bl-report em {
+  font-style: italic;
+}
+
+.bl-report code {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #f7fafc;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+.bl-report pre {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 0.75rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.bl-report blockquote {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid var(--bl-primary, #4a6fa5);
+  background: #f7fafc;
+  font-style: italic;
+}
+
+.bl-report a {
+  color: var(--bl-primary, #4a6fa5);
+  text-decoration: underline;
+}
+
+.bl-report a[rel~="noopener"] {
+  /* matches sanitize policy output */
+}
+
+/* ------------------------------------------------------------------ */
+/* COVER PAGE                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-report__cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  text-align: center;
+  padding: 3rem 2rem;
+  page-break-after: page;
+  break-after: page;
+}
+
+.bl-report__cover-logo {
+  max-width: 200px;
+  max-height: 80px;
+  margin-bottom: 2rem;
+  object-fit: contain;
+}
+
+.bl-report__cover-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bl-primary, #1a1a2e);
+  margin: 0 0 0.5rem;
+}
+
+.bl-report__cover-subtitle {
+  font-size: 1.15rem;
+  color: #64748b;
+  margin: 0 0 2rem;
+}
+
+.bl-report__cover-meta {
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+.bl-report__cover-meta-item {
+  margin: 0.25rem 0;
+}
+
+.bl-report__cover-meta-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+/* ------------------------------------------------------------------ */
+/* SECTION HEADER                                                     */
+/* ------------------------------------------------------------------ */
+
+.bl-report__section {
+  margin: 0 0 1.5rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.bl-report__section-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--bl-primary, #1a1a2e);
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--bl-primary, #4a6fa5);
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.bl-report__section-body {
+  /* rich text body */
+}
+
+/* ------------------------------------------------------------------ */
+/* PAGE BREAK                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-report__page-break {
+  page-break-after: page;
+  break-after: page;
+  /* zero-height, no visible marker */
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* PRINT                                                              */
+/* ------------------------------------------------------------------ */
+
+@media print {
+  .bl-report {
+    font-size: 10pt;
+    max-width: none;
+    margin: 0;
+  }
+
+  .bl-report__cover {
+    min-height: 90vh;
+  }
+
+  .bl-report a {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  /* Avoid orphans/widows on headings and short blocks. */
+  .bl-report h1,
+  .bl-report h2,
+  .bl-report h3,
+  .bl-report__section-title {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .bl-report p,
+  .bl-report li,
+  .bl-report blockquote {
+    orphans: 2;
+    widows: 2;
+  }
+}

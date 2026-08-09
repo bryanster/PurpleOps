@@ -1,8 +1,8 @@
 package report
-
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // ID is a stable block identifier from the v1 catalogue.
@@ -90,6 +90,11 @@ type RenderEnv struct {
 	// EngagementClient is the client organisation name.
 	EngagementClient string
 
+	// EngagementStartsOn is the engagement start date.
+	EngagementStartsOn time.Time
+
+	// EngagementEndsOn is the engagement end date.
+	EngagementEndsOn time.Time
 	// Branding holds the resolved branding (install defaults merged with
 	// per-report overrides).
 	Branding BrandingConfig

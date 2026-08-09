@@ -37,6 +37,7 @@ import (
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/report"
+	"github.com/bryanster/blacklight/internal/report/blocks"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
@@ -584,24 +585,40 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		panic("httpapi: engagement: " + err.Error())
 	}
 
-	// Report drafting (M6-002).
 	reportRegistry := report.NewRegistry()
-	// HTML-storing blocks (M6-005): param keys whose values are
-	// sanitized on write. M6-006 replaces these stubs with full
-	// definitions including ParamSchema.
-	htmlParamKeys := map[report.ID][]string{
-		report.IDRichText:         {"html"},
-		report.IDExecutiveSummary: {"body"},
-		report.IDScopeRoE:         {"body"},
+
+	// Narrative blocks with full definitions and renderers (M6-006).
+	reportRegistry.Register(blocks.CoverDef)
+	reportRegistry.SetRenderer(report.IDCover, blocks.CoverRenderer{})
+
+	reportRegistry.Register(blocks.SummaryDef)
+	reportRegistry.SetRenderer(report.IDExecutiveSummary, blocks.SummaryRenderer{})
+
+	reportRegistry.Register(blocks.ScopeDef)
+	reportRegistry.SetRenderer(report.IDScopeRoE, blocks.ScopeRenderer{})
+
+	reportRegistry.Register(blocks.RichTextDef)
+	reportRegistry.SetRenderer(report.IDRichText, blocks.RichTextRenderer{})
+
+	reportRegistry.Register(blocks.PageBreakDef)
+	reportRegistry.SetRenderer(report.IDPageBreak, blocks.PageBreakRenderer{})
+
+	// Remaining blocks — stubs until M6-007 and M6-008.
+	stubIDs := []report.ID{
+		report.IDCoverageHeatmap,
+		report.IDTacticScorecard,
+		report.IDDetectionDistribution,
+		report.IDDetectionGaps,
+		report.IDMTTD,
+		report.IDEngagementCompare,
+		report.IDScenarioWalkthrough,
+		report.IDFindingsBacklog,
+		report.IDEvidenceAppendix,
 	}
-	for _, id := range report.AllBlockIDs() {
-		// Register stub blocks — concrete definitions arrive in
-		// M6-006–M6-008. Until then every block id is known but
-		// has an empty param schema.
+	for _, id := range stubIDs {
 		reportRegistry.Register(report.Definition{
-			ID:            id,
-			Title:         string(id),
-			HTMLParamKeys: htmlParamKeys[id],
+			ID:    id,
+			Title: string(id),
 		})
 	}
 	reportRepo := storereport.NewReports(deps.Store)

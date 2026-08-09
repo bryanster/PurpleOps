@@ -6,18 +6,20 @@ import (
 	"sync"
 )
 
-// Registry holds every known block Definition, keyed by ID. Register blocks
-// during init — the registry is safe for concurrent reads after init but
-// writing after init is a programmer error that panics.
+// Registry holds every known block Definition and Renderer, keyed by ID.
+// Register blocks during init — the registry is safe for concurrent reads
+// after init but writing after init is a programmer error that panics.
 type Registry struct {
-	mu    sync.RWMutex
-	items map[ID]Definition
+	mu        sync.RWMutex
+	items     map[ID]Definition
+	renderers map[ID]Renderer
 }
 
 // NewRegistry returns an empty Registry ready for registration.
 func NewRegistry() *Registry {
 	return &Registry{
-		items: make(map[ID]Definition),
+		items:     make(map[ID]Definition),
+		renderers: make(map[ID]Renderer),
 	}
 }
 
@@ -52,6 +54,29 @@ func (r *Registry) MustGet(id ID) Definition {
 		panic(fmt.Sprintf("report: block id %q not registered", id))
 	}
 	return def
+}
+
+// Renderer returns the renderer for id, or false when none is set.
+func (r *Registry) Renderer(id ID) (Renderer, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rend, ok := r.renderers[id]
+	return rend, ok
+}
+
+// SetRenderer registers a renderer for an existing block id.
+// It panics if the block is not already registered via Register.
+func (r *Registry) SetRenderer(id ID, rend Renderer) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.items[id]; !exists {
+		panic(fmt.Sprintf("report: SetRenderer: block id %q not registered", id))
+	}
+	if _, exists := r.renderers[id]; exists {
+		panic(fmt.Sprintf("report: duplicate renderer for block id %q", id))
+	}
+	r.renderers[id] = rend
 }
 
 // List returns every registered Definition, in the stable catalogue order
