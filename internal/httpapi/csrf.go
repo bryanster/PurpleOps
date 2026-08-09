@@ -78,6 +78,14 @@ var csrfExemptRoutes = map[string]string{
 	// The OIDC callback is not in this list because it is a GET, and safe
 	// methods are exempt above.
 	"POST " + BasePath + samlACSPath: "the signed, replay-checked assertion is the proof, and the identity provider's cross-site POST could not carry a header",
+
+	// Share claim and password routes (M6-012). Public-ish: authorization is
+	// by share grant, not session. The share token in the URL is the proof of
+	// the right to claim. Guest registration has no session at all — the
+	// caller is creating their first credential.
+	"POST " + BasePath + "/report-views/{token}/claim":    "no session required; the share token in the URL authorizes the claim",
+	"POST " + BasePath + "/report-views/{token}/password": "no session required; the share token in the URL authorizes the password check",
+	"POST " + BasePath + "/auth/guest-register":           "no session exists yet; the caller is creating their first credential",
 }
 
 // samlACSPath is the assertion consumer's path, from the package that owns it,

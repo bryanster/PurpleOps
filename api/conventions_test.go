@@ -45,6 +45,7 @@ var nonProblemErrorResponses = map[string]string{
 	// tells the caller to try the HTML view instead, not that something is broken.
 	"previewReportPdf 503":    "PDF unavailable — Chromium not configured",
 	"getReportVersionPdf 503": "PDF unavailable — Chromium not configured",
+	"getReportSharePdf 503": "PDF unavailable — Chromium not configured",
 }
 // declaredCodePattern picks the problem code out of a shared response's
 // description — "`code` is `not_found`" — which is where a reader of the

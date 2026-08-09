@@ -652,6 +652,28 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/settings/report-branding/logo": {
 		mediaType: "multipart/form-data; boundary=walk",
 	},
+
+	// Report shares (M6-012). Management routes are protected (browser
+	// session with CSRF token). View routes are exempt (public-ish;
+	// authz is by grant, not session).
+	"POST " + BasePath + "/report-versions/{versionId}/shares": {
+		body: `{}`,
+	},
+	"DELETE " + BasePath + "/report-shares/{shareId}":  {body: ""},
+	"DELETE " + BasePath + "/report-shares/{shareId}/grants/{grantId}": {body: ""},
+	"POST " + BasePath + "/report-views/{token}/claim": {
+		body:   `{}`,
+		exempt: true,
+	},
+	"POST " + BasePath + "/report-views/{token}/password": {
+		body:   `{"password":"test"}`,
+		exempt: true,
+	},
+	// Guest registration (M6-012): no session exists yet.
+	"POST " + BasePath + "/auth/guest-register": {
+		body:   `{"email":"walked@example.com","password":"` + testPassword + `"}`,
+		exempt: true,
+	},
 }
 
 // The two media types the walks send.

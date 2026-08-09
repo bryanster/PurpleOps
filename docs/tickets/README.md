@@ -258,7 +258,7 @@ Build roughly in this order — the dependency chain is real. **M5-015 is a gate
 | [M6-009](M6-009-html-renderer.md) | Single HTML rendering path + golden files | L |
 | [M6-010](M6-010-pdf-chromedp.md) | PDF via headless Chromium (`chromedp`) | M |
 | [M6-011](M6-011-publish-and-versioning.md) | Publish, immutable versions, evidence opt-in, lead scope | L |
-| [M6-012](M6-012-share-links.md) | Share links, grants/guests, password gate, revoke → 404 | L |
+| [M6-012](done/M6-012-share-links.md) ✅ | Share links, grants/guests, password gate, revoke → 404 | L |
 | [M6-013](M6-013-builder-ui.md) | Builder UI: blocks, reorder, params, HTML preview | L |
 | [M6-014](M6-014-publish-share-ui.md) | Publish / versions / share & guest-grant UI | M |
 | [M6-015](M6-015-e2e-thesis.md) | Complete PLAN.md §9 E2E thesis (M5 rewrite) | L |

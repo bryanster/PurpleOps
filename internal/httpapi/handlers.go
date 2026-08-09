@@ -159,6 +159,9 @@ type handlers struct {
 
 	// versions reads published report versions (M6-011).
 	versions *storereport.Versions
+
+	// shareSvc manages share links and grants (M6-012).
+	shareSvc *report.ShareService
 }
 
 

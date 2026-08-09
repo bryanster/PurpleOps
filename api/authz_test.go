@@ -81,6 +81,14 @@ func TestTheMappingIsAnExemptionOrAPermissionAndNeverBoth(t *testing.T) {
 		// SSE subscription (M4-001): any authenticated session may subscribe;
 		// per-topic authz is enforced in the handler, not the middleware.
 		"subscribeEvents": true,
+		// Share view routes (M6-012): authorization is by grant, not engagement
+		// membership. The handler checks grant + password gate.
+		"getReportShareInfo": true, "claimReportShare": true,
+		"verifyReportSharePassword": true, "getReportShareHtml": true,
+		"getReportSharePdf": true,
+		// Guest registration (M6-012): creates an account for share invite
+		// recipients who have none. No session exists to present.
+		"guestRegister": true,
 	}
 
 	for id, requirement := range requirements {

@@ -76,3 +76,10 @@ link existence is not confirmed after revoke.
 - Build claim URLs from `BLACKLIGHT_BASE_URL`, never Host header.
 - Rate-limit claim and password attempts (reuse login throttling keys with distinct namespace).
 - PDF/HTML for shares always from **frozen version**, never live draft.
+
+## Implementation notes
+
+- Guest registration (`POST /auth/guest-register`) is stubbed (returns 501). Full implementation requires auth service integration.
+- Share password cookie enforcement at view time (HTML/PDF endpoints) is deferred: the `canAccessSharedVersion` check only validates the grant, not the `bl_report_share` cookie. The password is enforced at claim time. A follow-up should add middleware to extract the cookie from the request context.
+- Engagement members with `report.read` are not yet granted automatic access to shared versions (the `canAccessSharedVersion` check only looks at grants). This is noted with a TODO.
+- Share schemas were placed after the ReportVersion schema in `api/openapi.yaml` to keep the reporting section together.

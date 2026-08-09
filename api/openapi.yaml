@@ -6959,6 +6959,389 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+
+  # ── Report shares (M6-012) ────────────────────────────────────────
+
+  /report-versions/{versionId}/shares:
+    get:
+      operationId: listReportShares
+      summary: List shares for a published version.
+      description: |
+        Lead only (report.publish). Returns every share for this version
+        with their grants, newest first.
+      tags:
+        - reports
+      x-authz-action: report.publish
+      x-authz-resource:
+        type: report
+        engagement: versionId
+      parameters:
+        - $ref: "#/components/parameters/VersionId"
+      responses:
+        "200":
+          description: The version's shares with grants.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportShare"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createReportShare
+      summary: Create a share link for a published version.
+      description: |
+        Lead only (report.publish). Creates an unguessable share link.
+        The share token is returned once in the response — it is never
+        stored plaintext on the server.
+
+        Optional password gate, expiry, max grants, and label.
+      tags:
+        - reports
+      x-authz-action: report.publish
+      x-authz-resource:
+        type: report
+        engagement: versionId
+      parameters:
+        - $ref: "#/components/parameters/VersionId"
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportShare"
+      responses:
+        "201":
+          description: The created share with the token and claim URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateReportShareResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /report-shares/{shareId}:
+    delete:
+      operationId: revokeReportShare
+      summary: Revoke a share and all its grants.
+      description: |
+        Lead only (report.publish). Revokes the share and every grant
+        under it. Subsequent access via this share returns 404.
+      tags:
+        - reports
+      x-authz-action: report.publish
+      x-authz-resource:
+        type: report
+        engagement: shareId
+      parameters:
+        - name: shareId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The share to revoke.
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The share and its grants are revoked.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /report-shares/{shareId}/grants/{grantId}:
+    delete:
+      operationId: revokeReportShareGrant
+      summary: Revoke a single grant.
+      description: |
+        Lead only (report.publish). Revokes one grant on a share.
+        The grant holder's subsequent access returns 404.
+      tags:
+        - reports
+      x-authz-action: report.publish
+      x-authz-resource:
+        type: report
+        engagement: shareId
+      parameters:
+        - name: shareId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The parent share.
+        - name: grantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The grant to revoke.
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204":
+          description: The grant is revoked.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Report share views (public-ish, authz by grant) ────────────────
+
+  /report-views/{token}:
+    get:
+      operationId: getReportShareInfo
+      summary: Return share metadata for the claim page.
+      description: |
+        Public-ish: requires a signed-in session, but authorization is
+        by share grant, not engagement membership. Returns whether the
+        share exists, requires a password, and whether the caller has
+        already claimed it.
+      tags:
+        - reports
+      x-authz-public: true
+      x-authz-because: share access is authorized by grant, not engagement membership; the handler checks the grant.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The share token from the claim URL.
+      responses:
+        "200":
+          description: Share metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportShareInfo"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /report-views/{token}/claim:
+    post:
+      operationId: claimReportShare
+      summary: Claim access to a shared report version.
+      description: |
+        Public-ish: requires a signed-in session. Binds a grant to the
+        caller's user account. If the share has a password gate, the
+        password must be provided.
+      tags:
+        - reports
+      x-authz-public: true
+      x-authz-because: share claiming is authorized by the share token and password, not engagement membership.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The share token from the claim URL.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimReportShare"
+      responses:
+        "200":
+          description: Grant claimed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimReportShareResult"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /report-views/{token}/password:
+    post:
+      operationId: verifyReportSharePassword
+      summary: Verify the share password and set a satisfaction cookie.
+      description: |
+        Public-ish: requires a signed-in session. Verifies the password
+        for a password-gated share and sets a short-lived cookie
+        (bl_report_share) that authorizes subsequent HTML/PDF requests.
+      tags:
+        - reports
+      x-authz-public: true
+      x-authz-because: password verification uses the share token, not engagement membership.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The share token from the claim URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SharePassword"
+      responses:
+        "204":
+          description: Password accepted. The bl_report_share cookie is set.
+          headers:
+            Set-Cookie:
+              description: |
+                The share password satisfaction cookie, HttpOnly,
+                SameSite=Strict, Path scoped to /report-views/.
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /report-views/{token}/html:
+    get:
+      operationId: getReportShareHtml
+      summary: View the shared report as HTML.
+      description: |
+        Public-ish: requires a signed-in session with an active grant
+        (or engagement membership with report.read). If the share has a
+        password gate, the bl_report_share cookie must be present.
+
+        Revoked/expired/unknown shares return 404.
+      tags:
+        - reports
+      x-authz-public: true
+      x-authz-because: share view access is authorized by grant, not engagement membership; the handler enforces grant+password checks.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The share token from the claim URL.
+      responses:
+        "200":
+          description: The frozen report HTML.
+          content:
+            text/html:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /report-views/{token}/pdf:
+    get:
+      operationId: getReportSharePdf
+      summary: View the shared report as PDF.
+      description: |
+        Public-ish: requires a signed-in session with an active grant
+        (or engagement membership with report.read). If the share has a
+        password gate, the bl_report_share cookie must be present.
+
+        Returns 503 when PDF rendering is not configured.
+      tags:
+        - reports
+      x-authz-public: true
+      x-authz-because: share view access is authorized by grant, not engagement membership; the handler enforces grant+password checks.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The share token from the claim URL.
+      responses:
+        "200":
+          description: The frozen report PDF.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: PDF rendering is not configured on this server.
+
+  # ── Guest registration (M6-012) ───────────────────────────────────
+
+  /auth/guest-register:
+    post:
+      operationId: guestRegister
+      summary: Create a minimal local account for share invite access.
+      description: |
+        Public. Creates a local user account with no platform role
+        beyond member and no engagement memberships. Intended for
+        share invite recipients who do not yet have an account.
+
+        Rate-limited like login to prevent account enumeration.
+      tags:
+        - auth
+      x-authz-public: true
+      x-authz-because: guest registration is for share invite recipients who have no account yet; there is no session to present.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestRegisterRequest"
+      responses:
+        "201":
+          description: Account created. The caller is signed in.
+          headers:
+            Set-Cookie:
+              description: The session cookie for the new account.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestRegisterResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
 
   securitySchemes:
@@ -11860,6 +12243,24 @@ components:
           type: boolean
       additionalProperties: false
 
+    BurndownAnalysis:
+      type: object
+      required:
+        - severity
+        - blindFiltered
+      properties:
+        interval:
+          $ref: "#/components/schemas/BurndownInterval"
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/BurndownPoint"
+        severity:
+          $ref: "#/components/schemas/SeveritySnapshot"
+        blindFiltered:
+          type: boolean
+      additionalProperties: false
+
     CompareRow:
       type: object
       required:
@@ -12236,6 +12637,204 @@ components:
         pdfSha256:
           type: [string, "null"]
       additionalProperties: false
+    # ── M6-012 Report shares ────────────────────────────────────────
+
+    ReportShare:
+      type: object
+      required:
+        - id
+        - versionId
+        - createdBy
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionId:
+          type: string
+          format: uuid
+        passwordProtected:
+          type: boolean
+          description: Whether this share requires a password.
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        label:
+          type: [string, "null"]
+        maxGrants:
+          type: [integer, "null"]
+          description: Maximum number of grants, or null for unlimited.
+        grantCount:
+          type: integer
+          description: Current number of non-revoked grants.
+        grants:
+          type: array
+          description: Grants for this share. Present in list endpoints.
+          items:
+            $ref: "#/components/schemas/ReportShareGrant"
+      additionalProperties: false
+
+    ReportShareGrant:
+      type: object
+      required:
+        - id
+        - shareId
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        shareId:
+          type: string
+          format: uuid
+        userId:
+          type: [string, "null"]
+          format: uuid
+          description: The user who claimed this grant, or null if unclaimed.
+        claimedAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+
+    CreateReportShare:
+      type: object
+      description: Body of POST /report-versions/{versionId}/shares.
+      properties:
+        password:
+          type: string
+          description: Optional password gate. Must be at least 8 characters.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Optional expiry. After this time the share returns 404.
+        label:
+          type: string
+          description: Optional human-readable label.
+        maxGrants:
+          type: integer
+          minimum: 1
+          description: Maximum number of claims. Omit for unlimited.
+      additionalProperties: false
+
+    CreateReportShareResult:
+      type: object
+      required:
+        - share
+        - claimUrl
+      properties:
+        share:
+          $ref: "#/components/schemas/ReportShare"
+        token:
+          type: string
+          description: The share token. Shown once; never stored plaintext.
+        claimUrl:
+          type: string
+          description: Absolute claim URL for sharing with recipients.
+      additionalProperties: false
+
+    ReportShareInfo:
+      type: object
+      required:
+        - exists
+      properties:
+        exists:
+          type: boolean
+          description: Whether the share exists and is active.
+        passwordRequired:
+          type: boolean
+          description: Whether the share requires a password.
+        alreadyClaimed:
+          type: boolean
+          description: Whether the current user has already claimed this share.
+        label:
+          type: string
+          description: The share's label, if set.
+      additionalProperties: false
+
+    ClaimReportShare:
+      type: object
+      description: Body of POST /report-views/{token}/claim.
+      properties:
+        password:
+          type: string
+          description: Required if the share has a password gate.
+      additionalProperties: false
+
+    ClaimReportShareResult:
+      type: object
+      required:
+        - versionId
+      properties:
+        versionId:
+          type: string
+          format: uuid
+        reportId:
+          type: string
+          format: uuid
+      additionalProperties: false
+
+    SharePassword:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          description: The share password.
+      additionalProperties: false
+
+    GuestRegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address for the new account.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Password for the new account.
+        displayName:
+          type: string
+          description: Optional display name.
+      additionalProperties: false
+
+    GuestRegisterResult:
+      type: object
+      required:
+        - id
+        - email
+        - platformRole
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        platformRole:
+          type: string
+          enum: [member]
+      additionalProperties: false
+
+
     # ── M6 report templates ───────────────────────────────────────────
 
     ReportTemplate:

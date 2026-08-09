@@ -518,6 +518,21 @@ func (e FindingStatus) Valid() bool {
 	}
 }
 
+// Defines values for GuestRegisterResultPlatformRole.
+const (
+	GuestRegisterResultPlatformRoleMember GuestRegisterResultPlatformRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the GuestRegisterResultPlatformRole enum.
+func (e GuestRegisterResultPlatformRole) Valid() bool {
+	switch e {
+	case GuestRegisterResultPlatformRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthState.
 const (
 	HealthStateError HealthState = "error"
@@ -1093,6 +1108,18 @@ type ChangePasswordRequest struct {
 	// is one definition of an acceptable password rather than one here and
 	// one in the client.
 	NewPassword string `json:"newPassword"`
+}
+
+// ClaimReportShare Body of POST /report-views/{token}/claim.
+type ClaimReportShare struct {
+	// Password Required if the share has a password gate.
+	Password *string `json:"password,omitempty"`
+}
+
+// ClaimReportShareResult defines model for ClaimReportShareResult.
+type ClaimReportShareResult struct {
+	ReportId  *openapi_types.UUID `json:"reportId,omitempty"`
+	VersionId openapi_types.UUID  `json:"versionId"`
 }
 
 // Comment defines model for Comment.
@@ -1918,6 +1945,31 @@ type CreateReport struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// CreateReportShare Body of POST /report-versions/{versionId}/shares.
+type CreateReportShare struct {
+	// ExpiresAt Optional expiry. After this time the share returns 404.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// Label Optional human-readable label.
+	Label *string `json:"label,omitempty"`
+
+	// MaxGrants Maximum number of claims. Omit for unlimited.
+	MaxGrants *int `json:"maxGrants,omitempty"`
+
+	// Password Optional password gate. Must be at least 8 characters.
+	Password *string `json:"password,omitempty"`
+}
+
+// CreateReportShareResult defines model for CreateReportShareResult.
+type CreateReportShareResult struct {
+	// ClaimUrl Absolute claim URL for sharing with recipients.
+	ClaimUrl string      `json:"claimUrl"`
+	Share    ReportShare `json:"share"`
+
+	// Token The share token. Shown once; never stored plaintext.
+	Token *string `json:"token,omitempty"`
+}
+
 // CreateReportTemplate defines model for CreateReportTemplate.
 type CreateReportTemplate struct {
 	Name string `json:"name"`
@@ -2392,6 +2444,28 @@ type FindingStepIds struct {
 	// StepIds The complete set of step ids for this finding.
 	StepIds []openapi_types.UUID `json:"stepIds"`
 }
+
+// GuestRegisterRequest defines model for GuestRegisterRequest.
+type GuestRegisterRequest struct {
+	// DisplayName Optional display name.
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// Email Email address for the new account.
+	Email openapi_types.Email `json:"email"`
+
+	// Password Password for the new account.
+	Password string `json:"password"`
+}
+
+// GuestRegisterResult defines model for GuestRegisterResult.
+type GuestRegisterResult struct {
+	Email        string                          `json:"email"`
+	Id           openapi_types.UUID              `json:"id"`
+	PlatformRole GuestRegisterResultPlatformRole `json:"platformRole"`
+}
+
+// GuestRegisterResultPlatformRole defines model for GuestRegisterResult.PlatformRole.
+type GuestRegisterResultPlatformRole string
 
 // Health Health of the server and of everything it depends on. Reported with a 200
 // when `status` is `ok` and a 503 when it is `error`, so a monitor that only
@@ -3016,6 +3090,56 @@ type ReportBrandingLogo struct {
 	BlobRef string `json:"blobRef"`
 }
 
+// ReportShare defines model for ReportShare.
+type ReportShare struct {
+	CreatedAt time.Time                    `json:"createdAt"`
+	CreatedBy string                       `json:"createdBy"`
+	ExpiresAt nullable.Nullable[time.Time] `json:"expiresAt,omitempty"`
+
+	// GrantCount Current number of non-revoked grants.
+	GrantCount *int `json:"grantCount,omitempty"`
+
+	// Grants Grants for this share. Present in list endpoints.
+	Grants *[]ReportShareGrant       `json:"grants,omitempty"`
+	Id     openapi_types.UUID        `json:"id"`
+	Label  nullable.Nullable[string] `json:"label,omitempty"`
+
+	// MaxGrants Maximum number of grants, or null for unlimited.
+	MaxGrants nullable.Nullable[int] `json:"maxGrants,omitempty"`
+
+	// PasswordProtected Whether this share requires a password.
+	PasswordProtected *bool                        `json:"passwordProtected,omitempty"`
+	RevokedAt         nullable.Nullable[time.Time] `json:"revokedAt,omitempty"`
+	VersionId         openapi_types.UUID           `json:"versionId"`
+}
+
+// ReportShareGrant defines model for ReportShareGrant.
+type ReportShareGrant struct {
+	ClaimedAt nullable.Nullable[time.Time] `json:"claimedAt,omitempty"`
+	CreatedAt time.Time                    `json:"createdAt"`
+	Id        openapi_types.UUID           `json:"id"`
+	RevokedAt nullable.Nullable[time.Time] `json:"revokedAt,omitempty"`
+	ShareId   openapi_types.UUID           `json:"shareId"`
+
+	// UserId The user who claimed this grant, or null if unclaimed.
+	UserId nullable.Nullable[openapi_types.UUID] `json:"userId,omitempty"`
+}
+
+// ReportShareInfo defines model for ReportShareInfo.
+type ReportShareInfo struct {
+	// AlreadyClaimed Whether the current user has already claimed this share.
+	AlreadyClaimed *bool `json:"alreadyClaimed,omitempty"`
+
+	// Exists Whether the share exists and is active.
+	Exists bool `json:"exists"`
+
+	// Label The share's label, if set.
+	Label *string `json:"label,omitempty"`
+
+	// PasswordRequired Whether the share requires a password.
+	PasswordRequired *bool `json:"passwordRequired,omitempty"`
+}
+
 // ReportTemplate defines model for ReportTemplate.
 type ReportTemplate struct {
 	// Blocks Template blocks in ordinal order. Present in GET /report-templates/{templateId} responses; absent from list endpoints.
@@ -3263,6 +3387,12 @@ type SeverityBucket struct {
 // SeveritySnapshot defines model for SeveritySnapshot.
 type SeveritySnapshot struct {
 	Buckets []SeverityBucket `json:"buckets"`
+}
+
+// SharePassword defines model for SharePassword.
+type SharePassword struct {
+	// Password The share password.
+	Password string `json:"password"`
 }
 
 // StartContentSyncRequest Optional pin for multi-version sources. Additional properties are
@@ -5136,6 +5266,63 @@ type SetFindingStepsParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// RevokeReportShareParams defines parameters for RevokeReportShare.
+type RevokeReportShareParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// RevokeReportShareGrantParams defines parameters for RevokeReportShareGrant.
+type RevokeReportShareGrantParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
+// CreateReportShareParams defines parameters for CreateReportShare.
+type CreateReportShareParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // SetMfaPolicyParams defines parameters for SetMfaPolicy.
 type SetMfaPolicyParams struct {
 	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
@@ -5374,6 +5561,9 @@ type RevokeUserTokenParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// GuestRegisterJSONRequestBody defines body for GuestRegister for application/json ContentType.
+type GuestRegisterJSONRequestBody = GuestRegisterRequest
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -5524,6 +5714,15 @@ type PatchFindingJSONRequestBody = PatchFinding
 // SetFindingStepsJSONRequestBody defines body for SetFindingSteps for application/json ContentType.
 type SetFindingStepsJSONRequestBody = FindingStepIds
 
+// CreateReportShareJSONRequestBody defines body for CreateReportShare for application/json ContentType.
+type CreateReportShareJSONRequestBody = CreateReportShare
+
+// ClaimReportShareJSONRequestBody defines body for ClaimReportShare for application/json ContentType.
+type ClaimReportShareJSONRequestBody = ClaimReportShare
+
+// VerifyReportSharePasswordJSONRequestBody defines body for VerifyReportSharePassword for application/json ContentType.
+type VerifyReportSharePasswordJSONRequestBody = SharePassword
+
 // SetMfaPolicyJSONRequestBody defines body for SetMfaPolicy for application/json ContentType.
 type SetMfaPolicyJSONRequestBody = MFAPolicy
 
@@ -5547,6 +5746,9 @@ type ServerInterface interface {
 	// ListActivity List the installation-wide activity log.
 	// (GET /activity)
 	ListActivity(w http.ResponseWriter, r *http.Request, params ListActivityParams)
+	// GuestRegister Create a minimal local account for share invite access.
+	// (POST /auth/guest-register)
+	GuestRegister(w http.ResponseWriter, r *http.Request)
 	// Login Sign in with an email address and password.
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -6000,6 +6202,33 @@ type ServerInterface interface {
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// RevokeReportShare Revoke a share and all its grants.
+	// (DELETE /report-shares/{shareId})
+	RevokeReportShare(w http.ResponseWriter, r *http.Request, shareId string, params RevokeReportShareParams)
+	// RevokeReportShareGrant Revoke a single grant.
+	// (DELETE /report-shares/{shareId}/grants/{grantId})
+	RevokeReportShareGrant(w http.ResponseWriter, r *http.Request, shareId string, grantId string, params RevokeReportShareGrantParams)
+	// ListReportShares List shares for a published version.
+	// (GET /report-versions/{versionId}/shares)
+	ListReportShares(w http.ResponseWriter, r *http.Request, versionId VersionId)
+	// CreateReportShare Create a share link for a published version.
+	// (POST /report-versions/{versionId}/shares)
+	CreateReportShare(w http.ResponseWriter, r *http.Request, versionId VersionId, params CreateReportShareParams)
+	// GetReportShareInfo Return share metadata for the claim page.
+	// (GET /report-views/{token})
+	GetReportShareInfo(w http.ResponseWriter, r *http.Request, token string)
+	// ClaimReportShare Claim access to a shared report version.
+	// (POST /report-views/{token}/claim)
+	ClaimReportShare(w http.ResponseWriter, r *http.Request, token string)
+	// GetReportShareHtml View the shared report as HTML.
+	// (GET /report-views/{token}/html)
+	GetReportShareHtml(w http.ResponseWriter, r *http.Request, token string)
+	// VerifyReportSharePassword Verify the share password and set a satisfaction cookie.
+	// (POST /report-views/{token}/password)
+	VerifyReportSharePassword(w http.ResponseWriter, r *http.Request, token string)
+	// GetReportSharePdf View the shared report as PDF.
+	// (GET /report-views/{token}/pdf)
+	GetReportSharePdf(w http.ResponseWriter, r *http.Request, token string)
 	// GetMfaPolicy Read the platform-wide multi-factor authentication policy.
 	// (GET /settings/mfa)
 	GetMfaPolicy(w http.ResponseWriter, r *http.Request)
@@ -6060,6 +6289,12 @@ type Unimplemented struct{}
 // ListActivity List the installation-wide activity log.
 // (GET /activity)
 func (_ Unimplemented) ListActivity(w http.ResponseWriter, r *http.Request, params ListActivityParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GuestRegister Create a minimal local account for share invite access.
+// (POST /auth/guest-register)
+func (_ Unimplemented) GuestRegister(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6969,6 +7204,60 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// RevokeReportShare Revoke a share and all its grants.
+// (DELETE /report-shares/{shareId})
+func (_ Unimplemented) RevokeReportShare(w http.ResponseWriter, r *http.Request, shareId string, params RevokeReportShareParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RevokeReportShareGrant Revoke a single grant.
+// (DELETE /report-shares/{shareId}/grants/{grantId})
+func (_ Unimplemented) RevokeReportShareGrant(w http.ResponseWriter, r *http.Request, shareId string, grantId string, params RevokeReportShareGrantParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListReportShares List shares for a published version.
+// (GET /report-versions/{versionId}/shares)
+func (_ Unimplemented) ListReportShares(w http.ResponseWriter, r *http.Request, versionId VersionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateReportShare Create a share link for a published version.
+// (POST /report-versions/{versionId}/shares)
+func (_ Unimplemented) CreateReportShare(w http.ResponseWriter, r *http.Request, versionId VersionId, params CreateReportShareParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetReportShareInfo Return share metadata for the claim page.
+// (GET /report-views/{token})
+func (_ Unimplemented) GetReportShareInfo(w http.ResponseWriter, r *http.Request, token string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ClaimReportShare Claim access to a shared report version.
+// (POST /report-views/{token}/claim)
+func (_ Unimplemented) ClaimReportShare(w http.ResponseWriter, r *http.Request, token string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetReportShareHtml View the shared report as HTML.
+// (GET /report-views/{token}/html)
+func (_ Unimplemented) GetReportShareHtml(w http.ResponseWriter, r *http.Request, token string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// VerifyReportSharePassword Verify the share password and set a satisfaction cookie.
+// (POST /report-views/{token}/password)
+func (_ Unimplemented) VerifyReportSharePassword(w http.ResponseWriter, r *http.Request, token string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetReportSharePdf View the shared report as PDF.
+// (GET /report-views/{token}/pdf)
+func (_ Unimplemented) GetReportSharePdf(w http.ResponseWriter, r *http.Request, token string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetMfaPolicy Read the platform-wide multi-factor authentication policy.
 // (GET /settings/mfa)
 func (_ Unimplemented) GetMfaPolicy(w http.ResponseWriter, r *http.Request) {
@@ -7169,6 +7458,20 @@ func (siw *ServerInterfaceWrapper) ListActivity(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListActivity(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GuestRegister operation middleware
+func (siw *ServerInterfaceWrapper) GuestRegister(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GuestRegister(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13380,6 +13683,321 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// RevokeReportShare operation middleware
+func (siw *ServerInterfaceWrapper) RevokeReportShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeReportShareParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeReportShare(w, r, shareId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeReportShareGrant operation middleware
+func (siw *ServerInterfaceWrapper) RevokeReportShareGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "shareId" -------------
+	var shareId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "shareId", chi.URLParam(r, "shareId"), &shareId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "shareId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "grantId" -------------
+	var grantId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "grantId", chi.URLParam(r, "grantId"), &grantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grantId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeReportShareGrantParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeReportShareGrant(w, r, shareId, grantId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListReportShares operation middleware
+func (siw *ServerInterfaceWrapper) ListReportShares(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "versionId" -------------
+	var versionId VersionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionId", chi.URLParam(r, "versionId"), &versionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReportShares(w, r, versionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateReportShare operation middleware
+func (siw *ServerInterfaceWrapper) CreateReportShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "versionId" -------------
+	var versionId VersionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionId", chi.URLParam(r, "versionId"), &versionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateReportShareParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateReportShare(w, r, versionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReportShareInfo operation middleware
+func (siw *ServerInterfaceWrapper) GetReportShareInfo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "token" -------------
+	var token string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", chi.URLParam(r, "token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReportShareInfo(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClaimReportShare operation middleware
+func (siw *ServerInterfaceWrapper) ClaimReportShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "token" -------------
+	var token string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", chi.URLParam(r, "token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClaimReportShare(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReportShareHtml operation middleware
+func (siw *ServerInterfaceWrapper) GetReportShareHtml(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "token" -------------
+	var token string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", chi.URLParam(r, "token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReportShareHtml(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyReportSharePassword operation middleware
+func (siw *ServerInterfaceWrapper) VerifyReportSharePassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "token" -------------
+	var token string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", chi.URLParam(r, "token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyReportSharePassword(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReportSharePdf operation middleware
+func (siw *ServerInterfaceWrapper) GetReportSharePdf(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "token" -------------
+	var token string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", chi.URLParam(r, "token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReportSharePdf(w, r, token)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMfaPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetMfaPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -14693,6 +15311,36 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/engagements/{engagementId}/report-templates/from-report", wrapper.CreateReportTemplateFromReport)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/report-versions/{versionId}/shares", wrapper.ListReportShares)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/report-versions/{versionId}/shares", wrapper.CreateReportShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/report-shares/{shareId}", wrapper.RevokeReportShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/report-shares/{shareId}/grants/{grantId}", wrapper.RevokeReportShareGrant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/report-views/{token}", wrapper.GetReportShareInfo)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/report-views/{token}/claim", wrapper.ClaimReportShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/report-views/{token}/password", wrapper.VerifyReportSharePassword)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/report-views/{token}/html", wrapper.GetReportShareHtml)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/report-views/{token}/pdf", wrapper.GetReportSharePdf)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/guest-register", wrapper.GuestRegister)
+	})
 
 	return r
 }
@@ -14795,6 +15443,103 @@ type ListActivity500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListActivity500ApplicationProblemPlusJSONResponse) VisitListActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuestRegisterRequestObject struct {
+	Body *GuestRegisterJSONRequestBody
+}
+
+type GuestRegisterResponseObject interface {
+	VisitGuestRegisterResponse(w http.ResponseWriter) error
+}
+
+type GuestRegister201ResponseHeaders struct {
+	SetCookie *string
+}
+
+type GuestRegister201JSONResponse struct {
+	Body    GuestRegisterResult
+	Headers GuestRegister201ResponseHeaders
+}
+
+func (response GuestRegister201JSONResponse) VisitGuestRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuestRegister400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GuestRegister400ApplicationProblemPlusJSONResponse) VisitGuestRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuestRegister409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response GuestRegister409ApplicationProblemPlusJSONResponse) VisitGuestRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuestRegister429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response GuestRegister429ApplicationProblemPlusJSONResponse) VisitGuestRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuestRegister500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GuestRegister500ApplicationProblemPlusJSONResponse) VisitGuestRegisterResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -29616,6 +30361,701 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	return err
 }
 
+type RevokeReportShareRequestObject struct {
+	ShareId string `json:"shareId"`
+	Params  RevokeReportShareParams
+}
+
+type RevokeReportShareResponseObject interface {
+	VisitRevokeReportShareResponse(w http.ResponseWriter) error
+}
+
+type RevokeReportShare204Response struct {
+}
+
+func (response RevokeReportShare204Response) VisitRevokeReportShareResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeReportShare400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShare400ApplicationProblemPlusJSONResponse) VisitRevokeReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShare403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShare403ApplicationProblemPlusJSONResponse) VisitRevokeReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShare404ApplicationProblemPlusJSONResponse) VisitRevokeReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShare500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShare500ApplicationProblemPlusJSONResponse) VisitRevokeReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShareGrantRequestObject struct {
+	ShareId string `json:"shareId"`
+	GrantId string `json:"grantId"`
+	Params  RevokeReportShareGrantParams
+}
+
+type RevokeReportShareGrantResponseObject interface {
+	VisitRevokeReportShareGrantResponse(w http.ResponseWriter) error
+}
+
+type RevokeReportShareGrant204Response struct {
+}
+
+func (response RevokeReportShareGrant204Response) VisitRevokeReportShareGrantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeReportShareGrant400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShareGrant400ApplicationProblemPlusJSONResponse) VisitRevokeReportShareGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShareGrant403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShareGrant403ApplicationProblemPlusJSONResponse) VisitRevokeReportShareGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShareGrant404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShareGrant404ApplicationProblemPlusJSONResponse) VisitRevokeReportShareGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeReportShareGrant500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeReportShareGrant500ApplicationProblemPlusJSONResponse) VisitRevokeReportShareGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportSharesRequestObject struct {
+	VersionId VersionId `json:"versionId"`
+}
+
+type ListReportSharesResponseObject interface {
+	VisitListReportSharesResponse(w http.ResponseWriter) error
+}
+
+type ListReportShares200JSONResponse []ReportShare
+
+func (response ListReportShares200JSONResponse) VisitListReportSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportShares400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportShares400ApplicationProblemPlusJSONResponse) VisitListReportSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportShares403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportShares403ApplicationProblemPlusJSONResponse) VisitListReportSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportShares404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportShares404ApplicationProblemPlusJSONResponse) VisitListReportSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReportShares500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListReportShares500ApplicationProblemPlusJSONResponse) VisitListReportSharesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportShareRequestObject struct {
+	VersionId VersionId `json:"versionId"`
+	Params    CreateReportShareParams
+	Body      *CreateReportShareJSONRequestBody
+}
+
+type CreateReportShareResponseObject interface {
+	VisitCreateReportShareResponse(w http.ResponseWriter) error
+}
+
+type CreateReportShare201JSONResponse CreateReportShareResult
+
+func (response CreateReportShare201JSONResponse) VisitCreateReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportShare400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportShare400ApplicationProblemPlusJSONResponse) VisitCreateReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportShare403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportShare403ApplicationProblemPlusJSONResponse) VisitCreateReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportShare404ApplicationProblemPlusJSONResponse) VisitCreateReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReportShare500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateReportShare500ApplicationProblemPlusJSONResponse) VisitCreateReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportShareInfoRequestObject struct {
+	Token string `json:"token"`
+}
+
+type GetReportShareInfoResponseObject interface {
+	VisitGetReportShareInfoResponse(w http.ResponseWriter) error
+}
+
+type GetReportShareInfo200JSONResponse ReportShareInfo
+
+func (response GetReportShareInfo200JSONResponse) VisitGetReportShareInfoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportShareInfo404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportShareInfo404ApplicationProblemPlusJSONResponse) VisitGetReportShareInfoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportShareInfo500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportShareInfo500ApplicationProblemPlusJSONResponse) VisitGetReportShareInfoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaimReportShareRequestObject struct {
+	Token string `json:"token"`
+	Body  *ClaimReportShareJSONRequestBody
+}
+
+type ClaimReportShareResponseObject interface {
+	VisitClaimReportShareResponse(w http.ResponseWriter) error
+}
+
+type ClaimReportShare200JSONResponse ClaimReportShareResult
+
+func (response ClaimReportShare200JSONResponse) VisitClaimReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaimReportShare401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ClaimReportShare401ApplicationProblemPlusJSONResponse) VisitClaimReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaimReportShare403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ClaimReportShare403ApplicationProblemPlusJSONResponse) VisitClaimReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaimReportShare404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ClaimReportShare404ApplicationProblemPlusJSONResponse) VisitClaimReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaimReportShare409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ClaimReportShare409ApplicationProblemPlusJSONResponse) VisitClaimReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClaimReportShare500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ClaimReportShare500ApplicationProblemPlusJSONResponse) VisitClaimReportShareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportShareHtmlRequestObject struct {
+	Token string `json:"token"`
+}
+
+type GetReportShareHtmlResponseObject interface {
+	VisitGetReportShareHtmlResponse(w http.ResponseWriter) error
+}
+
+type GetReportShareHtml200TexthtmlResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetReportShareHtml200TexthtmlResponse) VisitGetReportShareHtmlResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/html")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetReportShareHtml404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportShareHtml404ApplicationProblemPlusJSONResponse) VisitGetReportShareHtmlResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportShareHtml500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportShareHtml500ApplicationProblemPlusJSONResponse) VisitGetReportShareHtmlResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyReportSharePasswordRequestObject struct {
+	Token string `json:"token"`
+	Body  *VerifyReportSharePasswordJSONRequestBody
+}
+
+type VerifyReportSharePasswordResponseObject interface {
+	VisitVerifyReportSharePasswordResponse(w http.ResponseWriter) error
+}
+
+type VerifyReportSharePassword204ResponseHeaders struct {
+	SetCookie *string
+}
+
+type VerifyReportSharePassword204Response struct {
+	Headers VerifyReportSharePassword204ResponseHeaders
+}
+
+func (response VerifyReportSharePassword204Response) VisitVerifyReportSharePasswordResponse(w http.ResponseWriter) error {
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
+type VerifyReportSharePassword401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyReportSharePassword401ApplicationProblemPlusJSONResponse) VisitVerifyReportSharePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyReportSharePassword404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyReportSharePassword404ApplicationProblemPlusJSONResponse) VisitVerifyReportSharePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyReportSharePassword500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyReportSharePassword500ApplicationProblemPlusJSONResponse) VisitVerifyReportSharePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportSharePdfRequestObject struct {
+	Token string `json:"token"`
+}
+
+type GetReportSharePdfResponseObject interface {
+	VisitGetReportSharePdfResponse(w http.ResponseWriter) error
+}
+
+type GetReportSharePdf200ApplicationpdfResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetReportSharePdf200ApplicationpdfResponse) VisitGetReportSharePdfResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetReportSharePdf404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportSharePdf404ApplicationProblemPlusJSONResponse) VisitGetReportSharePdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportSharePdf500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetReportSharePdf500ApplicationProblemPlusJSONResponse) VisitGetReportSharePdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReportSharePdf503Response struct {
+}
+
+func (response GetReportSharePdf503Response) VisitGetReportSharePdfResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
 type GetMfaPolicyRequestObject struct {
 }
 
@@ -31167,6 +32607,9 @@ type StrictServerInterface interface {
 	// ListActivity List the installation-wide activity log.
 	// (GET /activity)
 	ListActivity(ctx context.Context, request ListActivityRequestObject) (ListActivityResponseObject, error)
+	// GuestRegister Create a minimal local account for share invite access.
+	// (POST /auth/guest-register)
+	GuestRegister(ctx context.Context, request GuestRegisterRequestObject) (GuestRegisterResponseObject, error)
 	// Login Sign in with an email address and password.
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -31620,6 +33063,33 @@ type StrictServerInterface interface {
 	// GetHealth Report whether the server and its dependencies are healthy.
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// RevokeReportShare Revoke a share and all its grants.
+	// (DELETE /report-shares/{shareId})
+	RevokeReportShare(ctx context.Context, request RevokeReportShareRequestObject) (RevokeReportShareResponseObject, error)
+	// RevokeReportShareGrant Revoke a single grant.
+	// (DELETE /report-shares/{shareId}/grants/{grantId})
+	RevokeReportShareGrant(ctx context.Context, request RevokeReportShareGrantRequestObject) (RevokeReportShareGrantResponseObject, error)
+	// ListReportShares List shares for a published version.
+	// (GET /report-versions/{versionId}/shares)
+	ListReportShares(ctx context.Context, request ListReportSharesRequestObject) (ListReportSharesResponseObject, error)
+	// CreateReportShare Create a share link for a published version.
+	// (POST /report-versions/{versionId}/shares)
+	CreateReportShare(ctx context.Context, request CreateReportShareRequestObject) (CreateReportShareResponseObject, error)
+	// GetReportShareInfo Return share metadata for the claim page.
+	// (GET /report-views/{token})
+	GetReportShareInfo(ctx context.Context, request GetReportShareInfoRequestObject) (GetReportShareInfoResponseObject, error)
+	// ClaimReportShare Claim access to a shared report version.
+	// (POST /report-views/{token}/claim)
+	ClaimReportShare(ctx context.Context, request ClaimReportShareRequestObject) (ClaimReportShareResponseObject, error)
+	// GetReportShareHtml View the shared report as HTML.
+	// (GET /report-views/{token}/html)
+	GetReportShareHtml(ctx context.Context, request GetReportShareHtmlRequestObject) (GetReportShareHtmlResponseObject, error)
+	// VerifyReportSharePassword Verify the share password and set a satisfaction cookie.
+	// (POST /report-views/{token}/password)
+	VerifyReportSharePassword(ctx context.Context, request VerifyReportSharePasswordRequestObject) (VerifyReportSharePasswordResponseObject, error)
+	// GetReportSharePdf View the shared report as PDF.
+	// (GET /report-views/{token}/pdf)
+	GetReportSharePdf(ctx context.Context, request GetReportSharePdfRequestObject) (GetReportSharePdfResponseObject, error)
 	// GetMfaPolicy Read the platform-wide multi-factor authentication policy.
 	// (GET /settings/mfa)
 	GetMfaPolicy(ctx context.Context, request GetMfaPolicyRequestObject) (GetMfaPolicyResponseObject, error)
@@ -31731,6 +33201,37 @@ func (sh *strictHandler) ListActivity(w http.ResponseWriter, r *http.Request, pa
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListActivityResponseObject); ok {
 		if err := validResponse.VisitListActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GuestRegister operation middleware
+func (sh *strictHandler) GuestRegister(w http.ResponseWriter, r *http.Request) {
+	var request GuestRegisterRequestObject
+
+	var body GuestRegisterJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GuestRegister(ctx, request.(GuestRegisterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GuestRegister")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GuestRegisterResponseObject); ok {
+		if err := validResponse.VisitGuestRegisterResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -36082,6 +37583,271 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeReportShare operation middleware
+func (sh *strictHandler) RevokeReportShare(w http.ResponseWriter, r *http.Request, shareId string, params RevokeReportShareParams) {
+	var request RevokeReportShareRequestObject
+
+	request.ShareId = shareId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeReportShare(ctx, request.(RevokeReportShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeReportShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeReportShareResponseObject); ok {
+		if err := validResponse.VisitRevokeReportShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeReportShareGrant operation middleware
+func (sh *strictHandler) RevokeReportShareGrant(w http.ResponseWriter, r *http.Request, shareId string, grantId string, params RevokeReportShareGrantParams) {
+	var request RevokeReportShareGrantRequestObject
+
+	request.ShareId = shareId
+	request.GrantId = grantId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeReportShareGrant(ctx, request.(RevokeReportShareGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeReportShareGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeReportShareGrantResponseObject); ok {
+		if err := validResponse.VisitRevokeReportShareGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListReportShares operation middleware
+func (sh *strictHandler) ListReportShares(w http.ResponseWriter, r *http.Request, versionId VersionId) {
+	var request ListReportSharesRequestObject
+
+	request.VersionId = versionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListReportShares(ctx, request.(ListReportSharesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListReportShares")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListReportSharesResponseObject); ok {
+		if err := validResponse.VisitListReportSharesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateReportShare operation middleware
+func (sh *strictHandler) CreateReportShare(w http.ResponseWriter, r *http.Request, versionId VersionId, params CreateReportShareParams) {
+	var request CreateReportShareRequestObject
+
+	request.VersionId = versionId
+	request.Params = params
+
+	var body CreateReportShareJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateReportShare(ctx, request.(CreateReportShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateReportShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateReportShareResponseObject); ok {
+		if err := validResponse.VisitCreateReportShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReportShareInfo operation middleware
+func (sh *strictHandler) GetReportShareInfo(w http.ResponseWriter, r *http.Request, token string) {
+	var request GetReportShareInfoRequestObject
+
+	request.Token = token
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReportShareInfo(ctx, request.(GetReportShareInfoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReportShareInfo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportShareInfoResponseObject); ok {
+		if err := validResponse.VisitGetReportShareInfoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ClaimReportShare operation middleware
+func (sh *strictHandler) ClaimReportShare(w http.ResponseWriter, r *http.Request, token string) {
+	var request ClaimReportShareRequestObject
+
+	request.Token = token
+
+	var body ClaimReportShareJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ClaimReportShare(ctx, request.(ClaimReportShareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ClaimReportShare")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ClaimReportShareResponseObject); ok {
+		if err := validResponse.VisitClaimReportShareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReportShareHtml operation middleware
+func (sh *strictHandler) GetReportShareHtml(w http.ResponseWriter, r *http.Request, token string) {
+	var request GetReportShareHtmlRequestObject
+
+	request.Token = token
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReportShareHtml(ctx, request.(GetReportShareHtmlRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReportShareHtml")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportShareHtmlResponseObject); ok {
+		if err := validResponse.VisitGetReportShareHtmlResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerifyReportSharePassword operation middleware
+func (sh *strictHandler) VerifyReportSharePassword(w http.ResponseWriter, r *http.Request, token string) {
+	var request VerifyReportSharePasswordRequestObject
+
+	request.Token = token
+
+	var body VerifyReportSharePasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyReportSharePassword(ctx, request.(VerifyReportSharePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyReportSharePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyReportSharePasswordResponseObject); ok {
+		if err := validResponse.VisitVerifyReportSharePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReportSharePdf operation middleware
+func (sh *strictHandler) GetReportSharePdf(w http.ResponseWriter, r *http.Request, token string) {
+	var request GetReportSharePdfRequestObject
+
+	request.Token = token
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReportSharePdf(ctx, request.(GetReportSharePdfRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReportSharePdf")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReportSharePdfResponseObject); ok {
+		if err := validResponse.VisitGetReportSharePdfResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

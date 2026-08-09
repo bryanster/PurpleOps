@@ -693,6 +693,27 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	if err != nil {
 		panic("httpapi: report publish: " + err.Error())
 	}
+
+	// Report share links and grants (M6-012).
+	shareRepo := storereport.NewShares(deps.Store)
+	grantRepo := storereport.NewGrants(deps.Store)
+	shareTokenHasher, err := report.NewShareTokenHasher(deps.Config.Encryption.Key.Reveal())
+	if err != nil {
+		panic("httpapi: report share hasher: " + err.Error())
+	}
+	shareSvc, err := report.NewShareService(report.ShareServiceDeps{
+		Shares:      shareRepo,
+		Grants:      grantRepo,
+		Versions:    versionRepo,
+		TokenHasher: shareTokenHasher,
+		Activity:    activityLog,
+		BaseURL:     strings.TrimSuffix(deps.Config.Server.BaseURL.String(), "/"),
+		SessionSec:  deps.Config.Session.Secret.Reveal(),
+	})
+	if err != nil {
+		panic("httpapi: report share: " + err.Error())
+	}
+
 	customSvc, err := content.NewCustom(content.CustomDeps{
 		Sources:      sources,
 		Procedures:   procedures,
@@ -804,6 +825,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		custom:         customSvc,
 
 		attackpin: pin,
+		shareSvc: shareSvc,
 		reports: reportSvc,
 
 		publishSvc: publishSvc,

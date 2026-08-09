@@ -172,6 +172,12 @@ const (
 
 	// VerbReportTemplateApplied records that a template was applied to a report draft.
 	VerbReportTemplateApplied Verb = "report.template_applied"
+
+	// Report share lifecycle (M6-012). Object is the report_share or
+	// report_share_grant row.
+	VerbReportShareCreated Verb = "report.share_created"
+	VerbReportShareRevoked Verb = "report.share_revoked"
+	VerbReportShareClaimed Verb = "report.share_claimed"
 )
 
 
@@ -210,6 +216,9 @@ const (
 	ObjectComment = "comment"
 
 	ObjectReportTemplate = "report_template"
+
+	ObjectReportShare      = "report_share"
+	ObjectReportShareGrant = "report_share_grant"
 )
 
 
