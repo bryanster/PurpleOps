@@ -119,10 +119,7 @@ interface ToolbarProps {
   editor: NonNullable<ReturnType<typeof useEditor>>
   onSetLink: () => void
 }
-
 function Toolbar({ editor, onSetLink }: ToolbarProps) {
-  const btn =
-    'h-8 w-8 p-0 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground'
 
   return (
     <div className="bg-muted/40 flex flex-wrap items-center gap-0.5 rounded-md border p-1">

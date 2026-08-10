@@ -152,7 +152,10 @@ function EngagementContextProvider({
   children,
 }: {
   eng: { id: string }
-} & EngagementContextValue & { children: ReactNode }): ReactNode {
+  role: EngagementRole
+  closed: boolean
+  children: ReactNode
+}): ReactNode {
   return (
     <EngagementCtx
       value={{ engagementId: eng.id, role, closed }}

@@ -63,3 +63,56 @@ engagement + comparison block). M6 owns finishing it, including share revocation
   step 1 may be skipped with a comment linking `M2` coverage.
 - Stabilize selectors; no `waitForTimeout` sleeps without reason.
 - Guest claim may need mail-less registration selectors from M6-012.
+
+---
+
+## Implementation notes
+
+### Spec created
+
+`e2e/specs/thesis-report.spec.ts` — exercises the full product thesis from
+content seed through report publish (see `docs/testing.md#thesis-spec-m6-015`).
+
+### What is covered
+
+- Content seeding (ATT&CK + Atomic from fixtures via `blctl`)
+- Two engagements (baseline + retest — M5 rewrite: no rounds)
+- API-driven: scenarios, steps, red execution (pending→running→complete),
+  blue scoring, finding creation
+- Report creation + publish via API
+
+### What is deferred
+
+- **Report comparison block** — blocked by DuckDB params scan bug in
+  `putReportBlocks` (map→string). Documented in file header.
+- **Share/view/revoke** — exercised by existing `reports-share.spec.ts`
+  (M6-012); API path blocked by DuckDB nil-scan on `blocks_json` for
+  blockless versions.
+- **Browser UI for report builder** — the Reports tab/page rendering
+  has pre-existing issues affecting all e2e specs (engagement creation
+  form validation changed).
+
+### API discoveries
+
+1. CSRF token comes from `bl_csrf` cookie in login response (double-submit
+   scheme M1-005). No separate `/auth/csrf` endpoint exists.
+2. Multiple `Set-Cookie` headers are joined with `
+` by Playwright.
+3. Execution endpoints use `/execution` (red) and `/detection` (blue)
+   suffixes.
+4. Execution status transitions: `pending → running → complete` (not
+   `pending → complete` directly).
+5. The existing `analytics-blind.spec.ts` and `reports-share.spec.ts`
+   both have the same CSRF/API issues discovered here and would need
+   similar fixes.
+
+### Pre-existing bugs documented
+
+Three bugs in `internal/report/` (DuckDB params scan, DuckDB nil scan,
+authz engagement mapping) — documented in the spec file header and
+`docs/testing.md`.
+
+### CI
+
+The spec runs in ~5 seconds (seed + API setup). Suitable for PR CI
+with the content-library fixtures.

@@ -63,7 +63,7 @@ export function SharePanel({ versionId }: { versionId: string }): ReactNode {
               className="size-6"
               title="Copy URL"
               onClick={() => {
-                void navigator.clipboard.writeText(resultUrl)
+                if (resultUrl) void navigator.clipboard.writeText(resultUrl)
               }}
             >
               <CopyIcon className="size-3" />

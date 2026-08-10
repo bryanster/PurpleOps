@@ -90,9 +90,9 @@ export function useCreateReport(): UseMutationResult<
 > {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ engagementId, body }) =>
+    mutationFn: async ({ engagementId, body }) =>
       unwrap(
-        api.POST('/engagements/{engagementId}/reports', {
+        await api.POST('/engagements/{engagementId}/reports', {
           params: { path: { engagementId } },
           body,
         }),
@@ -219,7 +219,7 @@ export function previewQueryOptions(
     enabled: Boolean(engagementId && reportId),
     queryFn: async ({ signal }) => {
       if (!engagementId || !reportId) throw new Error('engagementId and reportId required')
-      const result = await api.GET('/engagements/{engagementId}/reports/{reportId}/preview', {
+      const result = await api.POST('/engagements/{engagementId}/reports/{reportId}/preview', {
         params: {
           path: { engagementId, reportId },
           query: includeEvidence ? { includeEvidence } : undefined,

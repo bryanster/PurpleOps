@@ -138,7 +138,7 @@ export function BuilderPage(): ReactNode {
     setLocalBlocks((prev) => {
       if (!prev) return prev
       const next = [...prev]
-      next[index] = { ...next[index], params }
+      next[index] = { ...next[index]!, params }
       return next
     })
   }, [])
@@ -249,10 +249,10 @@ export function BuilderPage(): ReactNode {
               <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                 {blocks.map((block, i) => (
                   <SortableBlock
-                    key={sortableIds[i]}
+                    key={sortableIds[i]!}
                     block={block}
                     index={i}
-                    sortableId={sortableIds[i]}
+                    sortableId={sortableIds[i]!}
                     onRemove={() => {
                       handleRemoveBlock(i)
                     }}

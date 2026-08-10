@@ -183,8 +183,38 @@ when you are done.
 - **No retries are configured**, deliberately. A retry turns a flaky test green and hands the cost
   to whoever debugs it in three months. Flakiness here is a bug — in the product or in the spec.
 
-The suite grows one milestone at a time towards the single spec `PLAN.md` §9 describes: install
-content, run an engagement over two rounds, and share a report. M6 owns finishing it.
+The suite grows one milestone at a time towards the single spec `PLAN.md` §9
+describes: install content, run an engagement over two rounds, and share a
+report. M6 owns finishing it.
+
+### Thesis spec (M6-015)
+
+`specs/thesis-report.spec.ts` exercises the full product thesis:
+
+| Step | What |
+|---|---|
+| Content | Seeded from offline ATT&CK + Atomic fixtures via `blctl` |
+| Baseline engagement | Created via API: two steps (T1059, T1190), red executes (pending→running→complete), blue scores |
+| Finding | Raised from the missed T1190 detection |
+| Retest engagement | Second engagement (M5 rewrite — no rounds): T1190 re-run, scored higher |
+| Report | Created and published via API |
+
+The report is published through the API on the retest engagement. Share creation,
+guest claim, HTML view, and revoke → 404 are exercised by
+`specs/reports-share.spec.ts` (M6-012).
+
+**Known pre-existing bugs discovered during M6-015 implementation** (all in
+`internal/report/` — need separate fixes):
+
+1. **DuckDB params scan** — `putReportBlocks` fails with "unsupported Scan,
+   storing driver.Value type map[string]interface {} into type *string".
+   Blocks cannot be set via API.
+2. **DuckDB nil scan** — `createReportShare` fails scanning `<nil>` into
+   `*json.RawMessage` for versions with no blocks. Blockless versions are
+   un-shareable via API.
+3. **Authz engagement mapping** — `putReportBlocks` maps `reportId` as the
+   engagement resource identifier instead of `engagementId`. Admin workaround
+   used; member sessions get 404.
 
 ## Content sync write fairness (M2-016)
 
