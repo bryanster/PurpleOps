@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/bryanster/blacklight/internal/authn"
@@ -98,11 +100,25 @@ func (h *handlers) UploadEvidence(ctx context.Context,
 		return nil, apierr.Conflict(fmt.Sprintf("engagement is %s", eng.Status))
 	}
 
-	// MIME check — must be in the allowlist.
-	mime := "" // determined from actual content; for now use the file name extension or octet-stream
-	// Unfortunately multipart doesn't always carry Content-Type per part.
-	// We'll sniff from the first bytes after streaming. For now, accept
-	// the content and let Put handle the validation.
+	// Sniff the MIME type from the first 512 bytes (the standard magic number
+	// window). Reconstruct the stream so the store receives every byte.
+	sniffBuf := make([]byte, 512)
+	n, sniffErr := io.ReadFull(file, sniffBuf)
+	if sniffErr != nil && sniffErr != io.ErrUnexpectedEOF && sniffErr != io.EOF {
+		return nil, fmt.Errorf("evidence: read sniff: %w", sniffErr)
+	}
+	sniffed := sniffBuf[:n]
+	mime := http.DetectContentType(sniffed)
+	file = io.MultiReader(bytes.NewReader(sniffed), file)
+
+	// Validate against the configured MIME allowlist.
+	if len(h.evidenceMIMEAllowlist) > 0 {
+		if !mimeAllowed(mime, h.evidenceMIMEAllowlist) {
+			return nil, apierr.Validation(apierr.Field("file",
+				fmt.Sprintf("content type %q is not allowed; allowed types: %s",
+					mime, strings.Join(h.evidenceMIMEAllowlist, ", "))))
+		}
+	}
 
 	if h.evidenceStore == nil {
 		return nil, apierr.Internal(fmt.Errorf("httpapi: evidence store is not configured"))
@@ -332,4 +348,21 @@ func evidenceToWire(e storengagement.Evidence) (gen.Evidence, error) {
 		w.CommentId.Set(cid)
 	}
 	return w, nil
+}
+
+// mimeAllowed reports whether mime matches an entry in the allowlist.
+// Comparison is case-insensitive and strips parameters (so "image/png;
+// charset=utf-8" matches "image/png").
+func mimeAllowed(mime string, allowlist []string) bool {
+	// Strip parameters: "text/plain; charset=utf-8" → "text/plain"
+	if idx := strings.IndexByte(mime, ';'); idx != -1 {
+		mime = strings.TrimSpace(mime[:idx])
+	}
+	mime = strings.ToLower(strings.TrimSpace(mime))
+	for _, a := range allowlist {
+		if strings.ToLower(strings.TrimSpace(a)) == mime {
+			return true
+		}
+	}
+	return false
 }

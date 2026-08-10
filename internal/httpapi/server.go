@@ -788,6 +788,8 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		go bridgeContentProgress(hub, progCh, progUnsub, log)
 	}
 
+	evidenceMIMEAllowlist := parseMIMEAllowlist(deps.Config.Evidence.MIMEAllowlist)
+
 	evidenceRepo := storengagement.NewEvidenceRepo(deps.Store)
 
 	queries := analytics.NewQueries(deps.Store)
@@ -825,6 +827,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		custom:         customSvc,
 
 		attackpin: pin,
+		evidenceMIMEAllowlist: evidenceMIMEAllowlist,
 		shareSvc: shareSvc,
 		reports: reportSvc,
 
@@ -858,4 +861,25 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	)
 
 	return handler
+}
+
+// parseMIMEAllowlist splits and trims the comma-separated MIME allowlist
+// from config. Returns nil when the string is empty — callers treat nil as
+// "no restriction" for backward compatibility with tests that never set it.
+func parseMIMEAllowlist(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	list := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			list = append(list, p)
+		}
+	}
+	if len(list) == 0 {
+		return nil
+	}
+	return list
 }

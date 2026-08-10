@@ -132,6 +132,10 @@ type handlers struct {
 	// presence is the in-memory presence registry (M4-006).
 	presence *presence.Registry
 
+	// evidenceMIMEAllowlist is the parsed list of allowed MIME types for
+	// evidence uploads (M7-007). Empty means no restriction (legacy / tests).
+	evidenceMIMEAllowlist []string
+
 	// analytics answers the aggregate questions M5 asks (M5-001).
 	analytics *analytics.Queries
 

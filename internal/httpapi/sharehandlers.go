@@ -10,6 +10,7 @@ import (
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/bryanster/blacklight/internal/authn"
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/report"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
@@ -239,7 +240,7 @@ func (h *handlers) GetReportShareHtml(ctx context.Context,
 	}
 
 	if !h.canAccessSharedVersion(ctx, share, ver) {
-		return nil, errors.New("access denied")
+		return nil, apierr.NotFound("report_share", "token")
 	}
 
 	return gen.GetReportShareHtml200TexthtmlResponse{
@@ -263,7 +264,7 @@ func (h *handlers) GetReportSharePdf(ctx context.Context,
 	}
 
 	if !h.canAccessSharedVersion(ctx, share, ver) {
-		return nil, errors.New("access denied")
+		return nil, apierr.NotFound("report_share", "token")
 	}
 
 	pdf, err := h.pdfPrinter.RenderPDF(ctx, []byte(ver.HTML))
