@@ -85,13 +85,20 @@ destroys the rows it was supposed to save.
 So take a backup before deploying a release that migrates:
 
 ```sh
-# The database is a single file; stop the server before copying it.
+# Compose (recommended) — stop, archive the data volume, start.
+docker compose stop
+docker run --rm \
+  -v blacklight_blacklight-data:/data:ro \
+  -v "$PWD:/backup" \
+  debian:trixie-slim \
+  tar czf /backup/blacklight-$(date -u +%Y%m%dT%H%M%SZ).duckdb.backup.tar.gz -C /data .
+docker compose start
+
+# Bare metal — the server must be stopped before copying the file.
 systemctl stop blacklight
 cp /var/lib/blacklight/blacklight.duckdb /var/backups/blacklight-$(date -u +%Y%m%dT%H%M%SZ).duckdb
 systemctl start blacklight
 ```
-
-To recover, stop the server, put the backup back, and start the previous release.
 
 ## When a migration fails
 

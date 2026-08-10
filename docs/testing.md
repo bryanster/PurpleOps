@@ -76,7 +76,7 @@ npx playwright test specs/isolation.spec.ts                       # each file al
 Playwright has no `--shuffle`; naming the files in different orders is how you vary it.
 
 Tests **within** one file share that file's server and run in order, in one worker. That is where a
-sequence like "open a round, then execute a step in it" belongs. Files run in parallel across
+sequence like "create a scenario, then execute a step in it" belongs. Files run in parallel across
 workers.
 
 ### Seeding
@@ -127,9 +127,10 @@ A failing seed step fails the spec file loudly. It never runs the tests against 
 database.
 
 `blctl` has the subcommand tree since `M0B-014` — `blctl --help` lists it, and
-[`docs/cli.md`](cli.md) explains it. The two commands above are registered but not implemented
-yet: they arrive with M1 and M2, and a seed step that uses one fails loudly today, which is the
-correct outcome for a spec that depends on a feature nobody has built.
+[`docs/cli.md`](cli.md) explains it. All seeded commands above (`user create`,
+`content sync`, etc.) are implemented and tested. A spec file whose seed step
+fails (bad args, missing source, locked database) fails loudly, which is the
+correct outcome — the seed system itself is the assertion.
 
 ## Debugging a failure
 
@@ -184,8 +185,9 @@ when you are done.
   to whoever debugs it in three months. Flakiness here is a bug — in the product or in the spec.
 
 The suite grows one milestone at a time towards the single spec `PLAN.md` §9
-describes: install content, run an engagement over two rounds, and share a
-report. M6 owns finishing it.
+describes: install content, run a baseline and retest engagement with
+cross-engagement comparison, and share a report. M6 delivered the product
+thesis (`M6-015`); the thesis spec exercises it end to end.
 
 ### Thesis spec (M6-015)
 

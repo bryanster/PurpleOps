@@ -1,6 +1,6 @@
 # Copy-on-use contract (content → engagement steps)
 
-Normative for M3. M2 ships the pin surface and this contract so engagement
+Normative. M2 ships the pin surface and this contract so engagement
 code cannot invent a second definition of "use a technique from the library".
 
 ## Why
@@ -52,15 +52,15 @@ they created it, even if the template is later edited or the source re-synced.
 
 ## Out of scope here
 
-- The `engagement.attack_version` column and engagement CRUD (M3-001).
+- The `engagement.attack_version` column and engagement CRUD (`M3-001`).
 - UI pickers (M3 / M2-013 may list versions; they must still call AssertPinned
   when the engagement pin is set).
 - Custom tactics/techniques (not a product feature).
 
-## CTID plan → scenario (M3-012)
+## CTID plan → scenario
 
-Emulation-plan import snapshots plan/step fields the same way procedure
-templates do. Field mapping lives in [content-ctid.md](content-ctid.md)
+Emulation-plan import (`M3-012`) snapshots plan/step fields the same way procedure
+
 § M3 import contract. Lineage may keep `plan_id` / step external ids; they are
 not live foreign keys. Plan `metadata.attack_version` is advisory only — the
 engagement pin is authoritative for technique resolve.

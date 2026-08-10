@@ -41,8 +41,8 @@ Markdown body size is capped by `BLACKLIGHT_CONTENT_NOTE_MAX_BYTES` (default
 ### Delete
 
 Hard delete when nothing references the row. Engagement reference counting
-arrives in M3; until then the counter always reports zero, so deletes succeed
-for unreferenced custom rows. Referenced deletes will answer `409` with counts.
+arrived in M3; deletes are refused with `409` when a row is referenced,
+and the response carries per-type reference counts.
 
 ### Activity
 
@@ -91,7 +91,7 @@ M2-012's importer accepts this shape (or documents any thin adapter delta).
 
 ## Import (v1 files)
 
-Operators migrating from PurpleOps/Blacklight v1 can upload `testcases.json`,
+Operators migrating from Blacklight v1 can upload `testcases.json`,
 a `testcases/*.yaml` tree, or `knowledgebase/*.yaml` via
 
 ```sh

@@ -43,7 +43,7 @@ make docker-smoke   # builds the image and makes 14 assertions about it
 
 ## What CI runs
 
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml), on every push to `main` or `v2` and on
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml), on every push to `main` and on
 every pull request. No secrets are used anywhere, so a fork's pull request gets the same verdict as
 a branch here.
 

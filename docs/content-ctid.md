@@ -3,7 +3,7 @@
 Blacklight installs **Center for Threat-Informed Defense (CTID)** adversary
 emulation plans as a **catalog only** in M2. Plans and ordered steps are
 browsable and syncable; turning a plan into an engagement Scenario is
-**M3-012** (`PLAN.md` §3).
+implemented (`M3-012`, `PLAN.md` §3).
 
 ## Default source row
 
@@ -116,9 +116,9 @@ M3 snapshots. See also [content-copy-on-use.md](content-copy-on-use.md).
 | Step `attack_version` pin | engagement pin at import time — **not** plan `metadata.attack_version` |
 | Executor / platform / command | from `procedure.executors` / `procedure.platforms` when present |
 
-Technique ids are **strings** until M3 pin-resolve. ATT&CK need not be installed
-before CTID sync. Optional warn if ATT&CK is present and an id does not resolve
-in the engagement's pinned version (M3).
+Technique ids are resolved against the engagement's pinned ATT&CK version.
+ATT&CK need not be installed before CTID sync. Optional warn if ATT&CK is
+present and an id does not resolve in the engagement's pinned version.
 
 Catalog re-sync must not rewrite imported scenario steps (copy-on-use).
 

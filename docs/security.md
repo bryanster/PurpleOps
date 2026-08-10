@@ -4,7 +4,7 @@ What this file covers is the parts of the design a reader has to understand *bef
 because the failure mode is silent. Sessions, sign-in throttling and the middleware chain are in
 [`docs/http.md`](http.md); **who may do what** is [`docs/authz.md`](authz.md), which is generated
 from the rule table and is the whole of the permission model. This is the cross-site request forgery
-model and the multi-factor one, and it will grow as the rest of M1 lands.
+model and the multi-factor one. M1 is complete; the model described here is the shipped one.
 
 ## CSRF
 

@@ -228,8 +228,8 @@ blctl content sync --source atomic --wait
 blctl content sync --source attack --version 15.1 --wait
 ```
 
-Production adapters land with `M2-006`…; until then a sync of a seeded kind
-fails with "no adapter registered".
+All production adapters (ATT&CK, Atomic, Sigma, CTID) are implemented. Sync
+requires the server to be stopped — `docker compose stop` first.
 
 ### `blctl content import-bundle`
 
@@ -264,12 +264,12 @@ blctl content export-custom --format json --type notes
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one
-milestone at a time. Each exits 1 and names the milestone that will implement it.
+milestone at a time. Each exits 1 and names the gap.
 
-| Command | Arrives in |
+| Command | Status |
 |---|---|
-| `blctl report render` | M6 — reporting |
-| `blctl backup` | M7 — replaces the manual procedure in `docs/deploy.md` |
+| `blctl report render` | M6 shipped the report builder and PDF renderer; the CLI render command was not built. Use the API: `POST /api/v1/engagements/{id}/reports/{id}/preview.pdf`. |
+| `blctl backup` | Not yet built. Use the manual procedure: [`docs/deploy.md#backup-and-restore`](deploy.md#backup-and-restore). `M7-005` will wrap this in a command. |
 
 ## Building it
 

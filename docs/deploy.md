@@ -7,9 +7,9 @@ The **container image is the supported artefact** (`PLAN.md` §8). Running the b
 and is documented below, but the image is the configuration that gets tested — `deploy/smoke.sh`
 runs against it on every CI build.
 
-> **Status:** v2 is under construction. Everything on this page is real and tested, but there is no
-> login, no content and no engagement to put in it yet — the server serves the API and the app
-> shell. `docs/tickets/` is the accurate description of what exists.
+> **Greenfield only.** Blacklight is a ground-up rebuild. There is no import path from the
+> prior Python/Mongo v1 app — a new installation starts with an empty database. Back up the
+> v1 deployment independently if its data is still needed.
 
 ---
 
@@ -352,13 +352,23 @@ understand.
 
 ### Upgrading
 
-```sh
-git pull
-docker compose up -d --build
-```
+1. **Read the release notes** for the version you are moving to. Breaking changes, new required
+   environment variables, and migration counts are listed there. The changelog is published
+   with each [GitHub Release](https://github.com/bryanster/blacklight/releases).
+2. **[Back up](#backup-and-restore).** Migrations are forward-only; the only path back to the
+   previous release is restore from backup.
+3. **Stop the server.** `docker compose stop` — DuckDB admits one process per file.
+4. **Pull the new image.** `docker compose pull` (or `docker compose build` if building
+   from source).
+5. **Start.** `docker compose up -d`. Migrations run at startup, one line each in the log.
+   Watch them with `docker compose logs -f`.
+6. **Verify.** Open `$BLACKLIGHT_BASE_URL` in a browser and sign in. Check the health
+   endpoint: `curl -f $BLACKLIGHT_BASE_URL/api/v1/healthz`.
 
-Migrations are applied at startup and logged one line each. Back up first; the reason the paragraph
-above exists is that rolling *back* is the case that is not supported.
+If the new release does not start, restore the backup and use the previous image tag.
+Migrations are append-only — a database that has been migrated forward cannot be opened by
+an older binary.
+
 
 ---
 
@@ -381,9 +391,9 @@ and Chromium aborts. Three ways out, worst last:
    That is a real trade, not a free one.
 3. **`cap_add: ["SYS_ADMIN"]`.** Also works, also worse than it sounds — it is most of root.
 
-If none of those are acceptable, M6 will need `--no-sandbox`, which gives up Chromium's own
-isolation between the renderer and the rest of the container. The renderer only ever parses HTML
-this deployment generated, so the exposure is bounded, but it is the option to reach for last.
+If none of those are acceptable, pass `--no-sandbox` to Chromium (via `BLACKLIGHT_CHROME_ARGS`),
+which disables Chromium's own process isolation. The renderer only ever parses HTML this
+deployment generated, so the exposure is bounded, but it is the option to reach for last.
 
 `docker compose` does not set any of these. Two settings it does set, both for Chromium: `init: true`,
 because Chromium leaves zombie children and PID 1 in a container reaps nothing by default; and

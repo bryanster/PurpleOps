@@ -104,7 +104,7 @@ the STIX collection label):
 
 ## Version pin surface (M2-007)
 
-Engagements will store `attack_version` (M3). M2 ships the catalog and resolve
+Engagements store `attack_version`. M2 shipped the catalog and resolve
 helpers so that column has one definition:
 
 | Method | Path | Authz |
@@ -121,8 +121,8 @@ Domain package: `internal/content/attackpin`
 `item_count > 0`.
 
 Delete isolation: removing version X never mutates version Y. External ref
-counts go through `attackpin.References.AttackVersion` (M2 stub returns 0; M3
-implements). Activity verb: `content.version.deleted`.
+counts go through `attackpin.References.AttackVersion`. Activity verb:
+`content.version.deleted`.
 
 Copy-on-use for steps: [content-copy-on-use.md](content-copy-on-use.md).
 

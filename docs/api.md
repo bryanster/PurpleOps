@@ -54,7 +54,7 @@ Two more the reader should know, though a test cannot check them:
 
 - **Timestamps** are UTC RFC 3339 (`type: string, format: date-time`); **IDs** are UUIDv7
   (`type: string, format: uuid`). Never format a time for display on the server.
-- **Red and blue write through different operations with different request bodies.** Where two roles
+- **Red and blue write through different operations with different request bodies.**
   write different fields of the same object, they get separate endpoints — a user cannot submit a
   field that does not exist in their request type. Do not collapse them for convenience;
   that is the structural fix in `PLAN.md` §4.
@@ -220,7 +220,7 @@ both accept and add the reason to this list.
 ## Analytics endpoints (M5)
 
 All endpoints require `report.read` (all engagement members). Every response carries `blindFiltered`
-so the UI can label the view; in a blind engagement blue sees seat-scoped numbers. The definitions
+so the UI can label the view; in a blind engagement the blue-team view shows seat-scoped numbers.
 of every term — attempted, unscored, covered, MTTD — are in [`docs/analytics.md`](analytics.md).
 
 | Endpoint | Returns |

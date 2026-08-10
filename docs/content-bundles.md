@@ -6,8 +6,8 @@ over HTTPS; offline install uploads that same archive. Reprocess re-reads the
 last successful raw snapshot with no network at all.
 
 This page is the operator contract for obtaining and uploading bundles. Adapter
-tickets (`M2-006`…`M2-010`) own the per-kind layout details; until a kind's
-adapter lands, that kind cannot be synced or imported.
+tickets (`M2-006`…`M2-010`) define the per-kind layout details; all adapter
+kinds (ATT&CK, Atomic, Sigma, CTID) are implemented and shipped.
 
 ## Limits
 
@@ -36,9 +36,9 @@ detail names the limit.
 3. Copy the file to the air-gapped host unchanged. Do not re-pack or rename
    internals — the adapter's Parse step expects the upstream layout.
 
-Exact filename patterns and nested paths are locked when each adapter ticket
-lands. Until then, treat the online Fetch output as the golden shape: whatever
-bytes a successful `POST .../sync` stored under
+Exact filename patterns and nested paths are locked by each adapter. The
+online Fetch output is the golden shape: whatever bytes a successful
+`POST .../sync` stored under
 `{CONTENT_DIR}/raw/{source_id}/{version}/{sha256}` is a valid bundle for that
 source/version.
 
