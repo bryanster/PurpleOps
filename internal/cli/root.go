@@ -62,7 +62,7 @@ func newRoot(a *app) *cobra.Command {
 		group("engagement", "Manage engagements",
 			newArchiveCommand(a),
 		),
-		newBackupCommand(),
+		newBackupCommand(a),
 		newReportCommand(),
 	)
 	return root

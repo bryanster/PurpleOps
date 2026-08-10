@@ -82,10 +82,19 @@ A down migration is written before anyone needs it, run once under pressure, and
 the tree that has never been tested against real data. When it matters it either fails or silently
 destroys the rows it was supposed to save.
 
-So take a backup before deploying a release that migrates:
+So take a backup before deploying a release that migrates. The easiest path is `blctl backup`
+(see [`docs/cli.md#blctl-backup`](cli.md#blctl-backup)). The server must be stopped first:
 
 ```sh
-# Compose (recommended) — stop, archive the data volume, start.
+docker compose stop
+docker compose run --rm blacklight blctl backup
+docker compose start
+```
+
+Fallback — manual archive of the data volume:
+
+```sh
+# Compose — stop, archive the data volume, start.
 docker compose stop
 docker run --rm \
   -v blacklight_blacklight-data:/data:ro \
@@ -95,10 +104,6 @@ docker run --rm \
 docker compose start
 
 # Bare metal — the server must be stopped before copying the file.
-systemctl stop blacklight
-cp /var/lib/blacklight/blacklight.duckdb /var/backups/blacklight-$(date -u +%Y%m%dT%H%M%SZ).duckdb
-systemctl start blacklight
-```
 
 ## When a migration fails
 

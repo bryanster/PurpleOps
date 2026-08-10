@@ -8,8 +8,8 @@ import (
 
 // The commands in this file are registered, documented and inert. PLAN.md §6
 // says blctl does four things beyond migrations — create users, sync content,
-// back up, render reports — and only the first of those exists so far (M1-003,
-// in user.go).
+// back up, render reports — and backup shipped in M7 (backup.go). The report
+// render command is still pending.
 //
 // They are here anyway so that the shape of the tool is visible from
 // `blctl --help` rather than discovered one milestone at a time, and so that
@@ -33,19 +33,6 @@ func notImplemented(milestone, summary string) func(*cobra.Command, []string) er
 
 // content commands live in content.go (M2-002 / M2-003).
 
-func newBackupCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "backup",
-		Short: "Take a consistent backup of the database and evidence (M7)",
-		Long: "Takes a backup of the database and the evidence directory together, which is\n" +
-			"the only combination that restores to anything useful.\n\n" +
-			"Until this exists, docs/deploy.md documents the manual procedure: stop the\n" +
-			"container, archive the data volume, start it again. The reason it says to stop\n" +
-			"first is exactly what this command will remove.",
-		Args: noArgs,
-		RunE: notImplemented("M7", "which turns the manual procedure in docs/deploy.md into a command"),
-	}
-}
 
 func newReportCommand() *cobra.Command {
 	render := &cobra.Command{

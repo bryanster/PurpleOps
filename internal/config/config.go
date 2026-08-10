@@ -446,7 +446,8 @@ type Tool struct {
 	Log      Log
 	// Content is the on-disk content root and runner knobs. blctl content sync
 	// writes raw snapshots here the same way the server does.
-	Content Content
+	Content  Content
+	Evidence Evidence
 }
 
 // binding is one environment variable and the field it fills.
@@ -479,10 +480,10 @@ func (c *Config) bindings() []binding {
 		{name: envShutdownTimeout, target: &c.Server.ShutdownTimeout, def: "15s"},
 		{name: envTrustedProxies, target: &c.Server.TrustedProxies},
 		{name: envDBPath, target: &c.Database.Path, def: "./blacklight.duckdb", tool: true},
-		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence"},
-		{name: envEvidenceMaxUpload, target: &c.Evidence.MaxUploadBytes, def: "25MiB"},
-		{name: envEvidenceMaxEngagement, target: &c.Evidence.MaxEngagementBytes, def: "2GiB"},
-		{name: envEvidenceMIMEAllowlist, target: &c.Evidence.MIMEAllowlist, def: "image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,application/zip,application/x-tar,application/gzip,application/x-7z-compressed,text/x-log"},
+		{name: envEvidenceDir, target: &c.Evidence.Dir, def: "./evidence", tool: true},
+		{name: envEvidenceMaxUpload, target: &c.Evidence.MaxUploadBytes, def: "25MiB", tool: true},
+		{name: envEvidenceMaxEngagement, target: &c.Evidence.MaxEngagementBytes, def: "2GiB", tool: true},
+		{name: envEvidenceMIMEAllowlist, target: &c.Evidence.MIMEAllowlist, def: "image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,application/zip,application/x-tar,application/gzip,application/x-7z-compressed,text/x-log", tool: true},
 		{name: envContentDir, target: &c.Content.Dir, def: "./content", tool: true},
 		{name: envContentMaxBytes, target: &c.Content.MaxBytes, def: "512MiB", tool: true},
 		{name: envContentJobTimeout, target: &c.Content.JobTimeout, def: "30m", tool: true},
@@ -603,7 +604,7 @@ func parse(env map[string]string) (Config, []error) {
 // render PDFs with. Adding a tool-visible check means calling it from here too.
 func parseTool(env map[string]string) (Tool, []error) {
 	cfg, errs := bind(env, func(b binding) bool { return b.tool })
-	return Tool{Database: cfg.Database, Log: cfg.Log, Content: cfg.Content}, errs
+	return Tool{Database: cfg.Database, Log: cfg.Log, Content: cfg.Content, Evidence: cfg.Evidence}, errs
 }
 
 // bind fills the fields whose bindings want accepts, and reports every problem

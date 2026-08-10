@@ -17,9 +17,18 @@ import (
 // exported BLACKLIGHT_* cannot change what a test is testing — config treats an
 // empty value as unset.
 var toolEnv = []string{
+	"BLACKLIGHT_CONTENT_DIR",
+	"BLACKLIGHT_CONTENT_JOB_TIMEOUT",
+	"BLACKLIGHT_CONTENT_MAX_BYTES",
+	"BLACKLIGHT_CONTENT_NOTE_MAX_BYTES",
+	"BLACKLIGHT_CONTENT_WRITE_BATCH",
 	"BLACKLIGHT_DB_PATH",
-	"BLACKLIGHT_LOG_LEVEL",
+	"BLACKLIGHT_EVIDENCE_DIR",
+	"BLACKLIGHT_EVIDENCE_MAX_UPLOAD_BYTES",
+	"BLACKLIGHT_EVIDENCE_MAX_ENGAGEMENT_BYTES",
+	"BLACKLIGHT_EVIDENCE_MIME_ALLOWLIST",
 	"BLACKLIGHT_LOG_FORMAT",
+	"BLACKLIGHT_LOG_LEVEL",
 }
 
 // result is one invocation of the CLI: what it printed, where, and what it
@@ -195,7 +204,7 @@ func TestExitCodesDistinguishTheKindOfFailure(t *testing.T) {
 		{"an unknown flag", []string{"version", "--nonsense"}, ExitUsage},
 		{"an unparseable flag value", []string{"version", "--log-level", "loud"}, ExitUsage},
 		{"an argument where none is taken", []string{"version", "extra"}, ExitUsage},
-		{"a command that ran and failed", []string{"backup"}, ExitFailure},
+		{"a command that ran and failed", []string{"report", "render"}, ExitFailure},
 		{"a database that cannot be opened", []string{"db", "info", "--db", "/nope/x.duckdb"}, ExitFailure},
 	}
 
@@ -252,6 +261,7 @@ func TestJSONIsParseableForEveryCommandThatSupportsIt(t *testing.T) {
 		{"migrate", "status"},
 		{"migrate", "up"},
 		{"db", "info"},
+		{"backup"},
 	}
 
 	for _, args := range tests {

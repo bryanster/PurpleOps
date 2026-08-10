@@ -261,6 +261,61 @@ blctl content export-custom --format json --type notes
 ```
 
 
+
+### `blctl backup`
+
+Creates a single tar.gz archive of everything needed to restore a deployment: the database
+file, the evidence directory, and any entrypoint-generated secrets (`session.secret`,
+`encryption.key`) that live beside the database on the data volume.
+
+The server must be stopped first — DuckDB gives the database file to one process at a time,
+and the command opens it first to prove nobody else holds it:
+
+```sh
+docker compose stop
+docker compose run --rm blacklight blctl backup
+docker compose start
+```
+
+```sh
+# Inside the container
+blctl backup
+
+# With a custom path
+blctl backup -o /backup/blacklight-$(date -u +%Y%m%d).tar.gz
+```
+
+The archive is written to the current directory unless `--output` (or `-o`) gives an
+explicit path. The default name is `blacklight-<utc-timestamp>.backup.tar.gz`.
+
+Restoring is the reverse: stop the server, extract the archive over the data volume, start
+the same or a newer release. See [`docs/deploy.md#backup-and-restore`](deploy.md#backup-and-restore).
+
+>
+> **`BLACKLIGHT_SESSION_SECRET` and `BLACKLIGHT_ENCRYPTION_KEY` are not in the archive**
+> when you supplied them as environment variables — they live in your deployment's
+> environment, not on disk. Back those up separately. A restored database without its
+> encryption key is one where nobody with MFA can sign in.
+>
+> **Engagement archive export is not a backup.** `blctl engagement archive` exports one
+> engagement at a time as structured JSON for sharing or offline review (M5-012). It does
+> not contain the user accounts, session state, content catalogue or evidence needed to
+> restore a deployment.
+
+| Flag | |
+|---|---|
+| `--output`, `-o` | Archive path. Default: `blacklight-<timestamp>.backup.tar.gz` |
+
+With `--json` the output is a single JSON document:
+
+```json
+{
+  "archive": "blacklight-20260810T120000Z.backup.tar.gz",
+  "sizeBytes": 45678,
+  "members": ["blacklight.duckdb", "evidence", "evidence/blob.bin", "session.secret"]
+}
+```
+
 ## Commands that are not built yet
 
 They are registered so the shape of the tool is visible from `--help` rather than discovered one
@@ -269,7 +324,6 @@ milestone at a time. Each exits 1 and names the gap.
 | Command | Status |
 |---|---|
 | `blctl report render` | M6 shipped the report builder and PDF renderer; the CLI render command was not built. Use the API: `POST /api/v1/engagements/{id}/reports/{id}/preview.pdf`. |
-| `blctl backup` | Not yet built. Use the manual procedure: [`docs/deploy.md#backup-and-restore`](deploy.md#backup-and-restore). `M7-005` will wrap this in a command. |
 
 ## Building it
 

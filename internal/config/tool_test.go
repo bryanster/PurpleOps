@@ -42,6 +42,9 @@ func TestToolReadsWhatItNeedsAndNothingElse(t *testing.T) {
 	if got, want := cfg.Content.WriteBatch, 250; got != want {
 		t.Errorf("Content.WriteBatch = %d, want %d", got, want)
 	}
+	if got, want := cfg.Evidence.Dir, "./evidence"; got != want {
+		t.Errorf("Evidence.Dir = %q, want the documented default %q", got, want)
+	}
 }
 
 // TestToolStillRejectsWhatItDoesRead: reading less is not reading carelessly.

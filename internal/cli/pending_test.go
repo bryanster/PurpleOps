@@ -14,7 +14,6 @@ func TestPendingCommandsSayWhenTheyArrive(t *testing.T) {
 		args      []string
 		milestone string
 	}{
-		{[]string{"backup"}, "M7"},
 		{[]string{"report", "render"}, "M6"},
 	}
 
@@ -45,8 +44,8 @@ func TestPendingCommandsSayWhenTheyArrive(t *testing.T) {
 func TestPendingCommandsTouchNothing(t *testing.T) {
 	db := tempDB(t)
 
-	if got := runIn(t, db, "backup"); got.code != ExitFailure {
-		t.Fatalf("backup exited %d, want %d", got.code, ExitFailure)
+	if got := runIn(t, db, "report", "render"); got.code != ExitFailure {
+		t.Fatalf("report render exited %d, want %d", got.code, ExitFailure)
 	}
 	if _, err := os.Stat(db); err == nil {
 		t.Errorf("%s was created by a command that is not implemented", db)

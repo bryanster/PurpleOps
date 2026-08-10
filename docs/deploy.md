@@ -334,15 +334,22 @@ torn state. **Stop the container first.** A backup that has never been restored 
 
 ### Back up
 
+The easiest way is `blctl backup`, the admin CLI command that archives the database,
+evidence, and any entrypoint-generated secrets into one tar.gz. The server must be stopped
+first — `docker compose stop` — because DuckDB gives the database file to one process at a
+time.
+
 ```sh
 docker compose stop
-docker run --rm \
-  -v blacklight_blacklight-data:/data:ro \
-  -v "$PWD:/backup" \
-  debian:trixie-slim \
-  tar czf /backup/blacklight-$(date -u +%Y%m%d).tar.gz -C /data .
+docker compose run --rm blacklight blctl backup -o /backup/blacklight-$(date -u +%Y%m%d).tar.gz
 docker compose start
 ```
+
+See [`docs/cli.md#blctl-backup`](cli.md#blctl-backup) for flags and JSON output.
+
+### Manual backup (fallback)
+
+If you do not have blctl available, archive the volume directly:
 
 The volume is called `blacklight_blacklight-data`: compose prefixes the volume name with the project
 name. `docker volume ls` confirms it.
@@ -379,8 +386,9 @@ understand.
 1. **Read the release notes** for the version you are moving to. Breaking changes, new required
    environment variables, and migration counts are listed there. The changelog is published
    with each [GitHub Release](https://github.com/bryanster/blacklight/releases).
-2. **[Back up](#backup-and-restore).** Migrations are forward-only; the only path back to the
-   previous release is restore from backup.
+2. **[Back up](#backup-and-restore).** `docker compose run --rm blacklight blctl backup` is the
+   easiest path. Migrations are forward-only; the only way back to the previous release is
+   restore from backup.
 3. **Stop the server.** `docker compose stop` — DuckDB admits one process per file.
 4. **Pull the new image.** `docker compose pull` (or `docker compose build` if building
    from source).
