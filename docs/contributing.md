@@ -108,3 +108,9 @@ Dependabot opens one grouped pull request per ecosystem per month
 ([`.github/dependabot.yml`](../.github/dependabot.yml)), a week after a release so a bad publish has
 time to be yanked. Actions are pinned to commit SHAs with the version in a trailing comment;
 Dependabot updates both, so leave the comment in place.
+
+
+## Releasing
+
+Maintainers: see [`docs/releasing.md`](releasing.md) for the tag→release workflow,
+version policy, and verification steps.

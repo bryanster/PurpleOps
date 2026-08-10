@@ -36,6 +36,30 @@ Before anyone else can reach it, read [Configuration](#configuration) — at min
 | `docker compose down` | Stop and remove the container. **Data is kept** |
 | `docker compose down -v` | Stop, remove, **and delete the data volume** |
 
+
+### From the published image
+
+Instead of building from source, pull the published multi-arch image from GitHub Container Registry.
+The image is tagged with the release version; `latest` tracks the most recent stable release:
+
+```sh
+IMAGE=ghcr.io/bryanster/blacklight IMAGE_TAG=v1.0.0 docker compose up -d
+```
+
+Set `IMAGE` and `IMAGE_TAG` to pull a specific version. Omit `IMAGE_TAG` for `latest`:
+
+```sh
+IMAGE=ghcr.io/bryanster/blacklight docker compose up -d
+```
+
+Release tags and their changelog entries are published on the
+[GitHub Releases](https://github.com/bryanster/blacklight/releases) page.
+
+`latest` tracks stable releases only — prerelease tags (`v1.0.0-rc.1`, `v1.0.0-alpha.1`) do not
+move it. Use the exact tag to test a prerelease.
+
+See [Upgrading](#upgrading) for the full upgrade procedure, including the backup step.
+
 > ⚠️ **`docker compose down -v` is irreversible.** The `-v` deletes the named volume, and with it the
 > database, every uploaded evidence file and any generated keys. There is no undo and no prompt.
 > Take a [backup](#backup-and-restore) first, or use `docker compose down` — which keeps everything
@@ -482,7 +506,7 @@ Notes that bite people:
 ```sh
 make docker-build                       # blacklight:local, version stamped from git
 make docker-smoke                       # build it, run it, and check every claim on this page
-IMAGE=ghcr.io/bryanster/blacklight IMAGE_TAG=v2.0.0 make docker-build
+IMAGE=ghcr.io/bryanster/blacklight IMAGE_TAG=v1.0.0 make docker-build
 ```
 
 The build context is the repository root and the Dockerfile is

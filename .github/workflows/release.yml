@@ -1,0 +1,183 @@
+# Blacklight — tag-triggered release pipeline.
+#
+# Triggered by pushing an annotated tag matching v* to the repository.
+# The tag must be on main, where CI already passed (branch protection requires
+# CI green before merge), so this workflow does not re-run the full suite.
+#
+# It builds multi-arch images (linux/amd64, linux/arm64) via buildx, reusing
+# deploy/Dockerfile's cross-compile approach (not QEMU go build), pushes them
+# to ghcr.io/bryanster/blacklight, and creates a GitHub Release with the
+# matching changelog section.
+#
+# Permissions are least privilege: contents:write for the release, packages:write
+# for GHCR. Pull requests cannot trigger this workflow — only tags on main.
+#
+# Fork PRs never see these credentials because the trigger is tags only and
+# forks do not receive tag push events on the upstream repository.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # create GitHub Release
+  packages: write   # push to GHCR
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # needed to verify the tag is on main
+
+      # ── guard: tag must be on main ─────────────────────────────────────────
+      #
+      # main has branch protection requiring CI before merge, so a tag on main
+      # is a tag on a commit that passed CI. This check exists so nobody can
+      # accidentally tag a branch and ship an untested build.
+      - name: Verify the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${GITHUB_REF#refs/tags/} is not on main."
+            echo "::error::Release tags must point to a commit reachable from origin/main, where CI passes."
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF#refs/tags/} is on main — CI was green on this commit."
+
+      # ── version metadata ───────────────────────────────────────────────────
+      - name: Set version variables
+        id: version
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short_commit=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+          # A semver prerelease has a hyphen after the PATCH number:
+          # v1.0.0-rc.1 → prerelease, v1.0.0 → not.
+          if echo "${tag}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+-'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "This is a prerelease — :latest will not be moved."
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── build multi-arch image ─────────────────────────────────────────────
+      #
+      # QEMU registers binfmt handlers so the buildx container driver can run
+      # non-native binaries during the image build. The Go stage still
+      # cross-compiles (see deploy/Dockerfile); QEMU is for apt-get and any
+      # RUN steps in the runtime stage, which are architecture-specific and
+      # cannot be cross-compiled.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push multi-arch. The Dockerfile already handles cross-compile
+      # in the Go build stage via BUILDPLATFORM/TARGETARCH; we just tell buildx
+      # which platforms we want. The SPA stage is pinned to BUILDPLATFORM since
+      # JavaScript is architecture-independent.
+      #
+      # Tags pushed:
+      #   ghcr.io/bryanster/blacklight:<tag>       always
+      #   ghcr.io/bryanster/blacklight:latest       only for non-prerelease
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/bryanster/blacklight:${{ steps.version.outputs.tag }}
+            ${{ steps.version.outputs.prerelease == 'false' && 'ghcr.io/bryanster/blacklight:latest' || '' }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.tag }}
+            COMMIT=${{ steps.version.outputs.commit }}
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+          provenance: true
+          sbom: true
+
+      # ── extract changelog section ──────────────────────────────────────────
+      #
+      # Pulls the section for this version from CHANGELOG.md. A Keep a Changelog
+      # section starts with "## [<version>]" and ends at the next "## [" header
+      # or end of file.
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          section="$(awk -v ver="${{ steps.version.outputs.tag }}" '
+            BEGIN { in_section=0 }
+            /^## \[/ {
+              if (in_section) exit
+              if ($2 == "[" ver "]") in_section=1
+            }
+            in_section { print }
+          ' CHANGELOG.md)"
+
+          if [[ -z "$section" ]]; then
+            echo "::warning::No changelog section found for ${{ steps.version.outputs.tag }}"
+            section="Release ${{ steps.version.outputs.tag }}"
+          fi
+
+          # Write to a file to avoid quoting issues with the action input.
+          echo "$section" > /tmp/changelog-section.md
+
+      # ── build release body ─────────────────────────────────────────────────
+      #
+      # Combine the changelog section with the image pull notes, digests, and
+      # the greenfield note. This is assembled before the release is created so
+      # the body is complete in one step.
+      - name: Assemble release body
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+
+          cat /tmp/changelog-section.md > /tmp/release-body.md
+          cat >> /tmp/release-body.md <<'BODYEOF'
+
+          ---
+
+          ## Docker image
+
+          ```sh
+          docker pull ghcr.io/bryanster/blacklight:__TAG__
+          ```
+
+          **Greenfield only.** Blacklight v1.0.0 is a ground-up rebuild. There is
+          no migration path from the prior Python/Mongo application — a new
+          installation starts with an empty database.
+
+          Image digests for this release are recorded in the package manifest at
+          [ghcr.io/bryanster/blacklight](https://github.com/bryanster/blacklight/pkgs/container/blacklight).
+
+          Full upgrade instructions:
+          [docs/deploy.md](https://github.com/bryanster/blacklight/blob/main/docs/deploy.md#upgrading)
+          BODYEOF
+
+          sed -i "s/__TAG__/${tag}/g" /tmp/release-body.md
+
+      # ── create GitHub Release ──────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          name: ${{ steps.version.outputs.tag }}
+          body_path: /tmp/release-body.md
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

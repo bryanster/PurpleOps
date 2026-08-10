@@ -76,3 +76,27 @@ checksums, and a changelog entry that states what changed and that cutover is gr
 - Reuse Dockerfile `BUILDPLATFORM` cross-compile; do not regress to emulated Go builds.
 - CI already builds on `main` and `v2`; release workflow is additive.
 - Never embed secrets in compose examples for GHCR public images.
+
+
+## Implementation notes
+
+- **Workflow (`release.yml`):** single job triggered on `v*` tags. Verifies tag is on `main`
+  (CI-green guarantee), builds multi-arch via buildx reusing `deploy/Dockerfile` cross-compile,
+  pushes to `ghcr.io/bryanster/blacklight:<tag>` and `:latest` (non-prerelease only), creates
+  GitHub Release with changelog section body + pull instructions. Prerelease detection:
+  `^v[0-9]+\.[0-9]+\.[0-9]+-` in tag name.
+- **CHANGELOG.md:** Keep a Changelog format. Unreleased section + `[1.0.0]` section prepared.
+  Upgrade notes: greenfield cutover, backup-before-migrate procedure.
+- **docs/deploy.md:** added "From the published image" subsection after quick start showing
+  `IMAGE=ghcr.io/bryanster/blacklight IMAGE_TAG=v1.0.0 docker compose up -d`. Fixed
+  `v2.0.0` → `v1.0.0` in building-image example.
+- **docs/releasing.md:** maintainer release procedure: update changelog, annotated tag on main,
+  push tag, watch workflow, verify GHCR + release.
+- **docs/contributing.md:** cross-reference to releasing.md.
+- **Verification:** `make test build` green (25 Go test files, 216 web tests). Lint has
+  pre-existing 121 issues outside changed files. `make generate` clean on generated code.
+  Release workflow not exercised against GHCR — real proof is the first tag publish per
+  acceptance criteria.
+- **Actions pinned to SHAs** matching dependabot policy (`.github/dependabot.yml`):
+  `setup-qemu-action@96fe6ef`, `setup-buildx-action@bb05f3f`, `login-action@dbcb813`,
+  `build-push-action@53b7df9`, `action-gh-release@3d0d988`.
