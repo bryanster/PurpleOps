@@ -406,6 +406,69 @@ SSD / arm64 devcontainer: ~20s, all rollups well under budget.
 Assumptions: single process, local NVMe/SSD, no competing writers. Not a
 multi-node test and not the M6 Chromium render path (measured in M7-008).
 
+## Report render budget (M7-008)
+
+Every report block path — HTML render, publish (snapshot + store), PDF —
+must stay responsive under realistic data and concurrent write load.
+`internal/report/loadtest` proves budgets hold, and a mutation gate proves
+the CI catches an N+1 regression inside a render.
+
+### CI (always on)
+
+```sh
+go test ./internal/report/loadtest/
+```
+
+| Test | What it proves |
+|---|---|
+| `TestReportRenderBudget` | 200 techniques, 5 scenarios × 10 steps, 50 findings, 50 render iterations. HTML render **p95 ≤ 1s**, max ≤ 3s. |
+| `TestReportRenderDetectsRegression` | Same as above but `TechniqueCoverage` replaced with 3× per-technique N+1 subqueries. Render **exceeds** 3s max budget — proves the gate catches a query regression. |
+| `TestReportRenderWithConcurrentWrites` | 3 concurrent writers (execution updates) + HTML renders for 10s. HTML render p95 ≤ 1s, write p95 ≤ 200ms (M3-016 interactive budget). |
+
+All three ride along with `make test` / `make test-race`.
+
+### Full developer load
+
+```sh
+BLACKLIGHT_LOADTEST=1 go test -count=1 -timeout 15m ./internal/report/loadtest/ -run TestReportRenderLoad
+```
+
+Runs **800 techniques**, **10 scenarios × 50 steps**, **200 findings** with
+**5 concurrent writers** for 15 seconds. Measures HTML render under write load,
+publish path, and PDF smoke (Chromium).
+
+### Budgets
+
+| Path | Budget |
+|---|---|
+| HTML render p95 | ≤ 1s |
+| HTML render max | ≤ 3s |
+| Publish (render + snapshot + store) p95 | ≤ 2s |
+| PDF render | ≤ 30s (documented; Chromium) |
+| Interactive write p95 (under render load) | ≤ 200ms (M3-016 budget) |
+
+### M7-008 re-run results (2026-08-10)
+
+Existing gates re-run against current `main`:
+
+| Gate | Original p95 | Re-run p95 | Budget | Status |
+|---|---:|---:|---|---|
+| M3-016 war-room writes | 16.7ms | 25.8ms | 200ms | ✅ |
+| M4-010 SSE publish | 17.4ms | 11.5ms | 200ms | ✅ |
+| M5-015 analytics queries | 11.2ms (Coverage) | 16.1ms (Coverage) | 250ms | ✅ |
+
+No silent >2× regression detected. All budgets intact.
+
+### When a budget fails
+
+1. **Check the queries.** Every analytics-backed block calls the same rollup
+   functions as M5-015. If a render budget fails but the query budget passes,
+   the issue is in the HTML assembly or a block Render method.
+2. **Check the publisher.** The publish path snapshots the full HTML into the
+   versions table — a large report with evidence inline can be several MB.
+3. **Do not hollow budgets.** The render budget reflects the PDF timeout.
+   If it cannot be met, fix the render — not the budget.
+
 ## What CI runs
 
 Every job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), on every pull request; see
