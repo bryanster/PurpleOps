@@ -71,7 +71,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M4 — Collaboration | ✅ done — 10/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](done/M4-EPIC.md) |
 | M5 — Analytics | ✅ done — 15/15 | [15 tickets](#m5--analytics) · [`M5-EPIC.md`](done/M5-EPIC.md) |
 | M6 — Reporting | ✅ done — 15/15 | [15 tickets](#m6--reporting) · [`M6-EPIC.md`](done/M6-EPIC.md) |
-| M7 — Cutover | refined — 0/9 | [9 tickets](#m7--cutover) · [`M7-EPIC.md`](M7-EPIC.md) |
+| M7 — Cutover | in progress — 5/9 | [9 tickets](#m7--cutover) · [`M7-EPIC.md`](M7-EPIC.md) |
 
 
 > **M0a note:** the annotated tag **`v1-final`** exists at `c053fb741ba953bc8f2e151c05f966db813ec8fc`.
@@ -275,10 +275,10 @@ immediately.** **M7-009** is the exit gate.
 | ID | Title | Size |
 |---|---|---|
 | [M7-001](done/M7-001-tag-v1-final.md) ✅ | Tag pre-rebuild tip as `v1-final` | S |
-| [M7-002](M7-002-readme-rewrite.md) | README rewrite (product front door) | M |
-| [M7-003](M7-003-docs-consolidation.md) | Docs consolidation & operator readiness | L |
-| [M7-004](M7-004-release-workflow.md) | Release workflow: GHCR + GitHub Release + changelog | L |
-| [M7-005](M7-005-upgrade-and-backup.md) | Upgrade path, backup procedure, optional `blctl backup` | M |
+| [M7-002](done/M7-002-readme-rewrite.md) ✅ | README rewrite (product front door) | M |
+| [M7-003](done/M7-003-docs-consolidation.md) ✅ | Docs consolidation & operator readiness | L |
+| [M7-004](done/M7-004-release-workflow.md) ✅ | Release workflow: GHCR + GitHub Release + changelog | L |
+| [M7-005](done/M7-005-upgrade-and-backup.md) ✅ | Upgrade path, backup procedure, optional `blctl backup` | M |
 | [M7-006](M7-006-cutover-hygiene.md) | Cutover hygiene: v1 refs, CI branches, status banners | S |
 | [M7-007](M7-007-security-review.md) | Security review pass (checklist) | L |
 | [M7-008](M7-008-performance-sanity.md) | Performance sanity pass (re-run gates + report load) | M |

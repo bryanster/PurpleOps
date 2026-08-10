@@ -30,7 +30,7 @@ GOLANGCI_LINT_VERSION := v2.5.0
 
 # Version stamping. Overridable so a release pipeline can pass exact values.
 # TestLDFlagsPopulateInfo asserts these -X paths still resolve.
-VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo v2-dev)
+VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo v1-dev)
 COMMIT     ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X $(MODULE)/internal/version.version=$(VERSION) \

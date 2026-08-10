@@ -20,7 +20,7 @@ services:
       args:
         # Overridable so a release build can stamp real values; the Makefile's
         # docker-build target passes what `git describe` says.
-        VERSION: ${BLACKLIGHT_VERSION:-v2-dev}
+        VERSION: ${BLACKLIGHT_VERSION:-v1-dev}
         COMMIT: ${BLACKLIGHT_COMMIT:-unknown}
         BUILD_DATE: ${BLACKLIGHT_BUILD_DATE:-unknown}
     image: blacklight:local

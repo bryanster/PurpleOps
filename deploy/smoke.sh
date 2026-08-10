@@ -147,7 +147,7 @@ if [[ -z $SKIP_BUILD ]]; then
 	build_args=(
 		--file "${REPO_ROOT}/deploy/Dockerfile"
 		--tag "$IMAGE"
-		--build-arg "VERSION=$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null || echo v2-dev)"
+		--build-arg "VERSION=$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null || echo v1-dev)"
 		--build-arg "COMMIT=$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
 		--build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	)

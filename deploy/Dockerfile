@@ -91,7 +91,7 @@ COPY --from=web /src/web/dist ./web/dist
 # Version stamping. The Makefile passes real values; the defaults keep a bare
 # `docker build` honest rather than claiming a version it does not have.
 ARG MODULE=github.com/bryanster/blacklight
-ARG VERSION=v2-dev
+ARG VERSION=v1-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 
@@ -245,7 +245,7 @@ CMD ["blacklight"]
 # Re-declared: a build argument does not cross a stage boundary, and these must
 # say the same thing as the binary's own --version. Last, so that changing them
 # only invalidates the label.
-ARG VERSION=v2-dev
+ARG VERSION=v1-dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 LABEL org.opencontainers.image.title="Blacklight" \
