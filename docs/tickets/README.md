@@ -69,14 +69,13 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M2 — Content | ✅ done — 16/16 | [16 tickets](#m2--content) · [`M2-EPIC.md`](done/M2-EPIC.md) |
 | M3 — Core domain | ✅ done — 16/16 | [16 tickets](#m3--core-domain) · [`M3-EPIC.md`](done/M3-EPIC.md) |
 | M4 — Collaboration | ✅ done — 10/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](done/M4-EPIC.md) |
-| M5 — Analytics | refined — 0/15 | [15 tickets](#m5--analytics) · [`M5-EPIC.md`](M5-EPIC.md) |
-| M6 — Reporting | refined — 0/15 | [15 tickets](#m6--reporting) · [`M6-EPIC.md`](M6-EPIC.md) |
-| M7 — Cutover | epic, needs refinement | [`M7-EPIC.md`](M7-EPIC.md) |
+| M5 — Analytics | ✅ done — 15/15 | [15 tickets](#m5--analytics) · [`M5-EPIC.md`](done/M5-EPIC.md) |
+| M6 — Reporting | ✅ done — 15/15 | [15 tickets](#m6--reporting) · [`M6-EPIC.md`](done/M6-EPIC.md) |
+| M7 — Cutover | refined — 0/9 | [9 tickets](#m7--cutover) · [`M7-EPIC.md`](M7-EPIC.md) |
 
-> **M0a note:** the working tree is clean (only `PLAN.md` and `.devcontainer/` remain), but
-> **no `v1-final` tag exists yet** — `git tag` returns nothing. `PLAN.md` §7 step 1 requires it.
-> Tag the pre-deletion commit on `main` before this branch merges, or the v1 tree is only findable
-> by SHA. Tracked as `M7-001`.
+
+> **M0a note:** the annotated tag **`v1-final`** exists at `c053fb741ba953bc8f2e151c05f966db813ec8fc`.
+> Untracked `files/` and `.env` were never in git and are accepted lost (`M7-EPIC`).
 
 ---
 
@@ -262,3 +261,25 @@ Build roughly in this order — the dependency chain is real. **M5-015 is a gate
 | [M6-013](M6-013-builder-ui.md) | Builder UI: blocks, reorder, params, HTML preview | L |
 | [M6-014](M6-014-publish-share-ui.md) | Publish / versions / share & guest-grant UI | M |
 | [M6-015](M6-015-e2e-thesis.md) | Complete PLAN.md §9 E2E thesis (M5 rewrite) | L |
+
+## M7 — Cutover
+
+Goal: ship **`v1.0.0`** — docs and README operator-ready, GHCR multi-arch + GitHub Release, backup /
+upgrade path, security and performance checklists green, historical `v1-final` tag in place.
+M6-015 remains the product thesis gate; M7 is the shippability gate. Decisions are locked in
+[`M7-EPIC.md`](M7-EPIC.md).
+
+Build roughly in this order — the dependency chain is real. **M7-001 is unblocked and should land
+immediately.** **M7-009** is the exit gate.
+
+| ID | Title | Size |
+|---|---|---|
+| [M7-001](done/M7-001-tag-v1-final.md) ✅ | Tag pre-rebuild tip as `v1-final` | S |
+| [M7-002](M7-002-readme-rewrite.md) | README rewrite (product front door) | M |
+| [M7-003](M7-003-docs-consolidation.md) | Docs consolidation & operator readiness | L |
+| [M7-004](M7-004-release-workflow.md) | Release workflow: GHCR + GitHub Release + changelog | L |
+| [M7-005](M7-005-upgrade-and-backup.md) | Upgrade path, backup procedure, optional `blctl backup` | M |
+| [M7-006](M7-006-cutover-hygiene.md) | Cutover hygiene: v1 refs, CI branches, status banners | S |
+| [M7-007](M7-007-security-review.md) | Security review pass (checklist) | L |
+| [M7-008](M7-008-performance-sanity.md) | Performance sanity pass (re-run gates + report load) | M |
+| [M7-009](M7-009-ship-v1.md) | Ship gate: `v1.0.0` release | M |
