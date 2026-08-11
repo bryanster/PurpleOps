@@ -13,10 +13,10 @@ import (
 
 // ScorecardDef is the Definition for the tactic scorecard block.
 var ScorecardDef = report.Definition{
-	ID:             report.IDTacticScorecard,
-	Title:          "Tactic Scorecard",
-	Description:    "Per-tactic coverage scorecard with dual denominators and category distribution.",
-	DefaultParams:  json.RawMessage(`{}`),
+	ID:              report.IDTacticScorecard,
+	Title:           "Tactic Scorecard",
+	Description:     "Per-tactic coverage scorecard with dual denominators and category distribution.",
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
 }
 

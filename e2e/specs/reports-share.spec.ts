@@ -1,4 +1,5 @@
-import { expect, test } from '../harness/test'
+import path from 'node:path'
+import { repoRoot } from '../harness/paths'
 
 /**
  * Publish → share → view → revoke end-to-end (M6-014).
@@ -10,6 +11,11 @@ import { expect, test } from '../harness/test'
 
 const adminEmail = 'publish-lead@example.test'
 const adminPassword = 'admin publish passphrase'
+
+const attackFixture = path.join(
+  repoRoot,
+  'internal/content/attack/testdata/enterprise-mini-15.1.json',
+)
 const viewerEmail = 'guest-viewer@example.test'
 const viewerPassword = 'guest viewer passphrase'
 
@@ -25,6 +31,7 @@ test.use({
         args: ['user', 'create', '--email', viewerEmail, '--name', 'Guest Viewer'],
         stdin: viewerPassword,
       },
+      ['content', 'import-bundle', '--source', 'attack', '--file', attackFixture, '--version', '15.1', '--wait'],
     ],
   },
 })
@@ -44,6 +51,9 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   await page.getByRole('link', { name: 'Engagements' }).click()
   await page.getByRole('button', { name: 'New engagement' }).click()
   await page.getByLabel('Name').fill('Share Test Engagement')
+  // Select ATT&CK version (required field).
+  await page.getByLabel('ATT&CK version').click()
+  await page.getByRole('option', { name: '15.1' }).click()
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page.getByRole('heading', { name: 'Share Test Engagement' })).toBeVisible()
 

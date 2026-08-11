@@ -25,16 +25,16 @@ var EvidenceDef = report.Definition{
 			Description: "Show only allowed image MIME evidence items.",
 		},
 	},
-	DefaultParams: json.RawMessage(`{"limit":50}`),
+	DefaultParams:      json.RawMessage(`{"limit":50}`),
 	NeedsEvidenceOptIn: true,
 }
 
 // allowedImageMIMEs is the set of MIME types that may be inlined as <img>.
 var allowedImageMIMEs = map[string]bool{
-	"image/png":  true,
-	"image/jpeg": true,
-	"image/gif":  true,
-	"image/webp": true,
+	"image/png":     true,
+	"image/jpeg":    true,
+	"image/gif":     true,
+	"image/webp":    true,
 	"image/svg+xml": true,
 }
 
@@ -70,13 +70,13 @@ func (EvidenceRenderer) Render(ctx context.Context, env report.RenderEnv, inst r
 	}
 
 	type evRow struct {
-		Evidence   string // filename
-		Caption    string
-		Side       string
-		StepName   string
-		MIME       string
-		Size       int64
-		IsImage    bool
+		Evidence string // filename
+		Caption  string
+		Side     string
+		StepName string
+		MIME     string
+		Size     int64
+		IsImage  bool
 	}
 	var rows []evRow
 	stepNames := make(map[string]string) // stepID → step name, lazy

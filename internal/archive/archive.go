@@ -20,23 +20,23 @@ const FormatVersion = 1
 // reader parses. Put FormatVersion first in the struct so it is first in the
 // JSON output even to a reader that gives up early.
 type Manifest struct {
-	FormatVersion   int    `json:"formatVersion"`
-	ExportedAt      string `json:"exportedAt"`
-	ToolVersion     string `json:"toolVersion"`
-	EngagementID    string `json:"engagementId"`
-	EngagementName  string `json:"engagementName"`
-	Client          string `json:"client"`
-	Mode            string `json:"mode"`
-	AttackVersion   string `json:"attackVersion"`
-	BlindFiltered   bool   `json:"blindFiltered"`
+	FormatVersion  int    `json:"formatVersion"`
+	ExportedAt     string `json:"exportedAt"`
+	ToolVersion    string `json:"toolVersion"`
+	EngagementID   string `json:"engagementId"`
+	EngagementName string `json:"engagementName"`
+	Client         string `json:"client"`
+	Mode           string `json:"mode"`
+	AttackVersion  string `json:"attackVersion"`
+	BlindFiltered  bool   `json:"blindFiltered"`
 }
 
 // EngagementArchive is the top-level engagement.json member.
 type EngagementArchive struct {
-	Engagement EngagementJSON        `json:"engagement"`
-	Scenarios  []ScenarioWithSteps   `json:"scenarios"`
-	Findings   []FindingWithSteps    `json:"findings"`
-	Comments   []CommentJSON         `json:"comments"`
+	Engagement EngagementJSON      `json:"engagement"`
+	Scenarios  []ScenarioWithSteps `json:"scenarios"`
+	Findings   []FindingWithSteps  `json:"findings"`
+	Comments   []CommentJSON       `json:"comments"`
 }
 
 // EngagementJSON is the archive-safe representation of an engagement header.
@@ -58,7 +58,7 @@ type EngagementJSON struct {
 
 // ScenarioWithSteps nests a scenario and its ordered steps.
 type ScenarioWithSteps struct {
-	Scenario ScenarioJSON  `json:"scenario"`
+	Scenario ScenarioJSON   `json:"scenario"`
 	Steps    []StepWithExec `json:"steps"`
 }
 
@@ -121,16 +121,16 @@ type ExecutionJSON struct {
 	RedNotes   string     `json:"redNotes,omitempty"`
 
 	// Blue side
-	DetectionCategory  *string        `json:"detectionCategory,omitempty"`
+	DetectionCategory  *string         `json:"detectionCategory,omitempty"`
 	DetectionModifiers json.RawMessage `json:"detectionModifiers,omitempty"`
-	Protection         *string        `json:"protection,omitempty"`
-	DetectedAt         *time.Time     `json:"detectedAt,omitempty"`
-	DetectingSource    string         `json:"detectingSource,omitempty"`
-	DetectingRuleRef   string         `json:"detectingRuleRef,omitempty"`
-	AlertSeverity      string         `json:"alertSeverity,omitempty"`
-	BlueNotes          string         `json:"blueNotes,omitempty"`
-	ScoredBy           UserRef        `json:"scoredBy,omitempty"`
-	ScoredAt           *time.Time     `json:"scoredAt,omitempty"`
+	Protection         *string         `json:"protection,omitempty"`
+	DetectedAt         *time.Time      `json:"detectedAt,omitempty"`
+	DetectingSource    string          `json:"detectingSource,omitempty"`
+	DetectingRuleRef   string          `json:"detectingRuleRef,omitempty"`
+	AlertSeverity      string          `json:"alertSeverity,omitempty"`
+	BlueNotes          string          `json:"blueNotes,omitempty"`
+	ScoredBy           UserRef         `json:"scoredBy,omitempty"`
+	ScoredAt           *time.Time      `json:"scoredAt,omitempty"`
 }
 
 // ExecutionStatusJSON is the archive-safe execution status.
@@ -272,13 +272,13 @@ func ExecutionToJSON(e storengagement.Execution, executedBy, scoredBy UserRef) E
 			StartedAt: e.StartedAt,
 			EndedAt:   e.EndedAt,
 		},
-		ExecutedBy:  executedBy,
-		CommandRun:  e.CommandRun,
-		SourceHost:  e.SourceHost,
-		TargetHost:  e.TargetHost,
-		RedNotes:    e.RedNotes,
-		ScoredBy:    scoredBy,
-		ScoredAt:    e.ScoredAt,
+		ExecutedBy: executedBy,
+		CommandRun: e.CommandRun,
+		SourceHost: e.SourceHost,
+		TargetHost: e.TargetHost,
+		RedNotes:   e.RedNotes,
+		ScoredBy:   scoredBy,
+		ScoredAt:   e.ScoredAt,
 	}
 	if e.DetectionCategory != nil {
 		v := string(*e.DetectionCategory)

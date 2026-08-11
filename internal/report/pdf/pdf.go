@@ -70,6 +70,9 @@ func New(chromePath string, timeout time.Duration) (*Printer, error) {
 		chromedp.NoDefaultBrowserCheck,
 		// Disable GPU — headless PDF has nothing to paint to screen.
 		chromedp.DisableGPU,
+		// Ubuntu 24.04+ restricts unprivileged user namespaces via
+		// AppArmor; --no-sandbox is required in CI and dev containers.
+		chromedp.Flag("no-sandbox", true),
 	)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
@@ -89,7 +92,8 @@ func New(chromePath string, timeout time.Duration) (*Printer, error) {
 func (p *Printer) RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, p.timeout)
+		timeoutCtx, cancel := context.WithTimeout(ctx, p.timeout)
+		ctx = timeoutCtx
 		defer cancel()
 	}
 	// Serialize access to the shared browser process. Tab contexts are created
@@ -102,7 +106,7 @@ func (p *Printer) RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
 	defer tabCancel()
 
 	// Ensure the tab is closed before unlocking the browser.
-	defer chromedp.Cancel(tabCtx)
+	defer func() { chromedp.Cancel(tabCtx) }() //nolint:errcheck
 
 	var pdfBytes []byte
 

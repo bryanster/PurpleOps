@@ -36,7 +36,7 @@ var CoverDef = report.Definition{
 			Default:     json.RawMessage("true"),
 		},
 	},
-	DefaultParams: json.RawMessage(`{"showDate": true, "showLogo": true}`),
+	DefaultParams:   json.RawMessage(`{"showDate": true, "showLogo": true}`),
 	AllowInTemplate: true,
 }
 

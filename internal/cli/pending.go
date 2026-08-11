@@ -33,7 +33,6 @@ func notImplemented(milestone, summary string) func(*cobra.Command, []string) er
 
 // content commands live in content.go (M2-002 / M2-003).
 
-
 func newReportCommand() *cobra.Command {
 	render := &cobra.Command{
 		Use:   "render",

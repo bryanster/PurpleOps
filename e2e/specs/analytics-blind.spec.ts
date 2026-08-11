@@ -111,7 +111,7 @@ async function addMember(
   engagementId: string, userEmail: string, role: string,
 ): Promise<void> {
   // Get user id by email
-  const usersResp = await request.get('/api/v1/admin/users', {
+  const usersResp = await request.get('/api/v1/users', {
     headers: readHeaders(s),
   })
   const usersBody = (await usersResp.json()) as { items: Array<{ id: string; email: string }> }

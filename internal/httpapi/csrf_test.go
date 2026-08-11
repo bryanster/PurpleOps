@@ -659,7 +659,7 @@ var csrfCoverage = map[string]struct {
 	"POST " + BasePath + "/report-versions/{versionId}/shares": {
 		body: `{}`,
 	},
-	"DELETE " + BasePath + "/report-shares/{shareId}":  {body: ""},
+	"DELETE " + BasePath + "/report-shares/{shareId}":                  {body: ""},
 	"DELETE " + BasePath + "/report-shares/{shareId}/grants/{grantId}": {body: ""},
 	"POST " + BasePath + "/report-views/{token}/claim": {
 		body:   `{}`,

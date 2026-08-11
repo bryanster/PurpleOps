@@ -277,7 +277,7 @@ func (s *TemplateService) CreateFromReport(ctx context.Context, in CreateFromRep
 	}
 
 	if _, err := s.templates.ReplaceBlocks(ctx, tmpl.ID, tmplBlocks); err != nil {
-		_ = s.templates.Delete(ctx, tmpl.ID)
+		_ = s.templates.Delete(ctx, tmpl.ID) //nolint:errcheck
 		return storereport.Template{}, fmt.Errorf("report templates: from-report: replace blocks: %w", err)
 	}
 

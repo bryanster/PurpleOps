@@ -3,8 +3,8 @@ package report
 import (
 	"context"
 	"database/sql"
-	"github.com/bryanster/blacklight/internal/store"
 	"encoding/json"
+	"github.com/bryanster/blacklight/internal/store"
 	"time"
 
 	"github.com/google/uuid"

@@ -348,7 +348,7 @@ func (s *ShareService) RevokeShare(ctx context.Context, in RevokeShareInput) err
 		if verErr == nil {
 			delta["report_id"] = ver.ReportID
 		}
-		_ = s.activity.RecordAlone(ctx, events.Entry{
+		_ = s.activity.RecordAlone(ctx, events.Entry{ //nolint:errcheck
 			ActorID:    in.RevokedBy,
 			Verb:       events.VerbReportShareRevoked,
 			ObjectType: "report_share",

@@ -23,7 +23,7 @@ type WriteOptions struct {
 
 	// Data members
 	Engagement EngagementArchive
-	Analytics  json.RawMessage // the frozen analytics.json blob, or nil
+	Analytics  json.RawMessage   // the frozen analytics.json blob, or nil
 	Activity   []json.RawMessage // activity rows as raw JSON bytes, for JSONL
 	Evidence   []EvidenceEntry
 
@@ -185,8 +185,8 @@ func writeActivityJSONL(zw *zip.Writer, rows []json.RawMessage, actors map[strin
 		var m map[string]any
 		if err := json.Unmarshal(row, &m); err != nil {
 			// If we can't parse, write the raw row as-is.
-			w.Write(row)
-			w.Write([]byte("\n"))
+			_, _ = w.Write(row)          //nolint:errcheck
+			_, _ = w.Write([]byte("\n")) //nolint:errcheck
 			continue
 		}
 

@@ -4,9 +4,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -213,7 +213,7 @@ func TestEvidenceDedup(t *testing.T) {
 		t.Fatalf("WriteArchive: %v", err)
 	}
 
-	zr, _ := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	zr, _ := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len())) //nolint:errcheck
 
 	// Count evidence files.
 	evidenceCount := 0

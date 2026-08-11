@@ -148,7 +148,7 @@ func (h *handlers) GetReportShareInfo(ctx context.Context,
 	alreadyClaimed := false
 	subject, _ := authn.SubjectFrom(ctx)
 	if subject.UserID != "" {
-		grant, _ := h.shareSvc.FindGrant(ctx, share.ID, subject.UserID)
+		grant, _ := h.shareSvc.FindGrant(ctx, share.ID, subject.UserID) //nolint:errcheck
 		alreadyClaimed = grant != nil
 	}
 

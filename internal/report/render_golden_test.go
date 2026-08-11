@@ -13,9 +13,9 @@ import (
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/report"
 	"github.com/bryanster/blacklight/internal/report/blocks"
-	storereport "github.com/bryanster/blacklight/internal/store/report"
-	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/store/blind"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
+	storereport "github.com/bryanster/blacklight/internal/store/report"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -105,7 +105,7 @@ func buildReportBlocks(reportID string, blocks ...blockSpec) []storereport.Repor
 	for i, b := range blocks {
 		params := json.RawMessage(`{}`)
 		if b.Params != nil {
-			params, _ = json.Marshal(b.Params)
+			params, _ = json.Marshal(b.Params) //nolint:errcheck
 		}
 		out[i] = storereport.ReportBlock{
 			ID:       "",
@@ -166,7 +166,7 @@ func TestRenderGoldenFullReport(t *testing.T) {
 
 	if !report.NormalizeAndCompare(string(doc.HTML), string(want)) {
 		actualPath := filepath.Join("testdata", "full_report.actual.html")
-		_ = os.WriteFile(actualPath, doc.HTML, 0o644)
+		_ = os.WriteFile(actualPath, doc.HTML, 0o644) //nolint:errcheck
 		t.Errorf("HTML differs from golden %s. Actual written to %s for diff.", goldenPath, actualPath)
 	}
 }
@@ -200,7 +200,7 @@ func TestRenderGoldenBlindPreview(t *testing.T) {
 
 	if !report.NormalizeAndCompare(string(doc.HTML), string(want)) {
 		actualPath := filepath.Join("testdata", "blind_preview.actual.html")
-		_ = os.WriteFile(actualPath, doc.HTML, 0o644)
+		_ = os.WriteFile(actualPath, doc.HTML, 0o644) //nolint:errcheck
 		t.Errorf("HTML differs from golden %s. Actual written to %s for diff.", goldenPath, actualPath)
 	}
 }

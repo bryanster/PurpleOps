@@ -20,9 +20,9 @@ var RichTextDef = report.Definition{
 			Description: "Rich text content (HTML).",
 		},
 	},
-	DefaultParams:  json.RawMessage(`{}`),
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
-	HTMLParamKeys:  []string{"html"},
+	HTMLParamKeys:   []string{"html"},
 }
 
 // RichTextRenderer renders the rich text block.

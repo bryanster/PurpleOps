@@ -22,7 +22,7 @@ var GapsDef = report.Definition{
 			Description: "Maximum rows to show per section (default 50).",
 		},
 	},
-	DefaultParams:  json.RawMessage(`{"maxRows":50}`),
+	DefaultParams:   json.RawMessage(`{"maxRows":50}`),
 	AllowInTemplate: true,
 }
 

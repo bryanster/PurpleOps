@@ -36,18 +36,18 @@ import (
 	engagement "github.com/bryanster/blacklight/internal/engagement"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/events/presence"
-	"github.com/bryanster/blacklight/internal/report"
-	"github.com/bryanster/blacklight/internal/report/blocks"
-	pdfreport "github.com/bryanster/blacklight/internal/report/pdf"
-	storereport "github.com/bryanster/blacklight/internal/store/report"
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
+	"github.com/bryanster/blacklight/internal/report"
+	"github.com/bryanster/blacklight/internal/report/blocks"
+	pdfreport "github.com/bryanster/blacklight/internal/report/pdf"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/activity"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/store/identity"
+	storereport "github.com/bryanster/blacklight/internal/store/report"
 	"github.com/bryanster/blacklight/internal/store/settings"
 )
 
@@ -632,7 +632,6 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	reportRegistry.Register(blocks.EvidenceDef)
 	reportRegistry.SetRenderer(report.IDEvidenceAppendix, blocks.EvidenceRenderer{})
 
-
 	// PDF printer (M6-010). Nil when Chrome is not configured — the server
 	// starts without it, and the endpoint returns a clear error.
 	var pdfPrinter *pdfreport.Printer
@@ -661,7 +660,6 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 
 	// Report templates (M6-003).
 	templateRepo := storereport.NewTemplates(deps.Store)
-
 
 	templateSvc, err := report.NewTemplateService(report.TemplateDeps{
 		Templates: templateRepo,
@@ -799,53 +797,53 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	activityEntries := activity.New(deps.Store)
 
 	h := &handlers{
-		store:          deps.Store,
-		auth:           auth,
-		ownership:      deps.Ownership,
-		evidenceStore:  evidenceStore,
-		evidenceRepo:   evidenceRepo,
-		blobRepo:       blobRepo,
+		store:           deps.Store,
+		auth:            auth,
+		ownership:       deps.Ownership,
+		evidenceStore:   evidenceStore,
+		evidenceRepo:    evidenceRepo,
+		blobRepo:        blobRepo,
 		scenarios:       scenarios,
 		steps:           steps,
 		executions:      executions,
 		comments:        comments,
 		findings:        findingsRepo,
 		activityEntries: activityEntries,
-		sessions:       sessions,
-		challenges:     challenges,
-		oidc:           provider,
-		templates:    templateSvc,
-		saml:           federation,
-		activity:       activityLog,
-		content:        registry,
-		runner:         runner,
-		objects:        objects,
-		pdfPrinter:     pdfPrinter,
-		procedures:     procedures,
-		detections:     detections,
-		emulationPlans: emulationPlans,
-		custom:         customSvc,
+		sessions:        sessions,
+		challenges:      challenges,
+		oidc:            provider,
+		templates:       templateSvc,
+		saml:            federation,
+		activity:        activityLog,
+		content:         registry,
+		runner:          runner,
+		objects:         objects,
+		pdfPrinter:      pdfPrinter,
+		procedures:      procedures,
+		detections:      detections,
+		emulationPlans:  emulationPlans,
+		custom:          customSvc,
 
-		attackpin: pin,
+		attackpin:             pin,
 		evidenceMIMEAllowlist: evidenceMIMEAllowlist,
-		shareSvc: shareSvc,
-		reports: reportSvc,
+		shareSvc:              shareSvc,
+		reports:               reportSvc,
 
 		publishSvc: publishSvc,
-		versions:    versionRepo,
+		versions:   versionRepo,
 
 		users:       users,
 		engagements: engSvc,
 		hub:         hub,
 
 		brandingSettings: brandingSvc,
-		docRenderer:     docRenderer,
-		analytics:       queries,
-		presence:        deps.Presence,
-		eventsMaxReplay: deps.Config.Events.MaxReplayEvents,
-		eventsHeartbeat: deps.Config.Events.Heartbeat,
-		signInURL:       signInURL(deps.Config),
-		log:             log,
+		docRenderer:      docRenderer,
+		analytics:        queries,
+		presence:         deps.Presence,
+		eventsMaxReplay:  deps.Config.Events.MaxReplayEvents,
+		eventsHeartbeat:  deps.Config.Events.Heartbeat,
+		signInURL:        signInURL(deps.Config),
+		log:              log,
 	}
 
 	// M4-004: wire the RevealLookup for step-scoped event data.

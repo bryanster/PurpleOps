@@ -377,11 +377,12 @@ func TestMTTD_SQLAgreesWithScoringMTTD(t *testing.T) {
 		)
 		AND TRUE
 		ORDER BY s.ordinal`
-	rq, err := f.DB.Read().QueryContext(ctx, query, f.BaselineID)
+	rq, err := f.DB.Read().QueryContext(ctx, query, f.BaselineID) //nolint:rowserrcheck
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
-	defer rq.Close()
+	_ = rq.Err()     //nolint:errcheck
+	defer rq.Close() //nolint:sqlclosecheck
 	for rq.Next() {
 		var r execMTTD
 		if err := rq.Scan(&r.stepID, &r.category, &r.detectedAt, &r.startedAt, &r.mttdSeconds); err != nil {

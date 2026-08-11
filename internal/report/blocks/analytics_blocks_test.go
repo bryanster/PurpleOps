@@ -3,8 +3,8 @@ package blocks
 import (
 	"context"
 	"encoding/json"
-	"testing"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/bryanster/blacklight/internal/analytics"
@@ -44,7 +44,7 @@ func blueScope() blind.Scope {
 // renderBlock is a test helper that renders a block and returns the HTML string.
 func renderBlock(t *testing.T, r report.Renderer, env report.RenderEnv, params map[string]any) string {
 	t.Helper()
-	raw, _ := json.Marshal(params)
+	raw, _ := json.Marshal(params) //nolint:errcheck
 	inst := report.Instance{
 		InstanceID: "inst-test",
 		BlockID:    report.IDCoverageHeatmap,
@@ -268,6 +268,7 @@ func TestMTTDEmptyEngagement(t *testing.T) {
 	html := renderBlock(t, r, env, nil)
 	mustContain(t, html, "No scored executions yet")
 }
+
 // Engagement Compare
 // ---------------------------------------------------------------------------
 

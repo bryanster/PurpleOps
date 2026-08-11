@@ -180,7 +180,6 @@ const (
 	VerbReportShareClaimed Verb = "report.share_claimed"
 )
 
-
 // Object types naming what a verb acted on. Kept as constants so a typo is a
 // compile error rather than a row nobody can filter for.
 const (
@@ -209,7 +208,7 @@ const (
 	ObjectEvidence = "evidence"
 
 	ObjectReportVersion = "report_version"
-	ObjectScenario = "scenario"
+	ObjectScenario      = "scenario"
 
 	ObjectStep = "step"
 
@@ -220,7 +219,6 @@ const (
 	ObjectReportShare      = "report_share"
 	ObjectReportShareGrant = "report_share_grant"
 )
-
 
 // Entry is one activity row as a caller wants it recorded. Secrets do not
 // belong in Delta — see [Delta] and the redaction helpers below.

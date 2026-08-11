@@ -12,10 +12,10 @@ import (
 
 // MTTDDef is the Definition for the MTTD block.
 var MTTDDef = report.Definition{
-	ID:             report.IDMTTD,
-	Title:          "Mean Time to Detect",
-	Description:    "MTTD percentiles (p50/p90/max) with mandatory denominator counts.",
-	DefaultParams:  json.RawMessage(`{}`),
+	ID:              report.IDMTTD,
+	Title:           "Mean Time to Detect",
+	Description:     "MTTD percentiles (p50/p90/max) with mandatory denominator counts.",
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
 }
 

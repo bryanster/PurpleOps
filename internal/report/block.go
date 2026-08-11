@@ -2,11 +2,11 @@ package report
 
 import (
 	"context"
-	"io"
 	"encoding/json"
 	"fmt"
-	"math"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
+	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -102,7 +102,6 @@ type RenderEnv struct {
 	// EngagementStartsOn is the engagement start date.
 	EngagementStartsOn time.Time
 
-
 	// EngagementEndsOn is the engagement end date.
 	EngagementEndsOn time.Time
 
@@ -135,6 +134,7 @@ type RenderEnv struct {
 	// Set in M6-009.
 	Format FormatHelpers
 }
+
 // AnalyticsFacade is the interface report blocks use to read analytics data.
 // M6-007 fills the concrete methods; *analytics.Queries satisfies it directly.
 // M6-009 sets it on RenderEnv during assembly.
@@ -187,8 +187,6 @@ type BrandingConfig struct {
 	// ClientName overrides the engagement client name for this report.
 	ClientName string
 }
-
-
 
 // FormatHelpers provides locale/format functions for report rendering.
 // Methods are defined here (M6-007) — fixed for v1: ISO dates, en-US grouping.

@@ -70,7 +70,7 @@ const (
 	envLogLevel        = prefix + "LOG_LEVEL"
 	envLogFormat       = prefix + "LOG_FORMAT"
 	envChromePath      = prefix + "CHROME_PATH"
-	envBrandingDir = prefix + "BRANDING_DIR"
+	envBrandingDir     = prefix + "BRANDING_DIR"
 )
 
 // Config is the whole configuration of a Blacklight process. It is grouped by

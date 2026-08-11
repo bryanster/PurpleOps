@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	storereport "github.com/bryanster/blacklight/internal/store/report"
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/store/blind"
+	storereport "github.com/bryanster/blacklight/internal/store/report"
 )
 
 // PublishService creates immutable published versions of report drafts (M6-011).

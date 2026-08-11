@@ -9,11 +9,11 @@ import (
 // PageBreakDef is the Definition for the page break block.
 // It has no parameters — it emits a CSS page-break marker.
 var PageBreakDef = report.Definition{
-	ID:            report.IDPageBreak,
-	Title:         "Page Break",
-	Description:   "Forces a page break in print and PDF output.",
-	ParamsSchema:  nil,
-	DefaultParams: nil,
+	ID:              report.IDPageBreak,
+	Title:           "Page Break",
+	Description:     "Forces a page break in print and PDF output.",
+	ParamsSchema:    nil,
+	DefaultParams:   nil,
 	AllowInTemplate: true,
 }
 

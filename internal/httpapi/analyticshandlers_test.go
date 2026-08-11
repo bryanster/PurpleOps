@@ -209,7 +209,7 @@ func TestAnalyticsBlindModeDifferentViews(t *testing.T) {
 	if err != nil {
 		t.Fatalf("blue GetAnalyticsCoverage: %v", err)
 	}
-	blueCov := blueResp.(gen.GetAnalyticsCoverage200JSONResponse)
+	blueCov := blueResp.(gen.GetAnalyticsCoverage200JSONResponse) //nolint:errcheck
 
 	ctxLead := context.WithValue(context.Background(), authorizationKey{}, Authorization{
 		OperationID: "getAnalyticsCoverage",
@@ -231,7 +231,7 @@ func TestAnalyticsBlindModeDifferentViews(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lead GetAnalyticsCoverage: %v", err)
 	}
-	leadCov := leadResp.(gen.GetAnalyticsCoverage200JSONResponse)
+	leadCov := leadResp.(gen.GetAnalyticsCoverage200JSONResponse) //nolint:errcheck
 
 	if len(blueCov.Techniques.Rows) > len(leadCov.Techniques.Rows) {
 		t.Errorf("blue sees %d technique rows, lead sees %d — blue should see <= lead",

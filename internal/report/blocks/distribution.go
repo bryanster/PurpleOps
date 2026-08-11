@@ -13,10 +13,10 @@ import (
 
 // DistributionDef is the Definition for the detection distribution block.
 var DistributionDef = report.Definition{
-	ID:             report.IDDetectionDistribution,
-	Title:          "Detection Distribution",
-	Description:    "Detection category distribution, protection rate, and outcome mix for the engagement.",
-	DefaultParams:  json.RawMessage(`{}`),
+	ID:              report.IDDetectionDistribution,
+	Title:           "Detection Distribution",
+	Description:     "Detection category distribution, protection rate, and outcome mix for the engagement.",
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
 }
 

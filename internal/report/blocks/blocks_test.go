@@ -11,28 +11,28 @@ import (
 )
 
 func fixedTime(s string) time.Time {
-	t, _ := time.Parse(time.RFC3339, s)
+	t, _ := time.Parse(time.RFC3339, s) //nolint:errcheck
 	return t
 }
 
 // stubEnv returns a RenderEnv with enough fields for narrative blocks.
 func stubEnv() report.RenderEnv {
 	return report.RenderEnv{
-		EngagementID:     "eng-1",
-		EngagementName:   "Acme Corp Security Assessment",
-		EngagementClient: "Acme Corporation",
+		EngagementID:       "eng-1",
+		EngagementName:     "Acme Corp Security Assessment",
+		EngagementClient:   "Acme Corporation",
 		EngagementStartsOn: fixedTime("2025-01-06T00:00:00Z"),
 		EngagementEndsOn:   fixedTime("2025-01-10T00:00:00Z"),
 		Branding: report.BrandingConfig{
-			FirmName:    "Blacklight Security",
-			PrimaryColor: "#1a1a2e",
+			FirmName:       "Blacklight Security",
+			PrimaryColor:   "#1a1a2e",
 			SecondaryColor: "#16213e",
 		},
 	}
 }
 
 func instance(blockID report.ID, params map[string]any) report.Instance {
-	raw, _ := json.Marshal(params)
+	raw, _ := json.Marshal(params) //nolint:errcheck
 	return report.Instance{
 		InstanceID: "inst-1",
 		BlockID:    blockID,
@@ -495,8 +495,8 @@ func TestPageBreakIgnoresParams(t *testing.T) {
 	t.Parallel()
 
 	r := PageBreakRenderer{}
-	frag1, _ := r.Render(context.Background(), stubEnv(), instance(report.IDPageBreak, nil))
-	frag2, _ := r.Render(context.Background(), stubEnv(), instance(report.IDPageBreak, map[string]any{
+	frag1, _ := r.Render(context.Background(), stubEnv(), instance(report.IDPageBreak, nil))           //nolint:errcheck
+	frag2, _ := r.Render(context.Background(), stubEnv(), instance(report.IDPageBreak, map[string]any{ //nolint:errcheck
 		"extra": "should be ignored",
 	}))
 

@@ -16,9 +16,9 @@ import (
 	"github.com/bryanster/blacklight/internal/evidence"
 	"github.com/bryanster/blacklight/internal/store"
 	storeactivity "github.com/bryanster/blacklight/internal/store/activity"
+	"github.com/bryanster/blacklight/internal/store/blind"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	identity "github.com/bryanster/blacklight/internal/store/identity"
-	"github.com/bryanster/blacklight/internal/store/blind"
 )
 
 // newArchiveCommand builds `blctl engagement archive`.
@@ -219,7 +219,7 @@ func runArchive(ctx context.Context, db *store.DB, engagementID, outputFile, evi
 	}
 
 	// 6. Compute analytics.
-	analyticsJSON, _ := cliComputeFrozenAnalytics(ctx, queries, scope)
+	analyticsJSON, _ := cliComputeFrozenAnalytics(ctx, queries, scope) //nolint:errcheck
 
 	// 7. Collect activity rows.
 	var allActivityRows []storeactivity.Row
@@ -243,7 +243,7 @@ func runArchive(ctx context.Context, db *store.DB, engagementID, outputFile, evi
 
 	var activityRows []json.RawMessage
 	for _, row := range allActivityRows {
-		raw, _ := json.Marshal(row)
+		raw, _ := json.Marshal(row) //nolint:errcheck
 		activityRows = append(activityRows, raw)
 	}
 	activityActors := make(map[string]string)
@@ -297,9 +297,9 @@ func cliComputeFrozenAnalytics(ctx context.Context, q *analytics.Queries, scope 
 		}
 	}
 	if cat, err := q.CategoryDistribution(ctx, scope); err == nil {
-		protRate, _ := q.ProtectionRate(ctx, scope)
-		outcome, _ := q.OutcomeMix(ctx, scope)
-		modDist, _ := q.ModifierDistribution(ctx, scope)
+		protRate, _ := q.ProtectionRate(ctx, scope)      //nolint:errcheck
+		outcome, _ := q.OutcomeMix(ctx, scope)           //nolint:errcheck
+		modDist, _ := q.ModifierDistribution(ctx, scope) //nolint:errcheck
 		result.Distribution = map[string]any{
 			"categoryDistribution": cat,
 			"protectionRate":       protRate,
@@ -311,7 +311,7 @@ func cliComputeFrozenAnalytics(ctx context.Context, q *analytics.Queries, scope 
 		result.MTTD = mttd
 	}
 	if burndown, err := q.FindingsBurndown(ctx, scope, ""); err == nil {
-		severity, _ := q.FindingsBySeverity(ctx, scope)
+		severity, _ := q.FindingsBySeverity(ctx, scope) //nolint:errcheck
 		result.Burndown = map[string]any{"burndown": burndown, "severitySnapshot": severity}
 	}
 	return json.Marshal(result)

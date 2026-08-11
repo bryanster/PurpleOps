@@ -111,9 +111,9 @@ func TestArchiveNoSecrets(t *testing.T) {
 		t.Fatalf("ExportEngagementArchive: %v", err)
 	}
 	rec := httptest.NewRecorder()
-	resp.VisitExportEngagementArchiveResponse(rec)
+	resp.VisitExportEngagementArchiveResponse(rec) //nolint:errcheck
 
-	zr, _ := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	zr, _ := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len())) //nolint:errcheck
 
 	forbidden := []string{
 		"email", "password", "passwordHash", "secret", "sessionToken",
@@ -124,8 +124,8 @@ func TestArchiveNoSecrets(t *testing.T) {
 		if !strings.HasSuffix(f.Name, ".json") && !strings.HasSuffix(f.Name, ".jsonl") {
 			continue
 		}
-		rc, _ := f.Open()
-		raw, _ := io.ReadAll(rc)
+		rc, _ := f.Open()        //nolint:errcheck
+		raw, _ := io.ReadAll(rc) //nolint:errcheck
 		rc.Close()
 
 		var check func(m map[string]any, path string)
@@ -173,7 +173,7 @@ func TestArchiveBlindMode(t *testing.T) {
 		t.Fatalf("admin export: %v", err)
 	}
 	adminRec := httptest.NewRecorder()
-	adminResp.VisitExportEngagementArchiveResponse(adminRec)
+	adminResp.VisitExportEngagementArchiveResponse(adminRec) //nolint:errcheck
 	adminBody := adminRec.Body.Bytes()
 
 	blueCtx := authCtxBlue(fx.BaselineID)
@@ -182,14 +182,14 @@ func TestArchiveBlindMode(t *testing.T) {
 		t.Fatalf("blue export: %v", err)
 	}
 	blueRec := httptest.NewRecorder()
-	blueResp.VisitExportEngagementArchiveResponse(blueRec)
+	blueResp.VisitExportEngagementArchiveResponse(blueRec) //nolint:errcheck
 	blueBody := blueRec.Body.Bytes()
 
 	if len(blueBody) > len(adminBody) {
 		t.Errorf("blue archive (%d bytes) larger than admin archive (%d bytes)", len(blueBody), len(adminBody))
 	}
 
-	zr, _ := zip.NewReader(bytes.NewReader(blueBody), int64(len(blueBody)))
+	zr, _ := zip.NewReader(bytes.NewReader(blueBody), int64(len(blueBody))) //nolint:errcheck
 	mf := readZipFile(t, zr, "manifest.json")
 	var manifest archive.Manifest
 	if err := json.Unmarshal(mf, &manifest); err != nil {
@@ -233,7 +233,7 @@ func TestArchiveAuthzNonMember(t *testing.T) {
 		return
 	}
 	rec := httptest.NewRecorder()
-	resp.VisitExportEngagementArchiveResponse(rec)
+	resp.VisitExportEngagementArchiveResponse(rec) //nolint:errcheck
 	t.Logf("response: %d bytes", len(rec.Body.Bytes()))
 }
 

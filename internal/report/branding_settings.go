@@ -16,16 +16,16 @@ import (
 
 // Setting keys for install-wide report branding.
 const (
-	settingFirmName      = "report_branding.firm_name"
-	settingPrimaryColor  = "report_branding.primary_color"
+	settingFirmName       = "report_branding.firm_name"
+	settingPrimaryColor   = "report_branding.primary_color"
 	settingSecondaryColor = "report_branding.secondary_color"
-	settingLogoBlobRef   = "report_branding.logo_blob_ref"
+	settingLogoBlobRef    = "report_branding.logo_blob_ref"
 )
 
 // Built-in fallbacks when nothing has been configured.
 const (
-	defaultFirmName      = "Blacklight"
-	defaultPrimaryColor  = "#1a1a2e"
+	defaultFirmName       = "Blacklight"
+	defaultPrimaryColor   = "#1a1a2e"
 	defaultSecondaryColor = "#16213e"
 )
 
@@ -45,15 +45,15 @@ var acceptedLogoMIMEs = map[string]bool{
 type BrandingSettings struct {
 	FirmName       string
 	PrimaryColor   string
-	SecondaryColor  string
+	SecondaryColor string
 	LogoBlobRef    string // empty = no logo
 }
 
 // BrandingSettingsService reads and writes install-wide branding defaults,
 // and manages logo blob storage.
 type BrandingSettingsService struct {
-	store     *settings.Store
-	logoDir   string // content-addressed logo storage root
+	store   *settings.Store
+	logoDir string // content-addressed logo storage root
 }
 
 // NewBrandingSettingsService returns a service over the settings store and
@@ -90,10 +90,10 @@ func (s *BrandingSettingsService) Set(ctx context.Context, in BrandingSettings, 
 		return BrandingSettings{}, err
 	}
 	values := map[string]string{
-		settingFirmName:      in.FirmName,
-		settingPrimaryColor:  in.PrimaryColor,
+		settingFirmName:       in.FirmName,
+		settingPrimaryColor:   in.PrimaryColor,
 		settingSecondaryColor: in.SecondaryColor,
-		settingLogoBlobRef:   in.LogoBlobRef,
+		settingLogoBlobRef:    in.LogoBlobRef,
 	}
 	if err := s.store.Put(ctx, values, actorID); err != nil {
 		return BrandingSettings{}, fmt.Errorf("report: branding settings: %w", err)
@@ -202,8 +202,8 @@ func (s *BrandingSettingsService) logoPath(digest string) string {
 // built-in fallbacks.
 func brandingFromMap(all map[string]settings.Setting) BrandingSettings {
 	b := BrandingSettings{
-		FirmName:      defaultFirmName,
-		PrimaryColor:  defaultPrimaryColor,
+		FirmName:       defaultFirmName,
+		PrimaryColor:   defaultPrimaryColor,
 		SecondaryColor: defaultSecondaryColor,
 	}
 	if v, ok := all[settingFirmName]; ok && v.Value != "" {

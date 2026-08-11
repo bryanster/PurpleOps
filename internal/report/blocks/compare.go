@@ -22,7 +22,7 @@ var CompareDef = report.Definition{
 			Description: "Baseline engagement ID to compare against (required).",
 		},
 	},
-	DefaultParams:  json.RawMessage(`{}`),
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
 }
 

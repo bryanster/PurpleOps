@@ -9,6 +9,7 @@ import (
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/report"
 )
+
 // live in internal/report.
 //
 // Who may change them is not decided here. api/openapi.yaml maps these
@@ -64,7 +65,7 @@ func brandingToWire(bs report.BrandingSettings) gen.ReportBranding {
 	w := gen.ReportBranding{
 		FirmName:       bs.FirmName,
 		PrimaryColor:   bs.PrimaryColor,
-		SecondaryColor:  bs.SecondaryColor,
+		SecondaryColor: bs.SecondaryColor,
 	}
 	if bs.LogoBlobRef != "" {
 		w.LogoBlobRef.Set(bs.LogoBlobRef)
@@ -79,5 +80,3 @@ func nullableStringDeref(ns nullable.Nullable[string]) string {
 	}
 	return ns.MustGet()
 }
-
-

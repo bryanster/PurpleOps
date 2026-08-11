@@ -2,10 +2,10 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"context"
 
 	"github.com/oapi-codegen/nullable"
 
@@ -13,12 +13,13 @@ import (
 	"github.com/bryanster/blacklight/internal/authz"
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/report"
+	"github.com/bryanster/blacklight/internal/store/blind"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	identity "github.com/bryanster/blacklight/internal/store/identity"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
-	"github.com/bryanster/blacklight/internal/store/blind"
 	"github.com/google/uuid"
 )
+
 // Report CRUD + blocks handlers (M6-002).
 
 // ListReports returns every report in an engagement.
@@ -291,6 +292,7 @@ func nullableToStringPtr(ns nullable.Nullable[string]) *string {
 	}
 	return &v
 }
+
 // PreviewReport renders the draft report as HTML (M6-009).
 func (h *handlers) PreviewReport(ctx context.Context, request gen.PreviewReportRequestObject) (gen.PreviewReportResponseObject, error) {
 	env, errResp := h.previewReportEnv(ctx, request.EngagementId.String(), request.ReportId.String(), request.Params.IncludeEvidence)
@@ -448,12 +450,12 @@ func (h *handlers) PublishReport(ctx context.Context,
 	}
 
 	env := report.RenderEnv{
-		EngagementID:      request.EngagementId.String(),
-		EngagementName:    eng.Name,
-		EngagementClient:  eng.Client,
+		EngagementID:       request.EngagementId.String(),
+		EngagementName:     eng.Name,
+		EngagementClient:   eng.Client,
 		EngagementStartsOn: eng.StartsOn,
 		EngagementEndsOn:   eng.EndsOn,
-		Analytics:        h.analytics,
+		Analytics:          h.analytics,
 		Domain: &report.DomainAdapter{
 			Scenarios:  storengagement.NewScenarios(h.store),
 			Steps:      storengagement.NewSteps(h.store),

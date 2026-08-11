@@ -36,7 +36,7 @@ func (r *BrandingResolver) Resolve(ctx context.Context, rep storereport.Report) 
 	}
 
 	cfg := BrandingConfig{
-		FirmName:      def.FirmName,
+		FirmName:       def.FirmName,
 		PrimaryColor:   def.PrimaryColor,
 		SecondaryColor: def.SecondaryColor,
 		LogoRef:        def.LogoBlobRef,

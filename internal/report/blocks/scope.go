@@ -26,9 +26,9 @@ var ScopeDef = report.Definition{
 			Description: "In-scope systems (plain text, one per line).",
 		},
 	},
-	DefaultParams:  json.RawMessage(`{}`),
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
-	HTMLParamKeys:  []string{"body"},
+	HTMLParamKeys:   []string{"body"},
 }
 
 // ScopeRenderer renders the scope/RoE block.

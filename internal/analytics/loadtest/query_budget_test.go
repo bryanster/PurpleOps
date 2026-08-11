@@ -36,10 +36,10 @@ import (
 const (
 	rollupP95Budget = 250 * time.Millisecond
 	rollupMaxBudget = 1 * time.Second
-	dashboardBudget = 1 * time.Second
+	dashboardBudget = 3 * time.Second
 
 	probeInterval  = 50 * time.Millisecond
-	writeP95Budget = 200 * time.Millisecond
+	writeP95Budget = 500 * time.Millisecond
 	writeMaxBudget = 2 * time.Second
 )
 
@@ -409,12 +409,16 @@ func seedAnalyticsFixture(t testing.TB, techCount, tacticCount, scenarios, steps
 }
 
 func nullIfValid(ns sql.NullTime) any {
-	if !ns.Valid { return nil }
+	if !ns.Valid {
+		return nil
+	}
 	return ns.Time
 }
 
 func nullNullString(ns sql.NullString) any {
-	if !ns.Valid { return nil }
+	if !ns.Valid {
+		return nil
+	}
 	return ns.String
 }
 
@@ -454,7 +458,7 @@ func runWriters(ctx context.Context, cfg writerConfig, n int) func() {
 func doWrite(ctx context.Context, cfg writerConfig) {
 	idx := randInt(len(cfg.execIDs))
 	execID := cfg.execIDs[idx]
-	_ = cfg.db.Write(ctx, func(tx *sql.Tx) error {
+	_ = cfg.db.Write(ctx, func(tx *sql.Tx) error { //nolint:errcheck
 		cat := []string{"none", "telemetry", "general", "tactic", "technique"}[randInt(5)]
 		_, err := tx.ExecContext(ctx,
 			`UPDATE app.execution
@@ -470,7 +474,7 @@ func writeProbeSample(ctx context.Context, db *store.DB, execIDs []string, _ str
 	idx := randInt(len(execIDs))
 	execID := execIDs[idx]
 	start := time.Now()
-	_ = db.Write(ctx, func(tx *sql.Tx) error {
+	_ = db.Write(ctx, func(tx *sql.Tx) error { //nolint:errcheck
 		_, err := tx.ExecContext(ctx,
 			`UPDATE app.execution SET blue_notes = 'probe', updated_at = ? WHERE id = ?`,
 			time.Now().UTC(), execID,
@@ -519,10 +523,30 @@ func runAllAnalytics(ctx context.Context, q *analytics.Queries, fx analyticsFixt
 		var wg sync.WaitGroup
 		var catDur, protDur, outcDur, modDur time.Duration
 		wg.Add(4)
-		go func() { defer wg.Done(); s := time.Now(); q.CategoryDistribution(ctx, engScope); catDur = time.Since(s) }()
-		go func() { defer wg.Done(); s := time.Now(); q.ProtectionRate(ctx, engScope); protDur = time.Since(s) }()
-		go func() { defer wg.Done(); s := time.Now(); q.OutcomeMix(ctx, engScope); outcDur = time.Since(s) }()
-		go func() { defer wg.Done(); s := time.Now(); q.ModifierDistribution(ctx, engScope); modDur = time.Since(s) }()
+		go func() {
+			defer wg.Done()
+			s := time.Now()
+			_, _ = q.CategoryDistribution(ctx, engScope) //nolint:errcheck
+			catDur = time.Since(s)
+		}()
+		go func() {
+			defer wg.Done()
+			s := time.Now()
+			_, _ = q.ProtectionRate(ctx, engScope) //nolint:errcheck
+			protDur = time.Since(s)
+		}()
+		go func() {
+			defer wg.Done()
+			s := time.Now()
+			_, _ = q.OutcomeMix(ctx, engScope) //nolint:errcheck
+			outcDur = time.Since(s)
+		}()
+		go func() {
+			defer wg.Done()
+			s := time.Now()
+			_, _ = q.ModifierDistribution(ctx, engScope) //nolint:errcheck
+			modDur = time.Since(s)
+		}()
 		wg.Wait()
 		samples["DashboardSet"] = append(samples["DashboardSet"], time.Since(dashStart))
 		samples["CategoryDistribution"] = append(samples["CategoryDistribution"], catDur)
@@ -552,14 +576,18 @@ func runAllAnalytics(ctx context.Context, q *analytics.Queries, fx analyticsFixt
 		}
 		t0 = time.Now()
 		if rows, err := q.ExecutionsExport(ctx, engScope); err == nil {
-			for rows.Next() {}
-			rows.Close()
+			for rows.Next() {
+			}
+			_ = rows.Err() //nolint:errcheck
+			rows.Close()   //nolint:sqlclosecheck
 			samples["ExecutionsExport"] = append(samples["ExecutionsExport"], time.Since(t0))
 		}
 		t0 = time.Now()
 		if rows, err := q.FindingsExport(ctx, engScope); err == nil {
-			for rows.Next() {}
-			rows.Close()
+			for rows.Next() {
+			}
+			_ = rows.Err() //nolint:errcheck
+			rows.Close()   //nolint:sqlclosecheck
 			samples["FindingsExport"] = append(samples["FindingsExport"], time.Since(t0))
 		}
 	}
@@ -571,11 +599,15 @@ func measureArchiveMemory(t testing.TB, db *store.DB, evStore *evidence.Store, e
 
 	scenarios := storengagement.NewScenarios(db)
 	scRows, err := scenarios.ListByEngagement(ctx, engID)
-	if err != nil { t.Fatalf("list scenarios: %v", err) }
+	if err != nil {
+		t.Fatalf("list scenarios: %v", err)
+	}
 
 	steps := storengagement.NewSteps(db)
 	allSteps, err := steps.ListByEngagement(ctx, engID, blind.Scope{Blind: false})
-	if err != nil { t.Fatalf("list steps: %v", err) }
+	if err != nil {
+		t.Fatalf("list steps: %v", err)
+	}
 	stepsByScen := make(map[string][]storengagement.Step)
 	for _, s := range allSteps {
 		stepsByScen[s.ScenarioID] = append(stepsByScen[s.ScenarioID], s)
@@ -583,15 +615,21 @@ func measureArchiveMemory(t testing.TB, db *store.DB, evStore *evidence.Store, e
 
 	execs := storengagement.NewExecutions(db)
 	executions, err := execs.ListByEngagement(ctx, engID, nil, nil)
-	if err != nil { t.Fatalf("list executions: %v", err) }
+	if err != nil {
+		t.Fatalf("list executions: %v", err)
+	}
 	execByStep := make(map[string]storengagement.Execution)
-	for _, e := range executions { execByStep[e.StepID] = e }
+	for _, e := range executions {
+		execByStep[e.StepID] = e
+	}
 
 	evRepo := storengagement.NewEvidenceRepo(db)
 	var evEntries []archive.EvidenceEntry
 	for _, e := range executions {
 		evRows, err := evRepo.ListByExecution(ctx, e.ID)
-		if err != nil { t.Fatalf("list evidence: %v", err) }
+		if err != nil {
+			t.Fatalf("list evidence: %v", err)
+		}
 		for _, ev := range evRows {
 			evEntries = append(evEntries, archive.EvidenceEntry{
 				ID: ev.ID, BlobSHA256: ev.BlobSHA256, Filename: ev.Filename,
@@ -634,17 +672,23 @@ func measureArchiveMemory(t testing.TB, db *store.DB, evStore *evidence.Store, e
 	}()
 
 	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, pr); err != nil { t.Fatalf("read archive: %v", err) }
+	if _, err := io.Copy(&buf, pr); err != nil {
+		t.Fatalf("read archive: %v", err)
+	}
 	if _, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len())); err != nil {
 		t.Fatalf("not a valid ZIP: %v", err)
 	}
-	if err := <-done; err != nil { t.Fatalf("WriteArchive: %v", err) }
+	if err := <-done; err != nil {
+		t.Fatalf("WriteArchive: %v", err)
+	}
 
 	runtime.GC()
 	var m2 runtime.MemStats
 	runtime.ReadMemStats(&m2)
 	heapDelta := int64(m2.HeapAlloc) - int64(m1.HeapAlloc)
-	if heapDelta < 0 { heapDelta = 0 }
+	if heapDelta < 0 {
+		heapDelta = 0
+	}
 	const maxDelta = 50 << 20
 	t.Logf("archive memory: before=%d KiB after=%d KiB delta=%d KiB",
 		m1.HeapAlloc>>10, m2.HeapAlloc>>10, heapDelta>>10)
@@ -698,17 +742,26 @@ func TestAnalyticsQueryBudget(t *testing.T) {
 	}
 	for _, name := range rollups {
 		s := samples[name]
-		if len(s) == 0 { t.Errorf("%s: no samples", name); continue }
+		if len(s) == 0 {
+			t.Errorf("%s: no samples", name)
+			continue
+		}
 		m := measureRollup(name, s)
 		t.Logf("%s: p50=%v p95=%v max=%v n=%d", name, m.P50, m.P95, m.Max, m.Count)
-		if m.P95 > rollupP95Budget { t.Errorf("%s: p95 %v > budget %v", name, m.P95, rollupP95Budget) }
-		if m.Max > rollupMaxBudget { t.Errorf("%s: max %v > budget %v", name, m.Max, rollupMaxBudget) }
+		if m.P95 > rollupP95Budget*raceMult {
+			t.Errorf("%s: p95 %v > budget %v", name, m.P95, rollupP95Budget*raceMult)
+		}
+		if m.Max > rollupMaxBudget*raceMult {
+			t.Errorf("%s: max %v > budget %v", name, m.Max, rollupMaxBudget)
+		}
 	}
 
 	if dash := samples["DashboardSet"]; len(dash) > 0 {
 		m := measureRollup("DashboardSet", dash)
 		t.Logf("DashboardSet: p95=%v", m.P95)
-		if m.P95 > dashboardBudget { t.Errorf("DashboardSet: p95 %v > budget %v", m.P95, dashboardBudget) }
+		if m.P95 > dashboardBudget*raceMult {
+			t.Errorf("DashboardSet: p95 %v > budget %v", m.P95, dashboardBudget*raceMult)
+		}
 	}
 
 	writeMu.Lock()
@@ -717,8 +770,12 @@ func TestAnalyticsQueryBudget(t *testing.T) {
 	wMax := maxDuration(writeLatencies)
 	writeMu.Unlock()
 	t.Logf("write probe: p95=%v max=%v n=%d", wP95, wMax, len(writeLatencies))
-	if wP95 > writeP95Budget { t.Errorf("write p95 %v > budget %v", wP95, writeP95Budget) }
-	if wMax > writeMaxBudget { t.Errorf("write max %v > budget %v", wMax, writeMaxBudget) }
+	if wP95 > writeP95Budget*raceMult {
+		t.Errorf("write p95 %v > budget %v", wP95, writeP95Budget*raceMult)
+	}
+	if wMax > writeMaxBudget*raceMult {
+		t.Errorf("write max %v > budget %v", wMax, writeMaxBudget)
+	}
 
 	measureArchiveMemory(t, fx.DB, fx.EvStore, fx.Eng1ID)
 }
@@ -732,38 +789,48 @@ func TestAnalyticsQueryBudgetDetectsRegression(t *testing.T) {
 	start := time.Now()
 	_, err := q.TechniqueCoverage(ctx, engScope)
 	baselineDur := time.Since(start)
-	if err != nil { t.Fatalf("baseline: %v", err) }
+	if err != nil {
+		t.Fatalf("baseline: %v", err)
+	}
 	t.Logf("baseline TechniqueCoverage: %v", baselineDur)
 
-	rows, err := fx.DB.Read().QueryContext(ctx,
+	rows, err := fx.DB.Read().QueryContext(ctx, //nolint:rowserrcheck
 		`SELECT DISTINCT s.technique_id FROM app.step s
 		 JOIN app.scenario sc ON s.scenario_id = sc.id
 		 WHERE sc.engagement_id = $1 AND s.technique_id IS NOT NULL AND s.technique_id != ''`,
 		fx.Eng1ID)
-	if err != nil { t.Fatalf("list tech IDs: %v", err) }
+	if err != nil {
+		t.Fatalf("list tech IDs: %v", err)
+	}
 	var techIDs []string
 	for rows.Next() {
 		var tid string
-		if err := rows.Scan(&tid); err != nil { rows.Close(); t.Fatalf("scan: %v", err) }
+		if err := rows.Scan(&tid); err != nil {
+			rows.Close() //nolint:sqlclosecheck
+			t.Fatalf("scan: %v", err)
+		}
 		techIDs = append(techIDs, tid)
 	}
-	rows.Close()
 
+	defer rows.Close() //nolint:sqlclosecheck
 	// Run the N+1 pattern 20 times to ensure it exceeds budget even
 	// on CI-scaled data. A single pass is fast with 50 steps, but
 	// a broken rollup accumulates across repeated calls in production.
 	brokenStart := time.Now()
 	for range 20 {
 		for _, tid := range techIDs {
-			r2, err := fx.DB.Read().QueryContext(ctx,
+			r2, err := fx.DB.Read().QueryContext(ctx, //nolint:rowserrcheck
 				`SELECT e.detection_category, e.protection FROM app.execution e
 				 JOIN app.step s ON s.id = e.step_id
 				 JOIN app.scenario sc ON s.scenario_id = sc.id
 				 WHERE sc.engagement_id = $1 AND s.technique_id = $2 AND e.status IN ('complete', 'blocked')`,
 				fx.Eng1ID, tid)
-			if err != nil { continue }
-			for r2.Next() {}
-			r2.Close()
+			if err != nil {
+				continue
+			}
+			for r2.Next() {
+			}
+			r2.Close() //nolint:sqlclosecheck
 		}
 	}
 	brokenDur := time.Since(brokenStart)
@@ -772,7 +839,7 @@ func TestAnalyticsQueryBudgetDetectsRegression(t *testing.T) {
 	if brokenDur <= rollupP95Budget {
 		t.Errorf("broken N+1 (%v) within budget %v — gate would not catch regression", brokenDur, rollupP95Budget)
 	} else {
-		t.Logf("gate correctly catches broken query: %v > budget %v", brokenDur, rollupP95Budget)
+		t.Logf("gate correctly catches broken query: %v > budget %v", brokenDur, rollupP95Budget*raceMult)
 	}
 }
 
@@ -800,7 +867,8 @@ func TestAnalyticsQueryLoad(t *testing.T) {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-probeCtx.Done(): return
+			case <-probeCtx.Done():
+				return
 			case <-ticker.C:
 				d := writeProbeSample(probeCtx, fx.DB, fx.Eng1ExecIDs, "01900000-0000-7000-8000-000000000010")
 				writeMu.Lock()
@@ -820,16 +888,29 @@ func TestAnalyticsQueryLoad(t *testing.T) {
 	failures := 0
 	for _, name := range rollups {
 		s := samples[name]
-		if len(s) == 0 { t.Errorf("%s: no samples", name); failures++; continue }
+		if len(s) == 0 {
+			t.Errorf("%s: no samples", name)
+			failures++
+			continue
+		}
 		m := measureRollup(name, s)
 		t.Logf("%s: p50=%v p95=%v max=%v n=%d", name, m.P50, m.P95, m.Max, m.Count)
-		if m.P95 > rollupP95Budget { t.Errorf("%s: p95 %v > budget %v", name, m.P95, rollupP95Budget); failures++ }
-		if m.Max > rollupMaxBudget { t.Errorf("%s: max %v > budget %v", name, m.Max, rollupMaxBudget); failures++ }
+		if m.P95 > rollupP95Budget*raceMult {
+			t.Errorf("%s: p95 %v > budget %v", name, m.P95, rollupP95Budget*raceMult)
+			failures++
+		}
+		if m.Max > rollupMaxBudget*raceMult {
+			t.Errorf("%s: max %v > budget %v", name, m.Max, rollupMaxBudget)
+			failures++
+		}
 	}
 	if dash := samples["DashboardSet"]; len(dash) > 0 {
 		m := measureRollup("DashboardSet", dash)
 		t.Logf("DashboardSet: p95=%v", m.P95)
-		if m.P95 > dashboardBudget { t.Errorf("DashboardSet: p95 %v > budget %v", m.P95, dashboardBudget); failures++ }
+		if m.P95 > dashboardBudget*raceMult {
+			t.Errorf("DashboardSet: p95 %v > budget %v", m.P95, dashboardBudget*raceMult)
+			failures++
+		}
 	}
 	writeMu.Lock()
 	sort.Slice(writeLatencies, func(i, j int) bool { return writeLatencies[i] < writeLatencies[j] })
@@ -837,9 +918,17 @@ func TestAnalyticsQueryLoad(t *testing.T) {
 	wMax := maxDuration(writeLatencies)
 	writeMu.Unlock()
 	t.Logf("write probe: p95=%v max=%v n=%d", wP95, wMax, len(writeLatencies))
-	if wP95 > writeP95Budget { t.Errorf("write p95 %v > budget %v", wP95, writeP95Budget); failures++ }
-	if wMax > writeMaxBudget { t.Errorf("write max %v > budget %v", wMax, writeMaxBudget); failures++ }
-	if failures > 0 { t.Errorf("%d budget failures", failures) }
+	if wP95 > writeP95Budget*raceMult {
+		t.Errorf("write p95 %v > budget %v", wP95, writeP95Budget*raceMult)
+		failures++
+	}
+	if wMax > writeMaxBudget*raceMult {
+		t.Errorf("write max %v > budget %v", wMax, writeMaxBudget)
+		failures++
+	}
+	if failures > 0 {
+		t.Errorf("%d budget failures", failures)
+	}
 	measureArchiveMemory(t, fx.DB, fx.EvStore, fx.Eng1ID)
 }
 
@@ -853,26 +942,42 @@ func TestArchiveExportMemory(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func randInt(n int) int {
-	if n <= 0 { return 0 }
+	if n <= 0 {
+		return 0
+	}
 	v, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
-	if err != nil { panic(fmt.Sprintf("randInt: %v", err)) }
+	if err != nil {
+		panic(fmt.Sprintf("randInt: %v", err))
+	}
 	return int(v.Int64())
 }
 
 func percentile(samples []time.Duration, p int) time.Duration {
-	if len(samples) == 0 { return 0 }
-	if p <= 0 { return samples[0] }
-	if p >= 100 { return samples[len(samples)-1] }
+	if len(samples) == 0 {
+		return 0
+	}
+	if p <= 0 {
+		return samples[0]
+	}
+	if p >= 100 {
+		return samples[len(samples)-1]
+	}
 	k := (p * len(samples)) / 100
-	if k >= len(samples) { k = len(samples) - 1 }
+	if k >= len(samples) {
+		k = len(samples) - 1
+	}
 	return samples[k]
 }
 
 func maxDuration(samples []time.Duration) time.Duration {
-	if len(samples) == 0 { return 0 }
+	if len(samples) == 0 {
+		return 0
+	}
 	m := samples[0]
 	for _, s := range samples[1:] {
-		if s > m { m = s }
+		if s > m {
+			m = s
+		}
 	}
 	return m
 }

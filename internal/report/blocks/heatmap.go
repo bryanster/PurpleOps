@@ -23,7 +23,7 @@ var HeatmapDef = report.Definition{
 			Enum:        []string{"summary", "full"},
 		},
 	},
-	DefaultParams:  json.RawMessage(`{"verbosity":"full"}`),
+	DefaultParams:   json.RawMessage(`{"verbosity":"full"}`),
 	AllowInTemplate: true,
 }
 

@@ -20,9 +20,9 @@ var SummaryDef = report.Definition{
 			Description: "Executive summary content (rich text HTML).",
 		},
 	},
-	DefaultParams:  json.RawMessage(`{}`),
+	DefaultParams:   json.RawMessage(`{}`),
 	AllowInTemplate: true,
-	HTMLParamKeys:  []string{"body"},
+	HTMLParamKeys:   []string{"body"},
 }
 
 // SummaryRenderer renders the executive summary block.

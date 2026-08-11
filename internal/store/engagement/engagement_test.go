@@ -870,7 +870,7 @@ func TestBackfillProducesOneRowPerFinding(t *testing.T) {
 	}
 
 	// Verify two backfill rows, one per finding.
-	rows, err := db.Read().QueryContext(context.Background(),
+	rows, err := db.Read().QueryContext(context.Background(), //nolint:rowserrcheck
 		`SELECT id, finding_id, engagement_id, from_status, to_status, changed_by, changed_at
 		FROM app.finding_status_history WHERE engagement_id = ?
 		ORDER BY finding_id ASC`, engID,

@@ -17,17 +17,17 @@ import (
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/evidence"
 
+	"github.com/bryanster/blacklight/internal/analytics"
 	"github.com/bryanster/blacklight/internal/report"
 	pdfreport "github.com/bryanster/blacklight/internal/report/pdf"
-	"github.com/bryanster/blacklight/internal/analytics"
 
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/store"
-	storecontent "github.com/bryanster/blacklight/internal/store/content"
-	storereport "github.com/bryanster/blacklight/internal/store/report"
-	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
-	"github.com/bryanster/blacklight/internal/version"
 	"github.com/bryanster/blacklight/internal/store/activity"
+	storecontent "github.com/bryanster/blacklight/internal/store/content"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
+	storereport "github.com/bryanster/blacklight/internal/store/report"
+	"github.com/bryanster/blacklight/internal/version"
 )
 
 // handlers implements the generated interface. Its dependencies arrive through
@@ -108,7 +108,7 @@ type handlers struct {
 
 	// activityEntries is the append-only activity log repo for archive export.
 	activityEntries *activity.Entries
-	users    membershipUserStore
+	users           membershipUserStore
 
 	// hub fans ephemeral UI events (M2-004). Nil only in tests that never hit
 	// GET /events.
@@ -167,7 +167,6 @@ type handlers struct {
 	// shareSvc manages share links and grants (M6-012).
 	shareSvc *report.ShareService
 }
-
 
 // The compiler is what keeps this in step with api/openapi.yaml: adding an
 // operation to the spec and regenerating breaks this line until it is

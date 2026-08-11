@@ -236,7 +236,7 @@ func (h *handlers) ExportEngagementArchive(ctx context.Context,
 	// Build activity JSONL rows from stored rows.
 	var activityRows []json.RawMessage
 	for _, row := range allActivityRows {
-		raw, _ := json.Marshal(row)
+		raw, _ := json.Marshal(row) //nolint:errcheck
 		activityRows = append(activityRows, raw)
 	}
 	// Build actor map for activity.jsonl enrichment.
@@ -298,9 +298,9 @@ func (h *handlers) computeFrozenAnalytics(ctx context.Context, scope analytics.S
 	// Distribution
 	catDist, err := h.analytics.CategoryDistribution(ctx, scope)
 	if err == nil {
-		protRate, _ := h.analytics.ProtectionRate(ctx, scope)
-		outcome, _ := h.analytics.OutcomeMix(ctx, scope)
-		modDist, _ := h.analytics.ModifierDistribution(ctx, scope)
+		protRate, _ := h.analytics.ProtectionRate(ctx, scope)      //nolint:errcheck
+		outcome, _ := h.analytics.OutcomeMix(ctx, scope)           //nolint:errcheck
+		modDist, _ := h.analytics.ModifierDistribution(ctx, scope) //nolint:errcheck
 		result.Distribution = map[string]any{
 			"categoryDistribution": catDist,
 			"protectionRate":       protRate,
@@ -318,7 +318,7 @@ func (h *handlers) computeFrozenAnalytics(ctx context.Context, scope analytics.S
 	// Burndown
 	burndown, err := h.analytics.FindingsBurndown(ctx, scope, "")
 	if err == nil {
-		severity, _ := h.analytics.FindingsBySeverity(ctx, scope)
+		severity, _ := h.analytics.FindingsBySeverity(ctx, scope) //nolint:errcheck
 		result.Burndown = map[string]any{
 			"burndown":         burndown,
 			"severitySnapshot": severity,

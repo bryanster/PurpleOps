@@ -16,11 +16,11 @@ import (
 
 // domainDomain adapts engagement repos to report.DomainFacade for tests.
 type domainDomain struct {
-	scenarios   *storengagement.Scenarios
-	steps       *storengagement.Steps
-	executions  *storengagement.Executions
-	findings    *storengagement.Findings
-	evidence    *storengagement.EvidenceRepo
+	scenarios  *storengagement.Scenarios
+	steps      *storengagement.Steps
+	executions *storengagement.Executions
+	findings   *storengagement.Findings
+	evidence   *storengagement.EvidenceRepo
 }
 
 func (d domainDomain) ListScenarios(ctx context.Context, engagementID string) ([]storengagement.Scenario, error) {
@@ -70,7 +70,7 @@ func domainEnv(t *testing.T, fx analyticstest.Fixture, blindScope blind.Scope) r
 // renderDomainBlock renders a domain block with the given params.
 func renderDomainBlock(t *testing.T, r report.Renderer, env report.RenderEnv, blockID report.ID, params map[string]any) string {
 	t.Helper()
-	raw, _ := json.Marshal(params)
+	raw, _ := json.Marshal(params) //nolint:errcheck
 	inst := report.Instance{
 		InstanceID: "inst-test",
 		BlockID:    blockID,
