@@ -63,12 +63,10 @@ import {
   type Report,
   type ReportBlockInput,
   type ReportVersion,
-
 } from './queries'
 import { ReportSettingsPanel } from './report-settings-panel'
 import { PublishDialog } from './publish/publish-dialog'
 import { VersionsPanel } from './publish/versions-panel'
-
 
 export function BuilderPage(): ReactNode {
   const { engagementId, reportId } = useParams<{
@@ -137,7 +135,9 @@ export function BuilderPage(): ReactNode {
   const handleUpdateBlockParams = useCallback((index: number, params: Record<string, never>) => {
     setLocalBlocks((prev) => {
       if (!prev) return prev
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const next = [...prev]
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       next[index] = { ...next[index]!, params }
       return next
     })
@@ -205,11 +205,7 @@ export function BuilderPage(): ReactNode {
             )}
             {showPreview ? 'Hide preview' : 'Preview'}
           </Button>
-          <PublishDialog
-            report={reportData}
-            engagementId={eid}
-            onPublished={handlePublished}
-          />
+          <PublishDialog report={reportData} engagementId={eid} onPublished={handlePublished} />
           <VersionsPanel engagementId={eid} reportId={rid} />
           <Button
             size="sm"
@@ -249,10 +245,13 @@ export function BuilderPage(): ReactNode {
               <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                 {blocks.map((block, i) => (
                   <SortableBlock
-                    key={sortableIds[i]!}
+                    key={sortableIds[i]}
                     block={block}
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                     index={i}
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                     sortableId={sortableIds[i]!}
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                     onRemove={() => {
                       handleRemoveBlock(i)
                     }}

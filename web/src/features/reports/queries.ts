@@ -39,7 +39,6 @@ export type ReportShareInfo = components['schemas']['ReportShareInfo']
 export type ClaimReportShareBody = components['schemas']['ClaimReportShare']
 export type ClaimReportShareResult = components['schemas']['ClaimReportShareResult']
 
-
 // ── Query keys ───────────────────────────────────────────────────────────────
 
 export const reportKeys = {
@@ -380,12 +379,13 @@ export function usePublishReport(): UseMutationResult<
 
 // ── Versions (M6-011) ────────────────────────────────────────────────────────
 
-export function versionsQueryOptions(engagementId: string | undefined, reportId: string | undefined) {
+export function versionsQueryOptions(
+  engagementId: string | undefined,
+  reportId: string | undefined,
+) {
   return queryOptions({
     queryKey:
-      engagementId && reportId
-        ? reportKeys.versions(engagementId, reportId)
-        : reportKeys.all(''),
+      engagementId && reportId ? reportKeys.versions(engagementId, reportId) : reportKeys.all(''),
     enabled: Boolean(engagementId && reportId),
     queryFn: async () => {
       if (!engagementId || !reportId) throw new Error('engagementId and reportId required')
@@ -554,7 +554,7 @@ export function useClaimShare(): UseMutationResult<
       unwrap(
         await api.POST('/report-views/{token}/claim', {
           params: { path: { token } },
-          body: body ?? ({})
+          body: body ?? {},
         }),
       ),
   })

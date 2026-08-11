@@ -141,7 +141,11 @@ export function queryKeysForVerb(
     case 'finding.updated':
     case 'finding.deleted':
     case 'finding.steps_changed':
-      return [engagementKeys.findings(engagementId), engagementKeys.analyticsBurndown(engagementId), ...activityKeys]
+      return [
+        engagementKeys.findings(engagementId),
+        engagementKeys.analyticsBurndown(engagementId),
+        ...activityKeys,
+      ]
 
     default:
       // Unknown verb — no invalidation.  Caller may log a dev warning.

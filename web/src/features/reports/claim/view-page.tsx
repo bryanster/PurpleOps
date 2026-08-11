@@ -61,7 +61,7 @@ export function ViewPage(): ReactNode {
           />
         ) : (
           <div className="flex items-center justify-center p-12">
-            <p className="text-sm text-muted-foreground">No content available.</p>
+            <p className="text-muted-foreground text-sm">No content available.</p>
           </div>
         )}
       </main>

@@ -168,10 +168,12 @@ function defaultEngagementPage(): components['schemas']['EngagementPage'] {
   }
 }
 
-function stubAll(overrides: {
-  compare?: Partial<components['schemas']['AnalyticsCompare']>
-  engagements?: Partial<components['schemas']['EngagementPage']>
-} = {}): void {
+function stubAll(
+  overrides: {
+    compare?: Partial<components['schemas']['AnalyticsCompare']>
+    engagements?: Partial<components['schemas']['EngagementPage']>
+  } = {},
+): void {
   server.use(
     get(COMPARE_PATH, () =>
       Response.json({ ...defaultCompare(), ...overrides.compare }, { status: 200 }),
@@ -190,9 +192,7 @@ function stub403(): void {
         { status: 403 },
       ),
     ),
-    get(ENGAGEMENTS_PATH, () =>
-      Response.json(defaultEngagementPage(), { status: 200 }),
-    ),
+    get(ENGAGEMENTS_PATH, () => Response.json(defaultEngagementPage(), { status: 200 })),
   )
 }
 
@@ -270,8 +270,10 @@ describe('ComparePage', () => {
 
     const rows = within(table).getAllByRole('row')
     // First data row should be regressed (classification order 0)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(within(rows[0]!).getByText('Regressed')).toBeDefined()
     // Second data row should be improved (classification order 1)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(within(rows[1]!).getByText('Improved')).toBeDefined()
   })
 
@@ -304,6 +306,7 @@ describe('ComparePage', () => {
       expect(rows).toHaveLength(1)
     })
     const rows = within(table).getAllByRole('row')
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(within(rows[0]!).getByText('Improved')).toBeDefined()
   })
 
@@ -416,7 +419,7 @@ describe('ComparePage', () => {
     renderCompare(BASELINE_ID)
 
     await screen.findByText('Compare')
-    const picker = screen.getByLabelText('Compare with…') as HTMLSelectElement
+    const picker = screen.getByLabelText('Compare with…') as HTMLSelectElement // eslint-disable-line @typescript-eslint/no-unnecessary-type-assertion
     await waitFor(() => {
       expect(picker.value).toBe(BASELINE_ID)
     })

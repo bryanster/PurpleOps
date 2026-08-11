@@ -46,7 +46,9 @@ export function PublishDialog({
           size="sm"
           variant="default"
           disabled={!canPublish || publish.isPending}
-          title={!canPublish ? 'Only the engagement lead or a platform admin can publish' : undefined}
+          title={
+            !canPublish ? 'Only the engagement lead or a platform admin can publish' : undefined
+          }
         >
           <UploadIcon className="size-4" />
           Publish
@@ -58,7 +60,7 @@ export function PublishDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Publish the current draft as an immutable version. Published versions use your full lead
             scope — never blind-filtered data.
           </p>
@@ -75,14 +77,14 @@ export function PublishDialog({
               <Label htmlFor="include-evidence" className="text-sm font-medium">
                 Include evidence
               </Label>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 Evidence files may contain client-sensitive screenshots. Keep this off unless the
                 recipient needs raw evidence.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <div className="bg-muted/40 text-muted-foreground flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs">
             <LockIcon className="size-3 shrink-0" />
             Published reports always use full engagement data (not blind-filtered).
           </div>

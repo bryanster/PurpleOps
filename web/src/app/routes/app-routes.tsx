@@ -42,7 +42,6 @@ import { ClaimPage } from '@/features/reports/claim/claim-page'
 import { ViewPage } from '@/features/reports/claim/view-page'
 import { CLAIM_PATH, VIEW_PATH } from '@/features/reports/paths'
 
-
 import { NotFoundPage } from './not-found'
 
 export function AppRoutes(): ReactNode {
@@ -53,7 +52,6 @@ export function AppRoutes(): ReactNode {
 
       <Route path={CLAIM_PATH} element={<ClaimPage />} />
       <Route path={VIEW_PATH} element={<ViewPage />} />
-
 
       <Route element={<RequireAuth />}>
         <Route path={ENROLMENT_PATH} element={<EnrolmentPage />} />

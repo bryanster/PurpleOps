@@ -51,10 +51,10 @@ export function SharePanel({ versionId }: { versionId: string }): ReactNode {
     <div className="space-y-3">
       {/* Token result — shown once */}
       {resultToken && (
-        <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
-          <div className="mb-1 text-xs font-medium text-primary">Share created</div>
+        <div className="border-primary/30 bg-primary/5 rounded-md border px-3 py-2">
+          <div className="text-primary mb-1 text-xs font-medium">Share created</div>
           <div className="flex items-center gap-1">
-            <code className="flex-1 truncate rounded bg-muted px-1.5 py-0.5 text-[10px]">
+            <code className="bg-muted flex-1 truncate rounded px-1.5 py-0.5 text-[10px]">
               {resultUrl}
             </code>
             <Button
@@ -69,7 +69,7 @@ export function SharePanel({ versionId }: { versionId: string }): ReactNode {
               <CopyIcon className="size-3" />
             </Button>
           </div>
-          <p className="mt-1 text-[10px] text-destructive">
+          <p className="text-destructive mt-1 text-[10px]">
             This link cannot be retrieved again. Save it now.
           </p>
           <Button
@@ -127,7 +127,7 @@ export function SharePanel({ versionId }: { versionId: string }): ReactNode {
       )}
 
       {(!shares.data || shares.data.length === 0) && !resultToken && (
-        <p className="text-xs text-muted-foreground">No share links yet.</p>
+        <p className="text-muted-foreground text-xs">No share links yet.</p>
       )}
 
       {/* Create share dialog */}
@@ -257,24 +257,21 @@ function ShareRow({
 }): ReactNode {
   const [showGrants, setShowGrants] = useState(false)
 
-  const status =
-    share.revokedAt
-      ? ('Revoked' as const)
-      : share.expiresAt && new Date(share.expiresAt) < new Date()
-        ? ('Expired' as const)
-        : ('Active' as const)
+  const status = share.revokedAt
+    ? ('Revoked' as const)
+    : share.expiresAt && new Date(share.expiresAt) < new Date()
+      ? ('Expired' as const)
+      : ('Active' as const)
 
   return (
-    <div className="rounded border bg-background px-3 py-2">
+    <div className="bg-background rounded border px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <LinkIcon className="size-3 text-muted-foreground shrink-0" />
-            <span className="truncate text-xs font-medium">
-              {share.label ?? 'Untitled share'}
-            </span>
+            <LinkIcon className="text-muted-foreground size-3 shrink-0" />
+            <span className="truncate text-xs font-medium">{share.label ?? 'Untitled share'}</span>
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[10px]">
             <span>{status}</span>
             {share.passwordProtected && (
               <>
@@ -292,7 +289,7 @@ function ShareRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex shrink-0 items-center gap-1">
           {status === 'Active' && share.grants && share.grants.length > 0 && (
             <Button
               size="sm"
@@ -309,7 +306,7 @@ function ShareRow({
             <Button
               size="sm"
               variant="ghost"
-              className="size-6 text-destructive"
+              className="text-destructive size-6"
               title="Revoke share"
               onClick={() => {
                 onRevokeShare(share.id)
@@ -324,17 +321,13 @@ function ShareRow({
       {showGrants && share.grants && share.grants.length > 0 && (
         <div className="mt-2 space-y-1 border-t pt-2">
           {share.grants.map((grant) => {
-            const grantStatus =
-              grant.revokedAt
-                ? ('Revoked' as const)
-                : grant.claimedAt
-                  ? ('Claimed' as const)
-                  : ('Unclaimed' as const)
+            const grantStatus = grant.revokedAt
+              ? ('Revoked' as const)
+              : grant.claimedAt
+                ? ('Claimed' as const)
+                : ('Unclaimed' as const)
             return (
-              <div
-                key={grant.id}
-                className="flex items-center justify-between gap-2 text-[10px]"
-              >
+              <div key={grant.id} className="flex items-center justify-between gap-2 text-[10px]">
                 <span className="text-muted-foreground">
                   {grant.userId ? (
                     <>
@@ -363,7 +356,7 @@ function ShareRow({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="size-4 text-destructive"
+                      className="text-destructive size-4"
                       title="Revoke grant"
                       onClick={() => {
                         onRevokeGrant(share.id, grant.id)

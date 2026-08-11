@@ -51,7 +51,7 @@ export function VersionsPanel({
         {versions.isPending ? (
           <PageLoading label="Loading versions…" />
         ) : versions.error ? (
-          <p className="text-sm text-destructive">Failed to load versions.</p>
+          <p className="text-destructive text-sm">Failed to load versions.</p>
         ) : versions.data.length > 0 ? (
           <div className="max-h-[60vh] space-y-3 overflow-y-auto">
             {versions.data.map((v) => (
@@ -67,7 +67,7 @@ export function VersionsPanel({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No published versions yet.</p>
+          <p className="text-muted-foreground text-sm">No published versions yet.</p>
         )}
       </DialogContent>
     </Dialog>
@@ -99,9 +99,9 @@ function VersionRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">v{version.ordinal}</span>
-            <span className="truncate text-sm text-muted-foreground">{version.title}</span>
+            <span className="text-muted-foreground truncate text-sm">{version.title}</span>
           </div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <span>{version.publishedBy}</span>
             <span>&middot;</span>
             <span>{formatMoment(version.publishedAt)}</span>
@@ -119,7 +119,7 @@ function VersionRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex shrink-0 items-center gap-1">
           <Button asChild size="sm" variant="ghost" title="Open HTML in new tab">
             <a href={htmlUrl} target="_blank" rel="noopener noreferrer">
               <FileTextIcon className="size-4" />

@@ -53,7 +53,7 @@ export function ClaimPage(): ReactNode {
       <div className="flex min-h-screen items-center justify-center">
         <div className="mx-auto max-w-sm text-center">
           <h1 className="text-lg font-semibold">Report not found</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-sm">
             This share link is invalid or has been revoked.
           </p>
         </div>
@@ -65,12 +65,7 @@ export function ClaimPage(): ReactNode {
 
   // Not signed in — show login gate
   if (!user) {
-    return (
-      <GuestGate
-        token={token}
-        shareLabel={data.label}
-      />
-    )
+    return <GuestGate token={token} shareLabel={data.label} />
   }
 
   // Already claimed — redirect to view
@@ -87,11 +82,19 @@ export function ClaimPage(): ReactNode {
         onPasswordChange={setPassword}
         onClaim={() => {
           if (password) {
-            claim.mutate({ token, body: { password } },
+            claim.mutate(
+              { token, body: { password } },
               {
-                onSuccess: () => { void navigate(viewPath(token), { replace: true }); },
-                onError: () => { toast.error("Failed to claim access. The share may be expired or the password incorrect.") },
-              })
+                onSuccess: () => {
+                  void navigate(viewPath(token), { replace: true })
+                },
+                onError: () => {
+                  toast.error(
+                    'Failed to claim access. The share may be expired or the password incorrect.',
+                  )
+                },
+              },
+            )
           }
         }}
         isPending={claim.isPending}
@@ -104,43 +107,43 @@ export function ClaimPage(): ReactNode {
     <ClaimGate
       shareLabel={data.label}
       onClaim={() => {
-        claim.mutate({ token },
+        claim.mutate(
+          { token },
           {
-            onSuccess: () => { void navigate(viewPath(token), { replace: true }); },
-            onError: () => { toast.error("Failed to claim access. The share may be expired or the password incorrect.") },
-          })
+            onSuccess: () => {
+              void navigate(viewPath(token), { replace: true })
+            },
+            onError: () => {
+              toast.error(
+                'Failed to claim access. The share may be expired or the password incorrect.',
+              )
+            },
+          },
+        )
       }}
       isPending={claim.isPending}
     />
   )
 }
 
-function GuestGate({
-  token,
-  shareLabel,
-}: {
-  token: string
-  shareLabel?: string
-}): ReactNode {
+function GuestGate({ token, shareLabel }: { token: string; shareLabel?: string }): ReactNode {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="mx-auto w-full max-w-sm space-y-6 text-center">
         <div className="space-y-1">
-          <LinkIcon className="mx-auto size-8 text-muted-foreground" />
+          <LinkIcon className="text-muted-foreground mx-auto size-8" />
           <h1 className="text-lg font-semibold">
             {shareLabel ? `Shared report: ${shareLabel}` : 'Shared report'}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Sign in or create a guest account to view this report.
           </p>
         </div>
         <div className="flex flex-col gap-2">
           <Button asChild>
-            <a href={`${LOGIN_PATH}?redirect=${encodeURIComponent(`/claim/${token}`)}`}>
-              Sign in
-            </a>
+            <a href={`${LOGIN_PATH}?redirect=${encodeURIComponent(`/claim/${token}`)}`}>Sign in</a>
           </Button>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             Send this link out of band. No email integration in this release.
           </p>
         </div>
@@ -169,7 +172,7 @@ function PasswordGate({
       <div className="mx-auto w-full max-w-sm space-y-6">
         <div className="space-y-1">
           <h1 className="text-lg font-semibold">Password required</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             This share is password-protected. Enter the password to continue.
           </p>
         </div>
@@ -188,11 +191,7 @@ function PasswordGate({
             }}
           />
         </div>
-        <Button
-          className="w-full"
-          onClick={onClaim}
-          disabled={!canSubmit || isPending}
-        >
+        <Button className="w-full" onClick={onClaim} disabled={!canSubmit || isPending}>
           {isPending ? 'Verifying…' : 'Continue'}
         </Button>
       </div>
@@ -214,19 +213,14 @@ function ClaimGate({
       <div className="mx-auto w-full max-w-sm space-y-6 text-center">
         <div className="space-y-1">
           <h1 className="text-lg font-semibold">Claim access</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             You have been invited to view this report. Claim your access to continue.
           </p>
         </div>
-        <Button
-          className="w-full"
-          onClick={onClaim}
-          disabled={isPending}
-        >
+        <Button className="w-full" onClick={onClaim} disabled={isPending}>
           {isPending ? 'Claiming…' : 'Claim access'}
         </Button>
       </div>
     </div>
   )
 }
-

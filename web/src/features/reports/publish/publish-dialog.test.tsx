@@ -2,7 +2,10 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
-import { EngagementCtx, type EngagementContextValue } from '@/features/engagements/engagement-layout'
+import {
+  EngagementCtx,
+  type EngagementContextValue,
+} from '@/features/engagements/engagement-layout'
 import { renderWithProviders } from '@/test/render'
 
 import { PublishDialog } from './publish-dialog'

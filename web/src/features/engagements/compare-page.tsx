@@ -4,11 +4,7 @@ import { useSearchParams } from 'react-router'
 import { PageEmpty, PageError, PageLoading } from '@/app/shell/page-state'
 import { cn } from '@/lib/utils'
 
-import {
-  UNSCORED_LABEL,
-  useAnalyticsCompare,
-  type AnalyticsCompare,
-} from './analytics-queries'
+import { UNSCORED_LABEL, useAnalyticsCompare, type AnalyticsCompare } from './analytics-queries'
 import { useEngagementContext } from './engagement-layout'
 import { useEngagements } from './queries'
 
@@ -111,7 +107,7 @@ function SummaryRow({
             'focus-visible:ring-ring/50 outline-none focus-visible:ring-3',
             activeFilter === c.key
               ? 'border-primary bg-primary/10 text-primary'
-              : 'border-transparent bg-muted text-muted-foreground hover:bg-muted/80',
+              : 'bg-muted text-muted-foreground hover:bg-muted/80 border-transparent',
           )}
         >
           <span className={CLASSIFICATION_COLOURS[c.key] ?? ''}>{c.label}</span>
@@ -179,7 +175,9 @@ function DeltaTable({
             <span className="font-mono text-xs" role="cell">
               {row.techniqueId}
               {row.subtechniqueId && (
-                <span className="text-muted-foreground">.{row.subtechniqueId.replace(/^T\d+\./, '')}</span>
+                <span className="text-muted-foreground">
+                  .{row.subtechniqueId.replace(/^T\d+\./, '')}
+                </span>
               )}
             </span>
             <span className="truncate" role="cell" title={row.name}>
@@ -193,7 +191,7 @@ function DeltaTable({
             </span>
             <span
               className={cn(
-                'tabular-nums text-xs font-medium',
+                'text-xs font-medium tabular-nums',
                 (row.ordinalDelta ?? 0) > 0 && 'text-green-600',
                 (row.ordinalDelta ?? 0) < 0 && 'text-red-600',
               )}
@@ -275,7 +273,7 @@ function BaselinePicker({
   const engagements = useEngagements()
 
   const allEngagements = useMemo(() => {
-    const list: Array<{ id: string; name: string; client: string; startsOn: string }> = []
+    const list: { id: string; name: string; client: string; startsOn: string }[] = []
     for (const page of engagements.data?.pages ?? []) {
       for (const eng of page.items) {
         if (eng.id !== engagementId) {
@@ -327,10 +325,7 @@ export function ComparePage(): ReactNode {
   const baselineId = searchParams.get('baseline') ?? ''
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
 
-  const compare = useAnalyticsCompare(
-    engagementId,
-    baselineId || undefined,
-  )
+  const compare = useAnalyticsCompare(engagementId, baselineId || undefined)
 
   const handleBaselineChange = (id: string) => {
     if (id) {
@@ -351,8 +346,8 @@ export function ComparePage(): ReactNode {
         <div className="rounded-lg border p-8">
           <div className="mx-auto max-w-md space-y-4 text-center">
             <p className="text-muted-foreground text-sm">
-              Compare this engagement&apos;s technique scores with a baseline engagement
-              to see what improved, regressed, or stayed the same.
+              Compare this engagement&apos;s technique scores with a baseline engagement to see what
+              improved, regressed, or stayed the same.
             </p>
             <BaselinePicker
               engagementId={engagementId}
@@ -447,11 +442,7 @@ export function ComparePage(): ReactNode {
       ) : (
         <>
           {/* Summary row */}
-          <SummaryRow
-            data={data}
-            activeFilter={activeFilter}
-            onFilter={setActiveFilter}
-          />
+          <SummaryRow data={data} activeFilter={activeFilter} onFilter={setActiveFilter} />
 
           {/* Delta table */}
           <div className="rounded-lg border">

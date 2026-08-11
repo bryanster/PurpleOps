@@ -17,7 +17,6 @@ export function engagementComparePath(engagementId: string, baselineId: string):
   return `/engagements/${engagementId}/analytics/compare?baseline=${encodeURIComponent(baselineId)}`
 }
 
-
 export function engagementWorkbookPath(engagementId: string): string {
   return `/engagements/${engagementId}/workbook`
 }
@@ -33,9 +32,6 @@ export function engagementReportsPath(engagementId: string): string {
   return `/engagements/${engagementId}/reports`
 }
 
-export function engagementReportPath(
-  engagementId: string,
-  reportId: string,
-): string {
+export function engagementReportPath(engagementId: string, reportId: string): string {
   return `/engagements/${engagementId}/reports/${reportId}`
 }

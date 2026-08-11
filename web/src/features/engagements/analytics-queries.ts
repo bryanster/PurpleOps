@@ -37,13 +37,7 @@ export const COLOUR_RAMP = [
   '#862121', // 4 — technique: dark red
 ] as const
 
-export const LEGEND_LABELS = [
-  'None',
-  'Telemetry',
-  'General',
-  'Tactic',
-  'Technique',
-] as const
+export const LEGEND_LABELS = ['None', 'Telemetry', 'General', 'Tactic', 'Technique'] as const
 
 /** Colour for not-attempted cells. Unscored and not-attempted are visually distinct from `none`. */
 export const NOT_ATTEMPTED_COLOUR = '#e8e8e8'
@@ -131,9 +125,7 @@ export function useAnalyticsDistribution(
   return useQuery(analyticsDistributionQueryOptions(engagementId))
 }
 
-export function useAnalyticsMttd(
-  engagementId: string | undefined,
-): UseQueryResult<AnalyticsMttd> {
+export function useAnalyticsMttd(engagementId: string | undefined): UseQueryResult<AnalyticsMttd> {
   return useQuery(analyticsMttdQueryOptions(engagementId))
 }
 
@@ -143,7 +135,10 @@ export function useAnalyticsBurndown(
   return useQuery(analyticsBurndownQueryOptions(engagementId))
 }
 
-export function analyticsCompareQueryOptions(engagementId: string | undefined, baselineId: string | undefined) {
+export function analyticsCompareQueryOptions(
+  engagementId: string | undefined,
+  baselineId: string | undefined,
+) {
   return queryOptions({
     queryKey: engagementKeys.analyticsCompare(engagementId ?? '', baselineId ?? ''),
     queryFn: async ({ signal }) => {

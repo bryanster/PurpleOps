@@ -46,29 +46,60 @@ function defaultCoverage(): components['schemas']['AnalyticsCoverage'] {
     techniques: {
       rows: [
         {
-          techniqueId: 'T1059', name: 'Command and Scripting Interpreter',
-          isSubtechnique: false, parentTechniqueId: '', matched: true, attempted: true,
-          bestCategory: 'technique', bestCategoryOrdinal: 4, bestProtection: 'blocked', stepCount: 2,
+          techniqueId: 'T1059',
+          name: 'Command and Scripting Interpreter',
+          isSubtechnique: false,
+          parentTechniqueId: '',
+          matched: true,
+          attempted: true,
+          bestCategory: 'technique',
+          bestCategoryOrdinal: 4,
+          bestProtection: 'blocked',
+          stepCount: 2,
         },
         {
-          techniqueId: 'T1059.001', name: 'PowerShell',
-          isSubtechnique: true, parentTechniqueId: 'T1059', matched: true, attempted: true,
-          bestCategory: 'general', bestCategoryOrdinal: 2, bestProtection: 'partial', stepCount: 1,
+          techniqueId: 'T1059.001',
+          name: 'PowerShell',
+          isSubtechnique: true,
+          parentTechniqueId: 'T1059',
+          matched: true,
+          attempted: true,
+          bestCategory: 'general',
+          bestCategoryOrdinal: 2,
+          bestProtection: 'partial',
+          stepCount: 1,
         },
         {
-          techniqueId: 'T1203', name: 'Exploitation for Client Execution',
-          isSubtechnique: false, parentTechniqueId: '', matched: true, attempted: false,
-          bestCategory: '', bestCategoryOrdinal: null, bestProtection: '', stepCount: 0,
+          techniqueId: 'T1203',
+          name: 'Exploitation for Client Execution',
+          isSubtechnique: false,
+          parentTechniqueId: '',
+          matched: true,
+          attempted: false,
+          bestCategory: '',
+          bestCategoryOrdinal: null,
+          bestProtection: '',
+          stepCount: 0,
         },
       ],
-      attempted: 2, notAttempted: 1, matrix: 200, unmatched: 0,
+      attempted: 2,
+      notAttempted: 1,
+      matrix: 200,
+      unmatched: 0,
     },
     tactics: {
-      rows: [{
-        tacticId: 'execution', tacticName: 'Execution',
-        attemptedTechniques: 2, matrixTechniques: 14,
-        categories: [{ category: 'technique', count: 1 }, { category: 'general', count: 1 }],
-      }],
+      rows: [
+        {
+          tacticId: 'execution',
+          tacticName: 'Execution',
+          attemptedTechniques: 2,
+          matrixTechniques: 14,
+          categories: [
+            { category: 'technique', count: 1 },
+            { category: 'general', count: 1 },
+          ],
+        },
+      ],
     },
     blindFiltered: false,
   }
@@ -78,11 +109,19 @@ function defaultDistribution(): components['schemas']['AnalyticsDistribution'] {
   return {
     category: {
       attempted: 3,
-      buckets: [{ label: 'technique', count: 1 }, { label: 'general', count: 1 }, { label: 'none', count: 1 }],
+      buckets: [
+        { label: 'technique', count: 1 },
+        { label: 'general', count: 1 },
+        { label: 'none', count: 1 },
+      ],
     },
     protection: {
       attempted: 3,
-      buckets: [{ label: 'blocked', count: 1 }, { label: 'partial', count: 1 }, { label: 'not_blocked', count: 1 }],
+      buckets: [
+        { label: 'blocked', count: 1 },
+        { label: 'partial', count: 1 },
+        { label: 'not_blocked', count: 1 },
+      ],
     },
     outcome: { attempted: 3, buckets: [] },
     modifier: { attempted: 3, buckets: [] },
@@ -92,8 +131,14 @@ function defaultDistribution(): components['schemas']['AnalyticsDistribution'] {
 
 function defaultMttd(): components['schemas']['AnalyticsMttd'] {
   return {
-    p50: 120, p90: 360, max: 720,
-    detectedCount: 3, undetectedCount: 1, unscoredCount: 0, unmeasurableCount: 0, attemptedCount: 4,
+    p50: 120,
+    p90: 360,
+    max: 720,
+    detectedCount: 3,
+    undetectedCount: 1,
+    unscoredCount: 0,
+    unmeasurableCount: 0,
+    attemptedCount: 4,
     blindFiltered: false,
   }
 }
@@ -116,17 +161,25 @@ function defaultBurndown(): components['schemas']['AnalyticsBurndown'] {
   }
 }
 
-function stubAll(overrides: {
-  coverage?: Partial<components['schemas']['AnalyticsCoverage']>
-  distribution?: Partial<components['schemas']['AnalyticsDistribution']>
-  mttd?: Partial<components['schemas']['AnalyticsMttd']>
-  burndown?: Partial<components['schemas']['AnalyticsBurndown']>
-} = {}): void {
+function stubAll(
+  overrides: {
+    coverage?: Partial<components['schemas']['AnalyticsCoverage']>
+    distribution?: Partial<components['schemas']['AnalyticsDistribution']>
+    mttd?: Partial<components['schemas']['AnalyticsMttd']>
+    burndown?: Partial<components['schemas']['AnalyticsBurndown']>
+  } = {},
+): void {
   server.use(
-    get(COVERAGE_PATH, () => Response.json({ ...defaultCoverage(), ...overrides.coverage }, { status: 200 })),
-    get(DISTRIBUTION_PATH, () => Response.json({ ...defaultDistribution(), ...overrides.distribution }, { status: 200 })),
+    get(COVERAGE_PATH, () =>
+      Response.json({ ...defaultCoverage(), ...overrides.coverage }, { status: 200 }),
+    ),
+    get(DISTRIBUTION_PATH, () =>
+      Response.json({ ...defaultDistribution(), ...overrides.distribution }, { status: 200 }),
+    ),
     get(MTTD_PATH, () => Response.json({ ...defaultMttd(), ...overrides.mttd }, { status: 200 })),
-    get(BURNDOWN_PATH, () => Response.json({ ...defaultBurndown(), ...overrides.burndown }, { status: 200 })),
+    get(BURNDOWN_PATH, () =>
+      Response.json({ ...defaultBurndown(), ...overrides.burndown }, { status: 200 }),
+    ),
   )
 }
 
@@ -151,7 +204,9 @@ describe('AnalyticsPage', () => {
 
   test('shows empty state when no techniques scored', async () => {
     stubAll({
-      coverage: { techniques: { rows: [], attempted: 0, notAttempted: 3, matrix: 200, unmatched: 0 } },
+      coverage: {
+        techniques: { rows: [], attempted: 0, notAttempted: 3, matrix: 200, unmatched: 0 },
+      },
     })
     renderAnalytics()
 
@@ -256,7 +311,11 @@ describe('Colour ramp agreement', () => {
 describe('MTTD required denominator', () => {
   test('AnalyticsMttd carries undetectedCount and detectedCount', () => {
     const mttd: components['schemas']['AnalyticsMttd'] = {
-      detectedCount: 1, undetectedCount: 2, unscoredCount: 0, unmeasurableCount: 0, attemptedCount: 3,
+      detectedCount: 1,
+      undetectedCount: 2,
+      unscoredCount: 0,
+      unmeasurableCount: 0,
+      attemptedCount: 3,
       blindFiltered: false,
     }
     expect(mttd.undetectedCount).toBe(2)

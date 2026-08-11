@@ -52,7 +52,6 @@ interface PanelProps {
   children: ReactNode
 }
 
-
 function PanelShell({ title, loading, error, onRetry, children }: PanelProps) {
   if (error) {
     return (
@@ -99,11 +98,15 @@ function BlindBanner() {
 function CoverageCard({ data }: { data: AnalyticsCoverage }) {
   const { techniques } = data
   if (techniques.rows.length === 0) {
-    return <PageEmpty title="Nothing scored yet" description="Add steps and score executions to see coverage." />
+    return (
+      <PageEmpty
+        title="Nothing scored yet"
+        description="Add steps and score executions to see coverage."
+      />
+    )
   }
-  const pct = techniques.matrix > 0
-    ? ((techniques.attempted / techniques.matrix) * 100).toFixed(1)
-    : '0.0'
+  const pct =
+    techniques.matrix > 0 ? ((techniques.attempted / techniques.matrix) * 100).toFixed(1) : '0.0'
   return (
     <div className="space-y-1">
       <div className="text-2xl font-semibold tabular-nums">{pct}%</div>
@@ -129,9 +132,7 @@ function DetectionCard({ data }: { data: AnalyticsDistribution }) {
   const total = category.buckets.reduce((s, b) => s + b.count, 0)
   return (
     <div className="space-y-2">
-      <p className="text-muted-foreground text-xs">
-        {category.attempted} scored executions
-      </p>
+      <p className="text-muted-foreground text-xs">{category.attempted} scored executions</p>
       <div className="flex h-2.5 w-full overflow-hidden rounded-full">
         {category.buckets.map((b) => (
           <div
@@ -149,8 +150,14 @@ function DetectionCard({ data }: { data: AnalyticsDistribution }) {
         {category.buckets.map((b) => {
           const colour = labelToColour[b.label] ?? UNSCORED_COLOUR
           return (
-            <span key={b.label} className="text-muted-foreground inline-flex items-center gap-1 text-xs">
-              <span className="inline-block size-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: colour }} />
+            <span
+              key={b.label}
+              className="text-muted-foreground inline-flex items-center gap-1 text-xs"
+            >
+              <span
+                className="inline-block size-2.5 flex-shrink-0 rounded-sm"
+                style={{ backgroundColor: colour }}
+              />
               {b.label}: {b.count}
             </span>
           )
@@ -168,9 +175,8 @@ function ProtectionRateCard({ data }: { data: AnalyticsDistribution }) {
   const blocked = protection.buckets.find((b) => b.label === 'blocked')?.count ?? 0
   const partial = protection.buckets.find((b) => b.label === 'partial')?.count ?? 0
   const prevented = blocked + partial
-  const pct = protection.attempted > 0
-    ? ((prevented / protection.attempted) * 100).toFixed(1)
-    : '0.0'
+  const pct =
+    protection.attempted > 0 ? ((prevented / protection.attempted) * 100).toFixed(1) : '0.0'
   return (
     <div className="space-y-1">
       <div className="text-2xl font-semibold tabular-nums">{pct}%</div>
@@ -204,7 +210,8 @@ function MttdCard({ data }: { data: AnalyticsMttd }) {
         </span>
       </div>
       <p className="text-muted-foreground text-xs">
-        p90: {data.p90 != null ? fmt(data.p90) : '—'} · max: {data.max != null ? fmt(data.max) : '—'}
+        p90: {data.p90 != null ? fmt(data.p90) : '—'} · max:{' '}
+        {data.max != null ? fmt(data.max) : '—'}
       </p>
       <p className="text-muted-foreground text-xs">
         {data.detectedCount} detected · {data.undetectedCount} undetected
@@ -228,9 +235,7 @@ function FindingsCard({ data }: { data: AnalyticsBurndown }) {
   return (
     <div className="space-y-1">
       <div className="text-2xl font-semibold tabular-nums">{totalOpen}</div>
-      <p className="text-muted-foreground text-xs">
-        open findings · {totalClosed} closed
-      </p>
+      <p className="text-muted-foreground text-xs">open findings · {totalClosed} closed</p>
       {severity.buckets.filter((b) => b.totalOpen > 0).length > 0 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1">
           {severity.buckets
@@ -256,26 +261,41 @@ function cellColour(row: TechniqueCoverageRow): { colour: string; label: string 
     return { colour: UNSCORED_COLOUR, label: UNSCORED_LABEL }
   }
   if (row.bestCategoryOrdinal >= 0 && row.bestCategoryOrdinal < COLOUR_RAMP.length) {
-    return { colour: COLOUR_RAMP[row.bestCategoryOrdinal] as string, label: LEGEND_LABELS[row.bestCategoryOrdinal] as string }
+    return {
+      colour: COLOUR_RAMP[row.bestCategoryOrdinal] as string,
+      label: LEGEND_LABELS[row.bestCategoryOrdinal] as string,
+    }
   }
   return { colour: UNSCORED_COLOUR, label: UNSCORED_LABEL }
 }
 
 function HeatmapLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" aria-label="Heatmap legend">
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+      aria-label="Heatmap legend"
+    >
       {LEGEND_LABELS.map((label, i) => (
         <span key={label} className="inline-flex items-center gap-1">
-          <span className="inline-block size-3 rounded-sm flex-shrink-0" style={{ backgroundColor: COLOUR_RAMP[i] }} />
+          <span
+            className="inline-block size-3 flex-shrink-0 rounded-sm"
+            style={{ backgroundColor: COLOUR_RAMP[i] }}
+          />
           {label}
         </span>
       ))}
       <span className="inline-flex items-center gap-1">
-        <span className="inline-block size-3 rounded-sm flex-shrink-0 border" style={{ backgroundColor: NOT_ATTEMPTED_COLOUR }} />
+        <span
+          className="inline-block size-3 flex-shrink-0 rounded-sm border"
+          style={{ backgroundColor: NOT_ATTEMPTED_COLOUR }}
+        />
         {NOT_ATTEMPTED_LABEL}
       </span>
       <span className="inline-flex items-center gap-1">
-        <span className="inline-block size-3 rounded-sm flex-shrink-0 border" style={{ backgroundColor: UNSCORED_COLOUR }} />
+        <span
+          className="inline-block size-3 flex-shrink-0 rounded-sm border"
+          style={{ backgroundColor: UNSCORED_COLOUR }}
+        />
         {UNSCORED_LABEL}
       </span>
     </div>
@@ -287,7 +307,7 @@ function ThermalCell({ row }: { row: TechniqueCoverageRow }) {
   return (
     <span
       className={cn(
-        'inline-block size-4 rounded-sm flex-shrink-0',
+        'inline-block size-4 flex-shrink-0 rounded-sm',
         !row.attempted && 'border border-dashed',
         row.attempted && row.bestCategoryOrdinal == null && 'border',
       )}
@@ -333,7 +353,12 @@ function Heatmap({ data }: { data: AnalyticsCoverage }) {
   }, [tactics])
 
   if (techniques.rows.length === 0) {
-    return <PageEmpty title="Nothing scored yet" description="Add steps and score executions to see the heatmap." />
+    return (
+      <PageEmpty
+        title="Nothing scored yet"
+        description="Add steps and score executions to see the heatmap."
+      />
+    )
   }
 
   return (
@@ -349,9 +374,13 @@ function Heatmap({ data }: { data: AnalyticsCoverage }) {
               const total = tactic.categories.reduce((s, c) => s + c.count, 0)
               if (total === 0) {
                 return (
-                  <div key={tactic.tacticId} className="rounded border px-2 py-1 text-xs" style={{ backgroundColor: NOT_ATTEMPTED_COLOUR }}>
+                  <div
+                    key={tactic.tacticId}
+                    className="rounded border px-2 py-1 text-xs"
+                    style={{ backgroundColor: NOT_ATTEMPTED_COLOUR }}
+                  >
                     <span className="text-muted-foreground">{tactic.tacticName}</span>
-                    <span className="ml-1 text-muted-foreground">—</span>
+                    <span className="text-muted-foreground ml-1">—</span>
                   </div>
                 )
               }
@@ -366,18 +395,25 @@ function Heatmap({ data }: { data: AnalyticsCoverage }) {
                     {tactic.categories
                       .filter((c) => c.count > 0)
                       .map((c) => {
-                        const idx = LEGEND_LABELS.indexOf(c.category as typeof LEGEND_LABELS[number])
+                        const idx = LEGEND_LABELS.indexOf(
+                          c.category as (typeof LEGEND_LABELS)[number],
+                        )
                         const colour = idx >= 0 ? COLOUR_RAMP[idx] : UNSCORED_COLOUR
                         return (
                           <div
                             key={c.category}
                             className="h-full"
-                            style={{ width: `${String((c.count / total) * 100)}%`, backgroundColor: colour }}
+                            style={{
+                              width: `${String((c.count / total) * 100)}%`,
+                              backgroundColor: colour,
+                            }}
                           />
                         )
                       })}
                   </div>
-                  <span className="text-muted-foreground ml-1">{String(tactic.attemptedTechniques)}/{String(tactic.matrixTechniques)}</span>
+                  <span className="text-muted-foreground ml-1">
+                    {String(tactic.attemptedTechniques)}/{String(tactic.matrixTechniques)}
+                  </span>
                 </div>
               )
             })}
@@ -400,7 +436,9 @@ function Heatmap({ data }: { data: AnalyticsCoverage }) {
             >
               <ThermalCell row={row} />
               <span className={cn('text-xs', row.isSubtechnique && 'text-muted-foreground')}>
-                {row.isSubtechnique ? row.name : (
+                {row.isSubtechnique ? (
+                  row.name
+                ) : (
                   <>
                     <span className="font-medium">{row.techniqueId}</span>
                     <span className="text-muted-foreground"> {row.name}</span>
@@ -425,7 +463,12 @@ function BurndownChart({ data }: BurndownChartProps) {
   const { points, interval } = data
 
   if (points.length === 0) {
-    return <PageEmpty title="No findings history" description="Burndown data appears once findings start changing status." />
+    return (
+      <PageEmpty
+        title="No findings history"
+        description="Burndown data appears once findings start changing status."
+      />
+    )
   }
 
   const maxTotal = Math.max(...points.map((p) => p.totalOpen + p.resolved + p.acceptedRisk), 1)
@@ -437,7 +480,10 @@ function BurndownChart({ data }: BurndownChartProps) {
   // SVG polyline for totalOpen
   const linePoints = points
     .map((p, i) => {
-      const x = points.length > 1 ? (i / (points.length - 1)) * (chartWidth - pad * 2) + pad : chartWidth / 2
+      const x =
+        points.length > 1
+          ? (i / (points.length - 1)) * (chartWidth - pad * 2) + pad
+          : chartWidth / 2
       const y = chartHeight - pad - (p.totalOpen / maxTotal) * (chartHeight - pad * 2)
       return `${String(x)},${String(y)}`
     })
@@ -492,16 +538,13 @@ function BurndownChart({ data }: BurndownChartProps) {
           />
           {/* Dots */}
           {points.map((p, i) => {
-            const x = points.length > 1 ? (i / (points.length - 1)) * (chartWidth - pad * 2) + pad : chartWidth / 2
+            const x =
+              points.length > 1
+                ? (i / (points.length - 1)) * (chartWidth - pad * 2) + pad
+                : chartWidth / 2
             const y = chartHeight - pad - (p.totalOpen / maxTotal) * (chartHeight - pad * 2)
             return (
-              <circle
-                key={i}
-                cx={x}
-                cy={y}
-                r={3}
-                fill={COLOUR_RAMP[4]}
-              >
+              <circle key={i} cx={x} cy={y} r={3} fill={COLOUR_RAMP[4]}>
                 <title>{`${p.date}: ${String(p.totalOpen)} open (${String(p.open)} new + ${String(p.inProgress)} in progress), ${String(p.resolved)} resolved, ${String(p.acceptedRisk)} accepted risk`}</title>
               </circle>
             )
@@ -509,7 +552,7 @@ function BurndownChart({ data }: BurndownChartProps) {
         </svg>
       </div>
       {points.length > 1 && (
-        <div className="flex justify-between text-[10px] text-muted-foreground">
+        <div className="text-muted-foreground flex justify-between text-[10px]">
           <span>{points[0]?.date}</span>
           <span>{points[points.length - 1]?.date}</span>
         </div>
@@ -529,10 +572,10 @@ export function AnalyticsPage(): ReactNode {
   const burndown = useAnalyticsBurndown(engagementId)
 
   const blindFiltered =
-    (coverage.data?.blindFiltered ??
-      distribution.data?.blindFiltered ??
-      mttd.data?.blindFiltered ??
-      burndown.data?.blindFiltered) ??
+    coverage.data?.blindFiltered ??
+    distribution.data?.blindFiltered ??
+    mttd.data?.blindFiltered ??
+    burndown.data?.blindFiltered ??
     false
 
   return (
@@ -555,7 +598,9 @@ export function AnalyticsPage(): ReactNode {
           title="Coverage"
           loading={coverage.isPending}
           error={coverage.error}
-          onRetry={() => { void coverage.refetch() }}
+          onRetry={() => {
+            void coverage.refetch()
+          }}
         >
           {coverage.data && <CoverageCard data={coverage.data} />}
         </PanelShell>
@@ -564,7 +609,9 @@ export function AnalyticsPage(): ReactNode {
           title="Detection"
           loading={distribution.isPending}
           error={distribution.error}
-          onRetry={() => { void distribution.refetch() }}
+          onRetry={() => {
+            void distribution.refetch()
+          }}
         >
           {distribution.data && <DetectionCard data={distribution.data} />}
         </PanelShell>
@@ -573,7 +620,9 @@ export function AnalyticsPage(): ReactNode {
           title="Protection rate"
           loading={distribution.isPending}
           error={distribution.error}
-          onRetry={() => { void distribution.refetch() }}
+          onRetry={() => {
+            void distribution.refetch()
+          }}
         >
           {distribution.data && <ProtectionRateCard data={distribution.data} />}
         </PanelShell>
@@ -582,7 +631,9 @@ export function AnalyticsPage(): ReactNode {
           title="MTTD"
           loading={mttd.isPending}
           error={mttd.error}
-          onRetry={() => { void mttd.refetch() }}
+          onRetry={() => {
+            void mttd.refetch()
+          }}
         >
           {mttd.data && <MttdCard data={mttd.data} />}
         </PanelShell>
@@ -591,7 +642,9 @@ export function AnalyticsPage(): ReactNode {
           title="Findings"
           loading={burndown.isPending}
           error={burndown.error}
-          onRetry={() => { void burndown.refetch() }}
+          onRetry={() => {
+            void burndown.refetch()
+          }}
         >
           {burndown.data && <FindingsCard data={burndown.data} />}
         </PanelShell>
@@ -602,7 +655,9 @@ export function AnalyticsPage(): ReactNode {
         title="ATT&amp;CK Heatmap"
         loading={coverage.isPending}
         error={coverage.error}
-        onRetry={() => { void coverage.refetch() }}
+        onRetry={() => {
+          void coverage.refetch()
+        }}
       >
         {coverage.data && <Heatmap data={coverage.data} />}
       </PanelShell>
@@ -612,7 +667,9 @@ export function AnalyticsPage(): ReactNode {
         title="Findings Burndown"
         loading={burndown.isPending}
         error={burndown.error}
-        onRetry={() => { void burndown.refetch() }}
+        onRetry={() => {
+          void burndown.refetch()
+        }}
       >
         {burndown.data && <BurndownChart data={burndown.data} />}
       </PanelShell>

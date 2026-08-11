@@ -94,7 +94,13 @@ describe('queryKeysForVerb', () => {
 
   it('step.created without scenarioId invalidates allSteps, analytics coverage, and activity', () => {
     const keys = queryKeysForVerb('step.created', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.allSteps(ENG), engagementKeys.analyticsCoverage(ENG), ACTIVITY])).toBe(true)
+    expect(
+      keysEqual(keys, [
+        engagementKeys.allSteps(ENG),
+        engagementKeys.analyticsCoverage(ENG),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
   })
 
   it('step.revealed invalidates allSteps, analytics, scenario steps, step, executions, and activity', () => {
@@ -162,7 +168,16 @@ describe('queryKeysForVerb', () => {
 
   it('execution.red_updated without executionId invalidates executions, analytics, and activity', () => {
     const keys = queryKeysForVerb('execution.red_updated', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.executions(ENG), engagementKeys.analyticsCoverage(ENG), engagementKeys.analyticsDistribution(ENG), engagementKeys.analyticsComparePrefix(ENG), engagementKeys.analyticsMttd(ENG), ACTIVITY])).toBe(true)
+    expect(
+      keysEqual(keys, [
+        engagementKeys.executions(ENG),
+        engagementKeys.analyticsCoverage(ENG),
+        engagementKeys.analyticsDistribution(ENG),
+        engagementKeys.analyticsComparePrefix(ENG),
+        engagementKeys.analyticsMttd(ENG),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
   })
 
   // ── Evidence ──────────────────────────────────────────────────────────
@@ -195,22 +210,46 @@ describe('queryKeysForVerb', () => {
   // ── Findings ──────────────────────────────────────────────────────────
   it('finding.created invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.created', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
+    expect(
+      keysEqual(keys, [
+        engagementKeys.findings(ENG),
+        engagementKeys.analyticsBurndown(ENG),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
   })
 
   it('finding.updated invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.updated', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
+    expect(
+      keysEqual(keys, [
+        engagementKeys.findings(ENG),
+        engagementKeys.analyticsBurndown(ENG),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
   })
 
   it('finding.deleted invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.deleted', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
+    expect(
+      keysEqual(keys, [
+        engagementKeys.findings(ENG),
+        engagementKeys.analyticsBurndown(ENG),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
   })
 
   it('finding.steps_changed invalidates findings, burndown, and activity', () => {
     const keys = queryKeysForVerb('finding.steps_changed', ENG, {})
-    expect(keysEqual(keys, [engagementKeys.findings(ENG), engagementKeys.analyticsBurndown(ENG), ACTIVITY])).toBe(true)
+    expect(
+      keysEqual(keys, [
+        engagementKeys.findings(ENG),
+        engagementKeys.analyticsBurndown(ENG),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
   })
 
   // ── Unknown ───────────────────────────────────────────────────────────

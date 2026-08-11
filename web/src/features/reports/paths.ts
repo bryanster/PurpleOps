@@ -13,7 +13,6 @@ export function engagementReportPath(engagementId: string, reportId: string): st
   return `/engagements/${engagementId}/reports/${reportId}`
 }
 
-
 /**
  * Share claim and view routes (M6-014).
  *
