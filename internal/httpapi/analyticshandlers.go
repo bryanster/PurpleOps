@@ -252,6 +252,7 @@ func navigatorLayerToWire(r *analytics.NavigatorLayerResult) gen.NavigatorLayer 
 	tacticBg := "#dddddd"
 
 	colours := make([]string, 5)
+	//nolint:staticcheck // copy loop is readable
 	for i, c := range analytics.NavigatorColourRamp {
 		colours[i] = c
 	}

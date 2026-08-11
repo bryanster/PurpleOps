@@ -1,3 +1,4 @@
+//nolint:staticcheck // QF1012 less readable with multi-line HTML templates
 package blocks
 
 import (

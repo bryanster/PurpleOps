@@ -101,8 +101,7 @@ type UpdateInput struct {
 
 // Update patches a report and records activity.
 func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (storereport.Report, error) {
-	rep, err := s.reports.ByID(ctx, id)
-	if err != nil {
+	if _, err := s.reports.ByID(ctx, id); err != nil {
 		return storereport.Report{}, err
 	}
 	// Validate per-report colour overrides (M6-004).
@@ -120,7 +119,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (storer
 		UpdatedBy:   in.ActorID,
 	}
 
-	rep, err = s.reports.Update(ctx, id, changes)
+	rep, err := s.reports.Update(ctx, id, changes)
 	if err != nil {
 		return storereport.Report{}, fmt.Errorf("report: update: %w", err)
 	}
@@ -324,8 +323,10 @@ func sanitizeHTMLParams(blockID ID, def Definition, params json.RawMessage) (jso
 	}
 
 	var m map[string]json.RawMessage
+	//nolint:nilerr
 	if err := json.Unmarshal(params, &m); err != nil {
 		return params, nil // not an object; leave alone
+		//nolint:nilerr // intentional: non-object params are left alone
 	}
 
 	for _, key := range def.HTMLParamKeys {

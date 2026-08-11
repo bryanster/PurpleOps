@@ -248,6 +248,7 @@ func seedAnalyticsFixture(t testing.TB, techCount, tacticCount, scenarios, steps
 					tacExtID := fmt.Sprintf("TA%04d", (techIdx%tacticCount)+1)
 
 					status := "complete"
+					//nolint:staticcheck // tagged switch less readable here
 					switch {
 					case st%10 == 7:
 						status = "blocked"

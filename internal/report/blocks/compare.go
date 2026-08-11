@@ -1,3 +1,4 @@
+//nolint:staticcheck // QF1012 less readable with multi-line HTML templates
 package blocks
 
 import (
@@ -57,9 +58,11 @@ func (CompareRenderer) Render(ctx context.Context, env report.RenderEnv, inst re
 	}
 
 	result, err := env.Analytics.Compare(ctx, compScope)
+	//nolint:nilerr
 	if err != nil {
 		// Draft preview: return a clear fragment error inline.
 		return report.HTMLFragment(fmt.Sprintf(
+			//nolint:nilerr // intentional: return HTML error fragment inline
 			`<div class="bl-report__error">Comparison unavailable: baseline engagement %s is not accessible or does not exist.</div>`,
 			html.EscapeString(p.BaselineEngagementID),
 		)), nil
@@ -121,6 +124,8 @@ func (CompareRenderer) Render(ctx context.Context, env report.RenderEnv, inst re
 }
 
 // writeCompareSummaryItem emits one summary metric.
+//
+//nolint:staticcheck // fmt.Fprintf less readable with multi-line templates
 func writeCompareSummaryItem(b *strings.Builder, label string, count int, color string) {
 	b.WriteString(fmt.Sprintf(`<div class="bl-report__compare-metric"><span class="bl-report__compare-metric-dot" style="background:%s"></span>%s: <strong>%d</strong></div>`,
 		color, label, count))

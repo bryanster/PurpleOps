@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"io"
 	"math"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/bryanster/blacklight/internal/analytics"
 	"github.com/bryanster/blacklight/internal/store/blind"
+	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 )
 
 // ID is a stable block identifier from the v1 catalogue.

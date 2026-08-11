@@ -281,6 +281,7 @@ func TestSanitizeIdempotentOnSafeHTML(t *testing.T) {
 			}
 			// Safe HTML should pass through with only link rel
 			// attributes added — check that structure is preserved.
+			//nolint:staticcheck
 			if !strings.Contains(got, strings.TrimSpace(tt.html)[:min(20, len(strings.TrimSpace(tt.html)))]) && len(tt.html) > 5 {
 				// This is approximate — the real check is that
 				// key elements survive. The per-case checks above

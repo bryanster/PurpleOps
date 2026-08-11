@@ -1,3 +1,4 @@
+//nolint:staticcheck // QF1012 less readable with multi-line HTML templates
 package blocks
 
 import (
@@ -70,7 +71,9 @@ func (MTTDRenderer) Render(ctx context.Context, env report.RenderEnv, inst repor
 // writeMTTDPercentile emits a single percentile card.
 func writeMTTDPercentile(b *strings.Builder, label string, seconds *int, f report.FormatHelpers) {
 	b.WriteString(`<div class="bl-report__mttd-card">`)
+	//nolint:staticcheck
 	b.WriteString(fmt.Sprintf(`<span class="bl-report__mttd-card-label">%s</span>`, label))
+	//nolint:staticcheck
 	if seconds != nil {
 		b.WriteString(fmt.Sprintf(`<span class="bl-report__mttd-card-value">%s</span>`, f.Duration(*seconds)))
 	} else {

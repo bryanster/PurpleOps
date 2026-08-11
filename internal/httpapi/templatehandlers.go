@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/bryanster/blacklight/internal/httpapi/gen"
 	"github.com/bryanster/blacklight/internal/report"
 	storereport "github.com/bryanster/blacklight/internal/store/report"
-	"github.com/google/uuid"
 )
 
 // Report template handlers (M6-003).
@@ -210,8 +211,8 @@ func templateToWire(t storereport.Template, blocks []storereport.TemplateBlock) 
 	}
 
 	w := gen.ReportTemplate{
-		Id:           gen.TemplateId(tmplID),
-		EngagementId: gen.EngagementId(engID),
+		Id:           tmplID,
+		EngagementId: engID,
 		Name:         t.Name,
 		CreatedBy:    t.CreatedBy,
 		CreatedAt:    t.CreatedAt,

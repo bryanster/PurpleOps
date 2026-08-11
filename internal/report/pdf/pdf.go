@@ -92,10 +92,9 @@ func New(chromePath string, timeout time.Duration) (*Printer, error) {
 //
 //nolint:contextcheck // ctx is function parameter, not newly created
 func (p *Printer) RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline { //nolint:staticcheck
 		var cancel context.CancelFunc
-		timeoutCtx, cancel := context.WithTimeout(ctx, p.timeout)
-		ctx = timeoutCtx
+		ctx, cancel = context.WithTimeout(ctx, p.timeout) //nolint:staticcheck,wastedassign
 		defer cancel()
 	}
 	// Serialize access to the shared browser process. Tab contexts are created

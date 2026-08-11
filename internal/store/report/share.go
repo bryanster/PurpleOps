@@ -78,7 +78,7 @@ func (s *Shares) Insert(ctx context.Context, in NewShare) (ReportShare, error) {
 		MaxGrants:    in.MaxGrants,
 	}
 	err := s.db.Write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		_, err := tx.ExecContext(ctx, `
 			INSERT INTO app.report_share (id, version_id, token_hash, password_hash,
 				expires_at, created_by, created_at, label, max_grants)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -164,7 +164,7 @@ func (s *Shares) ListByVersion(ctx context.Context, versionID string) ([]ReportS
 // Revoke marks a share as revoked.
 func (s *Shares) Revoke(ctx context.Context, id string) error {
 	return s.db.Write(ctx, func(tx *sql.Tx) error {
-		result, err := tx.Exec(`
+		result, err := tx.ExecContext(ctx, `
 			UPDATE app.report_share SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
 			now().UTC(), id)
 		if err != nil {
@@ -176,7 +176,7 @@ func (s *Shares) Revoke(ctx context.Context, id string) error {
 
 // DeleteByVersion removes all shares for a version (cascade). Runs in tx.
 func (s *Shares) DeleteByVersion(tx *sql.Tx, versionID string) error {
-	_, err := tx.Exec(`DELETE FROM app.report_share WHERE version_id = ?`, versionID)
+	_, err := tx.ExecContext(context.TODO(), `DELETE FROM app.report_share WHERE version_id = ?`, versionID)
 	return err
 }
 
@@ -229,7 +229,7 @@ func (g *Grants) Insert(ctx context.Context, in NewGrant) (ReportShareGrant, err
 		grant.ClaimedAt = &nowTime
 	}
 	err := g.db.Write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		_, err := tx.ExecContext(ctx, `
 			INSERT INTO app.report_share_grant (id, share_id, user_id, claimed_at, created_at)
 			VALUES (?, ?, ?, ?, ?)`,
 			id, in.ShareID, in.UserID, grant.ClaimedAt, nowTime,
@@ -289,7 +289,7 @@ func (g *Grants) ListByShare(ctx context.Context, shareID string) ([]ReportShare
 // Revoke marks a grant as revoked.
 func (g *Grants) Revoke(ctx context.Context, id string) error {
 	return g.db.Write(ctx, func(tx *sql.Tx) error {
-		result, err := tx.Exec(`
+		result, err := tx.ExecContext(ctx, `
 			UPDATE app.report_share_grant SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
 			now().UTC(), id)
 		if err != nil {
@@ -301,7 +301,7 @@ func (g *Grants) Revoke(ctx context.Context, id string) error {
 
 // DeleteByShare removes all grants for a share (for cascade within tx).
 func (g *Grants) DeleteByShare(tx *sql.Tx, shareID string) error {
-	_, err := tx.Exec(`DELETE FROM app.report_share_grant WHERE share_id = ?`, shareID)
+	_, err := tx.ExecContext(context.TODO(), `DELETE FROM app.report_share_grant WHERE share_id = ?`, shareID)
 	return err
 }
 

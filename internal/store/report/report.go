@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/bryanster/blacklight/internal/store"
 	"time"
+
+	"github.com/bryanster/blacklight/internal/store"
 
 	"github.com/google/uuid"
 
