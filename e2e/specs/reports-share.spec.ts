@@ -1,3 +1,5 @@
+import { expect, test } from '../harness/test'
+
 import path from 'node:path'
 import { repoRoot } from '../harness/paths'
 
