@@ -114,7 +114,7 @@ async function addMember(
   const usersResp = await request.get('/api/v1/users', {
     headers: readHeaders(s),
   })
-  const usersBody = (await usersResp.json()) as { items: Array<{ id: string; email: string }> }
+  const usersBody = (await usersResp.json()) as { items: { id: string; email: string }[] }
   const user = usersBody.items.find((u) => u.email === userEmail)
   if (user === undefined) throw new Error(`user not found: ${userEmail}`)
 
@@ -243,9 +243,9 @@ test('red and blue see different analytics totals in blind engagement', async ({
   // Blue analytics should show different coverage numbers than red
   // (Blue only sees 1 revealed technique, red sees both)
   // Read the coverage card text — they should differ
-  const redCoverageText = await redPage.locator('text=of 200').textContent()
+  const redCoverageText = redPage.locator('text=of 200')
   const blueCoverageText = await bluePage.locator('text=of 200').textContent()
-  expect(redCoverageText).not.toBe(blueCoverageText)
+  await expect(redCoverageText).not.toHaveText(blueCoverageText)
 
   await bluePage.close()
 })
