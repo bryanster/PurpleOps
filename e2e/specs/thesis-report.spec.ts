@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion, @typescript-eslint/array-type */
+
 import path from 'node:path'
 
 import { type APIRequestContext } from '@playwright/test'
@@ -171,8 +173,9 @@ async function mkFinding(r: APIRequestContext, s: Sess, eid: string, title: stri
 
 // ── Thesis spec ──────────────────────────────────────────────────────────────
 
+/* eslint-disable @typescript-eslint/no-non-null-assertion, @typescript-eslint/array-type */
 test('full product thesis: content, engagements, scoring, report', async ({
-  _browser, request,
+  request,
 }) => {
   const adm = await apiLogin(request, adminEmail, adminPassword)
   const r = await apiLogin(request, rEmail, rPass)
@@ -239,3 +242,4 @@ test('full product thesis: content, engagements, scoring, report', async ({
   // See file header for the three documented pre-existing bugs.
   // ═══════════════════════════════════════════════════════════════════════════
 })
+/* eslint-enable @typescript-eslint/no-non-null-assertion, @typescript-eslint/array-type */

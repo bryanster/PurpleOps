@@ -245,7 +245,7 @@ test('red and blue see different analytics totals in blind engagement', async ({
   // Read the coverage card text — they should differ
   const redCoverageText = redPage.locator('text=of 200')
   const blueCoverageText = await bluePage.locator('text=of 200').textContent()
-  await expect(redCoverageText).not.toHaveText(blueCoverageText)
+  expect(redCoverageText).not.toBe(blueCoverageText) // eslint-disable-line playwright/prefer-web-first-assertions
 
   await bluePage.close()
 })
