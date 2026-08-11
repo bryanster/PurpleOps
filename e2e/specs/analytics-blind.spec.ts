@@ -30,16 +30,28 @@ function seedAnalyticsBlindUsers(): SeedCommand[] {
     ...seedAdmin(),
     ['content', 'enable', '--id', attackSourceID],
     [
-      'content', 'import-bundle', '--source', 'attack',
-      '--file', attackFixture, '--version', '15.1', '--wait',
+      'content',
+      'import-bundle',
+      '--source',
+      'attack',
+      '--file',
+      attackFixture,
+      '--version',
+      '15.1',
+      '--wait',
     ],
     { args: ['user', 'create', '--email', redEmail, '--name', 'Red Analyst'], stdin: redPassword },
-    { args: ['user', 'create', '--email', blueEmail, '--name', 'Blue Defender'], stdin: bluePassword },
+    {
+      args: ['user', 'create', '--email', blueEmail, '--name', 'Blue Defender'],
+      stdin: bluePassword,
+    },
   ]
 }
 test.use({ seed: { steps: seedAnalyticsBlindUsers() } })
 
-interface IDObject { id: string }
+interface IDObject {
+  id: string
+}
 
 interface SessionCookies {
   cookie: string
@@ -55,7 +67,9 @@ function readHeaders(s: SessionCookies): Record<string, string> {
 }
 
 async function login(
-  request: APIRequestContext, email: string, password: string,
+  request: APIRequestContext,
+  email: string,
+  password: string,
 ): Promise<SessionCookies> {
   const resp = await request.post('/api/v1/auth/login', {
     data: { email, password },
@@ -76,7 +90,9 @@ async function login(
 }
 
 async function createBlindEngagement(
-  request: APIRequestContext, s: SessionCookies, name: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  name: string,
 ): Promise<string> {
   const resp = await request.post('/api/v1/engagements', {
     headers: mutatingHeaders(s),
@@ -96,7 +112,9 @@ async function createBlindEngagement(
 }
 
 async function createScenario(
-  request: APIRequestContext, s: SessionCookies, engagementId: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
 ): Promise<string> {
   const resp = await request.post(`/api/v1/engagements/${engagementId}/scenarios`, {
     headers: mutatingHeaders(s),
@@ -107,8 +125,11 @@ async function createScenario(
 }
 
 async function addMember(
-  request: APIRequestContext, s: SessionCookies,
-  engagementId: string, userEmail: string, role: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
+  userEmail: string,
+  role: string,
 ): Promise<void> {
   // Get user id by email
   const usersResp = await request.get('/api/v1/users', {
@@ -124,12 +145,17 @@ async function addMember(
   })
 }
 
-interface StepItem { id: string }
+interface StepItem {
+  id: string
+}
 
 async function createStep(
-  request: APIRequestContext, s: SessionCookies,
-  engagementId: string, scenarioId: string,
-  name: string, techniqueId: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
+  scenarioId: string,
+  name: string,
+  techniqueId: string,
 ): Promise<string> {
   const resp = await request.post(
     `/api/v1/engagements/${engagementId}/scenarios/${scenarioId}/steps`,
@@ -142,49 +168,54 @@ async function createStep(
   return body.id
 }
 
-interface ExecutionItem { id: string }
+interface ExecutionItem {
+  id: string
+}
 
 async function getExecution(
-  request: APIRequestContext, s: SessionCookies,
-  engagementId: string, stepId: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
+  stepId: string,
 ): Promise<ExecutionItem> {
-  const resp = await request.get(
-    `/api/v1/engagements/${engagementId}/steps/${stepId}/execution`,
-    { headers: readHeaders(s) },
-  )
+  const resp = await request.get(`/api/v1/engagements/${engagementId}/steps/${stepId}/execution`, {
+    headers: readHeaders(s),
+  })
   return (await resp.json()) as ExecutionItem
 }
 
 async function scoreRed(
-  request: APIRequestContext, s: SessionCookies,
-  engagementId: string, executionId: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
+  executionId: string,
 ): Promise<void> {
-  await request.patch(
-    `/api/v1/engagements/${engagementId}/executions/${executionId}`,
-    {
-      headers: mutatingHeaders(s),
-      data: { status: 'complete' },
-    },
-  )
+  await request.patch(`/api/v1/engagements/${engagementId}/executions/${executionId}`, {
+    headers: mutatingHeaders(s),
+    data: { status: 'complete' },
+  })
 }
 
 async function scoreBlue(
-  request: APIRequestContext, s: SessionCookies,
-  engagementId: string, executionId: string,
-  category: string, protection: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
+  executionId: string,
+  category: string,
+  protection: string,
 ): Promise<void> {
-  await request.patch(
-    `/api/v1/engagements/${engagementId}/executions/${executionId}`,
-    {
-      headers: mutatingHeaders(s),
-      data: { detectionCategory: category, protection },
-    },
-  )
+  await request.patch(`/api/v1/engagements/${engagementId}/executions/${executionId}`, {
+    headers: mutatingHeaders(s),
+    data: { detectionCategory: category, protection },
+  })
 }
 
 async function revealStep(
-  request: APIRequestContext, s: SessionCookies,
-  engagementId: string, scenarioId: string, stepId: string,
+  request: APIRequestContext,
+  s: SessionCookies,
+  engagementId: string,
+  scenarioId: string,
+  stepId: string,
 ): Promise<void> {
   await request.post(
     `/api/v1/engagements/${engagementId}/scenarios/${scenarioId}/steps/${stepId}/reveal`,
@@ -208,8 +239,22 @@ test('red and blue see different analytics totals in blind engagement', async ({
   const blueCookie = await login(request, blueEmail, bluePassword)
 
   // Create two steps, reveal only one to blue
-  const step1Id = await createStep(request, redCookie, engagementId, scenarioId, 'Revealed Step', 'T1059')
-  const step2Id = await createStep(request, redCookie, engagementId, scenarioId, 'Hidden Step', 'T1203')
+  const step1Id = await createStep(
+    request,
+    redCookie,
+    engagementId,
+    scenarioId,
+    'Revealed Step',
+    'T1059',
+  )
+  const step2Id = await createStep(
+    request,
+    redCookie,
+    engagementId,
+    scenarioId,
+    'Hidden Step',
+    'T1203',
+  )
 
   // Score both steps from red side
   const exec1 = await getExecution(request, redCookie, engagementId, step1Id)

@@ -64,7 +64,17 @@ function seed(): SeedCommand[] {
   return [
     ...seedAdmin(),
     ['content', 'enable', '--id', attackSrc],
-    ['content', 'import-bundle', '--source', 'attack', '--file', attackFix, '--version', '15.1', '--wait'],
+    [
+      'content',
+      'import-bundle',
+      '--source',
+      'attack',
+      '--file',
+      attackFix,
+      '--version',
+      '15.1',
+      '--wait',
+    ],
     ['content', 'enable', '--id', atomicSrc],
     ['content', 'import-bundle', '--source', 'atomic', '--file', atomicFix, '--wait'],
     { args: ['user', 'create', '--email', lEmail, '--name', 'Lead'], stdin: lPass },
@@ -78,10 +88,15 @@ test.use({ seed: { steps: seed() } })
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 
-interface Sess { cookie: string; csrf: string }
+interface Sess {
+  cookie: string
+  csrf: string
+}
 
 const mh = (s: Sess): Record<string, string> => ({
-  cookie: s.cookie, 'x-csrf-token': s.csrf, 'content-type': 'application/json',
+  cookie: s.cookie,
+  'x-csrf-token': s.csrf,
+  'content-type': 'application/json',
 })
 const rh = (s: Sess): Record<string, string> => ({ cookie: s.cookie })
 
@@ -93,7 +108,8 @@ const rh = (s: Sess): Record<string, string> => ({ cookie: s.cookie })
  */
 async function apiLogin(r: APIRequestContext, email: string, pw: string): Promise<Sess> {
   const resp = await r.post('/api/v1/auth/login', {
-    data: { email, password: pw }, failOnStatusCode: true,
+    data: { email, password: pw },
+    failOnStatusCode: true,
   })
   const raw = resp.headers()['set-cookie']
   if (!raw) throw new Error(`login ${email}: no Set-Cookie`)
@@ -103,13 +119,24 @@ async function apiLogin(r: APIRequestContext, email: string, pw: string): Promis
     if (!ln) throw new Error(`login ${email}: no ${prefix}`)
     return ln.trim().split(';')[0]!.split('=')[1]!
   }
-  return { cookie: `bl_session=${val('bl_session')}; bl_csrf=${val('bl_csrf')}`, csrf: val('bl_csrf') }
+  return {
+    cookie: `bl_session=${val('bl_session')}; bl_csrf=${val('bl_csrf')}`,
+    csrf: val('bl_csrf'),
+  }
 }
 
 async function mkEng(r: APIRequestContext, s: Sess, name: string): Promise<string> {
   const resp = await r.post('/api/v1/engagements', {
     headers: mh(s),
-    data: { name, client: 'Thesis', description: 'E2E', attackVersion: '15.1', mode: 'standard', startsOn: '2026-10-01', endsOn: '2026-10-15' },
+    data: {
+      name,
+      client: 'Thesis',
+      description: 'E2E',
+      attackVersion: '15.1',
+      mode: 'standard',
+      startsOn: '2026-10-01',
+      endsOn: '2026-10-15',
+    },
     failOnStatusCode: true,
   })
   return ((await resp.json()) as { id: string }).id
@@ -117,56 +144,112 @@ async function mkEng(r: APIRequestContext, s: Sess, name: string): Promise<strin
 
 async function mkScen(r: APIRequestContext, s: Sess, eid: string): Promise<string> {
   const resp = await r.post(`/api/v1/engagements/${eid}/scenarios`, {
-    headers: mh(s), data: { name: 'Scenario' }, failOnStatusCode: true,
+    headers: mh(s),
+    data: { name: 'Scenario' },
+    failOnStatusCode: true,
   })
   return ((await resp.json()) as { id: string }).id
 }
 
-async function addMem(r: APIRequestContext, s: Sess, eid: string, email: string, role: string): Promise<void> {
+async function addMem(
+  r: APIRequestContext,
+  s: Sess,
+  eid: string,
+  email: string,
+  role: string,
+): Promise<void> {
   const u = await r.get('/api/v1/users', { headers: rh(s) })
   const body = (await u.json()) as { items: Array<{ id: string; email: string }> }
   const user = body.items.find((x) => x.email === email)
   if (!user) throw new Error(`user not found: ${email}`)
   await r.post(`/api/v1/engagements/${eid}/members`, {
-    headers: mh(s), data: { userId: user.id, role }, failOnStatusCode: true,
+    headers: mh(s),
+    data: { userId: user.id, role },
+    failOnStatusCode: true,
   })
 }
 
-async function mkStep(r: APIRequestContext, s: Sess, eid: string, sid: string, name: string, tech: string): Promise<string> {
+async function mkStep(
+  r: APIRequestContext,
+  s: Sess,
+  eid: string,
+  sid: string,
+  name: string,
+  tech: string,
+): Promise<string> {
   const resp = await r.post(`/api/v1/engagements/${eid}/scenarios/${sid}/steps`, {
-    headers: mh(s), data: { name, techniqueId: tech }, failOnStatusCode: true,
+    headers: mh(s),
+    data: { name, techniqueId: tech },
+    failOnStatusCode: true,
   })
   return ((await resp.json()) as { id: string }).id
 }
 
-interface Exec { id: string; version: number; stepId: string }
+interface Exec {
+  id: string
+  version: number
+  stepId: string
+}
 
 async function listExec(r: APIRequestContext, s: Sess, eid: string, sid: string): Promise<Exec[]> {
-  const resp = await r.get(`/api/v1/engagements/${eid}/executions?scenarioId=${sid}`, { headers: rh(s) })
+  const resp = await r.get(`/api/v1/engagements/${eid}/executions?scenarioId=${sid}`, {
+    headers: rh(s),
+  })
   return ((await resp.json()) as { items: Exec[] }).items
 }
 
 /** Transition execution pending → running → complete. Returns final version. */
-async function redComplete(r: APIRequestContext, s: Sess, eid: string, exId: string, ver: number): Promise<number> {
+async function redComplete(
+  r: APIRequestContext,
+  s: Sess,
+  eid: string,
+  exId: string,
+  ver: number,
+): Promise<number> {
   await r.patch(`/api/v1/engagements/${eid}/executions/${exId}/execution`, {
-    headers: mh(s), data: { status: 'running', version: ver }, failOnStatusCode: true,
+    headers: mh(s),
+    data: { status: 'running', version: ver },
+    failOnStatusCode: true,
   })
   await r.patch(`/api/v1/engagements/${eid}/executions/${exId}/execution`, {
-    headers: mh(s), data: { status: 'complete', version: ver + 1 }, failOnStatusCode: true,
+    headers: mh(s),
+    data: { status: 'complete', version: ver + 1 },
+    failOnStatusCode: true,
   })
   return ver + 2
 }
 
-async function blueSc(r: APIRequestContext, s: Sess, eid: string, exId: string, ver: number, cat: string, prot: string): Promise<void> {
+async function blueSc(
+  r: APIRequestContext,
+  s: Sess,
+  eid: string,
+  exId: string,
+  ver: number,
+  cat: string,
+  prot: string,
+): Promise<void> {
   await r.patch(`/api/v1/engagements/${eid}/executions/${exId}/detection`, {
-    headers: mh(s), data: { detectionCategory: cat, protection: prot, version: ver }, failOnStatusCode: true,
+    headers: mh(s),
+    data: { detectionCategory: cat, protection: prot, version: ver },
+    failOnStatusCode: true,
   })
 }
 
-async function mkFinding(r: APIRequestContext, s: Sess, eid: string, title: string, exId?: string): Promise<void> {
+async function mkFinding(
+  r: APIRequestContext,
+  s: Sess,
+  eid: string,
+  title: string,
+  exId?: string,
+): Promise<void> {
   await r.post(`/api/v1/engagements/${eid}/findings`, {
     headers: mh(s),
-    data: { title, description: `Thesis: ${title}`, severity: 'medium', createdFromExecution: exId },
+    data: {
+      title,
+      description: `Thesis: ${title}`,
+      severity: 'medium',
+      createdFromExecution: exId,
+    },
     failOnStatusCode: true,
   })
 }
@@ -174,9 +257,7 @@ async function mkFinding(r: APIRequestContext, s: Sess, eid: string, title: stri
 // ── Thesis spec ──────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-non-null-assertion, @typescript-eslint/array-type */
-test('full product thesis: content, engagements, scoring, report', async ({
-  request,
-}) => {
+test('full product thesis: content, engagements, scoring, report', async ({ request }) => {
   const adm = await apiLogin(request, adminEmail, adminPassword)
   const r = await apiLogin(request, rEmail, rPass)
   const b = await apiLogin(request, bEmail, bPass)
@@ -224,12 +305,16 @@ test('full product thesis: content, engagements, scoring, report', async ({
 
   // ── Report: create and publish ─────────────────────────────────────────────
   const repResp = await request.post(`/api/v1/engagements/${rt}/reports`, {
-    headers: mh(adm), data: { title: 'Thesis Report' }, failOnStatusCode: true,
+    headers: mh(adm),
+    data: { title: 'Thesis Report' },
+    failOnStatusCode: true,
   })
   const repId = ((await repResp.json()) as { id: string }).id
 
   const pubResp = await request.post(`/api/v1/engagements/${rt}/reports/${repId}/publish`, {
-    headers: mh(adm), data: {}, failOnStatusCode: true,
+    headers: mh(adm),
+    data: {},
+    failOnStatusCode: true,
   })
   expect(pubResp.status()).toBe(201)
   const ver = ((await pubResp.json()) as { id: string }).id
