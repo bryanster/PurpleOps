@@ -51,7 +51,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
 
   // ── Create an engagement (needed for reports) ──────────────────────────────
   await page.getByRole('link', { name: 'Engagements' }).click()
-  await page.getByRole('button', { name: 'New engagement' }).click()
+  await page.getByRole('button', { name: 'New engagement' }).first().click()
   await page.getByLabel('Name').fill('Share Test Engagement')
   // Select ATT&CK version (required field).
   await page.waitForSelector("#create-attack")

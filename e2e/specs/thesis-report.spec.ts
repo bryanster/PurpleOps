@@ -172,7 +172,7 @@ async function mkFinding(r: APIRequestContext, s: Sess, eid: string, title: stri
 // ── Thesis spec ──────────────────────────────────────────────────────────────
 
 test('full product thesis: content, engagements, scoring, report', async ({
-  browser, request,
+  _browser, request,
 }) => {
   const adm = await apiLogin(request, adminEmail, adminPassword)
   const r = await apiLogin(request, rEmail, rPass)
