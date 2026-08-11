@@ -89,6 +89,7 @@ func New(chromePath string, timeout time.Duration) (*Printer, error) {
 // RenderPDF creates a fresh tab per call and closes it before returning.
 // The caller's context deadline bounds the entire operation; if the context
 // carries no deadline, Printer.timeout is applied.
+//
 //nolint:contextcheck // ctx is function parameter, not newly created
 func (p *Printer) RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
