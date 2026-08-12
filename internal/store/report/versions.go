@@ -205,7 +205,7 @@ func HashBytes(data []byte) string {
 
 // jsonOrDefault returns the JSON message as a string, or fallback when empty.
 // blocks_json and branding_json are NOT NULL columns; an empty draft must store
-// valid JSON ('[]' / '{}') rather than NULL, or the read-back scan into
+// valid JSON ('[]' / '{}') rather than NULL, or the read-back scan into json.RawMessage fails.
 func jsonOrDefault(raw json.RawMessage, fallback string) any {
 	if len(raw) == 0 || string(raw) == "null" {
 		return fallback
