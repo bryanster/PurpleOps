@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
@@ -17,12 +18,6 @@ const versionColumns = `id, report_id, ordinal, title, published_by, published_a
 	include_evidence, blind_scope, blocks_json, branding_json, html,
 	content_sha256, pdf_sha256`
 
-// versionSelectColumns is versionColumns with the two nullable JSON columns
-// COALESCEd so an empty draft (NULL blocks_json / branding_json) reads back as
-// valid JSON instead of failing the scan into json.RawMessage.
-const versionSelectColumns = `id, report_id, ordinal, title, published_by, published_at,
-	include_evidence, blind_scope, COALESCE(blocks_json, '[]'), COALESCE(branding_json, '{}'), html,
-	content_sha256, pdf_sha256`
 
 // ---------------------------------------------------------------------------
 // Versions repository
@@ -69,7 +64,7 @@ func (v *Versions) Insert(ctx context.Context, in NewVersion, after ...After) (R
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, in.ReportID, in.Ordinal, in.Title, in.PublishedBy,
 			now, in.IncludeEvidence, in.BlindScope,
-			nullJSON(in.BlocksJSON), nullJSON(in.BrandingJSON),
+			jsonOrDefault(in.BlocksJSON, `[]`), jsonOrDefault(in.BrandingJSON, `{}`),
 			in.HTML, contentSHA256Arg, nil,
 		)
 		if err != nil {
@@ -95,7 +90,7 @@ func (v *Versions) Insert(ctx context.Context, in NewVersion, after ...After) (R
 func (v *Versions) ByID(ctx context.Context, id string) (ReportVersion, error) {
 	var ver ReportVersion
 	err := v.db.Read().QueryRowContext(ctx,
-		`SELECT `+versionSelectColumns+` FROM app.report_version WHERE id = ?`, id,
+		`SELECT `+versionColumns+` FROM app.report_version WHERE id = ?`, id,
 	).Scan(
 		&ver.ID, &ver.ReportID, &ver.Ordinal, &ver.Title, &ver.PublishedBy,
 		&ver.PublishedAt, &ver.IncludeEvidence, &ver.BlindScope,
@@ -114,7 +109,7 @@ func (v *Versions) ByID(ctx context.Context, id string) (ReportVersion, error) {
 // ListByReport returns every version of a report, newest first.
 func (v *Versions) ListByReport(ctx context.Context, reportID string) ([]ReportVersion, error) {
 	rows, err := v.db.Read().QueryContext(ctx,
-		`SELECT `+versionSelectColumns+`
+		`SELECT `+versionColumns+`
 		 FROM app.report_version
 		 WHERE report_id = ?
 		 ORDER BY ordinal DESC`, reportID,
@@ -207,6 +202,17 @@ func (v *Versions) DeleteByReport(ctx context.Context, reportID string) error {
 func HashBytes(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+
+// jsonOrDefault returns the JSON message as a string, or fallback when empty.
+// blocks_json and branding_json are NOT NULL columns; an empty draft must store
+// valid JSON ('[]' / '{}') rather than NULL, or the read-back scan into
+// json.RawMessage fails.
+func jsonOrDefault(raw json.RawMessage, fallback string) any {
+	if len(raw) == 0 {
+		return fallback
+	}
+	return string(raw)
 }
 
 func strPtr(s string) *string {
