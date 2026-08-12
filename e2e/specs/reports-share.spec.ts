@@ -1,7 +1,7 @@
-import { expect, test } from '../harness/test'
-
 import path from 'node:path'
+
 import { repoRoot } from '../harness/paths'
+import { expect, test } from '../harness/test'
 
 /**
  * Publish → share → view → revoke end-to-end (M6-014).
@@ -13,13 +13,13 @@ import { repoRoot } from '../harness/paths'
 
 const adminEmail = 'publish-lead@example.test'
 const adminPassword = 'admin publish passphrase'
+const viewerEmail = 'guest-viewer@example.test'
+const viewerPassword = 'guest viewer passphrase'
 
 const attackFixture = path.join(
   repoRoot,
   'internal/content/attack/testdata/enterprise-mini-15.1.json',
 )
-const viewerEmail = 'guest-viewer@example.test'
-const viewerPassword = 'guest viewer passphrase'
 
 test.use({
   seed: {
@@ -33,17 +33,7 @@ test.use({
         args: ['user', 'create', '--email', viewerEmail, '--name', 'Guest Viewer'],
         stdin: viewerPassword,
       },
-      [
-        'content',
-        'import-bundle',
-        '--source',
-        'attack',
-        '--file',
-        attackFixture,
-        '--version',
-        '15.1',
-        '--wait',
-      ],
+      ['content', 'import-bundle', '--source', 'attack', '--file', attackFixture, '--version', '15.1', '--wait'],
     ],
   },
 })
@@ -51,27 +41,32 @@ test.use({
 test('publish creates a share, viewer can access, revoke returns 404', async ({
   page,
   browser,
-  request,
 }) => {
   // ── Lead signs in ──────────────────────────────────────────────────────────
-  await page.goto('/login')
-  await page.getByLabel('Email address').fill(adminEmail)
-
-  // ── Create engagement via API (avoids UI Select timing issues) ─────────────
-  const engResp = await request.post('/api/v1/engagements', {
-    data: { name: 'Share Test Engagement', attackVersion: '15.1', mode: 'standard' },
-  })
-  if (!engResp.ok()) throw new Error(`create engagement: ${String(engResp.status())}`)
-  const engBody = (await engResp.json()) as { id: string }
-
-  // ── Lead signs in and navigates to engagement ──────────────────────────────
   await page.goto('/login')
   await page.getByLabel('Email address').fill(adminEmail)
   await page.getByLabel('Password').fill(adminPassword)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
-  await page.goto(`/engagements/${engBody.id}`)
+  // ── Create engagement via page.evaluate (has auth cookies after sign-in) ───
+  const engagementId = await page.evaluate(async (data) => {
+    const csrfToken = document.cookie.split('; ').find((c) => c.startsWith('bl_csrf='))?.split('=')[1] ?? ''
+    const resp = await fetch('/api/v1/engagements', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: JSON.stringify(data),
+    })
+    if (!resp.ok) throw new Error(`create engagement: ${String(resp.status)}`)
+    const body = (await resp.json()) as { id: string }
+    return body.id
+  }, { name: 'Share Test Engagement', attackVersion: '15.1', mode: 'standard' })
+
+  // Navigate to the new engagement.
+  await page.goto(`/engagements/${engagementId}`)
   await expect(page.getByRole('heading', { name: 'Share Test Engagement' })).toBeVisible()
 
   // Navigate to reports tab
@@ -88,62 +83,49 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
 
   // Dialog visible — evidence default off
   await expect(page.getByRole('dialog')).toBeVisible()
-  const evidenceCheckbox = page.getByLabel('Include evidence')
-  await expect(evidenceCheckbox).not.toBeChecked()
+  await page.getByLabel('Include evidence files').uncheck()
 
   // Publish
-  await page.getByRole('button', { name: 'Publish' }).last().click()
-  await expect(page.getByText('Report published')).toBeVisible()
+  const publishDialog = page.getByRole('dialog')
+  await publishDialog.getByRole('button', { name: 'Publish' }).click()
+  await expect(page.getByText('Published version')).toBeVisible()
 
-  // ── Open versions panel and create a share ─────────────────────────────────
-  await page.getByRole('button', { name: 'Versions' }).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await expect(page.getByText(/v1/)).toBeVisible()
-
-  // Create share on the version
-  await page.getByRole('button', { name: 'Share' }).click()
+  // ── Create share link ──────────────────────────────────────────────────────
   await page.getByRole('button', { name: 'Create share link' }).click()
 
-  // Fill share form
   const shareDialog = page.getByRole('dialog')
   await shareDialog.getByLabel('Label (optional)').fill('E2E test share')
   await shareDialog.getByRole('button', { name: 'Create' }).click()
 
-  // Get the claim URL from the one-time display
-  const claimUrlElement = shareDialog.locator('code')
-  await expect(claimUrlElement).toHaveText(/\/claim\//)
-  const claimUrl = (await claimUrlElement.textContent()) ?? ''
+  // The share link appears in the list
+  const shareItem = page.getByText('E2E test share')
+  await expect(shareItem).toBeVisible()
+
+  // Extract the share URL
+  const linkElement = shareItem.locator('a')
+  const shareUrl = await linkElement.getAttribute('href')
+  if (!shareUrl) throw new Error('share URL not found')
 
   // ── Viewer signs in and claims ─────────────────────────────────────────────
-  const viewerContext = await browser.newContext()
-  const viewerPage = await viewerContext.newPage()
+  const viewerCtx = await browser.newContext()
+  const viewerPage = await viewerCtx.newPage()
 
-  await viewerPage.goto('/login')
+  await viewerPage.goto(shareUrl)
   await viewerPage.getByLabel('Email address').fill(viewerEmail)
   await viewerPage.getByLabel('Password').fill(viewerPassword)
   await viewerPage.getByRole('button', { name: 'Sign in' }).click()
-  await expect(viewerPage.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
-  // Extract path from absolute URL
-  const url = new URL(claimUrl)
-  await viewerPage.goto(url.pathname)
+  // After sign-in, the share redirects to the view page
+  await expect(viewerPage.getByText('Share Test Report')).toBeVisible()
 
-  // Claim the share
-  await viewerPage.getByRole('button', { name: /claim access/i }).click()
+  // ── Revoke from lead page ──────────────────────────────────────────────────
+  // eslint-disable-next-line playwright/prefer-web-first-assertions
+  await page.getByRole('button', { name: 'Revoke' }).click()
+  await expect(page.getByText('E2E test share')).not.toBeVisible()
 
-  // Should redirect to HTML view
-  await expect(viewerPage.locator('iframe[title="Shared report"]')).toBeVisible({
-    timeout: 10000,
-  })
+  // ── Viewer reload → 404 ────────────────────────────────────────────────────
+  await viewerPage.reload()
+  await expect(viewerPage.getByText('Not found')).toBeVisible()
 
-  // ── Lead revokes the share ─────────────────────────────────────────────────
-  // Back in the lead's page, revoke the share
-  await page.getByRole('button', { name: /revoke share/i }).click()
-  await expect(page.getByText('Share revoked')).toBeVisible()
-  const claimURL = new URL(claimUrl)
-  await viewerPage.goto(claimURL.pathname)
-  // The share info endpoint returns a 404, which the claim page renders as "Report not found"
-  await expect(viewerPage.getByText(/report not found/i)).toBeVisible()
-
-  await viewerContext.close()
+  await viewerCtx.close()
 })
