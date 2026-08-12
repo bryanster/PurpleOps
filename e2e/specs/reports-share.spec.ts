@@ -123,42 +123,54 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   // Create a report
   await page.getByRole('button', { name: 'New report' }).first().click()
   await page.getByLabel('Title').fill('Share Test Report')
-  await page.getByRole('button', { name: 'Create' }).click()
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByText('Share Test Report')).toBeVisible()
 
   // ── Publish ────────────────────────────────────────────────────────────────
   await page.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByLabel('Include evidence files').uncheck()
+  const evidenceCheckbox = page.getByLabel('Include evidence')
+  await expect(evidenceCheckbox).not.toBeChecked()
   const publishDialog = page.getByRole('dialog')
   await publishDialog.getByRole('button', { name: 'Publish', exact: true }).click()
-  await expect(page.getByText('Published version')).toBeVisible()
+  await expect(page.getByText('Report published')).toBeVisible()
 
-  // ── Create share link ──────────────────────────────────────────────────────
+  // ── Open versions panel and create a share ─────────────────────────────────
+  await page.getByRole('button', { name: 'Versions' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByText(/v1/)).toBeVisible()
+  await page.getByRole('button', { name: 'Share' }).click()
   await page.getByRole('button', { name: 'Create share link' }).click()
   const shareDialog = page.getByRole('dialog')
   await shareDialog.getByLabel('Label (optional)').fill('E2E test share')
-  await shareDialog.getByRole('button', { name: 'Create' }).click()
-  const shareItem = page.getByText('E2E test share')
-  await expect(shareItem).toBeVisible()
-  const shareUrl = await shareItem.locator('a').getAttribute('href')
-  if (!shareUrl) throw new Error('share URL not found')
+  await shareDialog.getByRole('button', { name: 'Create', exact: true }).click()
+
+  // Get claim URL from the one-time display
+  const claimUrlElement = shareDialog.locator('code')
+  await expect(claimUrlElement).toHaveText(/\/claim\//)
+  const claimUrl = (await claimUrlElement.textContent()) ?? ''
 
   // ── Viewer signs in and claims ─────────────────────────────────────────────
-  const viewerCtx = await browser.newContext()
-  const viewerPage = await viewerCtx.newPage()
-  await viewerPage.goto(shareUrl)
+  const viewerContext = await browser.newContext()
+  const viewerPage = await viewerContext.newPage()
+  await viewerPage.goto('/login')
   await viewerPage.getByLabel('Email address').fill(viewerEmail)
   await viewerPage.getByLabel('Password').fill(viewerPassword)
   await viewerPage.getByRole('button', { name: 'Sign in' }).click()
-  await expect(viewerPage.getByText('Share Test Report')).toBeVisible()
+  await expect(viewerPage.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
-  // ── Revoke from lead page ──────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'Revoke' }).click()
-  await expect(page.getByText('E2E test share')).not.toBeVisible()
+  const url = new URL(claimUrl)
+  await viewerPage.goto(url.pathname)
+  await viewerPage.getByRole('button', { name: /claim access/i }).click()
+  await expect(viewerPage.locator('iframe[title="Shared report"]')).toBeVisible({ timeout: 10000 })
+
+  // ── Lead revokes share ─────────────────────────────────────────────────────
+  await page.getByRole('button', { name: /revoke share/i }).click()
+  await expect(page.getByText('Share revoked')).toBeVisible()
 
   // ── Viewer reload → 404 ────────────────────────────────────────────────────
-  await viewerPage.reload()
-  await expect(viewerPage.getByText('Not found')).toBeVisible()
-  await viewerCtx.close()
+  const claimURL = new URL(claimUrl)
+  await viewerPage.goto(claimURL.pathname)
+  await expect(viewerPage.getByText(/report not found/i)).toBeVisible()
+  await viewerContext.close()
 })
