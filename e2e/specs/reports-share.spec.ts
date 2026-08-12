@@ -51,34 +51,27 @@ test.use({
 test('publish creates a share, viewer can access, revoke returns 404', async ({
   page,
   browser,
+  request,
 }) => {
   // ── Lead signs in ──────────────────────────────────────────────────────────
+  await page.goto('/login')
+  await page.getByLabel('Email address').fill(adminEmail)
+
+  // ── Create engagement via API (avoids UI Select timing issues) ─────────────
+  const engResp = await request.post('/api/v1/engagements', {
+    data: { name: 'Share Test Engagement', attackVersion: '15.1', mode: 'standard' },
+  })
+  if (!engResp.ok()) throw new Error(`create engagement: ${String(engResp.status())}`)
+  const engBody = (await engResp.json()) as { id: string }
+
+  // ── Lead signs in and navigates to engagement ──────────────────────────────
   await page.goto('/login')
   await page.getByLabel('Email address').fill(adminEmail)
   await page.getByLabel('Password').fill(adminPassword)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
-  // ── Create engagement via API (avoids UI Select timing issues) ─────────────
-  await page.evaluate(
-    async ([name, version]) => {
-      const resp = await fetch('/api/v1/engagements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, attackVersion: version, mode: 'standard' }),
-      })
-      if (!resp.ok) throw new Error(`create engagement: ${String(resp.status)}`)
-      const body = await resp.json()
-      return (body as { id: string }).id
-    },
-    ['Share Test Engagement', '15.1'],
-  )
-
-  // Reload the page so the engagement list is current.
-  await page.reload()
-  await page.getByRole('link', { name: 'Engagements' }).click()
-  await expect(page.getByText('Share Test Engagement')).toBeVisible()
-  await page.getByText('Share Test Engagement').click()
+  await page.goto(`/engagements/${engBody.id}`)
   await expect(page.getByRole('heading', { name: 'Share Test Engagement' })).toBeVisible()
 
   // Navigate to reports tab
