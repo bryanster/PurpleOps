@@ -33,7 +33,17 @@ test.use({
         args: ['user', 'create', '--email', viewerEmail, '--name', 'Guest Viewer'],
         stdin: viewerPassword,
       },
-      ['content', 'import-bundle', '--source', 'attack', '--file', attackFixture, '--version', '15.1', '--wait'],
+      [
+        'content',
+        'import-bundle',
+        '--source',
+        'attack',
+        '--file',
+        attackFixture,
+        '--version',
+        '15.1',
+        '--wait',
+      ],
     ],
   },
 })
@@ -51,21 +61,28 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
 
   // ── Create engagement via page.evaluate (has auth cookies after sign-in) ───
   /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
-  const engagementId = await page.evaluate(async (data) => {
-    // @ts-expect-error: page.evaluate runs in browser context with DOM types
-    const csrfToken = document.cookie.split('; ').find((c) => c.startsWith('bl_csrf='))?.split('=')[1] ?? ''
-    const resp = await fetch('/api/v1/engagements', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken,
-      },
-      body: JSON.stringify(data),
-    })
-    if (!resp.ok) throw new Error(`create engagement: ${String(resp.status)}`)
-    const body = (await resp.json()) as { id: string }
-    return body.id
-  }, { name: 'Share Test Engagement', attackVersion: '15.1', mode: 'standard' })
+  const engagementId = await page.evaluate(
+    async (data) => {
+      // @ts-expect-error: page.evaluate runs in browser context with DOM types
+      const csrfToken =
+        document.cookie
+          .split('; ')
+          .find((c) => c.startsWith('bl_csrf='))
+          ?.split('=')[1] ?? ''
+      const resp = await fetch('/api/v1/engagements', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify(data),
+      })
+      if (!resp.ok) throw new Error(`create engagement: ${String(resp.status)}`)
+      const body = (await resp.json()) as { id: string }
+      return body.id
+    },
+    { name: 'Share Test Engagement', attackVersion: '15.1', mode: 'standard' },
+  )
   /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 
   // Navigate to the new engagement.
