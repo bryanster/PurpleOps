@@ -121,7 +121,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   await page.getByRole('link', { name: 'Reports' }).click()
 
   // Create a report
-  await page.getByRole('button', { name: 'New report' }).click()
+  await page.getByRole('button', { name: 'New report' }).first().click()
   await page.getByLabel('Title').fill('Share Test Report')
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page.getByText('Share Test Report')).toBeVisible()
