@@ -83,10 +83,10 @@ async function login(
   if (sessionPart === undefined) {
     throw new Error(`login for ${email}: no bl_session cookie in Set-Cookie`)
   }
-  const cookie = sessionPart.trim()
-  const csrfResp = await request.get('/api/v1/auth/csrf', { headers: { cookie } })
-  const csrfBody = (await csrfResp.json()) as { token: string }
-  return { cookie, csrfToken: csrfBody.token }
+  const body = (await resp.json()) as { user?: { csrfToken?: string } }
+  const csrfToken = body.user?.csrfToken ?? ''
+  const cookie = `${sessionPart.trim()}; bl_csrf=${csrfToken}`
+  return { cookie, csrfToken }
 }
 
 async function createBlindEngagement(
