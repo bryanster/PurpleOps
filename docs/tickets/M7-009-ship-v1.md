@@ -1,6 +1,6 @@
 # M7-009 — Ship gate: `v1.0.0` release
 
-**Milestone:** M7 · **Size:** M · **Depends on:** M7-002, M7-003, M7-004, M7-005, M7-006, M7-007, M7-008
+**Milestone:** M7 · **Size:** M · **Depends on:** M7-002, M7-003, M7-004, M7-005, M7-006, M7-007, M7-008, M7-010, M7-011, M7-012
 
 ## Why
 
@@ -16,6 +16,7 @@ greenfield statement. M6-015 already proved the product thesis; this proves dist
   - M7-001 `v1-final` pushed.
   - M7-002…M7-008 acceptance criteria checked (or explicitly waived in writing on this ticket with
     reason — default: **no waivers** for 007 High+ or 004 publish path).
+  - M7-010, M7-011, M7-012 High findings from [`docs/SECURITY_FINDINGS.md`](../SECURITY_FINDINGS.md) closed (no waiver).
   - `main` CI green on the intended ship SHA.
   - `CHANGELOG.md` `[1.0.0]` section final (date, highlights, upgrade/greenfield notes).
 - Create **annotated** tag `v1.0.0` on the ship commit; push to `origin`.
@@ -57,7 +58,7 @@ greenfield statement. M6-015 already proved the product thesis; this proves dist
 - [ ] Smoke against released image recorded in completion notes.
 - [ ] Greenfield / no v1 migration called out in release notes and changelog.
 - [ ] M7 epic state `done`; tickets index updated; ticket files in `done/`.
-- [ ] No Critical/High security findings still open from M7-007.
+- [ ] No Critical/High security findings still open from M7-007 **or** `docs/SECURITY_FINDINGS.md` (M7-010, M7-011, M7-012 merged).
 - [ ] Perf notes from M7-008 attached or linked.
 
 ## Tests

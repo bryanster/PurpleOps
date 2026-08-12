@@ -127,11 +127,11 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   await expect(page.getByText('Share Test Report')).toBeVisible()
 
   // ── Publish ────────────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'Publish' }).click()
+  await page.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByLabel('Include evidence files').uncheck()
   const publishDialog = page.getByRole('dialog')
-  await publishDialog.getByRole('button', { name: 'Publish' }).click()
+  await publishDialog.getByRole('button', { name: 'Publish', exact: true }).click()
   await expect(page.getByText('Published version')).toBeVisible()
 
   // ── Create share link ──────────────────────────────────────────────────────

@@ -21,7 +21,7 @@ trust the security/perf posture of the published artifact.
 | **Data / migration** | **Greenfield only.** No Mongo importer, no engagement restore from v1. Any operator moving from the old stack **starts empty**. State this in release notes. Untracked `files/` (prior evidence) and live `.env` secrets were never in git; working tree has neither — **loss accepted on the record**. `CURRENT.md` substance lives in `PLAN.md` Context; no separate revive. |
 | **Release artifacts** | **GitHub Release + GHCR multi-arch image.** On tag `v*`: build/push `ghcr.io/bryanster/blacklight:<tag>` and `:latest` for `linux/amd64` + `linux/arm64` (buildx, same cross-compile approach as `M0B-011`); attach checksums; publish `CHANGELOG` section for the tag. Host binaries optional (CGO/Chromium make the image the supported artifact — `PLAN.md` §8). |
 | **Docs** | **One consolidation ticket** over existing `docs/*`. Feature tickets already wrote deploy, security, SSO, API, tokens, migrations, testing. M7 reviews for drift, strips "under construction" banners, adds the missing **upgrade** narrative, and makes README the front door. Not a from-scratch rewrite. |
-| **Security gate** | **Structured checklist pass** against the live surface (headers, cookies, uploads, share links, SSO, tokens, CSRF, authz regressions). Findings either fixed in-tree or filed with severity; no silent defer of High. Not an external pentest requirement for v1.0.0. |
+| **Security gate** | **Structured checklist pass** against the live surface (headers, cookies, uploads, share links, SSO, tokens, CSRF, authz regressions). Findings either fixed in-tree or filed with severity; no silent defer of High. Not an external pentest requirement for v1.0.0. **2026-08-12 follow-up:** [`docs/SECURITY_FINDINGS.md`](../SECURITY_FINDINGS.md) reopened Highs M7-007 marked PASS — tickets **M7-010…M7-012** are the fix PRs and are ship gates for M7-009. |
 | **Performance gate** | **Re-run existing gates** (`M3-016`, `M4-010`, `M5-015`) under a fixture that includes **M6 report render/PDF load**. No new perf framework. Budgets hold or code fixes — do not hollow budgets. |
 | **Extra scope** | **None.** No PLAN.md rounds rewrite, no archive import, no README demo GIF requirement. Keep M7 tight to cutover/release. |
 | **Exit gate** | **`M7-009`:** annotated tag `v1.0.0` on `main`, GHCR images live for that tag, README + docs operator-ready (no "under construction" on the install path), `CHANGELOG` entry, security + perf checklists green, release notes state greenfield cutover. **M6-015 remains the product thesis gate** and must already be green before M7 ship. |
@@ -41,7 +41,12 @@ ticket merges.** M7-001 is cheap and should land immediately (even before other 
 | [M7-006](M7-006-cutover-hygiene.md) | Cutover hygiene: v1 refs, CI branches, status banners | S | M7-001 |
 | [M7-007](M7-007-security-review.md) | Security review pass (checklist) | L | M6-015, M1-014 |
 | [M7-008](M7-008-performance-sanity.md) | Performance sanity pass (re-run gates + report load) | M | M6-015, M3-016, M4-010, M5-015 |
-| [M7-009](M7-009-ship-v1.md) | Ship gate: `v1.0.0` release | M | M7-002…M7-008 |
+| [M7-009](M7-009-ship-v1.md) | Ship gate: `v1.0.0` release | M | M7-002…M7-008, **M7-010, M7-011, M7-012** |
+| [M7-010](M7-010-engagement-list-authz.md) | Engagement list leaks every engagement (BL-001) | S | M3-002, M1-013 |
+| [M7-011](M7-011-ownership-facts-loader.md) | Replace production Ownership.Facts stub (BL-003) | L | M3-002, M1-013 |
+| [M7-012](M7-012-cross-engagement-idor.md) | Bind nested IDs to authorized engagement (BL-002) | L | M7-011 |
+| [M7-013](M7-013-share-token-logging.md) | Share tokens in logs; unthrottled claim/password (BL-005) | M | M6-012, M1-004 |
+| [M7-014](M7-014-content-sync-ssrf.md) | Content sync SSRF allowlist (BL-004) | M | M2-002, M2-003 |
 
 ## Risks
 
