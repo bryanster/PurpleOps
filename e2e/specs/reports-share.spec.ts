@@ -18,6 +18,7 @@ const adminPassword = 'admin publish passphrase'
 const viewerEmail = 'guest-viewer@example.test'
 const viewerPassword = 'guest viewer passphrase'
 
+const attackSourceID = '01900000-0000-7000-8000-000000000001'
 const attackFixture = path.join(
   repoRoot,
   'internal/content/attack/testdata/enterprise-mini-15.1.json',
@@ -26,6 +27,7 @@ const attackFixture = path.join(
 function seedSteps(): SeedCommand[] {
   return [
     ['migrate', 'up'],
+    ['content', 'enable', '--id', attackSourceID],
     {
       args: ['user', 'create', '--email', adminEmail, '--name', 'Publish Lead', '--admin'],
       stdin: adminPassword,

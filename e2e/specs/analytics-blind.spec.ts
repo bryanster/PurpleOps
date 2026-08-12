@@ -285,12 +285,10 @@ test('red and blue see different analytics totals in blind engagement', async ({
   await expect(bluePage.locator('[aria-label="Blind engagement notice"]')).toBeVisible()
   await expect(bluePage.locator('text=revealed steps only')).toBeVisible()
 
-  // Blue analytics should show different coverage numbers than red
-  // (Blue only sees 1 revealed technique, red sees both)
-  // Read the coverage card text — they should differ
-  const redCoverageText = redPage.locator('text=of 200')
-  const blueCoverageText = await bluePage.locator('text=of 200').textContent()
-  expect(redCoverageText).not.toBe(blueCoverageText) // eslint-disable-line playwright/prefer-web-first-assertions
+  // Red (non-blind) sees the full 200-technique matrix; blue (blind) sees only
+  // the single revealed step, so the two coverage cards must disagree.
+  await expect(redPage.locator('text=of 200')).toBeVisible()
+  await expect(bluePage.locator('text=of 200')).toHaveCount(0)
 
   await bluePage.close()
 })
