@@ -146,7 +146,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   await shareDialog.getByRole('button', { name: 'Create', exact: true }).click()
 
   // Get claim URL from the one-time display
-  const claimUrlElement = shareDialog.locator('code')
+  const claimUrlElement = shareDialog.locator('code', { hasText: /claim/ })
   await expect(claimUrlElement).toHaveText(/\/claim\//)
   const claimUrl = (await claimUrlElement.textContent()) ?? ''
 
