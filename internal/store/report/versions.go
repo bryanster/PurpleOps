@@ -18,7 +18,6 @@ const versionColumns = `id, report_id, ordinal, title, published_by, published_a
 	include_evidence, blind_scope, blocks_json, branding_json, html,
 	content_sha256, pdf_sha256`
 
-
 // ---------------------------------------------------------------------------
 // Versions repository
 // ---------------------------------------------------------------------------
@@ -207,9 +206,8 @@ func HashBytes(data []byte) string {
 // jsonOrDefault returns the JSON message as a string, or fallback when empty.
 // blocks_json and branding_json are NOT NULL columns; an empty draft must store
 // valid JSON ('[]' / '{}') rather than NULL, or the read-back scan into
-// json.RawMessage fails.
 func jsonOrDefault(raw json.RawMessage, fallback string) any {
-	if len(raw) == 0 {
+	if len(raw) == 0 || string(raw) == "null" {
 		return fallback
 	}
 	return string(raw)
