@@ -50,6 +50,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
   // ── Create engagement via page.evaluate (has auth cookies after sign-in) ───
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
   const engagementId = await page.evaluate(async (data) => {
     // @ts-expect-error: page.evaluate runs in browser context with DOM types
     const csrfToken = document.cookie.split('; ').find((c) => c.startsWith('bl_csrf='))?.split('=')[1] ?? ''
@@ -65,6 +66,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
     const body = (await resp.json()) as { id: string }
     return body.id
   }, { name: 'Share Test Engagement', attackVersion: '15.1', mode: 'standard' })
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 
   // Navigate to the new engagement.
   await page.goto(`/engagements/${engagementId}`)
