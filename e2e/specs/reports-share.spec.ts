@@ -67,7 +67,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, attackVersion: version, mode: 'standard' }),
       })
-      if (!resp.ok) throw new Error(`create engagement: ${resp.status}`)
+      if (!resp.ok) throw new Error(`create engagement: ${String(resp.status)}`)
       const body = await resp.json()
       return (body as { id: string }).id
     },
