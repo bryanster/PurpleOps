@@ -17,6 +17,13 @@ const versionColumns = `id, report_id, ordinal, title, published_by, published_a
 	include_evidence, blind_scope, blocks_json, branding_json, html,
 	content_sha256, pdf_sha256`
 
+// versionSelectColumns is versionColumns with the two nullable JSON columns
+// COALESCEd so an empty draft (NULL blocks_json / branding_json) reads back as
+// valid JSON instead of failing the scan into json.RawMessage.
+const versionSelectColumns = `id, report_id, ordinal, title, published_by, published_at,
+	include_evidence, blind_scope, COALESCE(blocks_json, '[]'), COALESCE(branding_json, '{}'), html,
+	content_sha256, pdf_sha256`
+
 // ---------------------------------------------------------------------------
 // Versions repository
 // ---------------------------------------------------------------------------
@@ -88,7 +95,7 @@ func (v *Versions) Insert(ctx context.Context, in NewVersion, after ...After) (R
 func (v *Versions) ByID(ctx context.Context, id string) (ReportVersion, error) {
 	var ver ReportVersion
 	err := v.db.Read().QueryRowContext(ctx,
-		`SELECT `+versionColumns+` FROM app.report_version WHERE id = ?`, id,
+		`SELECT `+versionSelectColumns+` FROM app.report_version WHERE id = ?`, id,
 	).Scan(
 		&ver.ID, &ver.ReportID, &ver.Ordinal, &ver.Title, &ver.PublishedBy,
 		&ver.PublishedAt, &ver.IncludeEvidence, &ver.BlindScope,
@@ -107,7 +114,7 @@ func (v *Versions) ByID(ctx context.Context, id string) (ReportVersion, error) {
 // ListByReport returns every version of a report, newest first.
 func (v *Versions) ListByReport(ctx context.Context, reportID string) ([]ReportVersion, error) {
 	rows, err := v.db.Read().QueryContext(ctx,
-		`SELECT `+versionColumns+`
+		`SELECT `+versionSelectColumns+`
 		 FROM app.report_version
 		 WHERE report_id = ?
 		 ORDER BY ordinal DESC`, reportID,
