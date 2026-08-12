@@ -43,4 +43,8 @@ export async function signIn(
   await page.getByLabel('Email address').fill(email)
   await page.getByLabel('Password').fill(password)
   await page.getByRole('button', { name: 'Sign in' }).click()
+  // Wait for the client-side redirect out of /login. Without this, a caller
+  // that navigates immediately afterwards cancels the in-flight login POST
+  // and the session never lands (server logs "context canceled").
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'))
 }
