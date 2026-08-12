@@ -198,7 +198,7 @@ func (s *ShareService) CreateShare(ctx context.Context, in CreateShareInput) (*C
 		}
 	}
 
-	claimURL := fmt.Sprintf("%s/report-views/%s", s.baseURL, token)
+	claimURL := fmt.Sprintf("%s/claim/%s", s.baseURL, token)
 
 	return &CreateShareResult{
 		Share:    share,
@@ -399,7 +399,7 @@ func (s *ShareService) ListShares(ctx context.Context, in ListSharesInput) (*Lis
 		result = append(result, ShareWithGrants{
 			Share:    share,
 			Grants:   grants,
-			ClaimURL: fmt.Sprintf("%s/report-views/…", s.baseURL),
+			ClaimURL: fmt.Sprintf("%s/claim/…", s.baseURL),
 		})
 	}
 	return &ListSharesResult{Shares: result}, nil
