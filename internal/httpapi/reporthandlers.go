@@ -31,7 +31,7 @@ func (h *handlers) ListReports(ctx context.Context,
 		return nil, err
 	}
 
-	var items []gen.Report
+	items := make([]gen.Report, 0, len(reports))
 	for _, r := range reports {
 		w, err := reportToWire(r, nil)
 		if err != nil {

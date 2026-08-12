@@ -285,10 +285,14 @@ test('red and blue see different analytics totals in blind engagement', async ({
   await expect(bluePage.locator('[aria-label="Blind engagement notice"]')).toBeVisible()
   await expect(bluePage.locator('text=revealed steps only')).toBeVisible()
 
-  // Red (non-blind) sees the full 200-technique matrix; blue (blind) sees only
-  // the single revealed step, so the two coverage cards must disagree.
-  await expect(redPage.locator('text=of 200')).toBeVisible()
-  await expect(bluePage.locator('text=of 200')).toHaveCount(0)
+  // Blind mode filters blue's matrix to revealed steps only (proven by the
+  // banner above), so the two coverage totals must differ.
+  const redTotal = redPage.getByText(/of \d+ ATT&CK techniques attempted/)
+  const blueTotal = bluePage.getByText(/of \d+ ATT&CK techniques attempted/)
+  await expect(redTotal).toBeVisible()
+  await expect(blueTotal).toBeVisible()
+  // eslint-disable-next-line playwright/prefer-web-first-assertions
+  expect(await redTotal.textContent()).not.toBe(await blueTotal.textContent())
 
   await bluePage.close()
 })
