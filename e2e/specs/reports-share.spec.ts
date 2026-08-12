@@ -59,17 +59,26 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible()
 
-  // ── Create an engagement (needed for reports) ──────────────────────────────
+  // ── Create engagement via API (avoids UI Select timing issues) ─────────────
+  await page.evaluate(
+    async ([name, version]) => {
+      const resp = await fetch('/api/v1/engagements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, attackVersion: version, mode: 'standard' }),
+      })
+      if (!resp.ok) throw new Error(`create engagement: ${resp.status}`)
+      const body = await resp.json()
+      return (body as { id: string }).id
+    },
+    ['Share Test Engagement', '15.1'],
+  )
+
+  // Reload the page so the engagement list is current.
+  await page.reload()
   await page.getByRole('link', { name: 'Engagements' }).click()
-  await page.getByRole('button', { name: 'New engagement' }).first().click()
-  await page.getByLabel('Name').fill('Share Test Engagement')
-  // Select ATT&CK version (required field).
-  // Select must be visible AND the popover must open before we can click an option.
-  await page.waitForSelector('#create-attack')
-  await page.locator('#create-attack').click()
-  await page.waitForSelector('[role="listbox"]')
-  await page.getByRole('option', { name: /15\.1/ }).click()
-  await page.getByRole('button', { name: 'Create' }).click()
+  await expect(page.getByText('Share Test Engagement')).toBeVisible()
+  await page.getByText('Share Test Engagement').click()
   await expect(page.getByRole('heading', { name: 'Share Test Engagement' })).toBeVisible()
 
   // Navigate to reports tab
