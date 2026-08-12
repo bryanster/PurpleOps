@@ -51,6 +51,7 @@ test('publish creates a share, viewer can access, revoke returns 404', async ({
 
   // ── Create engagement via page.evaluate (has auth cookies after sign-in) ───
   const engagementId = await page.evaluate(async (data) => {
+    // @ts-expect-error: page.evaluate runs in browser context with DOM types
     const csrfToken = document.cookie.split('; ').find((c) => c.startsWith('bl_csrf='))?.split('=')[1] ?? ''
     const resp = await fetch('/api/v1/engagements', {
       method: 'POST',
