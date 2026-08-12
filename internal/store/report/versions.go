@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
@@ -212,12 +211,12 @@ func HashBytes(data []byte) string {
 
 // jsonOrDefault returns the JSON message as a string, or fallback when empty.
 // blocks_json and branding_json are NOT NULL columns; an empty draft must store
-// valid JSON ('[]' / '{}') rather than NULL, or the read-back scan into json.RawMessage fails.
-func jsonOrDefault(raw json.RawMessage, fallback string) any {
-	if len(raw) == 0 || string(raw) == "null" {
+// valid JSON ('[]' / '{}') rather than NULL, or the read-back scan fails.
+func jsonOrDefault(raw string, fallback string) any {
+	if raw == "" || raw == "null" {
 		return fallback
 	}
-	return string(raw)
+	return raw
 }
 
 func strPtr(s string) *string {

@@ -1,7 +1,6 @@
 package report
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -17,8 +16,8 @@ type ReportVersion struct {
 	PublishedAt     time.Time
 	IncludeEvidence bool
 	BlindScope      string
-	BlocksJSON      json.RawMessage
-	BrandingJSON    json.RawMessage
+	BlocksJSON      string
+	BrandingJSON    string
 	HTML            string
 	ContentSHA256   *string
 	PDFSHA256       *string
@@ -32,8 +31,8 @@ type NewVersion struct {
 	PublishedBy     string
 	IncludeEvidence bool
 	BlindScope      string
-	BlocksJSON      json.RawMessage
-	BrandingJSON    json.RawMessage
+	BlocksJSON      string
+	BrandingJSON    string
 	HTML            string
 	ContentSHA256   string
 }

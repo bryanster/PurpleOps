@@ -133,8 +133,8 @@ func (s *PublishService) Publish(ctx context.Context, env RenderEnv, in PublishI
 		PublishedBy:     in.PublishedBy,
 		IncludeEvidence: in.IncludeEvidence,
 		BlindScope:      "lead_full",
-		BlocksJSON:      blocksJSON,
-		BrandingJSON:    brandingJSON,
+		BlocksJSON:      string(blocksJSON),
+		BrandingJSON:    string(brandingJSON),
 		HTML:            string(doc.HTML),
 		ContentSHA256:   contentHash,
 	})
