@@ -13,9 +13,16 @@ import (
 // ---------------------------------------------------------------------------
 // Column constants
 // ---------------------------------------------------------------------------
-
 const versionColumns = `id, report_id, ordinal, title, published_by, published_at,
 	include_evidence, blind_scope, blocks_json, branding_json, html,
+	content_sha256, pdf_sha256`
+
+// versionSelectColumns is versionColumns with the two JSON columns cast to
+// VARCHAR. DuckDB scans a JSON column as a parsed value ([]interface{} /
+// map[string]interface{}), which database/sql cannot store in json.RawMessage;
+// casting to VARCHAR returns the raw JSON text.
+const versionSelectColumns = `id, report_id, ordinal, title, published_by, published_at,
+	include_evidence, blind_scope, CAST(blocks_json AS VARCHAR), CAST(branding_json AS VARCHAR), html,
 	content_sha256, pdf_sha256`
 
 // ---------------------------------------------------------------------------
@@ -89,7 +96,7 @@ func (v *Versions) Insert(ctx context.Context, in NewVersion, after ...After) (R
 func (v *Versions) ByID(ctx context.Context, id string) (ReportVersion, error) {
 	var ver ReportVersion
 	err := v.db.Read().QueryRowContext(ctx,
-		`SELECT `+versionColumns+` FROM app.report_version WHERE id = ?`, id,
+		`SELECT `+versionSelectColumns+` FROM app.report_version WHERE id = ?`, id,
 	).Scan(
 		&ver.ID, &ver.ReportID, &ver.Ordinal, &ver.Title, &ver.PublishedBy,
 		&ver.PublishedAt, &ver.IncludeEvidence, &ver.BlindScope,
@@ -108,7 +115,7 @@ func (v *Versions) ByID(ctx context.Context, id string) (ReportVersion, error) {
 // ListByReport returns every version of a report, newest first.
 func (v *Versions) ListByReport(ctx context.Context, reportID string) ([]ReportVersion, error) {
 	rows, err := v.db.Read().QueryContext(ctx,
-		`SELECT `+versionColumns+`
+		`SELECT `+versionSelectColumns+`
 		 FROM app.report_version
 		 WHERE report_id = ?
 		 ORDER BY ordinal DESC`, reportID,
