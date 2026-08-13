@@ -285,7 +285,7 @@ immediately.** **M7-009** is the exit gate. **M7-010…M7-012** are High finding
 | [M7-007](done/M7-007-security-review.md) ✅ | Security review pass (checklist) | L |
 | [M7-008](done/M7-008-performance-sanity.md) ✅ | Performance sanity pass (re-run gates + report load) | M |
 | [M7-009](M7-009-ship-v1.md) | Ship gate: `v1.0.0` release | M |
-| [M7-010](M7-010-engagement-list-authz.md) | Engagement list leaks every engagement (BL-001, High) | S |
+| [M7-010](done/M7-010-engagement-list-authz.md) ✅ | Engagement list leaks every engagement (BL-001, High) | S |
 | [M7-011](M7-011-ownership-facts-loader.md) | Replace production Ownership.Facts stub (BL-003, High) | L |
 | [M7-012](M7-012-cross-engagement-idor.md) | Bind nested IDs to the authorized engagement (BL-002, High) | L |
 | [M7-013](M7-013-share-token-logging.md) | Share tokens in logs; unthrottled claim/password (BL-005, Medium) | M |

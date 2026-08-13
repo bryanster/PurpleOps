@@ -28,7 +28,12 @@ func (h *handlers) ListEngagements(ctx context.Context,
 	}
 	filter.Limit = limitParam(request.Params.Limit)
 
-	items, err := h.engagements.List(ctx, filter)
+	actor, err := subjectFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := h.engagements.List(ctx, actor, filter)
 	if err != nil {
 		return nil, err
 	}

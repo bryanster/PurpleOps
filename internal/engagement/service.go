@@ -172,16 +172,20 @@ type ListFilter struct {
 	Limit  int
 }
 
-// List returns a page of engagements visible to the caller.
-// For admins this returns all engagements; for members only their own.
-// The decision of which filter to apply is made by the handler (or a separate
-// list-mode parameter), not here.
-func (s *Service) List(ctx context.Context, filter ListFilter) ([]storengagement.Engagement, error) {
-	return s.engagements.List(ctx, storengagement.ListFilter{
+// List returns a page of engagements visible to the caller. Admins see every
+// engagement; members see only the ones they belong to. The membership fence is
+// applied here, from the caller's platform role and user id, so no handler can
+// forget to filter.
+func (s *Service) List(ctx context.Context, actor authn.Subject, filter ListFilter) ([]storengagement.Engagement, error) {
+	storeFilter := storengagement.ListFilter{
 		Status: filter.Status,
 		After:  filter.After,
 		Limit:  filter.Limit,
-	})
+	}
+	if actor.PlatformRole != authz.PlatformRoleAdmin {
+		storeFilter.MemberID = actor.UserID
+	}
+	return s.engagements.List(ctx, storeFilter)
 }
 
 // UpdateInput is the caller's half of patching an engagement.

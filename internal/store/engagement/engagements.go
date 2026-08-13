@@ -265,20 +265,29 @@ const listEngagementsBase = selectEngagement + `WHERE 1=1 `
 
 // ListFilter narrows the engagement list.
 type ListFilter struct {
-	Status string // empty means no filter
-	After  string // cursor: id of the last row from the previous page
-	Limit  int    // max rows; 0 means the caller's default
+	Status   string // empty means no filter
+	After    string // cursor: id of the last row from the previous page
+	Limit    int    // max rows; 0 means the caller's default
+	MemberID string // when set, only engagements this user belongs to are returned
 }
 
 // List returns a page of engagements, newest first by created_at descending,
 // with id as the stable tiebreaker.
 func (r *Engagements) List(ctx context.Context, filter ListFilter) ([]Engagement, error) {
-	args := make([]any, 0, 3)
+	args := make([]any, 0, 4)
 	query := listEngagementsBase
 
+	if filter.MemberID != "" {
+		query += `AND id IN (SELECT engagement_id FROM app.engagement_member WHERE user_id = ?) `
+		args = append(args, filter.MemberID)
+	}
+
 	if filter.After != "" {
-		query += `AND (created_at, id) < (SELECT created_at, id FROM app.engagement WHERE id = ?) `
-		args = append(args, filter.After)
+		// DuckDB rejects a two-column scalar subquery in a row comparison, so
+		// the cursor is expanded into an OR over created_at with id as the
+		// tiebreaker — the same shape activity.List uses.
+		query += `AND (created_at < (SELECT created_at FROM app.engagement WHERE id = ?) OR (created_at = (SELECT created_at FROM app.engagement WHERE id = ?) AND id < ?)) `
+		args = append(args, filter.After, filter.After, filter.After)
 	}
 	if filter.Status != "" {
 		query += `AND status = ? `
