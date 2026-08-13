@@ -787,6 +787,8 @@ func (r *Runner) finalizeSuccess(ctx context.Context, src storecontent.Source, b
 }
 
 func (r *Runner) succeedJob(ctx context.Context, job storecontent.Job, src storecontent.Source, result pipelineResult, finished time.Time) error {
+	r.cleanupJobUpload(job)
+
 	itemCount := result.count
 	version := result.version
 	if version == "" {
@@ -835,6 +837,8 @@ func (r *Runner) succeedJob(ctx context.Context, job storecontent.Job, src store
 }
 
 func (r *Runner) failJob(ctx context.Context, job storecontent.Job, version string, cause error) error {
+	r.cleanupJobUpload(job)
+
 	msg := cause.Error()
 	finished := time.Now().UTC()
 	if _, err := r.jobs.Update(ctx, job.ID, storecontent.JobUpdate{
@@ -880,6 +884,8 @@ func (r *Runner) failJob(ctx context.Context, job storecontent.Job, version stri
 }
 
 func (r *Runner) cancelJob(ctx context.Context, job storecontent.Job, src storecontent.Source, finished time.Time) error {
+	r.cleanupJobUpload(job)
+
 	if _, err := r.jobs.Update(ctx, job.ID, storecontent.JobUpdate{
 		Status:          storecontent.JobStatusCancelled,
 		Phase:           job.Phase,

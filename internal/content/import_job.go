@@ -86,6 +86,8 @@ func (r *Runner) executeV1Import(parent context.Context, job storecontent.Job) e
 		// Prefer absolute library size when we can list — but TotalWritten is
 		// the delta for this run, which is what operators care about in the
 		// job row. Source item_count is left to a cheap recount below.
+		r.cleanupJobUpload(job)
+
 		if _, err := r.jobs.Update(parent, current.ID, storecontent.JobUpdate{
 			Status:          storecontent.JobStatusSucceeded,
 			Phase:           PhaseFinalize,

@@ -487,11 +487,9 @@ export function useRevokeShare(): UseMutationResult<
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ shareId }) => {
-      unwrap(
-        await api.DELETE('/report-shares/{shareId}', {
-          params: { path: { shareId } },
-        }),
-      )
+      await api.DELETE('/report-shares/{shareId}', {
+        params: { path: { shareId } },
+      })
     },
     onSuccess: (_data, { versionId }) => {
       void queryClient.invalidateQueries({
@@ -509,11 +507,9 @@ export function useRevokeGrant(): UseMutationResult<
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ shareId, grantId }) => {
-      unwrap(
-        await api.DELETE('/report-shares/{shareId}/grants/{grantId}', {
-          params: { path: { shareId, grantId } },
-        }),
-      )
+      await api.DELETE('/report-shares/{shareId}/grants/{grantId}', {
+        params: { path: { shareId, grantId } },
+      })
     },
     onSuccess: (_data, { versionId }) => {
       void queryClient.invalidateQueries({
@@ -586,6 +582,7 @@ export function shareHtmlQueryOptions(token: string | undefined) {
       return unwrap(
         await api.GET('/report-views/{token}/html', {
           params: { path: { token } },
+          parseAs: 'text',
         }),
       )
     },

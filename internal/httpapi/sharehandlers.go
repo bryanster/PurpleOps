@@ -140,6 +140,9 @@ func (h *handlers) GetReportShareInfo(ctx context.Context,
 
 	_, share, err := h.shareSvc.GetShareVersion(ctx, request.Token)
 	if err != nil {
+		if errors.Is(err, apierr.ErrNotFound) {
+			return gen.GetReportShareInfo200JSONResponse(gen.ReportShareInfo{Exists: false}), nil
+		}
 		return nil, err
 	}
 
