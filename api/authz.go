@@ -63,6 +63,7 @@ const (
 	resourceType       = "type"
 	resourceParam      = "param"
 	resourceEngagement = "engagement"
+	resourceKind       = "kind"
 )
 
 // Requirement is what one operation requires of its caller.
@@ -141,6 +142,12 @@ type ResourceRef struct {
 	// that cannot say which engagement owns it is one [authz.Can] denies rather
 	// than treats as unowned, and "unowned" would mean "no membership needed".
 	Engagement string
+
+	// Kind names the concrete entity to walk when the resource type is broader
+	// than the thing [Param] identifies — `report` covers report, template,
+	// version and share, and `evidence` upload is addressed by its execution.
+	// Empty means the kind is the resource type itself.
+	Kind string
 }
 
 // Requirements returns what every operation in doc requires of its caller,
@@ -376,12 +383,11 @@ func parseResource(where string, item *openapi3.PathItem, op *openapi3.Operation
 			where, extResource, raw, resourceType)
 	}
 	for _, key := range slices.Sorted(maps.Keys(fields)) {
-		if key != resourceType && key != resourceParam && key != resourceEngagement {
-			return ResourceRef{}, fmt.Errorf("%s declares %s.%s, which is not one of %s, %s, %s",
-				where, extResource, key, resourceType, resourceParam, resourceEngagement)
+		if key != resourceType && key != resourceParam && key != resourceEngagement && key != resourceKind {
+			return ResourceRef{}, fmt.Errorf("%s declares %s.%s, which is not one of %s, %s, %s, %s",
+				where, extResource, key, resourceType, resourceParam, resourceEngagement, resourceKind)
 		}
 	}
-
 	ref := ResourceRef{}
 	name, err := field(where, fields, resourceType, true)
 	if err != nil {
@@ -394,6 +400,9 @@ func parseResource(where string, item *openapi3.PathItem, op *openapi3.Operation
 	if ref.Engagement, err = field(where, fields, resourceEngagement, false); err != nil {
 		return ResourceRef{}, err
 	}
+	if ref.Kind, err = field(where, fields, resourceKind, false); err != nil {
+		return ResourceRef{}, err
+	}
 
 	// The action already knows what it acts on. Naming it again in the document
 	// is for whoever reads the endpoint rather than the rule table — and this is
@@ -402,15 +411,18 @@ func parseResource(where string, item *openapi3.PathItem, op *openapi3.Operation
 		return ResourceRef{}, fmt.Errorf("%s acts on a %s according to %s, and %s acts on a %s",
 			where, ref.Type, extResource, action, want)
 	}
-
 	switch scoped := ref.Type.EngagementScoped(); {
-	case scoped && ref.Engagement == "":
+	case scoped && ref.Engagement == "" && ref.Param == "":
 		return ResourceRef{}, fmt.Errorf("%s acts on a %s, which belongs to an engagement, and names no %s "+
-			"path parameter. A resource that cannot say which engagement owns it is one nobody needs a membership for",
-			where, ref.Type, resourceEngagement)
+			"path parameter and no %s parameter to derive the owner from. A resource that cannot say which "+
+			"engagement owns it is one nobody needs a membership for",
+			where, ref.Type, resourceEngagement, resourceParam)
 	case !scoped && ref.Engagement != "":
 		return ResourceRef{}, fmt.Errorf("%s acts on a %s, which belongs to the installation and not to an "+
 			"engagement, and names the %s parameter %q", where, ref.Type, resourceEngagement, ref.Engagement)
+	}
+	if err := checkKind(where, ref); err != nil {
+		return ResourceRef{}, err
 	}
 
 	declared := pathParameters(item, op)
@@ -437,6 +449,42 @@ func field(where string, fields map[string]any, key string, required bool) (stri
 		return "", fmt.Errorf("%s declares %s.%s: %v, want a non-empty string", where, extResource, key, raw)
 	}
 	return value, nil
+}
+
+// resourceKinds says which concrete entity a `kind` value walks, and which
+// resource type may name it. `kind` exists for the two cases where the authz
+// resource type is broader than the thing the path parameter identifies: report
+// (report, template, version, share) and evidence (an upload addressed by its
+// execution).
+var resourceKinds = map[string]authz.ResourceType{
+	"report":    authz.ResourceReport,
+	"template":  authz.ResourceReport,
+	"version":   authz.ResourceReport,
+	"share":     authz.ResourceReport,
+	"execution": authz.ResourceEvidence,
+}
+
+// checkKind validates x-authz-resource.kind against the resource type it
+// belongs to. A misspelled kind is a startup failure rather than a loader that
+// guesses, for the same reason an unknown key is.
+func checkKind(where string, ref ResourceRef) error {
+	if ref.Kind == "" {
+		return nil
+	}
+	want, ok := resourceKinds[ref.Kind]
+	if !ok {
+		return fmt.Errorf("%s declares %s.kind %q, which is not a concrete resource kind",
+			where, extResource, ref.Kind)
+	}
+	if ref.Type != want {
+		return fmt.Errorf("%s declares %s.kind %q, which names a %s and not a %s",
+			where, extResource, ref.Kind, want, ref.Type)
+	}
+	if ref.Param == "" {
+		return fmt.Errorf("%s declares %s.kind %q but no %s parameter identifies it",
+			where, extResource, ref.Kind, resourceParam)
+	}
+	return nil
 }
 
 // resourceOf returns the resource type an action acts on, from the one rule that

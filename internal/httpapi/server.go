@@ -85,9 +85,8 @@ type Deps struct {
 	UI fs.FS
 
 	// Ownership loads the facts an engagement-scoped authorization decision
-	// needs (M1-013). Nil defaults to a membership-table loader sufficient for
-	// the activity feed (M1-015); M3 replaces it with one that also knows
-	// whether an engagement exists and whether it runs blind.
+	// needs (M1-013). Nil defaults to the store-backed loader that walks a
+	// resource to its owning engagement (M7-011); tests may substitute a fake.
 	Ownership Ownership
 
 	// ContentAdapters registers kind→adapter implementations on the content
@@ -139,9 +138,10 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 		log = slog.Default()
 	}
 	if deps.Ownership == nil {
-		// Engagement-scoped routes (the activity feed today) need a loader.
-		// Memberships are enough until M3 owns engagements themselves.
-		deps.Ownership = NewMembershipOwnership(identity.NewMemberships(deps.Store))
+		// The store-backed loader: Facts walks the named row to its owning
+		// engagement, so blind mode and child-id mismatch are answered the same
+		// way as a missing row.
+		deps.Ownership = NewOwnership(deps.Store)
 	}
 	responder := apierr.NewResponder(log)
 

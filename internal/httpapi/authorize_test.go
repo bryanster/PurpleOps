@@ -295,19 +295,33 @@ func TestAuthorizeRefusesEngagementOpsWithoutALoader(t *testing.T) {
 	}
 }
 
-// TestNewServerDefaultsOwnershipForEngagementOps is the production path:
-// leaving Deps.Ownership nil installs a membership-backed loader so the
-// activity feed (M1-015) can start before M3 owns engagements.
-func TestNewServerDefaultsOwnershipForEngagementOps(t *testing.T) {
+// TestNewServerDefaultsOwnershipToTheStoreBackedLoader is the production path:
+// leaving Deps.Ownership nil installs the loader that walks a resource to its
+// owning engagement (M7-011). The stub that treated any path string as an
+// engagement is gone; this proves the default refuses a missing engagement even
+// to a platform admin, which the stub let through.
+func TestNewServerDefaultsOwnershipToTheStoreBackedLoader(t *testing.T) {
 	t.Parallel()
 
-	deps := Deps{Config: testConfig(t), Store: stubStore{}, DisableContentRunner: true} // no Ownership
-	server, err := newServer(deps, fixtureSpec(t, engagementSpec), nil)
+	logs := &logBuffer{}
+	deps := Deps{
+		Config:               testConfig(t),
+		Store:                storetest.Migrated(t),
+		DisableContentRunner: true,
+		Logger:               logs.logger(),
+		// Ownership deliberately nil: newServer must install the store-backed walk.
+	}
+	server, err := newServer(deps, fixtureSpec(t, engagementSpec), func(r chi.Router) {
+		r.Get("/engagements/{engagementId}/steps", panicHandler(t))
+	})
 	if err != nil {
 		t.Fatalf("newServer with default Ownership: %v", err)
 	}
-	if server == nil {
-		t.Fatal("nil server")
+
+	rec := do(server, asMember(t, "admin", authz.PlatformRoleAdmin,
+		httptest.NewRequest(http.MethodGet, BasePath+"/engagements/01900000-ffff-7000-8000-000000000000/steps", nil)))
+	if got, want := rec.Code, http.StatusNotFound; got != want {
+		t.Errorf("GET a missing engagement as admin = %d, want %d\nbody: %s", got, want, rec.Body.String())
 	}
 }
 

@@ -323,6 +323,47 @@ func TestASelfOperationCannotNameAnotherResource(t *testing.T) {
 	}
 }
 
+// reportSpec is a fixture for the report family, where `kind` disambiguates
+// report / template / version / share (M7-011).
+const reportSpec = `
+openapi: 3.1.0
+info: {title: report fixture, version: 1.0.0}
+servers: [{url: /api/v1}]
+paths:
+  /engagements/{engagementId}/reports/{reportId}:
+    parameters:
+      - {name: engagementId, in: path, required: true, schema: {type: string}}
+      - {name: reportId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getReport
+      summary: Read one report.
+      x-authz-action: report.read
+      x-authz-resource: {type: report, engagement: engagementId, param: reportId}
+      responses: {"200": {description: ok}}
+`
+
+// TestReportKindIsValidated holds the x-authz-resource.kind field to fail
+// closed: a known kind is accepted, a misspelled one is refused by name, and a
+// kind that belongs to a different resource type is refused.
+func TestReportKindIsValidated(t *testing.T) {
+	spec := strings.Replace(reportSpec, "param: reportId}", "param: reportId, kind: template}", 1)
+	if _, err := Requirements(fixture(t, spec)); err != nil {
+		t.Fatalf("a known report kind was refused: %v", err)
+	}
+
+	spec = strings.Replace(reportSpec, "param: reportId}", "param: reportId, kind: templat}", 1)
+	if _, err := Requirements(fixture(t, spec)); err == nil {
+		t.Fatal("an unknown report kind was accepted")
+	} else if !strings.Contains(err.Error(), `"templat"`) {
+		t.Errorf("error = %q, want it to name the bad kind", err)
+	}
+
+	spec = strings.Replace(reportSpec, "param: reportId}", "param: reportId, kind: execution}", 1)
+	if _, err := Requirements(fixture(t, spec)); err == nil {
+		t.Fatal("a kind for the wrong resource type was accepted")
+	}
+}
+
 // fixture parses one of the inline documents above. They are not run through
 // [load], which enforces conventions this package's real spec follows and these
 // small documents deliberately do not — the subject here is the authorization

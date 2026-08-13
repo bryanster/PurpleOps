@@ -54,14 +54,14 @@ This is the root control failure. Fix it before, or in the same PR as, M7-012 �
 
 ## Acceptance criteria
 
-- [ ] Production `Facts` opens the named row. A missing row is `NotFound`, not “exists, not blind, revealed”.
-- [ ] `Facts` for a scenario/step/execution/evidence/finding/report/template/share returns that
+- [x] Production `Facts` opens the named row. A missing row is `NotFound`, not “exists, not blind, revealed”.
+- [x] `Facts` for a scenario/step/execution/evidence/finding/report/template/share returns that
       object’s owning engagement id.
-- [ ] A nested route whose path `engagementId` disagrees with the loaded owner is 404.
-- [ ] `GuardBlindMode` can fire: a blue member of a blind engagement is 404’d by middleware on
+- [x] A nested route whose path `engagementId` disagrees with the loaded owner is 404.
+- [x] `GuardBlindMode` can fire: a blue member of a blind engagement is 404’d by middleware on
       `execution.read` / `evidence.read` for an unrevealed step (handlers may still re-check).
-- [ ] `cmd/blacklight` no longer depends on the M1 “engagements do not exist yet” loader.
-- [ ] `TestNewServerDefaultsOwnershipForEngagementOps` is rewritten or deleted so it cannot
+- [x] `cmd/blacklight` no longer depends on the M1 “engagements do not exist yet” loader.
+- [x] `TestNewServerDefaultsOwnershipForEngagementOps` is rewritten or deleted so it cannot
       re-bless the stub as the production path.
 
 ## Tests
@@ -79,3 +79,17 @@ chain (evidence → execution → step → scenario → engagement, etc.). Cache
 `Seat` stays on the *owning* engagement id Facts returned, never on the child UUID.
 
 This ticket is a ship gate for `M7-009`. High findings do not defer.
+
+## Implementation notes
+
+- `ownership` (in `internal/httpapi/ownership.go`) replaces `membershipOwnership`. `NewOwnership(store.Store)`
+  builds the engagement and report repositories and walks the parent chain per resource type; `newServer`
+  installs it when `Deps.Ownership` is nil, and `cmd/blacklight` needs no change.
+- Added `x-authz-resource.kind` (`api/authz.go`, both `ResourceRef` types, `checkKind`) to disambiguate the
+  report family (report/template/version/share) and `evidence` upload (addressed by its `execution`). Spec
+  mappings on the child-id routes were corrected to name `engagementId` where the path has one, and to drop
+  the bogus child-id `engagement:` label where it does not.
+- `Facts` normalises a store miss to `apierr.NotFound`: the store packages disagree on whether a missing row
+  is `sql.ErrNoRows` or `apierr.ErrNotFound`, and concealed denial must be indistinguishable from a missing id.
+- Tests: `ownership_test.go` covers every walk, missing rows, and cross-engagement mismatch; the blind-mode
+  middleware regression and the admin-non-member case drive the default loader end to end.

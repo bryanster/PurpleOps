@@ -93,6 +93,9 @@ type ResourceRef struct {
 	// EngagementID is the engagement named in the path. Empty for a
 	// platform-scoped resource.
 	EngagementID string
+	// Kind is the concrete entity to walk when the resource type is broader
+	// than the thing ID identifies. Empty means the kind is the type itself.
+	Kind string
 }
 
 // ResourceFacts is what a loader found: the ownership state [authz.Can] reads.
@@ -381,6 +384,7 @@ func facts(ctx context.Context, requirement api.Requirement, route specRoute, ca
 		Type:         requirement.Resource.Type,
 		ID:           route.PathParams[requirement.Resource.Param],
 		EngagementID: route.PathParams[requirement.Resource.Engagement],
+		Kind:         requirement.Resource.Kind,
 	}
 	// `x-authz-resource: {type: engagement, engagement: engagementId}` names the
 	// engagement once, and it is both the resource and its owner.

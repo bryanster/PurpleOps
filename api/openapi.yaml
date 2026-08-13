@@ -3452,7 +3452,7 @@ paths:
       x-authz-action: evidence.write
       x-authz-resource:
         type: evidence
-        engagement: executionId
+        kind: execution
         param: executionId
       parameters:
         - $ref: "#/components/parameters/ExecutionId"
@@ -3497,7 +3497,6 @@ paths:
       x-authz-action: execution.read
       x-authz-resource:
         type: execution
-        engagement: executionId
         param: executionId
       parameters:
         - $ref: "#/components/parameters/ExecutionId"
@@ -3531,7 +3530,6 @@ paths:
       x-authz-action: evidence.read
       x-authz-resource:
         type: evidence
-        engagement: evidenceId
         param: evidenceId
       parameters:
         - $ref: "#/components/parameters/EvidenceId"
@@ -3564,7 +3562,6 @@ paths:
       x-authz-action: evidence.write
       x-authz-resource:
         type: evidence
-        engagement: evidenceId
         param: evidenceId
       parameters:
         - $ref: "#/components/parameters/EvidenceId"
@@ -3594,7 +3591,6 @@ paths:
       x-authz-action: evidence.read
       x-authz-resource:
         type: evidence
-        engagement: evidenceId
         param: evidenceId
       parameters:
         - $ref: "#/components/parameters/EvidenceId"
@@ -5703,7 +5699,6 @@ paths:
       x-authz-resource:
         type: finding
         engagement: engagementId
-        param: engagementId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/CSRFToken"
@@ -5745,7 +5740,6 @@ paths:
       x-authz-action: finding.read
       x-authz-resource:
         type: finding
-        engagement: findingId
         param: findingId
       parameters:
         - $ref: "#/components/parameters/FindingId"
@@ -5777,7 +5771,6 @@ paths:
       x-authz-action: finding.write
       x-authz-resource:
         type: finding
-        engagement: findingId
         param: findingId
       parameters:
         - $ref: "#/components/parameters/FindingId"
@@ -5819,7 +5812,6 @@ paths:
       x-authz-action: finding.write
       x-authz-resource:
         type: finding
-        engagement: findingId
         param: findingId
       parameters:
         - $ref: "#/components/parameters/FindingId"
@@ -5851,7 +5843,6 @@ paths:
       x-authz-action: finding.write
       x-authz-resource:
         type: finding
-        engagement: findingId
         param: findingId
       parameters:
         - $ref: "#/components/parameters/FindingId"
@@ -6283,7 +6274,8 @@ paths:
       x-authz-action: report.read
       x-authz-resource:
         type: report
-        engagement: reportId
+        engagement: engagementId
+        param: reportId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6317,7 +6309,8 @@ paths:
       x-authz-action: report.write
       x-authz-resource:
         type: report
-        engagement: reportId
+        engagement: engagementId
+        param: reportId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6355,7 +6348,8 @@ paths:
       x-authz-action: report.write
       x-authz-resource:
         type: report
-        engagement: reportId
+        engagement: engagementId
+        param: reportId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6388,7 +6382,8 @@ paths:
       x-authz-action: report.write
       x-authz-resource:
         type: report
-        engagement: reportId
+        engagement: engagementId
+        param: reportId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6531,7 +6526,8 @@ paths:
       x-authz-action: report.publish
       x-authz-resource:
         type: report
-        engagement: reportId
+        engagement: engagementId
+        param: reportId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6789,7 +6785,9 @@ paths:
       x-authz-action: report.read
       x-authz-resource:
         type: report
-        engagement: templateId
+        engagement: engagementId
+        param: templateId
+        kind: template
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/TemplateId"
@@ -6820,7 +6818,9 @@ paths:
       x-authz-action: report.write
       x-authz-resource:
         type: report
-        engagement: templateId
+        engagement: engagementId
+        param: templateId
+        kind: template
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/TemplateId"
@@ -6859,7 +6859,9 @@ paths:
       x-authz-action: report.write
       x-authz-resource:
         type: report
-        engagement: templateId
+        engagement: engagementId
+        param: templateId
+        kind: template
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/TemplateId"
@@ -6890,7 +6892,8 @@ paths:
       x-authz-action: report.write
       x-authz-resource:
         type: report
-        engagement: reportId
+        engagement: engagementId
+        param: reportId
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6974,7 +6977,8 @@ paths:
       x-authz-action: report.publish
       x-authz-resource:
         type: report
-        engagement: versionId
+        param: versionId
+        kind: version
       parameters:
         - $ref: "#/components/parameters/VersionId"
       responses:
@@ -7008,7 +7012,8 @@ paths:
       x-authz-action: report.publish
       x-authz-resource:
         type: report
-        engagement: versionId
+        param: versionId
+        kind: version
       parameters:
         - $ref: "#/components/parameters/VersionId"
         - $ref: "#/components/parameters/CSRFToken"
@@ -7046,7 +7051,8 @@ paths:
       x-authz-action: report.publish
       x-authz-resource:
         type: report
-        engagement: shareId
+        param: shareId
+        kind: share
       parameters:
         - name: shareId
           in: path
@@ -7079,7 +7085,8 @@ paths:
       x-authz-action: report.publish
       x-authz-resource:
         type: report
-        engagement: shareId
+        param: shareId
+        kind: share
       parameters:
         - name: shareId
           in: path
