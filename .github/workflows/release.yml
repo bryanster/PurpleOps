@@ -122,7 +122,7 @@ jobs:
         id: changelog
         run: |
           section="$(awk -v ver="${{ steps.version.outputs.tag }}" '
-            BEGIN { in_section=0 }
+            BEGIN { in_section=0; sub(/^v/, "", ver) }
             /^## \[/ {
               if (in_section) exit
               if ($2 == "[" ver "]") in_section=1
