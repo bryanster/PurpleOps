@@ -73,6 +73,11 @@ func New(chromePath string, timeout time.Duration) (*Printer, error) {
 		// Ubuntu 24.04+ restricts unprivileged user namespaces via
 		// AppArmor; --no-sandbox is required in CI and dev containers.
 		chromedp.Flag("no-sandbox", true),
+		// CI runners under `go test -race` can take longer than chromedp's
+		// default 20s to start Chromium; the launch then fails with
+		// "websocket url timeout reached". Give browser startup its own,
+		// generous window, independent of the per-render timeout.
+		chromedp.WSURLReadTimeout(60*time.Second),
 	)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
