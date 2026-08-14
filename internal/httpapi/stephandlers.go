@@ -22,7 +22,7 @@ func (h *handlers) ListSteps(ctx context.Context,
 		return nil, err
 	}
 
-	steps, err := h.engagements.ListSteps(ctx, request.ScenarioId.String(), scope)
+	steps, err := h.engagements.ListSteps(ctx, request.EngagementId.String(), request.ScenarioId.String(), scope)
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +48,9 @@ func (h *handlers) CreateStep(ctx context.Context,
 	}
 
 	in := engagement.CreateStepInput{
-		ScenarioID: request.ScenarioId.String(),
-		Name:       request.Body.Name,
+		EngagementID: request.EngagementId.String(),
+		ScenarioID:   request.ScenarioId.String(),
+		Name:         request.Body.Name,
 	}
 	if request.Body.Objective != nil {
 		in.Objective = *request.Body.Objective
@@ -115,7 +116,7 @@ func (h *handlers) GetStep(ctx context.Context,
 		return nil, err
 	}
 
-	step, err := h.engagements.GetStep(ctx, request.StepId.String())
+	step, err := h.engagements.GetStepInEngagement(ctx, request.EngagementId.String(), request.StepId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func (h *handlers) PatchStep(ctx context.Context,
 		in.ControlsInScope = raw
 	}
 
-	step, err := h.engagements.PatchStep(ctx, subject, request.StepId.String(), in)
+	step, err := h.engagements.PatchStep(ctx, subject, request.EngagementId.String(), request.StepId.String(), in)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +186,7 @@ func (h *handlers) DeleteStep(ctx context.Context,
 		return nil, err
 	}
 
-	if err := h.engagements.DeleteStep(ctx, subject, request.StepId.String()); err != nil {
+	if err := h.engagements.DeleteStep(ctx, subject, request.EngagementId.String(), request.StepId.String()); err != nil {
 		return nil, err
 	}
 
@@ -209,7 +210,7 @@ func (h *handlers) ReorderSteps(ctx context.Context,
 		ids[i] = id.String()
 	}
 
-	steps, err := h.engagements.ReorderSteps(ctx, subject, request.ScenarioId.String(), ids)
+	steps, err := h.engagements.ReorderSteps(ctx, subject, request.EngagementId.String(), request.ScenarioId.String(), ids)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +237,7 @@ func (h *handlers) RevealStep(ctx context.Context,
 		return nil, err
 	}
 
-	step, err := h.engagements.RevealStep(ctx, subject, request.StepId.String())
+	step, err := h.engagements.RevealStep(ctx, subject, request.EngagementId.String(), request.StepId.String())
 	if err != nil {
 		return nil, err
 	}

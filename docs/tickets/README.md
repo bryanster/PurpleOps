@@ -71,7 +71,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M4 — Collaboration | ✅ done — 10/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](done/M4-EPIC.md) |
 | M5 — Analytics | ✅ done — 15/15 | [15 tickets](#m5--analytics) · [`M5-EPIC.md`](done/M5-EPIC.md) |
 | M6 — Reporting | ✅ done — 15/15 | [15 tickets](#m6--reporting) · [`M6-EPIC.md`](done/M6-EPIC.md) |
-| M7 — Cutover | in progress — 10/14 | [14 tickets](#m7--cutover) · [`M7-EPIC.md`](M7-EPIC.md) |
+| M7 — Cutover | in progress — 11/14 | [14 tickets](#m7--cutover) · [`M7-EPIC.md`](M7-EPIC.md) |
 
 
 > **M0a note:** the annotated tag **`v1-final`** exists at `c053fb741ba953bc8f2e151c05f966db813ec8fc`.
@@ -287,6 +287,6 @@ immediately.** **M7-009** is the exit gate. **M7-010…M7-012** are High finding
 | [M7-009](M7-009-ship-v1.md) | Ship gate: `v1.0.0` release | M |
 | [M7-010](done/M7-010-engagement-list-authz.md) ✅ | Engagement list leaks every engagement (BL-001, High) | S |
 | [M7-011](done/M7-011-ownership-facts-loader.md) ✅ | Replace production Ownership.Facts stub (BL-003, High) | L |
-| [M7-012](M7-012-cross-engagement-idor.md) | Bind nested IDs to the authorized engagement (BL-002, High) | L |
+| [M7-012](done/M7-012-cross-engagement-idor.md) ✅ | Bind nested IDs to the authorized engagement (BL-002, High) | L |
 | [M7-013](M7-013-share-token-logging.md) | Share tokens in logs; unthrottled claim/password (BL-005, Medium) | M |
 | [M7-014](M7-014-content-sync-ssrf.md) | Content sync SSRF allowlist (BL-004, Medium) | M |

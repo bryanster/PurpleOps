@@ -17,6 +17,7 @@ import (
 
 // CreateStepInput is the caller's half of creating a step.
 type CreateStepInput struct {
+	EngagementID        string
 	ScenarioID          string
 	Name                string
 	Objective           string
@@ -63,6 +64,9 @@ func (s *Service) CreateStep(ctx context.Context, actor authn.Subject, in Create
 	// Load scenario to get engagement_id.
 	scenario, err := s.scenarios.ByID(ctx, in.ScenarioID)
 	if err != nil {
+		return storengagement.Step{}, err
+	}
+	if err := requireSameEngagement("scenario", in.ScenarioID, scenario.EngagementID, in.EngagementID); err != nil {
 		return storengagement.Step{}, err
 	}
 
@@ -140,9 +144,34 @@ func (s *Service) GetStep(ctx context.Context, id string) (storengagement.Step, 
 	return s.steps.ByID(ctx, id)
 }
 
+// GetStepInEngagement returns one step, 404 unless it belongs to the authorized
+// engagement (step -> scenario -> engagement). The raw GetStep remains for
+// callers walking a parent chain rather than naming a path engagement (M7-012).
+func (s *Service) GetStepInEngagement(ctx context.Context, engagementID, stepID string) (storengagement.Step, error) {
+	step, err := s.steps.ByID(ctx, stepID)
+	if err != nil {
+		return storengagement.Step{}, err
+	}
+	owner, err := s.ScenarioEngagementID(ctx, step.ScenarioID)
+	if err != nil {
+		return storengagement.Step{}, err
+	}
+	if err := requireSameEngagement("step", stepID, owner, engagementID); err != nil {
+		return storengagement.Step{}, err
+	}
+	return step, nil
+}
+
 // ListSteps returns every step in a scenario, blind-filtered through scope.
 // When scope withholds unrevealed steps, only revealed steps are returned.
-func (s *Service) ListSteps(ctx context.Context, scenarioID string, scope blind.Scope) ([]storengagement.Step, error) {
+func (s *Service) ListSteps(ctx context.Context, engagementID, scenarioID string, scope blind.Scope) ([]storengagement.Step, error) {
+	owner, err := s.ScenarioEngagementID(ctx, scenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireSameEngagement("scenario", scenarioID, owner, engagementID); err != nil {
+		return nil, err
+	}
 	return s.steps.ListByScenario(ctx, scenarioID, scope)
 }
 
@@ -165,7 +194,7 @@ type PatchStepInput struct {
 // PatchStep updates one step's always-editable fields. Soft freeze is
 // enforced: if the step's execution has left pending, the PATCH is refused
 // with 409 naming the frozen fields. Closed/archived engagements are refused.
-func (s *Service) PatchStep(ctx context.Context, actor authn.Subject, id string, in PatchStepInput) (storengagement.Step, error) {
+func (s *Service) PatchStep(ctx context.Context, actor authn.Subject, engagementID, id string, in PatchStepInput) (storengagement.Step, error) {
 	current, err := s.steps.ByID(ctx, id)
 	if err != nil {
 		return storengagement.Step{}, err
@@ -174,6 +203,9 @@ func (s *Service) PatchStep(ctx context.Context, actor authn.Subject, id string,
 	// Load scenario for engagement context.
 	scenario, err := s.scenarios.ByID(ctx, current.ScenarioID)
 	if err != nil {
+		return storengagement.Step{}, err
+	}
+	if err := requireSameEngagement("step", id, scenario.EngagementID, engagementID); err != nil {
 		return storengagement.Step{}, err
 	}
 
@@ -231,7 +263,7 @@ func (s *Service) PatchStep(ctx context.Context, actor authn.Subject, id string,
 
 // DeleteStep removes a step and its child graph (execution, comments,
 // evidence, finding_step links). Closed/archived engagements are refused.
-func (s *Service) DeleteStep(ctx context.Context, actor authn.Subject, id string) error {
+func (s *Service) DeleteStep(ctx context.Context, actor authn.Subject, engagementID, id string) error {
 	current, err := s.steps.ByID(ctx, id)
 	if err != nil {
 		return err
@@ -239,6 +271,9 @@ func (s *Service) DeleteStep(ctx context.Context, actor authn.Subject, id string
 
 	scenario, err := s.scenarios.ByID(ctx, current.ScenarioID)
 	if err != nil {
+		return err
+	}
+	if err := requireSameEngagement("step", id, scenario.EngagementID, engagementID); err != nil {
 		return err
 	}
 
@@ -266,9 +301,12 @@ func (s *Service) DeleteStep(ctx context.Context, actor authn.Subject, id string
 // ReorderSteps reassigns ordinals 1..N to match the requested order.
 // Every step in the scenario must appear exactly once.
 // Closed/archived engagements are refused.
-func (s *Service) ReorderSteps(ctx context.Context, actor authn.Subject, scenarioID string, ids []string) ([]storengagement.Step, error) {
+func (s *Service) ReorderSteps(ctx context.Context, actor authn.Subject, engagementID, scenarioID string, ids []string) ([]storengagement.Step, error) {
 	scenario, err := s.scenarios.ByID(ctx, scenarioID)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireSameEngagement("scenario", scenarioID, scenario.EngagementID, engagementID); err != nil {
 		return nil, err
 	}
 
@@ -314,7 +352,7 @@ func (s *Service) ReorderSteps(ctx context.Context, actor authn.Subject, scenari
 // RevealStep sets revealed_at to now, making the step visible to blue in a
 // blind engagement. Idempotent: an already-revealed step succeeds with no
 // change. Closed/archived engagements are refused.
-func (s *Service) RevealStep(ctx context.Context, actor authn.Subject, id string) (storengagement.Step, error) {
+func (s *Service) RevealStep(ctx context.Context, actor authn.Subject, engagementID, id string) (storengagement.Step, error) {
 	current, err := s.steps.ByID(ctx, id)
 	if err != nil {
 		return storengagement.Step{}, err
@@ -322,6 +360,9 @@ func (s *Service) RevealStep(ctx context.Context, actor authn.Subject, id string
 
 	scenario, err := s.scenarios.ByID(ctx, current.ScenarioID)
 	if err != nil {
+		return storengagement.Step{}, err
+	}
+	if err := requireSameEngagement("step", id, scenario.EngagementID, engagementID); err != nil {
 		return storengagement.Step{}, err
 	}
 

@@ -69,6 +69,20 @@ func (s *Service) GetScenario(ctx context.Context, id string) (storengagement.Sc
 	return s.scenarios.ByID(ctx, id)
 }
 
+// GetScenarioInEngagement returns one scenario, 404 unless it belongs to the
+// authorized engagement. The raw GetScenario remains for callers walking a
+// parent chain rather than naming a path engagement (M7-012).
+func (s *Service) GetScenarioInEngagement(ctx context.Context, engagementID, scenarioID string) (storengagement.Scenario, error) {
+	scenario, err := s.scenarios.ByID(ctx, scenarioID)
+	if err != nil {
+		return storengagement.Scenario{}, err
+	}
+	if err := requireSameEngagement("scenario", scenarioID, scenario.EngagementID, engagementID); err != nil {
+		return storengagement.Scenario{}, err
+	}
+	return scenario, nil
+}
+
 // ListScenarios returns every scenario in an engagement, ordered by ordinal.
 func (s *Service) ListScenarios(ctx context.Context, engagementID string) ([]storengagement.Scenario, error) {
 	return s.scenarios.ListByEngagement(ctx, engagementID)
@@ -83,9 +97,12 @@ type PatchScenarioInput struct {
 
 // PatchScenario updates one scenario's fields. Closed/archived engagements
 // are refused. Only non-nil fields are changed.
-func (s *Service) PatchScenario(ctx context.Context, actor authn.Subject, id string, in PatchScenarioInput) (storengagement.Scenario, error) {
+func (s *Service) PatchScenario(ctx context.Context, actor authn.Subject, engagementID, id string, in PatchScenarioInput) (storengagement.Scenario, error) {
 	current, err := s.scenarios.ByID(ctx, id)
 	if err != nil {
+		return storengagement.Scenario{}, err
+	}
+	if err := requireSameEngagement("scenario", id, current.EngagementID, engagementID); err != nil {
 		return storengagement.Scenario{}, err
 	}
 
@@ -134,9 +151,12 @@ func (s *Service) PatchScenario(ctx context.Context, actor authn.Subject, id str
 // DeleteScenario removes a scenario and its child graph (steps, executions,
 // comments, evidence, finding_step links). Closed/archived engagements are
 // refused.
-func (s *Service) DeleteScenario(ctx context.Context, actor authn.Subject, id string) error {
+func (s *Service) DeleteScenario(ctx context.Context, actor authn.Subject, engagementID, id string) error {
 	current, err := s.scenarios.ByID(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := requireSameEngagement("scenario", id, current.EngagementID, engagementID); err != nil {
 		return err
 	}
 

@@ -38,7 +38,7 @@ func (h *handlers) ListComments(ctx context.Context,
 		return nil, apierr.NotFound("execution", request.ExecutionId.String())
 	}
 
-	comments, err := h.engagements.ListComments(ctx, request.ExecutionId.String())
+	comments, err := h.engagements.ListComments(ctx, request.EngagementId.String(), request.ExecutionId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (h *handlers) PatchComment(ctx context.Context,
 		return nil, apierr.Unauthenticated("no authenticated subject")
 	}
 
-	comment, err := h.engagements.GetComment(ctx, request.CommentId.String())
+	comment, err := h.engagements.GetCommentInEngagement(ctx, request.EngagementId.String(), request.CommentId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (h *handlers) PatchComment(ctx context.Context,
 func (h *handlers) ListCommentRevisions(ctx context.Context,
 	request gen.ListCommentRevisionsRequestObject) (gen.ListCommentRevisionsResponseObject, error) {
 
-	revisions, err := h.engagements.ListCommentRevisions(ctx, request.CommentId.String())
+	revisions, err := h.engagements.ListCommentRevisions(ctx, request.EngagementId.String(), request.CommentId.String())
 	if err != nil {
 		return nil, err
 	}

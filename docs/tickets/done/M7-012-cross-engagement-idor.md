@@ -59,18 +59,17 @@ Prefer one helper (`requireSameEngagement(got, want) error` → `apierr.NotFound
 per-handler `if` that will be copied wrong.
 
 ## Acceptance criteria
-
-- [ ] Member of `EB` calling `GET /engagements/{EB}/scenarios/{SA}` (SA belongs to EA) gets 404
+- [x] Member of `EB` calling `GET /engagements/{EB}/scenarios/{SA}` (SA belongs to EA) gets 404
       and a body identical to an invented scenario id.
-- [ ] Lead of `EB` calling `POST /engagements/{EB}/scenarios/{SA}/steps` does not create a step
+- [x] Lead of `EB` calling `POST /engagements/{EB}/scenarios/{SA}/steps` does not create a step
       under EA.
-- [ ] `POST /engagements/{EB}/reports/{RA}/preview` does not render EA’s draft.
-- [ ] `POST /engagements/{EB}/report-templates/from-report` with `reportId=RA` does not copy EA’s
+- [x] `POST /engagements/{EB}/reports/{RA}/preview` does not render EA’s draft.
+- [x] `POST /engagements/{EB}/report-templates/from-report` with `reportId=RA` does not copy EA’s
       blocks into EB.
-- [ ] `ApplyTemplate` with a template from EA onto a report in EB is 404.
-- [ ] `GET /evidence/{id}` and `GET /evidence/{id}/content` as blue in a blind engagement 404
+- [x] `ApplyTemplate` with a template from EA onto a report in EB is 404.
+- [x] `GET /evidence/{id}` and `GET /evidence/{id}/content` as blue in a blind engagement 404
       when the parent step is unrevealed (handler-side, even if middleware also catches it).
-- [ ] No nested ByID in `internal/httpapi` remains without an engagement equality check or a
+- [x] No nested ByID in `internal/httpapi` remains without an engagement equality check or a
       domain method that performs it.
 
 ## Tests
@@ -89,3 +88,24 @@ If M7-011 already 404s some of these at middleware, keep the handler check. Midd
 drift; handlers that load by id must not trust the path.
 
 This ticket is a ship gate for `M7-009`. High findings do not defer.
+
+## Implementation notes
+
+- Binding lives in the domain services, not the handlers: `internal/engagement` gained
+  `requireSameEngagement` plus `GetScenarioInEngagement` / `GetStepInEngagement` /
+  `GetExecutionInEngagement` / `GetCommentInEngagement`, and the write methods (`PatchScenario`,
+  `DeleteScenario`, `CreateStep`, `CreateStepFromTemplate`, `PatchStep`, `DeleteStep`, `RevealStep`,
+  `ReorderSteps`, `PatchRedExecution`, `PatchBlueDetection`, `CreateComment`, `EditComment`,
+  `ListComments`, `ListCommentRevisions`, `ListSteps`) now take the path `engagementID` and 404 on a
+  mismatch. `internal/report` mirrors this for `Service.Get/Update/Delete/ReplaceBlocks`,
+  `TemplateService.GetTemplate/UpdateTemplate/DeleteTemplate/ApplyTemplate/CreateFromReport`, and
+  `PublishService.Publish`.
+- `ListSteps` and `CreateStepFromTemplate` were not explicit table rows but are nested
+  read/write routes naming an engagement and a child id, so they got the same bind (the ticket's
+  "In" preamble covers them).
+- `GET /evidence/{id}` and `/content` gained a handler-side blind-reveal check (`evidenceConcealed`)
+  mirroring the middleware guard; evidence routes are child-only so there is no path engagement to
+  bind, and the middleware (M7-011) owns membership there.
+- Tests are service-level regressions (`internal/engagement/bind_test.go`,
+  `internal/report/bind_test.go`) asserting `apierr.ErrNotFound` on every cross-engagement bind and
+  no row created/updated on the write cases.

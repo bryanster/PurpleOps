@@ -68,7 +68,7 @@ func (h *handlers) CreateReportTemplate(ctx context.Context,
 func (h *handlers) GetReportTemplate(ctx context.Context,
 	request gen.GetReportTemplateRequestObject) (gen.GetReportTemplateResponseObject, error) {
 
-	tmpl, err := h.templates.GetTemplate(ctx, request.TemplateId.String())
+	tmpl, err := h.templates.GetTemplate(ctx, request.EngagementId.String(), request.TemplateId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (h *handlers) PatchReportTemplate(ctx context.Context,
 		in.Name = request.Body.Name
 	}
 
-	tmpl, err := h.templates.UpdateTemplate(ctx, request.TemplateId.String(), in)
+	tmpl, err := h.templates.UpdateTemplate(ctx, request.EngagementId.String(), request.TemplateId.String(), in)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (h *handlers) DeleteReportTemplate(ctx context.Context,
 		return nil, err
 	}
 
-	if err := h.templates.DeleteTemplate(ctx, request.TemplateId.String(), subject.UserID); err != nil {
+	if err := h.templates.DeleteTemplate(ctx, request.EngagementId.String(), request.TemplateId.String(), subject.UserID); err != nil {
 		return nil, err
 	}
 
@@ -145,9 +145,10 @@ func (h *handlers) ApplyReportTemplate(ctx context.Context,
 	}
 
 	r, err := h.templates.ApplyTemplate(ctx, report.ApplyTemplateInput{
-		ReportID:   request.ReportId.String(),
-		TemplateID: request.Body.TemplateId.String(),
-		ActorID:    subject.UserID,
+		ReportID:     request.ReportId.String(),
+		TemplateID:   request.Body.TemplateId.String(),
+		EngagementID: request.EngagementId.String(),
+		ActorID:      subject.UserID,
 	})
 	if err != nil {
 		return nil, err

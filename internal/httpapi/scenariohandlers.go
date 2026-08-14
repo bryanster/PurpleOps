@@ -77,7 +77,7 @@ func (h *handlers) CreateScenario(ctx context.Context,
 func (h *handlers) GetScenario(ctx context.Context,
 	request gen.GetScenarioRequestObject) (gen.GetScenarioResponseObject, error) {
 
-	scenario, err := h.engagements.GetScenario(ctx, request.ScenarioId.String())
+	scenario, err := h.engagements.GetScenarioInEngagement(ctx, request.EngagementId.String(), request.ScenarioId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (h *handlers) PatchScenario(ctx context.Context,
 		ThreatActor: request.Body.ThreatActor,
 	}
 
-	scenario, err := h.engagements.PatchScenario(ctx, subject, request.ScenarioId.String(), in)
+	scenario, err := h.engagements.PatchScenario(ctx, subject, request.EngagementId.String(), request.ScenarioId.String(), in)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (h *handlers) DeleteScenario(ctx context.Context,
 		return nil, err
 	}
 
-	if err := h.engagements.DeleteScenario(ctx, subject, request.ScenarioId.String()); err != nil {
+	if err := h.engagements.DeleteScenario(ctx, subject, request.EngagementId.String(), request.ScenarioId.String()); err != nil {
 		return nil, err
 	}
 

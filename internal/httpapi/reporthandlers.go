@@ -76,7 +76,7 @@ func (h *handlers) CreateReport(ctx context.Context,
 func (h *handlers) GetReport(ctx context.Context,
 	request gen.GetReportRequestObject) (gen.GetReportResponseObject, error) {
 
-	r, err := h.reports.Get(ctx, request.ReportId.String())
+	r, err := h.reports.Get(ctx, request.EngagementId.String(), request.ReportId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (h *handlers) PatchReport(ctx context.Context,
 		}
 	}
 
-	r, err := h.reports.Update(ctx, request.ReportId.String(), in)
+	r, err := h.reports.Update(ctx, request.EngagementId.String(), request.ReportId.String(), in)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (h *handlers) DeleteReport(ctx context.Context,
 		return nil, err
 	}
 
-	if err := h.reports.Delete(ctx, request.ReportId.String(), subject.UserID); err != nil {
+	if err := h.reports.Delete(ctx, request.EngagementId.String(), request.ReportId.String(), subject.UserID); err != nil {
 		return nil, err
 	}
 
@@ -194,9 +194,10 @@ func (h *handlers) PutReportBlocks(ctx context.Context,
 	}
 
 	r, err := h.reports.ReplaceBlocks(ctx, report.ReplaceBlocksInput{
-		ReportID: request.ReportId.String(),
-		Blocks:   blocks,
-		ActorID:  subject.UserID,
+		ReportID:     request.ReportId.String(),
+		EngagementID: request.EngagementId.String(),
+		Blocks:       blocks,
+		ActorID:      subject.UserID,
 	})
 	if err != nil {
 		return nil, err
@@ -300,7 +301,7 @@ func (h *handlers) PreviewReport(ctx context.Context, request gen.PreviewReportR
 		return errResp, nil
 	}
 
-	rep, blocks, errResp := h.previewReportData(ctx, request.ReportId.String())
+	rep, blocks, errResp := h.previewReportData(ctx, request.EngagementId.String(), request.ReportId.String())
 	if errResp != nil {
 		return errResp, nil
 	}
@@ -323,7 +324,7 @@ func (h *handlers) PreviewReportPdf(ctx context.Context, request gen.PreviewRepo
 		return gen.PreviewReportPdf500ApplicationProblemPlusJSONResponse{}, nil
 	}
 
-	rep, blocks, errResp := h.previewReportData(ctx, request.ReportId.String())
+	rep, blocks, errResp := h.previewReportData(ctx, request.EngagementId.String(), request.ReportId.String())
 	if errResp != nil {
 		return gen.PreviewReportPdf500ApplicationProblemPlusJSONResponse{}, nil
 	}
@@ -351,7 +352,7 @@ func (h *handlers) previewReportEnv(ctx context.Context, engagementID, reportID 
 		return nil, gen.PreviewReport404ApplicationProblemPlusJSONResponse{}
 	}
 
-	rep, err := h.reports.Get(ctx, reportID)
+	rep, err := h.reports.Get(ctx, engagementID, reportID)
 	if err != nil {
 		h.log.Error("preview: get report", "report_id", reportID, "err", err)
 		return nil, gen.PreviewReport404ApplicationProblemPlusJSONResponse{}
@@ -409,8 +410,8 @@ func (h *handlers) previewReportEnv(ctx context.Context, engagementID, reportID 
 }
 
 // previewReportData fetches the report and its blocks.
-func (h *handlers) previewReportData(ctx context.Context, reportID string) (*storereport.Report, []storereport.ReportBlock, gen.PreviewReportResponseObject) {
-	rep, err := h.reports.Get(ctx, reportID)
+func (h *handlers) previewReportData(ctx context.Context, engagementID, reportID string) (*storereport.Report, []storereport.ReportBlock, gen.PreviewReportResponseObject) {
+	rep, err := h.reports.Get(ctx, engagementID, reportID)
 	if err != nil {
 		h.log.Error("preview: get report", "report_id", reportID, "err", err)
 		return nil, nil, gen.PreviewReport404ApplicationProblemPlusJSONResponse{}
@@ -485,6 +486,11 @@ func (h *handlers) PublishReport(ctx context.Context,
 // ListReportVersions lists published versions of a report, newest first.
 func (h *handlers) ListReportVersions(ctx context.Context,
 	request gen.ListReportVersionsRequestObject) (gen.ListReportVersionsResponseObject, error) {
+
+	if _, err := h.reports.Get(ctx, request.EngagementId.String(), request.ReportId.String()); err != nil {
+		h.log.Error("list versions: get report", "report_id", request.ReportId, "err", err)
+		return gen.ListReportVersions404ApplicationProblemPlusJSONResponse{}, nil
+	}
 
 	versions, err := h.versions.ListByReport(ctx, request.ReportId.String())
 	if err != nil {

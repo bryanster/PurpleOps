@@ -45,7 +45,7 @@ var validStatusTransitionsExecution = map[storengagement.ExecutionStatus][]store
 
 // PatchRedExecution applies red-side changes to an execution with optimistic
 // locking, status transition validation, auto-reveal and activity logging.
-func (s *Service) PatchRedExecution(ctx context.Context, actor authn.Subject, id string, in PatchRedExecutionInput) (storengagement.Execution, error) {
+func (s *Service) PatchRedExecution(ctx context.Context, actor authn.Subject, engagementID, id string, in PatchRedExecutionInput) (storengagement.Execution, error) {
 	// Load the execution and its parent chain.
 	exec, err := s.executions.ByID(ctx, id)
 	if err != nil {
@@ -59,6 +59,9 @@ func (s *Service) PatchRedExecution(ctx context.Context, actor authn.Subject, id
 
 	scenario, err := s.scenarios.ByID(ctx, step.ScenarioID)
 	if err != nil {
+		return storengagement.Execution{}, err
+	}
+	if err := requireSameEngagement("execution", id, scenario.EngagementID, engagementID); err != nil {
 		return storengagement.Execution{}, err
 	}
 
@@ -186,7 +189,7 @@ type PatchBlueDetectionInput struct {
 
 // PatchBlueDetection applies blue-side changes to an execution with optimistic
 // locking, validation, and activity logging.
-func (s *Service) PatchBlueDetection(ctx context.Context, actor authn.Subject, id string, in PatchBlueDetectionInput) (storengagement.Execution, error) {
+func (s *Service) PatchBlueDetection(ctx context.Context, actor authn.Subject, engagementID, id string, in PatchBlueDetectionInput) (storengagement.Execution, error) {
 	exec, err := s.executions.ByID(ctx, id)
 	if err != nil {
 		return storengagement.Execution{}, err
@@ -199,6 +202,9 @@ func (s *Service) PatchBlueDetection(ctx context.Context, actor authn.Subject, i
 
 	scenario, err := s.scenarios.ByID(ctx, step.ScenarioID)
 	if err != nil {
+		return storengagement.Execution{}, err
+	}
+	if err := requireSameEngagement("execution", id, scenario.EngagementID, engagementID); err != nil {
 		return storengagement.Execution{}, err
 	}
 
@@ -306,6 +312,25 @@ func blueDelta(in PatchBlueDetectionInput, before, after storengagement.Executio
 // unrevealed).
 func (s *Service) GetExecution(ctx context.Context, id string) (storengagement.Execution, error) {
 	return s.executions.ByID(ctx, id)
+}
+
+// GetExecutionInEngagement returns one execution, 404 unless it belongs to the
+// authorized engagement (execution -> step -> scenario -> engagement). The raw
+// GetExecution remains for callers walking a parent chain rather than naming a
+// path engagement (M7-012).
+func (s *Service) GetExecutionInEngagement(ctx context.Context, engagementID, executionID string) (storengagement.Execution, error) {
+	exec, err := s.executions.ByID(ctx, executionID)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+	owner, err := s.StepEngagementID(ctx, exec.StepID)
+	if err != nil {
+		return storengagement.Execution{}, err
+	}
+	if err := requireSameEngagement("execution", executionID, owner, engagementID); err != nil {
+		return storengagement.Execution{}, err
+	}
+	return exec, nil
 }
 
 // ListEngagementExecutions returns executions in an engagement, optionally

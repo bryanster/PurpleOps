@@ -80,9 +80,17 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (storereport.Repor
 	return rep, nil
 }
 
-// Get returns one report by id.
-func (s *Service) Get(ctx context.Context, id string) (storereport.Report, error) {
-	return s.reports.ByID(ctx, id)
+// Get returns one report by id, 404 unless it belongs to the authorized
+// engagement (M7-012).
+func (s *Service) Get(ctx context.Context, engagementID, id string) (storereport.Report, error) {
+	rep, err := s.reports.ByID(ctx, id)
+	if err != nil {
+		return storereport.Report{}, err
+	}
+	if err := requireSameEngagement("report", id, rep.EngagementID, engagementID); err != nil {
+		return storereport.Report{}, err
+	}
+	return rep, nil
 }
 
 // ListByEngagement returns every report in an engagement.
@@ -100,8 +108,12 @@ type UpdateInput struct {
 }
 
 // Update patches a report and records activity.
-func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (storereport.Report, error) {
-	if _, err := s.reports.ByID(ctx, id); err != nil {
+func (s *Service) Update(ctx context.Context, engagementID, id string, in UpdateInput) (storereport.Report, error) {
+	rep, err := s.reports.ByID(ctx, id)
+	if err != nil {
+		return storereport.Report{}, err
+	}
+	if err := requireSameEngagement("report", id, rep.EngagementID, engagementID); err != nil {
 		return storereport.Report{}, err
 	}
 	// Validate per-report colour overrides (M6-004).
@@ -119,7 +131,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (storer
 		UpdatedBy:   in.ActorID,
 	}
 
-	rep, err := s.reports.Update(ctx, id, changes)
+	rep, err = s.reports.Update(ctx, id, changes)
 	if err != nil {
 		return storereport.Report{}, fmt.Errorf("report: update: %w", err)
 	}
@@ -151,9 +163,12 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (storer
 }
 
 // Delete removes a report and cascades to its blocks.
-func (s *Service) Delete(ctx context.Context, id string, actorID string) error {
+func (s *Service) Delete(ctx context.Context, engagementID, id string, actorID string) error {
 	rep, err := s.reports.ByID(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := requireSameEngagement("report", id, rep.EngagementID, engagementID); err != nil {
 		return err
 	}
 
@@ -177,9 +192,10 @@ func (s *Service) Delete(ctx context.Context, id string, actorID string) error {
 
 // ReplaceBlocksInput is the caller's half of replacing all blocks.
 type ReplaceBlocksInput struct {
-	ReportID string
-	Blocks   []BlockInput
-	ActorID  string
+	ReportID     string
+	EngagementID string
+	Blocks       []BlockInput
+	ActorID      string
 }
 
 // BlockInput is one block in a replace request.
@@ -199,6 +215,10 @@ const (
 )
 
 func (s *Service) ReplaceBlocks(ctx context.Context, in ReplaceBlocksInput) (storereport.Report, error) {
+	if _, err := s.Get(ctx, in.EngagementID, in.ReportID); err != nil {
+		return storereport.Report{}, err
+	}
+
 	if len(in.Blocks) > MaxBlocks {
 		return storereport.Report{}, apierr.Validation(
 			apierr.FieldError{Field: "blocks", Message: fmt.Sprintf("maximum %d blocks", MaxBlocks)},

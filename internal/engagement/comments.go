@@ -19,6 +19,13 @@ func (s *Service) CreateComment(ctx context.Context, actor authn.Subject, engage
 	if len(body) > 16384 {
 		return storengagement.Comment{}, fmt.Errorf("engagement: comment body exceeds 16 KiB limit")
 	}
+	owner, err := s.ExecutionEngagementID(ctx, executionID)
+	if err != nil {
+		return storengagement.Comment{}, err
+	}
+	if err := requireSameEngagement("execution", executionID, owner, engagementID); err != nil {
+		return storengagement.Comment{}, err
+	}
 
 	comment, err := s.comments.Create(ctx, storengagement.NewComment{
 		ExecutionID: executionID,
@@ -53,6 +60,13 @@ func (s *Service) EditComment(ctx context.Context, actor authn.Subject, in EditC
 	if len(in.Body) > 16384 {
 		return storengagement.Comment{}, fmt.Errorf("engagement: comment body exceeds 16 KiB limit")
 	}
+	owner, err := s.ExecutionEngagementID(ctx, in.ExecutionID)
+	if err != nil {
+		return storengagement.Comment{}, err
+	}
+	if err := requireSameEngagement("comment", in.CommentID, owner, in.EngagementID); err != nil {
+		return storengagement.Comment{}, err
+	}
 
 	comment, _, err := s.comments.Edit(ctx, in.CommentID, actor.UserID, in.Body)
 	if err != nil {
@@ -68,7 +82,14 @@ func (s *Service) EditComment(ctx context.Context, actor authn.Subject, in EditC
 }
 
 // ListComments returns comments on an execution, oldest first.
-func (s *Service) ListComments(ctx context.Context, executionID string) ([]storengagement.Comment, error) {
+func (s *Service) ListComments(ctx context.Context, engagementID, executionID string) ([]storengagement.Comment, error) {
+	owner, err := s.ExecutionEngagementID(ctx, executionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireSameEngagement("execution", executionID, owner, engagementID); err != nil {
+		return nil, err
+	}
 	return s.comments.ListByExecution(ctx, executionID)
 }
 
@@ -77,8 +98,32 @@ func (s *Service) GetComment(ctx context.Context, id string) (storengagement.Com
 	return s.comments.ByID(ctx, id)
 }
 
+// GetCommentInEngagement returns one comment, 404 unless it belongs to the
+// authorized engagement (comment -> execution -> step -> scenario -> engagement).
+func (s *Service) GetCommentInEngagement(ctx context.Context, engagementID, commentID string) (storengagement.Comment, error) {
+	comment, err := s.comments.ByID(ctx, commentID)
+	if err != nil {
+		return storengagement.Comment{}, err
+	}
+	owner, err := s.ExecutionEngagementID(ctx, comment.ExecutionID)
+	if err != nil {
+		return storengagement.Comment{}, err
+	}
+	if err := requireSameEngagement("comment", commentID, owner, engagementID); err != nil {
+		return storengagement.Comment{}, err
+	}
+	return comment, nil
+}
+
 // ListCommentRevisions returns the edit history for a comment, oldest first.
-func (s *Service) ListCommentRevisions(ctx context.Context, commentID string) ([]storengagement.CommentRevision, error) {
+func (s *Service) ListCommentRevisions(ctx context.Context, engagementID, commentID string) ([]storengagement.CommentRevision, error) {
+	owner, err := s.CommentEngagementID(ctx, commentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireSameEngagement("comment", commentID, owner, engagementID); err != nil {
+		return nil, err
+	}
 	return s.comments.Revisions(ctx, commentID)
 }
 

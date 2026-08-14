@@ -100,9 +100,17 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, in CreateTemplateI
 	return tmpl, nil
 }
 
-// GetTemplate returns one template by id.
-func (s *TemplateService) GetTemplate(ctx context.Context, id string) (storereport.Template, error) {
-	return s.templates.ByID(ctx, id)
+// GetTemplate returns one template by id, 404 unless it belongs to the
+// authorized engagement (M7-012).
+func (s *TemplateService) GetTemplate(ctx context.Context, engagementID, id string) (storereport.Template, error) {
+	tmpl, err := s.templates.ByID(ctx, id)
+	if err != nil {
+		return storereport.Template{}, err
+	}
+	if err := requireSameEngagement("template", id, tmpl.EngagementID, engagementID); err != nil {
+		return storereport.Template{}, err
+	}
+	return tmpl, nil
 }
 
 // ListTemplates returns every template in an engagement.
@@ -117,7 +125,14 @@ type UpdateTemplateInput struct {
 }
 
 // UpdateTemplate patches a template and records activity.
-func (s *TemplateService) UpdateTemplate(ctx context.Context, id string, in UpdateTemplateInput) (storereport.Template, error) {
+func (s *TemplateService) UpdateTemplate(ctx context.Context, engagementID, id string, in UpdateTemplateInput) (storereport.Template, error) {
+	current, err := s.templates.ByID(ctx, id)
+	if err != nil {
+		return storereport.Template{}, err
+	}
+	if err := requireSameEngagement("template", id, current.EngagementID, engagementID); err != nil {
+		return storereport.Template{}, err
+	}
 	tmpl, err := s.templates.Update(ctx, id, storereport.TemplateUpdate{
 		Name: in.Name,
 	})
@@ -145,9 +160,12 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id string, in Upda
 }
 
 // DeleteTemplate removes a template, cascading to its blocks, and records activity.
-func (s *TemplateService) DeleteTemplate(ctx context.Context, id string, actorID string) error {
+func (s *TemplateService) DeleteTemplate(ctx context.Context, engagementID, id string, actorID string) error {
 	tmpl, err := s.templates.ByID(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := requireSameEngagement("template", id, tmpl.EngagementID, engagementID); err != nil {
 		return err
 	}
 
@@ -180,14 +198,30 @@ func (s *TemplateService) TemplateBlocks(ctx context.Context, templateID string)
 
 // ApplyTemplateInput is the caller's half of applying a template to a report.
 type ApplyTemplateInput struct {
-	ReportID   string
-	TemplateID string
-	ActorID    string
+	ReportID     string
+	TemplateID   string
+	EngagementID string
+	ActorID      string
 }
 
 // ApplyTemplate atomically replaces a report's draft blocks with a deep copy
 // of the template's blocks. Title and branding are left alone.
 func (s *TemplateService) ApplyTemplate(ctx context.Context, in ApplyTemplateInput) (storereport.Report, error) {
+	report, err := s.reports.ByID(ctx, in.ReportID)
+	if err != nil {
+		return storereport.Report{}, err
+	}
+	if err := requireSameEngagement("report", in.ReportID, report.EngagementID, in.EngagementID); err != nil {
+		return storereport.Report{}, err
+	}
+	tmpl, err := s.templates.ByID(ctx, in.TemplateID)
+	if err != nil {
+		return storereport.Report{}, err
+	}
+	if err := requireSameEngagement("template", in.TemplateID, tmpl.EngagementID, in.EngagementID); err != nil {
+		return storereport.Report{}, err
+	}
+
 	tmplBlocks, err := s.templates.BlocksByTemplate(ctx, in.TemplateID)
 	if err != nil {
 		return storereport.Report{}, fmt.Errorf("report templates: apply: read template blocks: %w", err)
@@ -242,6 +276,14 @@ type CreateFromReportInput struct {
 
 // CreateFromReport snapshots a report's current draft blocks into a new template.
 func (s *TemplateService) CreateFromReport(ctx context.Context, in CreateFromReportInput) (storereport.Template, error) {
+	src, err := s.reports.ByID(ctx, in.ReportID)
+	if err != nil {
+		return storereport.Template{}, err
+	}
+	if err := requireSameEngagement("report", in.ReportID, src.EngagementID, in.EngagementID); err != nil {
+		return storereport.Template{}, err
+	}
+
 	count, err := s.countByEngagement(ctx, in.EngagementID)
 	if err != nil {
 		return storereport.Template{}, err

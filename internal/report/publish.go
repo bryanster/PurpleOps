@@ -80,6 +80,9 @@ func (s *PublishService) Publish(ctx context.Context, env RenderEnv, in PublishI
 	if err != nil {
 		return PublishResult{}, fmt.Errorf("report: publish: %w", err)
 	}
+	if err := requireSameEngagement("report", in.ReportID, rep.EngagementID, in.EngagementID); err != nil {
+		return PublishResult{}, err
+	}
 
 	blocks, err := s.reports.BlocksByReport(ctx, in.ReportID)
 	if err != nil {

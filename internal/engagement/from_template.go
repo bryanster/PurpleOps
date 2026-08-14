@@ -43,6 +43,14 @@ func (s *Service) CreateStepFromTemplate(ctx context.Context, actor authn.Subjec
 		return storengagement.Step{}, apierr.Conflict(fmt.Sprintf("engagement is %s", eng.Status))
 	}
 
+	scenario, err := s.scenarios.ByID(ctx, in.ScenarioID)
+	if err != nil {
+		return storengagement.Step{}, err
+	}
+	if err := requireSameEngagement("scenario", in.ScenarioID, scenario.EngagementID, in.EngagementID); err != nil {
+		return storengagement.Step{}, err
+	}
+
 	attackVersion := eng.AttackVersion
 	tmpl := in.Template
 

@@ -206,6 +206,14 @@ func (h *handlers) GetEvidence(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	concealed, err := h.evidenceConcealed(ctx, ev)
+	if err != nil {
+		return nil, err
+	}
+	if concealed {
+		return nil, apierr.NotFound("evidence", request.EvidenceId.String())
+	}
+
 	wire, err := evidenceToWire(ev)
 	if err != nil {
 		return nil, err
@@ -221,6 +229,13 @@ func (h *handlers) GetEvidenceContent(ctx context.Context,
 	ev, err := h.evidenceRepo.ByID(ctx, request.EvidenceId.String())
 	if err != nil {
 		return nil, err
+	}
+	concealed, err := h.evidenceConcealed(ctx, ev)
+	if err != nil {
+		return nil, err
+	}
+	if concealed {
+		return nil, apierr.NotFound("evidence", request.EvidenceId.String())
 	}
 
 	rc, err := h.evidenceStore.Open(ev.BlobSHA256)
@@ -365,4 +380,50 @@ func mimeAllowed(mime string, allowlist []string) bool {
 		}
 	}
 	return false
+}
+
+// evidenceParent resolves an evidence row to its owning engagement id and its
+// parent step id, walking execution (or comment -> execution) -> step ->
+// scenario. A missing row anywhere in the chain is the same not-found the
+// middleware produces, so a child id from another engagement is concealed.
+func (h *handlers) evidenceParent(ctx context.Context, ev storengagement.Evidence) (engagementID, stepID string, err error) {
+	var exec storengagement.Execution
+	if ev.ExecutionID != "" {
+		exec, err = h.engagements.GetExecution(ctx, ev.ExecutionID)
+	} else {
+		var c storengagement.Comment
+		c, err = h.engagements.GetComment(ctx, ev.CommentID)
+		if err != nil {
+			return "", "", err
+		}
+		exec, err = h.engagements.GetExecution(ctx, c.ExecutionID)
+	}
+	if err != nil {
+		return "", "", err
+	}
+	engagementID, err = h.engagements.StepEngagementID(ctx, exec.StepID)
+	if err != nil {
+		return "", "", err
+	}
+	return engagementID, exec.StepID, nil
+}
+
+// evidenceConcealed reports whether a blue member of a blind engagement must be
+// denied this evidence because its parent step is unrevealed. It is the
+// handler-side mirror of the middleware's blind guard, kept here because
+// middleware mappings drift (M7-012).
+func (h *handlers) evidenceConcealed(ctx context.Context, ev storengagement.Evidence) (bool, error) {
+	engagementID, stepID, err := h.evidenceParent(ctx, ev)
+	if err != nil {
+		return false, err
+	}
+	step, err := h.engagements.GetStep(ctx, stepID)
+	if err != nil {
+		return false, err
+	}
+	scope, err := h.stepBlindScope(ctx, engagementID)
+	if err != nil {
+		return false, err
+	}
+	return !scope.Permits(step.RevealedAt != nil), nil
 }

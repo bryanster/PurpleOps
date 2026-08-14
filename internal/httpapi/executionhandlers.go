@@ -22,7 +22,7 @@ import (
 func (h *handlers) GetExecution(ctx context.Context,
 	request gen.GetExecutionRequestObject) (gen.GetExecutionResponseObject, error) {
 
-	exec, err := h.engagements.GetExecution(ctx, request.ExecutionId.String())
+	exec, err := h.engagements.GetExecutionInEngagement(ctx, request.EngagementId.String(), request.ExecutionId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (h *handlers) PatchRedExecution(ctx context.Context,
 		in.RedNotes = request.Body.RedNotes
 	}
 
-	exec, err := h.engagements.PatchRedExecution(ctx, actor, request.ExecutionId.String(), in)
+	exec, err := h.engagements.PatchRedExecution(ctx, actor, request.EngagementId.String(), request.ExecutionId.String(), in)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (h *handlers) PatchBlueDetection(ctx context.Context,
 		in.BlueNotes = request.Body.BlueNotes
 	}
 
-	exec, err := h.engagements.PatchBlueDetection(ctx, actor, request.ExecutionId.String(), in)
+	exec, err := h.engagements.PatchBlueDetection(ctx, actor, request.EngagementId.String(), request.ExecutionId.String(), in)
 	if err != nil {
 		return nil, err
 	}
