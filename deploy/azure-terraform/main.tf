@@ -1,0 +1,295 @@
+# Blacklight on Azure Container Apps — a fully worked Terraform example.
+#
+# Deploys the published container image to Azure Container Apps (Azure's
+# serverless-container service; the Azure equivalent of "Cloud Run"), with:
+#
+#   * the database and evidence on an Azure Files share in a Storage Account,
+#   * the session secret and encryption key generated here and kept in Key Vault.
+#
+# The only prerequisite is an `az login` session. See README.md for the full
+# walkthrough, the first-administrator step, and the operational caveats.
+
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+
+provider "azurerm" {
+  # No credentials configured on purpose: with an `az login` session active, the
+  # provider authenticates through the Azure CLI automatically.
+  features {}
+}
+
+data "azurerm_client_config" "current" {}
+
+# ─── names ────────────────────────────────────────────────────────────────────
+#
+# Storage accounts and Key Vaults need globally unique names, so they get a
+# random suffix. Everything else derives from `var.name`.
+
+resource "random_string" "suffix" {
+  length  = 8
+  lower   = true
+  upper   = false
+  numeric = true
+  special = false
+}
+
+locals {
+  resource_group_name  = "${var.name}-rg"
+  log_analytics_name   = "${var.name}-logs"
+  environment_name     = "${var.name}-env"
+  identity_name        = "${var.name}-identity"
+  container_app_name   = var.name
+  storage_account_name = "st${random_string.suffix.result}"
+  key_vault_name       = "kv${random_string.suffix.result}"
+  file_share_name      = "blacklight-data"
+  storage_mount_name   = "blacklight-data"
+}
+
+# ─── base: resource group, logs, environment ─────────────────────────────────
+
+resource "azurerm_resource_group" "main" {
+  name     = local.resource_group_name
+  location = var.location
+}
+
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = local.log_analytics_name
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+}
+
+resource "azurerm_container_app_environment" "main" {
+  name                       = local.environment_name
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+}
+
+# ─── storage: the database + evidence live on an Azure Files share ───────────
+
+resource "azurerm_storage_account" "main" {
+  name                     = local.storage_account_name
+  location                 = azurerm_resource_group.main.location
+  resource_group_name      = azurerm_resource_group.main.name
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_share" "data" {
+  name                 = local.file_share_name
+  storage_account_name = azurerm_storage_account.main.name
+  quota                = var.storage_share_quota_gb
+}
+
+# Links the environment to the share. The container app's volume references this
+# link by name (`storage_mount_name`), not the share name.
+resource "azurerm_container_app_environment_storage" "data" {
+  name                         = local.storage_mount_name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  account_name                 = azurerm_storage_account.main.name
+  share_name                   = azurerm_storage_share.data.name
+  access_key                   = azurerm_storage_account.main.primary_access_key
+  access_mode                  = "ReadWrite"
+}
+
+# ─── secrets: generated here, stored in Key Vault ────────────────────────────
+
+resource "azurerm_key_vault" "main" {
+  name                = local.key_vault_name
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+}
+
+# Two independent values, so the encryption key can never equal the session
+# secret (the server refuses to start if the two match).
+resource "random_password" "session_secret" {
+  length  = 64
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
+}
+
+resource "random_password" "encryption_key" {
+  length  = 64
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
+}
+
+# The principal running `terraform apply` (the az-login user) writes these, so
+# it needs data-plane access to the vault before the secrets are created.
+resource "azurerm_key_vault_access_policy" "terraform" {
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = data.azurerm_client_config.current.object_id
+
+  secret_permissions = ["Get", "List", "Set", "Delete", "Recover", "Purge"]
+}
+
+resource "azurerm_key_vault_secret" "session_secret" {
+  name         = "blacklight-session-secret"
+  value        = random_password.session_secret.result
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.terraform]
+}
+
+resource "azurerm_key_vault_secret" "encryption_key" {
+  name         = "blacklight-encryption-key"
+  value        = random_password.encryption_key.result
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.terraform]
+}
+
+# ─── identity: the container app reads the Key Vault secrets with this ───────
+
+resource "azurerm_user_assigned_identity" "app" {
+  name                = local.identity_name
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+
+resource "azurerm_key_vault_access_policy" "app" {
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = azurerm_user_assigned_identity.app.principal_id
+
+  secret_permissions = ["Get"]
+}
+
+# ─── the app ─────────────────────────────────────────────────────────────────
+
+resource "azurerm_container_app" "main" {
+  name                         = local.container_app_name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  # The identity is assigned to the app AND used by the `secret` blocks, so the
+  # Key Vault references resolve before the first revision starts.
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.app.id]
+  }
+
+  secret {
+    name                = "session-secret"
+    identity            = azurerm_user_assigned_identity.app.id
+    key_vault_secret_id = azurerm_key_vault_secret.session_secret.versionless_id
+  }
+  secret {
+    name                = "encryption-key"
+    identity            = azurerm_user_assigned_identity.app.id
+    key_vault_secret_id = azurerm_key_vault_secret.encryption_key.versionless_id
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 8080
+    transport        = "http"
+
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  template {
+    # DuckDB gives the database file to one process at a time, so this app must
+    # never scale beyond a single replica.
+    min_replicas = 1
+    max_replicas = 1
+
+    volume {
+      name         = "data"
+      storage_type = "AzureFile"
+      storage_name = azurerm_container_app_environment_storage.data.name
+      # The image runs as uid/gid 10001; force the share's files to that owner
+      # so the non-root process can write them.
+      mount_options = "uid=10001,gid=10001,dir_mode=0750,file_mode=0750"
+    }
+
+    # Chromium (PDF rendering) needs more than Container Apps' 64 MiB /dev/shm.
+    # An EmptyDir mount replaces it with the replica's ephemeral disk.
+    volume {
+      name         = "shm"
+      storage_type = "EmptyDir"
+    }
+
+    container {
+      name   = "blacklight"
+      image  = "${var.image}:${var.image_tag}"
+      cpu    = var.container_cpu
+      memory = var.container_memory
+
+      env {
+        name  = "BLACKLIGHT_BASE_URL"
+        value = "https://${local.container_app_name}.${azurerm_container_app_environment.main.default_domain}"
+      }
+      env {
+        name        = "BLACKLIGHT_SESSION_SECRET"
+        secret_name = "session-secret"
+      }
+      env {
+        name        = "BLACKLIGHT_ENCRYPTION_KEY"
+        secret_name = "encryption-key"
+      }
+
+      volume_mounts {
+        name = "data"
+        path = "/var/lib/blacklight"
+      }
+      volume_mounts {
+        name = "shm"
+        path = "/dev/shm"
+      }
+
+      readiness_probe {
+        transport = "HTTP"
+        port      = 8080
+        path      = "/api/v1/healthz"
+      }
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = 8080
+        path                    = "/api/v1/healthz"
+        initial_delay           = 30
+        interval_seconds        = 30
+        timeout                 = 5
+        failure_count_threshold = 3
+      }
+      startup_probe {
+        transport               = "HTTP"
+        port                    = 8080
+        path                    = "/api/v1/healthz"
+        initial_delay           = 10
+        interval_seconds        = 10
+        timeout                 = 5
+        failure_count_threshold = 30
+      }
+    }
+  }
+
+  # The app's managed identity must have Get on the vault before the first
+  # revision starts resolving the secret references.
+  depends_on = [azurerm_key_vault_access_policy.app]
+}

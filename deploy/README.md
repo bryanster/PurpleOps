@@ -10,6 +10,7 @@ context. This file is the map.
 | `entrypoint.sh` | Generates and persists a session secret when the operator did not supply one, then `exec`s the server. Nothing else |
 | `healthcheck.sh` | The image's `HEALTHCHECK` command: `GET /api/v1/healthz` on the configured port |
 | `smoke.sh` | Builds the image, runs it, and asserts every claim `docs/deploy.md` makes. `make docker-smoke`; CI runs the same script |
+| `terraform/` | Azure Container Apps example — app, Azure Files data volume, Key Vault secrets. See `deploy/terraform/README.md` |
 
 [`compose.yml`](../compose.yml) is at the repository root rather than here, so that
 `docker compose up` works in a clean clone with no `-f`.

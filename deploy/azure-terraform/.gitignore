@@ -1,0 +1,10 @@
+# Local Terraform state and provider cache.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# User-specific overrides (the example file is committed).
+*.tfvars
+!*.tfvars.example

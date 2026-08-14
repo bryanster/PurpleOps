@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and edit. Every value is optional; these are the
+# defaults from variables.tf.
+
+location         = "eastus"
+name             = "blacklight"
+image_tag        = "v1.0.0"
+container_cpu    = 1
+container_memory = "2Gi"

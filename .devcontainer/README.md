@@ -24,6 +24,7 @@ docker volume rm blacklight-go-mod blacklight-go-build
 | Node 24.18.1 | Exactly the version in `.prototools`, `web/.nvmrc` and `web/package.json` — copied from the official image rather than installed from a distribution repo, which would drift |
 | `make`, git, jq | The Makefile is the interface to this repository |
 | Docker CLI | Via the `docker-outside-of-docker` feature, pointed at the host daemon — so `make docker-build` and `make docker-smoke` work, sharing the host's layer cache |
+| Azure CLI (`az`) | Via the `azure-cli` feature. The Microsoft apt repo carries no trixie suite, so the feature falls back to a pipx install under `/usr/local/pipx` — a slower build, the same `az` on the PATH. Host `~/.azure` is bind-mounted, so `az login` survives rebuilds |
 | Claude Code | `npm install -g @anthropic-ai/claude-code` |
 | Oh My Pi (`omp`) | Prebuilt binary from [omp.sh](https://omp.sh/install) into `/usr/local/bin` (shared PATH; not root's `~/.local/bin`) |
 | **Not** golangci-lint or oapi-codegen | The Makefile pins both and installs them into `./bin`. A second copy in the image is a second version to drift. `make tools` runs as `postCreateCommand` |
@@ -33,8 +34,14 @@ docker volume rm blacklight-go-mod blacklight-go-build
 Ports 8080 (the server) and 5173 (`npm --prefix web run dev`, which proxies `/api` to 8080) are
 forwarded.
 
-Host `~/.gitconfig`, `~/.ssh`, `~/.claude`, and `~/.omp` are bind-mounted into the `vscode` home so
-git identity, keys, and agent config survive rebuilds.
+Host `~/.gitconfig`, `~/.ssh`, `~/.claude`, `~/.omp`, and `~/.azure` are bind-mounted into the
+`vscode` home so git identity, keys, agent config, and the Azure CLI session survive rebuilds.
+Docker creates a missing source path as a root-owned directory, so if you have never run `az` on the
+host, create it once before the first build:
+
+```sh
+mkdir -p ~/.azure
+```
 
 ## Caches
 

@@ -14,7 +14,13 @@
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "moby": false
     },
-    "ghcr.io/devcontainers/features/github-cli":1
+    "ghcr.io/devcontainers/features/github-cli":1,
+    // `az`. The Microsoft apt repo has no trixie suite, so the feature's apt
+    // path fails and it falls back to installing into a pipx venv under
+    // /usr/local/pipx — slower to build, same command on the PATH.
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+      "version": "latest"
+    }
   },
   // Installs the pinned generators and linter into ./bin and runs `npm ci`.
   // The one command in the Makefile that needs the network.
@@ -33,6 +39,12 @@
   // Desktop cannot share.
   "mounts": [
     "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+    // Azure CLI state — `az login` tokens and the chosen subscription — so a
+    // rebuild does not mean logging in again. It is a bind, not a volume: the
+    // host's own `az` shares the session. Docker creates the source as a
+    // root-owned directory if it does not exist, so run `mkdir -p ~/.azure` on
+    // the host before the first build (the same caveat as ~/.omp).
+    "source=${localEnv:HOME}/.azure,target=/home/vscode/.azure,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.omp,target=/home/vscode/.omp,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
