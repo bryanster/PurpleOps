@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -94,6 +95,10 @@ type Deps struct {
 	// land (M2-006+); tests inject a fixture adapter to exercise the pipeline
 	// end to end over HTTP.
 	ContentAdapters map[storecontent.Kind]content.Adapter
+	// ContentLookupIP resolves a content source hostname during URL validation
+	// (M7-014). Nil uses net.DefaultResolver. Tests inject a stub so content
+	// URL validation never touches the network.
+	ContentLookupIP func(ctx context.Context, host string) ([]net.IP, error)
 
 	// DisableContentRunner skips boot/start of the content job worker. Tests
 	// that substitute a non-functional store (panickyStore) set this so
@@ -537,11 +542,17 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 	emulationPlans := storecontent.NewEmulationPlans(deps.Store)
 	notes := storecontent.NewNotes(deps.Store)
 
+	contentPolicy := content.URLPolicy{
+		AllowHTTP: deps.Config.Env.IsDevelopment(),
+		LookupIP:  deps.ContentLookupIP,
+	}
+
 	registry, err := content.New(content.Deps{
 		Sources:  sources,
 		Versions: versions,
 		Jobs:     jobs,
 		Activity: activityLog,
+		Policy:   contentPolicy,
 	})
 	if err != nil {
 		// Construction only fails when a repository is nil, which is a
@@ -756,6 +767,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		JobTimeout: deps.Config.Content.JobTimeout,
 		WriteBatch: deps.Config.Content.WriteBatch,
 		Log:        log,
+		Policy:     contentPolicy,
 	})
 	if err != nil {
 		panic("httpapi: content runner: " + err.Error())

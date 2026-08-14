@@ -79,6 +79,13 @@ func newAuthServerDeps(t *testing.T, adjustDeps func(*Deps), adjust ...func(*con
 	}
 	db := storetest.Migrated(t)
 	var depsFns []func(*Deps)
+	// Content URL validation (M7-014) resolves hostnames; default it to a stub
+	// so no test touches the network. SSRF-fence tests override it explicitly.
+	depsFns = append(depsFns, func(d *Deps) {
+		if d.ContentLookupIP == nil {
+			d.ContentLookupIP = stubContentLookupIP
+		}
+	})
 	if adjustDeps != nil {
 		depsFns = append(depsFns, adjustDeps)
 	}

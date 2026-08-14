@@ -86,6 +86,7 @@ func (a *FixtureAdapter) Fetch(ctx context.Context, req FetchRequest) (Bundle, e
 		URL:      req.Source.URL,
 		MaxBytes: req.MaxBytes,
 		Client:   req.HTTP,
+		Policy:   req.Policy,
 	}
 	raw, err := ReadAll(ctx, src)
 	if err != nil {

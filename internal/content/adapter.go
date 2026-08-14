@@ -58,9 +58,13 @@ type FetchRequest struct {
 	// MaxBytes is the download ceiling from config. Fetch must enforce it.
 	MaxBytes int64
 
-	// HTTP is the client to use for network I/O. Nil means http.DefaultClient.
-	// Tests inject a short-timeout client pointed at httptest.
+	// HTTP is the client to use for network I/O. Nil means the runner's
+	// policy client (M7-014). Tests inject a short-timeout client.
 	HTTP HTTPDoer
+
+	// Policy fences the URLs Fetch may touch (M7-014). Adapters pass it to
+	// HTTPSource so a fetch is validated even when HTTP is injected.
+	Policy URLPolicy
 }
 
 // SourceInfo is the registry subset adapters need. Kept small so a test can

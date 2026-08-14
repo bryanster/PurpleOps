@@ -53,6 +53,7 @@ func (a *Adapter) Fetch(ctx context.Context, req content.FetchRequest) (content.
 		URL:      url,
 		MaxBytes: req.MaxBytes,
 		Client:   req.HTTP,
+		Policy:   req.Policy,
 	})
 	if err != nil {
 		return content.Bundle{}, fmt.Errorf("ctid: fetch %s: %w", url, err)

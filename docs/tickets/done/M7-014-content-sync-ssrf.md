@@ -44,14 +44,14 @@ admin). That is still a confused deputy: the **server** fetches IMDS, loopback, 
 
 ## Acceptance criteria
 
-- [ ] `PATCH` with `url=http://127.0.0.1/` is 400 in production config.
-- [ ] `PATCH` with `url=http://169.254.169.254/latest/meta-data/` is 400.
-- [ ] `PATCH` with `url=file:///etc/passwd` is 400.
-- [ ] `PATCH` with `url=https://github.com/...` still succeeds.
-- [ ] A pre-existing row pointed at a private URL fails closed at sync start (no packet to the
+- [x] `PATCH` with `url=http://127.0.0.1/` is 400 in production config.
+- [x] `PATCH` with `url=http://169.254.169.254/latest/meta-data/` is 400.
+- [x] `PATCH` with `url=file:///etc/passwd` is 400.
+- [x] `PATCH` with `url=https://github.com/...` still succeeds.
+- [x] A pre-existing row pointed at a private URL fails closed at sync start (no packet to the
       target if DNS/IP is private; no `file:` open).
-- [ ] A 302 from an allowed host to `http://169.254.169.254/` is not followed.
-- [ ] Production runner does not call `http.DefaultClient`.
+- [x] A 302 from an allowed host to `http://169.254.169.254/` is not followed.
+- [x] Production runner does not call `http.DefaultClient`.
 
 ## Tests
 
@@ -69,3 +69,20 @@ Do not special-case “admin said so” with a config flag unless an operator ti
 The whole point is that admin UI is not an HTTP proxy.
 
 Medium: not a silent defer, but not a `M7-009` blocker unless the ship owner promotes it.
+
+## Implementation notes
+
+- New `internal/content/urlpolicy.go` owns the fence: `URLPolicy.Validate` (scheme allowlist,
+  metadata-host blocklist, private/reserved-IP deny, DNS-rebinding deny when any resolved address
+  is private) and `URLPolicy.NewClient` (redirect re-validation + dial-time pinning + dial and
+  response-header timeouts). Wired on write (`Registry.UpdateSource`) and on fetch
+  (`HTTPSource.Open`, plus every adapter passing `FetchRequest.Policy` through).
+- `http` is allowed only when `config.Environment.IsDevelopment()`; the policy is derived from
+  `deps.Config.Env` in `internal/httpapi/server.go`. `blctl` builds its runner without a policy, so
+  it keeps the strictest default (https only) — it does not read `BLACKLIGHT_ENV`.
+- No whole-request `http.Client.Timeout`: the response body is bounded by the job context (and
+  `MaxBytes`), and a fixed client timeout would truncate legitimate multi-hundred-MiB catalogs on
+  slow links. The client still carries dial (10s) and response-header (30s) timeouts, which is what
+  stops a private host that accepts TCP but never answers.
+- Tests never touch the network: `URLPolicy` takes an injectable `LookupIP`, and the httpapi test
+  server stubs `Deps.ContentLookupIP` by default (override it for fence-specific cases).

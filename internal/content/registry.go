@@ -24,6 +24,7 @@ type Registry struct {
 	versions *storecontent.Versions
 	jobs     *storecontent.Jobs
 	activity *events.Log
+	policy   URLPolicy
 }
 
 // Deps is everything a [Registry] is built from.
@@ -32,6 +33,9 @@ type Deps struct {
 	Versions *storecontent.Versions
 	Jobs     *storecontent.Jobs
 	Activity *events.Log // optional; nil skips durable activity rows
+	// Policy fences source URLs on write (M7-014). The zero value is the
+	// production posture: https only, no private destinations.
+	Policy URLPolicy
 }
 
 // New returns a Registry over deps, or an error naming what is missing.
@@ -49,6 +53,7 @@ func New(deps Deps) (*Registry, error) {
 		versions: deps.Versions,
 		jobs:     deps.Jobs,
 		activity: deps.Activity,
+		policy:   deps.Policy,
 	}, nil
 }
 
@@ -127,6 +132,9 @@ func (r *Registry) UpdateSource(ctx context.Context, actor authn.Subject, id str
 		}
 	}
 	if edit.URL != nil && *edit.URL != before.URL {
+		if err := r.policy.Validate(ctx, *edit.URL); err != nil {
+			return storecontent.Source{}, apierr.Validation(apierr.Field("url", err.Error()))
+		}
 		delta["url"] = change(before.URL, *edit.URL)
 		after.URL = *edit.URL
 	}

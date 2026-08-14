@@ -171,6 +171,30 @@ func TestAdminCanPatchSourceMetadata(t *testing.T) {
 	}
 }
 
+func TestAdminPatchSourceRejectsPrivateURL(t *testing.T) {
+	t.Parallel()
+
+	server := newAuthServer(t)
+	server.seedUser(t)
+	admin := server.signIn(t)
+	id := storecontent.SourceIDAtomic
+
+	for _, bad := range []string{
+		"http://127.0.0.1/",
+		"http://169.254.169.254/latest/meta-data/",
+		"file:///etc/passwd",
+	} {
+		body, err := json.Marshal(map[string]string{"url": bad})
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := server.send(http.MethodPatch, contentSourcePath(id), string(body), admin)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("patch url=%q: status %d, want 400\nbody: %s", bad, recorder.Code, recorder.Body)
+		}
+	}
+}
+
 func TestDeleteCustomSourceIsConflict(t *testing.T) {
 	t.Parallel()
 

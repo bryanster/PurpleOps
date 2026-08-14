@@ -1,7 +1,9 @@
 package content_test
 
 import (
+	"context"
 	"errors"
+	"net"
 	"testing"
 
 	"github.com/bryanster/blacklight/internal/authn"
@@ -13,6 +15,41 @@ import (
 	"github.com/bryanster/blacklight/internal/store/storetest"
 )
 
+func TestRegistryUpdateSourceURLValidation(t *testing.T) {
+	t.Parallel()
+
+	db := storetest.Migrated(t)
+	public := func(_ context.Context, _ string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("8.8.8.8")}, nil
+	}
+	reg, err := content.New(content.Deps{
+		Sources:  storecontent.NewSources(db),
+		Versions: storecontent.NewVersions(db, storecontent.Paths{}),
+		Jobs:     storecontent.NewJobs(db),
+		Activity: events.New(activity.New(db)),
+		Policy:   content.URLPolicy{AllowHTTP: false, LookupIP: public},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := authn.Subject{UserID: "actor"}
+
+	for _, bad := range []string{
+		"http://127.0.0.1/",
+		"http://169.254.169.254/latest/meta-data/",
+		"file:///etc/passwd",
+	} {
+		_, err := reg.UpdateSource(t.Context(), actor, storecontent.SourceIDAttack, content.SourceEdit{URL: &bad})
+		if !errors.Is(err, apierr.ErrValidation) {
+			t.Fatalf("UpdateSource(%q) = %v, want a validation error", bad, err)
+		}
+	}
+
+	good := "https://github.com/mitre-attack/attack-stix-data"
+	if _, err := reg.UpdateSource(t.Context(), actor, storecontent.SourceIDAttack, content.SourceEdit{URL: &good}); err != nil {
+		t.Fatalf("UpdateSource(%q) = %v, want nil", good, err)
+	}
+}
 func testRegistry(t *testing.T) (*content.Registry, *storecontent.Sources) {
 	t.Helper()
 	db := storetest.Migrated(t)

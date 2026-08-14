@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +52,7 @@ type Runner struct {
 	// custom applies v1_import jobs (M2-012). Optional until that path is used.
 	custom *Custom
 	http   HTTPDoer
+	policy URLPolicy
 	log    *slog.Logger
 
 	maxBytes   int64
@@ -87,9 +87,13 @@ type RunnerDeps struct {
 	MaxBytes   int64
 	JobTimeout time.Duration
 	WriteBatch int
-	// HTTP is injected into FetchRequest. Nil uses http.DefaultClient.
+	// HTTP is injected into FetchRequest. Nil uses the runner's policy client
+	// (M7-014). Tests inject a short-timeout client.
 	HTTP HTTPDoer
-	Log  *slog.Logger
+	// Policy fences the URLs a fetch may touch (M7-014). The zero value is the
+	// production posture: https only, no private destinations.
+	Policy URLPolicy
+	Log    *slog.Logger
 }
 
 // NewRunner returns a Runner over deps, or an error naming what is missing.
@@ -134,6 +138,7 @@ func NewRunner(deps RunnerDeps) (*Runner, error) {
 		adapters:   adapters,
 		custom:     deps.Custom,
 		http:       deps.HTTP,
+		policy:     deps.Policy,
 		log:        log,
 		maxBytes:   maxBytes,
 		jobTimeout: timeout,
@@ -653,6 +658,7 @@ func (r *Runner) runPipeline(ctx context.Context, adapter Adapter, src storecont
 			Version:  job.Version,
 			MaxBytes: r.maxBytes,
 			HTTP:     r.httpClient(),
+			Policy:   r.policy,
 		})
 		if err != nil {
 			return out, err
@@ -916,7 +922,7 @@ func (r *Runner) httpClient() HTTPDoer {
 	if r.http != nil {
 		return r.http
 	}
-	return http.DefaultClient
+	return r.policy.NewClient()
 }
 
 func (r *Runner) recordAlone(ctx context.Context, e events.Entry) {

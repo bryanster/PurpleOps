@@ -85,6 +85,7 @@ func (a *Adapter) Fetch(ctx context.Context, req content.FetchRequest) (content.
 		URL:      bundleURL,
 		MaxBytes: req.MaxBytes,
 		Client:   req.HTTP,
+		Policy:   req.Policy,
 	})
 	if err != nil {
 		return content.Bundle{}, fmt.Errorf("attack: fetch %s: %w", bundleURL, err)
@@ -174,6 +175,7 @@ func (a *Adapter) discoverLatest(ctx context.Context, req content.FetchRequest, 
 			URL:      indexURL,
 			MaxBytes: req.MaxBytes,
 			Client:   req.HTTP,
+			Policy:   req.Policy,
 		})
 		if err != nil {
 			return "", fmt.Errorf("attack: discover latest via %s: %w", indexURL, err)

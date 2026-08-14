@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -234,3 +235,10 @@ func (stubStore) Read() store.Reader { return nil }
 func (stubStore) Write(context.Context, func(*sql.Tx) error) error { return nil }
 
 func (stubStore) Close() error { return nil }
+
+// stubContentLookupIP resolves every hostname to a public address, so content
+// URL validation never touches the network in tests. Tests that exercise the
+// SSRF fence (M7-014) override it via Deps.ContentLookupIP.
+func stubContentLookupIP(_ context.Context, _ string) ([]net.IP, error) {
+	return []net.IP{net.ParseIP("8.8.8.8")}, nil
+}

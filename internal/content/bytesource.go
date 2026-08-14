@@ -25,11 +25,15 @@ func (e *ErrTooLarge) Error() string {
 	return fmt.Sprintf("download exceeds content max bytes limit of %d", e.Limit)
 }
 
-// HTTPSource fetches bytes over HTTPS (or http in tests).
+// HTTPSource fetches bytes over HTTPS (or http in development).
 type HTTPSource struct {
 	URL      string
 	MaxBytes int64
 	Client   HTTPDoer
+	// Policy fences the URL before any request is made, and builds the client
+	// when Client is nil. The zero value is the production posture (https
+	// only, no private destinations).
+	Policy URLPolicy
 	// UserAgent is sent on the request. Empty defaults to "blacklight-content".
 	UserAgent string
 }
@@ -39,9 +43,12 @@ func (s HTTPSource) Open(ctx context.Context) (io.ReadCloser, int64, error) {
 	if s.URL == "" {
 		return nil, 0, errors.New("content: HTTPSource: empty URL")
 	}
+	if err := s.Policy.Validate(ctx, s.URL); err != nil {
+		return nil, 0, fmt.Errorf("content: fetch %s: %w", s.URL, err)
+	}
 	client := s.Client
 	if client == nil {
-		client = http.DefaultClient
+		client = s.Policy.NewClient()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.URL, nil)
 	if err != nil {
