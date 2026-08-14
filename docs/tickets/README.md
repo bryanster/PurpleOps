@@ -71,7 +71,7 @@ A ticket is done when **all** of the following are true. Tickets do not restate 
 | M4 — Collaboration | ✅ done — 10/10 | [10 tickets](#m4--collaboration) · [`M4-EPIC.md`](done/M4-EPIC.md) |
 | M5 — Analytics | ✅ done — 15/15 | [15 tickets](#m5--analytics) · [`M5-EPIC.md`](done/M5-EPIC.md) |
 | M6 — Reporting | ✅ done — 15/15 | [15 tickets](#m6--reporting) · [`M6-EPIC.md`](done/M6-EPIC.md) |
-| M7 — Cutover | in progress — 13/14 | [14 tickets](#m7--cutover) · [`M7-EPIC.md`](M7-EPIC.md) |
+| M7 — Cutover | ✅ done — 14/14 | [14 tickets](#m7--cutover) · [`M7-EPIC.md`](done/M7-EPIC.md) |
 
 
 > **M0a note:** the annotated tag **`v1-final`** exists at `c053fb741ba953bc8f2e151c05f966db813ec8fc`.
@@ -267,7 +267,7 @@ Build roughly in this order — the dependency chain is real. **M5-015 is a gate
 Goal: ship **`v1.0.0`** — docs and README operator-ready, GHCR multi-arch + GitHub Release, backup /
 upgrade path, security and performance checklists green, historical `v1-final` tag in place.
 M6-015 remains the product thesis gate; M7 is the shippability gate. Decisions are locked in
-[`M7-EPIC.md`](M7-EPIC.md).
+[`M7-EPIC.md`](done/M7-EPIC.md).
 
 Build roughly in this order — the dependency chain is real. **M7-001 is unblocked and should land
 immediately.** **M7-009** is the exit gate. **M7-010…M7-012** are High findings from
@@ -284,7 +284,7 @@ immediately.** **M7-009** is the exit gate. **M7-010…M7-012** are High finding
 | [M7-006](done/M7-006-cutover-hygiene.md) ✅ | Cutover hygiene: v1 refs, CI branches, status banners | S |
 | [M7-007](done/M7-007-security-review.md) ✅ | Security review pass (checklist) | L |
 | [M7-008](done/M7-008-performance-sanity.md) ✅ | Performance sanity pass (re-run gates + report load) | M |
-| [M7-009](M7-009-ship-v1.md) | Ship gate: `v1.0.0` release | M |
+| [M7-009](done/M7-009-ship-v1.md) ✅ | Ship gate: `v1.0.0` release | M |
 | [M7-010](done/M7-010-engagement-list-authz.md) ✅ | Engagement list leaks every engagement (BL-001, High) | S |
 | [M7-011](done/M7-011-ownership-facts-loader.md) ✅ | Replace production Ownership.Facts stub (BL-003, High) | L |
 | [M7-012](done/M7-012-cross-engagement-idor.md) ✅ | Bind nested IDs to the authorized engagement (BL-002, High) | L |
