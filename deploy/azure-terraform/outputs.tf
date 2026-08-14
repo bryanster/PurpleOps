@@ -30,12 +30,20 @@ output "admin_email" {
 
 output "admin_password_command" {
   description = "Command that prints the first administrator's initial password. The value is write-only, so Key Vault is the only place it exists — Terraform cannot show it here. Null when no account is created."
+
+  # Built from the vault and secret *names*, never from the secret resource
+  # itself: every attribute of an azurerm_key_vault_secret is sensitive, so a
+  # reference to one would make this whole string sensitive and unprintable.
   value = local.create_admin ? join(" ", [
     "az keyvault secret show",
     "--vault-name ${azurerm_key_vault.main.name}",
-    "--name ${one(azurerm_key_vault_secret.admin_password).name}",
+    "--name ${local.admin_secret_name}",
     "--query value -o tsv",
   ]) : null
+
+  # The command is not the password — it is what an operator runs to fetch it
+  # from Key Vault, having already authenticated to Azure.
+  depends_on = [azurerm_key_vault_secret.admin_password]
 }
 
 output "managed_identity_client_id" {

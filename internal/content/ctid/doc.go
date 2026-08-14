@@ -8,9 +8,14 @@
 //	url = https://github.com/center-for-threat-informed-defense/adversary_emulation_library/archive/refs/heads/master.zip
 //	ref = master
 //
-// Fetch GETs the source URL (a GitHub archive zip of the repository). Offline
-// bundle upload accepts the same zip bytes. Tests inject FetchBytes so CI never
-// hits the network.
+// A GitHub archive URL is not downloaded: the archive is hundreds of megabytes
+// of tooling around a few dozen kilobytes of plans, and it grew past the content
+// size limit. Fetch reads the repository listing, takes the plan files from
+// raw.githubusercontent.com, and reassembles them into a small zip with the
+// archive's own layout — see fetch.go, and docs/content-ctid.md for the
+// operator-visible consequences. Any other URL is GET as-is, and offline bundle
+// upload accepts the same zip bytes. Tests inject FetchBytes so CI never hits
+// the network.
 //
 // # Parse
 //

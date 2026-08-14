@@ -248,10 +248,9 @@ func (s *Service) PatchStep(ctx context.Context, actor authn.Subject, engagement
 	}
 
 	after := storengagement.After(func(ctx context.Context, tx *sql.Tx) error {
-		recordActivityStep(ctx, s.activity, actor.UserID, scenario.EngagementID,
+		return recordActivityStepTx(ctx, s.activity, tx, actor.UserID, scenario.EngagementID,
 			events.VerbStepUpdated, id, delta,
 		)
-		return nil
 	})
 
 	step, err := s.steps.Update(ctx, id, changes, after)
@@ -404,4 +403,32 @@ func recordActivityStep(ctx context.Context, activity *events.Log, actorID, enga
 	}
 	//nolint:errcheck // best-effort audit trail; failure is logged by the store
 	activity.RecordAlone(ctx, entry)
+}
+
+// recordActivityStepTx is recordActivityStep for a [storengagement.After] hook,
+// which runs inside the mutation's own write transaction.
+//
+// The distinction is not cosmetic. [store.DB.Write] serializes writers and is
+// not re-entrant, so RecordAlone — which opens a write transaction of its own —
+// called from inside a hook queues behind the transaction that is waiting on
+// it. The request stalls until its deadline and the outer commit then fails on
+// a transaction the context already rolled back. Recording on the caller's tx
+// is what After exists for: the log row and the change share one commit.
+func recordActivityStepTx(ctx context.Context, activity *events.Log, tx *sql.Tx,
+	actorID, engagementID string, verb events.Verb, objectID string, delta map[string]any) error {
+	if activity == nil {
+		return nil
+	}
+	entry := events.Entry{
+		EngagementID: engagementID,
+		ActorID:      actorID,
+		Verb:         verb,
+		ObjectType:   events.ObjectStep,
+		ObjectID:     objectID,
+		At:           time.Now(),
+	}
+	if delta != nil {
+		entry.Delta = events.Delta(delta)
+	}
+	return activity.Record(ctx, tx, entry)
 }

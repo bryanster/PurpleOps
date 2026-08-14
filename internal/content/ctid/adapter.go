@@ -49,6 +49,25 @@ func (a *Adapter) Fetch(ctx context.Context, req content.FetchRequest) (content.
 	if url == "" {
 		return content.Bundle{}, fmt.Errorf("ctid: fetch: source URL is empty")
 	}
+
+	// A GitHub archive URL is read file by file instead of whole: the archive
+	// is hundreds of megabytes of tooling around a few hundred kilobytes of
+	// plans, and the plans are all this adapter reads. See fetch.go. Any other
+	// URL — a mirror, a zip served from somewhere else — is fetched as it
+	// always was.
+	if repo, ok := parseArchiveURL(url); ok {
+		raw, err := fetchPlans(ctx, req, repo)
+		if err != nil {
+			return content.Bundle{}, err
+		}
+		return content.Bundle{
+			Bytes:     raw,
+			Size:      int64(len(raw)),
+			Version:   storecontent.VersionCurrent,
+			MediaType: "application/zip",
+		}, nil
+	}
+
 	raw, err := content.ReadAll(ctx, content.HTTPSource{
 		URL:      url,
 		MaxBytes: req.MaxBytes,

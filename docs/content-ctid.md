@@ -15,7 +15,36 @@ Seeded by migration `0011_content` (disabled until an admin enables it):
 | URL | `https://github.com/center-for-threat-informed-defense/adversary_emulation_library/archive/refs/heads/master.zip` |
 | Ref | `master` |
 
-Fetch GETs the URL as-is. Offline bundle upload accepts the **same zip bytes**.
+## How the fetch works
+
+The URL above names a GitHub archive of the whole repository — around **640 MB**, and growing with
+every tool, binary and packet capture the project adds. The plans this adapter reads come to about
+**75 KB** of it. Downloading the archive to reach them eventually stopped working altogether: it
+crossed `BLACKLIGHT_CONTENT_MAX_BYTES` (512 MiB by default) and the sync failed with
+`download exceeds content max bytes limit`.
+
+So a **GitHub** archive URL is not downloaded. The adapter reads the repository listing
+(`GET /repos/{owner}/{repo}/git/trees/{ref}?recursive=1`), picks the plan files out of it with the
+same rule `Parse` applies to archive entries, fetches those files from `raw.githubusercontent.com`,
+and reassembles them into a small zip with the archive's own layout
+(`{repo}-{ref}/{actor}/Emulation_Plan/yaml/…`). One sync moves roughly **2 MB instead of 640 MB** and
+takes a few seconds. Everything downstream — parse, the raw snapshot, reprocess-from-raw, offline
+bundle import — still sees a zip and is unchanged.
+
+What this means in practice:
+
+- **The raw snapshot is that small zip**, not the upstream archive. Its digest changes when a plan
+  changes rather than on every commit to any file in the repository, so re-syncs that changed
+  nothing are visible as such.
+- **The GitHub API is used unauthenticated**, which is rate limited per address (60 requests an hour)
+  and resets hourly. One listing call per sync is well inside it; a `403` from the listing says so in
+  the job error.
+- **A truncated listing fails the job.** The entries GitHub drops when truncating could be plans, and
+  a catalog quietly missing an adversary is worse than a sync that says it could not read the
+  repository. Import an offline bundle if you ever hit it.
+- **Any other URL is fetched whole, as before** — a mirror, or a zip served from anywhere that is not
+  `github.com` / `codeload.github.com`. Offline bundle upload accepts the **same zip bytes** it
+  always did.
 
 ## Archive shape
 

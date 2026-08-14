@@ -284,8 +284,11 @@ export function IdBadges({
 }
 
 /**
- * Placeholder for M3 "use in scenario". Disabled and honest — it does not imply
- * an API exists yet.
+ * Placeholder for "use in scenario". Still disabled: importing library content
+ * needs an engagement to import *into*, and the library has none in scope. The
+ * flow itself shipped with M3 and lives on the other side of it — the
+ * engagement's Workbook tab — so the tooltip names that route rather than a
+ * milestone that has already landed.
  */
 export function UseInScenarioPlaceholder(): ReactNode {
   return (
@@ -294,7 +297,7 @@ export function UseInScenarioPlaceholder(): ReactNode {
       variant="secondary"
       size="sm"
       disabled
-      title="Arrives with engagements (M3)"
+      title="Import from an engagement: Workbook → Import CTID / From Template"
     >
       Use in scenario
     </Button>

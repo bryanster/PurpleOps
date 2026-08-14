@@ -65,6 +65,7 @@ locals {
   container_app_name   = var.name
   storage_account_name = "st${random_string.suffix.result}"
   key_vault_name       = "kv${random_string.suffix.result}"
+  admin_secret_name    = "blacklight-bootstrap-admin-password"
   file_share_name      = "blacklight-data"
   storage_mount_name   = "blacklight-data"
 }
@@ -212,7 +213,7 @@ resource "azurerm_key_vault_secret" "encryption_key" {
 resource "azurerm_key_vault_secret" "admin_password" {
   count = local.create_admin ? 1 : 0
 
-  name             = "blacklight-bootstrap-admin-password"
+  name             = local.admin_secret_name
   value_wo         = coalesce(var.admin_password, ephemeral.random_password.admin_password.result)
   value_wo_version = var.admin_password_version
   key_vault_id     = azurerm_key_vault.main.id

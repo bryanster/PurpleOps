@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Importing a step from a template works again.** From Template in an
+  engagement workbook hung for thirty seconds and then answered 500, every time
+  — the step was never created. The activity entry recorded alongside the new
+  step opened a second write transaction from inside the one creating it, and
+  the store serializes writers: the recording queued behind the transaction that
+  was waiting on it until the request deadline fired, and the commit then failed
+  on a transaction the cancelled context had already rolled back. Recording now
+  happens on the caller's transaction, as the hook was designed to, so the step
+  and its activity row share one commit. Patching a step and patching a scenario
+  recorded the same broken way and were failing identically; both are fixed with
+  it.
+- **The CTID content pack syncs again.** Its source is a GitHub archive of the
+  whole `adversary_emulation_library` repository, which passed 512 MiB and so
+  failed every sync with `download exceeds content max bytes limit`. The
+  adapter no longer downloads it: it reads the repository listing, fetches only
+  the plan files it actually parses, and reassembles them into a small zip with
+  the archive's layout — about 75 KB moved instead of 640 MB, in a few seconds.
+  Mirrors and offline bundles are unaffected, and the raw snapshot's digest now
+  changes when a plan changes rather than on every upstream commit. See
+  `docs/content-ctid.md`.
+- **Administrators can edit engagements again.** An administrator opening an
+  engagement got no workbook toolbar — no Add Scenario, Add Step, Import CTID or
+  From Template — read-only red and blue execution editors, and no way to raise
+  a finding. The server had always allowed all of it (every engagement-scoped
+  rule grants `Platform: admins`); only the interface disagreed, so the buttons
+  were absent rather than refused. The interface now reads the caller's actual
+  seat first, falling back to the platform seat only for an administrator who
+  holds no membership, and its permission predicates match the server's table
+  for every role. This bit hardest on a fresh install, where the bootstrapped
+  first account is an administrator and there is nobody else to be a lead yet.
+
 ## [1.0.1] — 2026-08-14
 
 ### Added

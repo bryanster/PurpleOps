@@ -10,7 +10,7 @@ import { renderWithProviders } from '@/test/render'
 
 import { EngagementCtx, type EngagementContextValue } from './engagement-layout'
 import { engagementWorkbookPath } from './paths'
-import { engagementKeys } from './queries'
+import { engagementKeys, type EngagementRole } from './queries'
 import { WorkbookPage } from './workbook-page'
 
 const ENGAGEMENT_ID = '0192a000-0000-7000-8000-000000000001'
@@ -203,7 +203,7 @@ function stubWorkbookData(): void {
 
 function renderWorkbook(
   user: components['schemas']['CurrentUser'],
-  contextRole: components['schemas']['EngagementRole'],
+  contextRole: EngagementRole,
 ): ReturnType<typeof renderWithProviders> {
   const ctx: EngagementContextValue = {
     engagementId: ENGAGEMENT_ID,
@@ -262,6 +262,28 @@ describe('WorkbookPage — red sees all steps', () => {
     await expandFirstScenario()
 
     expect(screen.getByRole('button', { name: /add scenario/i })).toBeDefined()
+  })
+})
+
+describe('WorkbookPage — platform admin holding no seat', () => {
+  // Regression: the toolbar was gated on lead/red only, so an administrator —
+  // the seat the bootstrapped first account holds — opened the workbook of a
+  // fresh install and found no way to add anything, though the server grants
+  // `workbook.write` to `Platform: admins`.
+  test('shows Add Scenario button for admin', async () => {
+    stubWorkbookData()
+    renderWorkbook(adminUserFixture, 'admin')
+
+    expect(await screen.findByRole('button', { name: /add scenario/i })).toBeDefined()
+  })
+
+  test('shows the step-building controls for admin', async () => {
+    stubWorkbookData()
+    renderWorkbook(adminUserFixture, 'admin')
+
+    expect(await screen.findByRole('button', { name: /add step/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /import ctid/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /from template/i })).toBeDefined()
   })
 })
 

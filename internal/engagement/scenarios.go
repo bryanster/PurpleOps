@@ -135,10 +135,9 @@ func (s *Service) PatchScenario(ctx context.Context, actor authn.Subject, engage
 	}
 
 	after := storengagement.After(func(ctx context.Context, tx *sql.Tx) error {
-		s.recordActivity(ctx, actor.UserID, current.EngagementID,
+		return s.recordActivityTx(ctx, tx, actor.UserID, current.EngagementID,
 			events.VerbScenarioUpdated, events.ObjectScenario, id, delta,
 		)
-		return nil
 	})
 
 	scenario, err := s.scenarios.Update(ctx, id, changes, after)
@@ -240,4 +239,25 @@ func (s *Service) recordActivity(ctx context.Context, actorID, engagementID stri
 	}
 	//nolint:errcheck // best-effort audit trail; failure is logged by the store
 	s.activity.RecordAlone(ctx, entry)
+}
+
+// recordActivityTx is recordActivity for a [storengagement.After] hook, which
+// runs inside the mutation's own write transaction. See recordActivityStepTx
+// for why an After hook must not record through RecordAlone.
+func (s *Service) recordActivityTx(ctx context.Context, tx *sql.Tx, actorID, engagementID string,
+	verb events.Verb, objectType, objectID string, delta map[string]any) error {
+	if s.activity == nil {
+		return nil
+	}
+	entry := events.Entry{
+		EngagementID: engagementID,
+		ActorID:      actorID,
+		Verb:         verb,
+		ObjectType:   objectType,
+		ObjectID:     objectID,
+	}
+	if delta != nil {
+		entry.Delta = events.Delta(delta)
+	}
+	return s.activity.Record(ctx, tx, entry)
 }

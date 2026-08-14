@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/bryanster/blacklight/internal/authn"
 	"github.com/bryanster/blacklight/internal/engagement"
+	"github.com/bryanster/blacklight/internal/events"
+	storeactivity "github.com/bryanster/blacklight/internal/store/activity"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 	storengagement "github.com/bryanster/blacklight/internal/store/engagement"
 	"github.com/bryanster/blacklight/internal/store/identity"
@@ -17,6 +20,7 @@ import (
 type fromTemplateDeps struct {
 	Procedures  *storecontent.Procedures
 	Engagements *storengagement.Engagements
+	Activity    *storeactivity.Entries
 	Service     *engagement.Service
 	Engagement  storengagement.Engagement
 	Scenario    storengagement.Scenario
@@ -31,10 +35,15 @@ func newFromTemplateDeps(t *testing.T) *fromTemplateDeps {
 	scenarios := storengagement.NewScenarios(db)
 	steps := storengagement.NewSteps(db)
 	memberships := identity.NewMemberships(db)
+	// Wired the way the server wires it (httpapi.NewServer). Leaving it nil
+	// would skip the activity hook entirely, which is how the from-template
+	// stall reached production with these tests green.
+	entries := storeactivity.New(db)
 
 	svc, err := engagement.New(engagement.Deps{
 		Engagements: engagements,
 		AttackPin:   nil, // no technique resolution in these tests
+		Activity:    events.New(entries),
 		Memberships: memberships,
 		Scenarios:   scenarios,
 		Steps:       steps,
@@ -65,6 +74,7 @@ func newFromTemplateDeps(t *testing.T) *fromTemplateDeps {
 	return &fromTemplateDeps{
 		Procedures:  procedures,
 		Engagements: engagements,
+		Activity:    entries,
 		Service:     svc,
 		Engagement:  eng,
 		Scenario:    scenario,
@@ -312,5 +322,98 @@ func TestCreateStepFromTemplate_NameAndObjectiveOverride(t *testing.T) {
 	}
 	if step.TargetAsset != "DC01" {
 		t.Errorf("targetAsset = %q, want DC01", step.TargetAsset)
+	}
+}
+
+// TestCreateStepFromTemplate_RecordsActivityOnTheCallersTransaction is the
+// regression test for importing a step from a template being impossible in a
+// running server.
+//
+// The activity hook runs inside the write transaction that creates the step,
+// and store.DB.Write serializes writers and is not re-entrant. Recording
+// through RecordAlone — which opens a write transaction of its own — therefore
+// queued the hook behind the transaction waiting on it: the request stalled
+// until its deadline and the commit then failed on a transaction the cancelled
+// context had already rolled back. Every from-template import answered 500.
+//
+// The two assertions are the two halves of that. A step that came back at all
+// means the write finished rather than deadlocking, and an activity row for it
+// means the hook wrote on the caller's transaction and shared its commit.
+func TestCreateStepFromTemplate_RecordsActivityOnTheCallersTransaction(t *testing.T) {
+	t.Parallel()
+
+	d := newFromTemplateDeps(t)
+	ctx := context.Background()
+
+	tmpl, err := d.Procedures.Create(ctx, storecontent.ProcedureTemplate{
+		SourceID:    storecontent.SourceIDAtomic,
+		Version:     storecontent.VersionCurrent,
+		ExternalID:  "T1003-2",
+		Name:        "LSASS Dump",
+		Description: "Dumps LSASS memory.",
+		Command:     "procdump -ma lsass.exe #{path}",
+		Platforms:   json.RawMessage(`["windows"]`),
+	})
+	if err != nil {
+		t.Fatalf("create template: %v", err)
+	}
+
+	// A deadlocked write does not fail — it hangs — so the call is given a
+	// deadline of its own rather than the test binary's. Two seconds is
+	// several orders of magnitude more than one insert needs and well short of
+	// the 30s request timeout the stall used to run into.
+	deadlined, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	actor := actorForTest()
+	step, err := d.Service.CreateStepFromTemplate(deadlined, actor, engagement.CreateStepFromTemplateInput{
+		EngagementID: d.Engagement.ID,
+		ScenarioID:   d.Scenario.ID,
+		Template:     tmpl,
+		ArgValues:    map[string]string{"path": "C:\\temp\\lsass.dmp"},
+	})
+	if err != nil {
+		t.Fatalf("CreateStepFromTemplate with activity recording wired: %v", err)
+	}
+
+	rows, _, err := d.Activity.List(ctx, storeactivity.ListFilter{
+		ScopeEngagement: d.Engagement.ID,
+	})
+	if err != nil {
+		t.Fatalf("list activity: %v", err)
+	}
+
+	var found *storeactivity.Row
+	for i, row := range rows {
+		if row.ObjectID == step.ID {
+			found = &rows[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("no activity row for step %s; the hook's write did not share the step's commit\nrows: %+v",
+			step.ID, rows)
+	}
+	if got, want := found.Verb, string(events.VerbStepCreated); got != want {
+		t.Errorf("verb = %q, want %q", got, want)
+	}
+	if got, want := found.ObjectType, events.ObjectStep; got != want {
+		t.Errorf("objectType = %q, want %q", got, want)
+	}
+	if found.ActorID != actor.UserID {
+		t.Errorf("actorId = %q, want %q", found.ActorID, actor.UserID)
+	}
+
+	// The delta is what makes the row useful in the timeline: it names the
+	// template the step was imported from.
+	var delta map[string]any
+	if err := json.Unmarshal(found.Delta, &delta); err != nil {
+		t.Fatalf("unmarshal delta: %v\nraw: %s", err, found.Delta)
+	}
+	if delta["template_id"] != tmpl.ID {
+		t.Errorf("delta.template_id = %v, want %q", delta["template_id"], tmpl.ID)
+	}
+	if delta["template_name"] != tmpl.Name {
+		t.Errorf("delta.template_name = %v, want %q", delta["template_name"], tmpl.Name)
 	}
 }

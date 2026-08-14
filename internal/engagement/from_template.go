@@ -115,7 +115,7 @@ func (s *Service) CreateStepFromTemplate(ctx context.Context, actor authn.Subjec
 
 	after := storengagement.After(func(ctx context.Context, tx *sql.Tx) error {
 		id := storengagement.AfterEntityID(ctx)
-		recordActivityStep(ctx, s.activity, actor.UserID, in.EngagementID,
+		return recordActivityStepTx(ctx, s.activity, tx, actor.UserID, in.EngagementID,
 			events.VerbStepCreated, id,
 			map[string]any{
 				"name":            name,
@@ -126,7 +126,6 @@ func (s *Service) CreateStepFromTemplate(ctx context.Context, actor authn.Subjec
 				"attack_version":  attackVersion,
 			},
 		)
-		return nil
 	})
 
 	step, _, err := s.steps.CreateWithExecution(ctx, storengagement.NewStep{

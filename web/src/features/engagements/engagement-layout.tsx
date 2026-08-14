@@ -61,7 +61,12 @@ export function EngagementLayout(): ReactNode {
   }
 
   const eng = engagement.data
-  const role = isPlatformAdmin(user) ? ('admin' as EngagementRole) : roleInEngagement(eng.id, user)
+  // Real membership wins over the platform seat. An administrator who created
+  // this engagement is its lead (internal/engagement/service.go adds the
+  // creator), and reading them as 'admin' instead would hide every red/blue
+  // control the server would have accepted. 'admin' is the fallback for an
+  // administrator who is not a member: implicit access to every engagement.
+  const role = roleInEngagement(eng.id, user) ?? (isPlatformAdmin(user) ? 'admin' : undefined)
 
   if (role === undefined) {
     return <Navigate to="/engagements" replace />
