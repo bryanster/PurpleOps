@@ -216,6 +216,34 @@ DuckDB gives the database file to one process at a time, so the server has to be
 (`docker compose stop` first), or the command has to run in a container that shares nothing with it.
 The error says so if you forget.
 
+**Where you cannot run the CLI.** On a managed container platform — Azure Container Apps, Cloud Run,
+ECS — the database is inside the container and stopping the server to run one command is a
+production of its own, which leaves a deployment tool able to provision everything except the account
+needed to open the product. For those, the server will create the first administrator itself from
+its configuration:
+
+```sh
+BLACKLIGHT_BOOTSTRAP_ADMIN_EMAIL=you@example.com
+BLACKLIGHT_BOOTSTRAP_ADMIN_NAME="Your Name"
+BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/bootstrap-admin-password
+```
+
+The password may also be given inline as `BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD`, and exactly one of
+the two must be set. Prefer the file wherever a secret can be mounted as one: the contents never
+enter the process environment.
+
+The account is created active, as a platform administrator, with a local password — and **only on a
+database that holds no accounts at all**. Not "no account with this address": none. So it runs at
+most once per deployment, and the configuration is inert on every start afterwards, which is what
+makes it safe to leave in place. It cannot reset a password, re-promote somebody who was demoted or
+revive an account that was disabled; those are `blctl` and API jobs. What it can do is fail the
+start: a password the policy refuses, or a secret file that cannot be read, stops the server on a
+fresh database rather than leaving one that comes up healthy and cannot be signed in to. Sign in and
+change the password.
+
+[`deploy/azure-terraform`](../deploy/azure-terraform) is a worked example: it generates the password,
+keeps it in Key Vault, and hands it to the app.
+
 Everybody after the first is created from the running application instead, by an administrator:
 `POST /users`, with a password for a local account or without one for an account that signs in
 through the identity provider. There is no mail transport, so nothing is sent — the response carries

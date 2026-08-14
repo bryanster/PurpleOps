@@ -98,6 +98,40 @@ func (r *Users) Create(ctx context.Context, u NewUser, after ...After) (User, er
 	return created, nil
 }
 
+// CreateWithLocalLogin writes an account and the local login method that points
+// at it — the pair that makes somebody able to sign in with a password, and
+// what both paths that create an account outside the API build (`blctl user
+// create`, and the first-administrator bootstrap in internal/bootstrap).
+//
+// The two are separate writes because they are separate repositories, and there
+// is a window between them. It is reported rather than hidden: an account
+// without its identity row can still sign in — local login resolves by email —
+// but account linking (M1-009) reads that table, so a deployment should not be
+// left with a gap in it quietly.
+//
+// A conflicting address comes back as [apierr.ErrConflict], for the caller to
+// word for whoever is reading.
+func CreateWithLocalLogin(ctx context.Context, db DB, in NewUser) (User, error) {
+	created, err := NewUsers(db).Create(ctx, in)
+	if err != nil {
+		return User{}, err
+	}
+
+	// The subject of a local identity is the normalized address, which is what
+	// the database stores as email_normalized and what every lookup uses.
+	_, err = NewIdentities(db).Create(ctx, NewIdentity{
+		UserID:   created.ID,
+		Provider: ProviderLocal,
+		Subject:  strings.ToLower(strings.TrimSpace(created.Email)),
+	})
+	if err != nil {
+		return User{}, fmt.Errorf(
+			"the account %s was created (id %s) but its local login method was not: %w",
+			created.Email, created.ID, err)
+	}
+	return created, nil
+}
+
 // ByID returns the user with this identifier, or [apierr.NotFound].
 func (r *Users) ByID(ctx context.Context, id string) (User, error) {
 	u, err := scanUser(r.db.Read().QueryRowContext(ctx, selectUser+`WHERE id = ?`, id))
@@ -234,6 +268,22 @@ func (r *Users) Page(ctx context.Context, f PageFilter) (users []User, nextCurso
 		users = []User{}
 	}
 	return users, nextCursor, nil
+}
+
+// Count reports how many accounts exist, in every status and every role.
+//
+// It answers one question, asked once at startup by internal/bootstrap: is this
+// a database nobody has an account on? Zero is the only interesting answer, and
+// it is read through the pool rather than in a transaction because the process
+// asking holds the database file — DuckDB gives it to one writer — so there is
+// nothing for the count to race with.
+func (r *Users) Count(ctx context.Context) (int, error) {
+	var count int
+	if err := r.db.Read().QueryRowContext(ctx,
+		`SELECT count(*) FROM app."user"`).Scan(&count); err != nil {
+		return 0, fmt.Errorf("identity: count the accounts: %w", err)
+	}
+	return count, nil
 }
 
 // CountActiveAdmins reports how many accounts are both [authz.PlatformRoleAdmin]

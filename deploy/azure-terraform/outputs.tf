@@ -23,6 +23,21 @@ output "storage_account_name" {
   value       = azurerm_storage_account.main.name
 }
 
+output "admin_email" {
+  description = "Address the first administrator signs in with, or null when this deployment creates no account."
+  value       = var.admin_email
+}
+
+output "admin_password_command" {
+  description = "Command that prints the first administrator's initial password. The value is write-only, so Key Vault is the only place it exists — Terraform cannot show it here. Null when no account is created."
+  value = local.create_admin ? join(" ", [
+    "az keyvault secret show",
+    "--vault-name ${azurerm_key_vault.main.name}",
+    "--name ${one(azurerm_key_vault_secret.admin_password).name}",
+    "--query value -o tsv",
+  ]) : null
+}
+
 output "managed_identity_client_id" {
   description = "Client ID of the app's user-assigned identity (the Key Vault reader)."
   value       = azurerm_user_assigned_identity.app.client_id

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-14
+
+### Added
+
+- **First administrator from the environment.** `BLACKLIGHT_BOOTSTRAP_ADMIN_EMAIL`,
+  `BLACKLIGHT_BOOTSTRAP_ADMIN_NAME` and one of
+  `BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD_FILE` / `BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD`
+  create that account at startup — but only on a database with no accounts at
+  all, so the configuration is inert on every start afterwards and can never
+  change an account that exists. It is for deployments where `blctl user create`
+  means stopping the server to get at the database (Container Apps, Cloud Run,
+  ECS); keep using the CLI everywhere else.
+- **Azure Terraform example creates the first administrator.** Set `admin_email`
+  and the configuration generates a password, stores it in Key Vault write-only
+  beside the other two secrets, and passes it to the app;
+  `terraform output admin_password_command` prints the command that reads it
+  back.
+
 ## [1.0.0] — 2026-08-14
 
 > **Greenfield only.** Blacklight v1.0.0 is a ground-up rebuild of the prior
@@ -82,4 +100,5 @@ older binary.
 - **Static asset directory.** The binary is the whole application; nothing is
   served from disk.
 
+[1.0.1]: https://github.com/bryanster/blacklight/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bryanster/blacklight/releases/tag/v1.0.0

@@ -23,8 +23,8 @@ variable "image" {
 
 variable "image_tag" {
   type        = string
-  default     = "v1.0.0"
-  description = "Container image tag. Pin to a release for reproducible deployments."
+  default     = "v1.0.1"
+  description = "Container image tag. Pin to a release for reproducible deployments. v1.0.1 is the first release that can create the first administrator from admin_email below."
 }
 
 variable "container_cpu" {
@@ -75,6 +75,53 @@ variable "encryption_key" {
     condition     = var.encryption_key == null || length(coalesce(var.encryption_key, "")) >= 32
     error_message = "encryption_key must carry at least 32 bytes of secret material."
   }
+}
+
+# ─── the first administrator ─────────────────────────────────────────────────
+#
+# A deployment has no sign-up, and `blctl user create` needs the database file —
+# which lives inside the container here, and DuckDB gives it to one process at a
+# time. Set an address and this configuration creates the first administrator
+# for you: the password is generated, stored in Key Vault beside the other two
+# secrets, and read once by the server on a database that has no accounts.
+#
+# Leave admin_email unset to do it the other way, by stopping the app and
+# running the CLI against the share (see README.md).
+
+variable "admin_email" {
+  type        = string
+  default     = null
+  description = "Email address of the first administrator. Set it and the app creates that account the first time it starts against an empty database; leave it unset and no account is created. It is ignored on a deployment whose database already has accounts, so it is safe to leave in place."
+
+  validation {
+    condition     = var.admin_email == null || can(regex("^[^@[:space:]]+@[^@[:space:]]+$", coalesce(var.admin_email, "")))
+    error_message = "admin_email must be a single email address."
+  }
+}
+
+variable "admin_name" {
+  type        = string
+  default     = "Administrator"
+  description = "Name to show for the first administrator. Only used when the account is actually created."
+}
+
+variable "admin_password" {
+  type        = string
+  default     = null
+  sensitive   = true
+  ephemeral   = true
+  description = "Initial password for the first administrator. Leave unset to have Terraform generate one — `terraform output admin_password_command` prints the az command that reads it back out of Key Vault. At least 12 characters, and change it at first sign-in either way."
+
+  validation {
+    condition     = var.admin_password == null || length(coalesce(var.admin_password, "")) >= 12
+    error_message = "admin_password must be at least 12 characters — the same policy the application applies."
+  }
+}
+
+variable "admin_password_version" {
+  type        = number
+  default     = 1
+  description = "Rotation counter for the stored initial password, on the same write-only rule as the two secrets. Bumping it stores a new password in Key Vault, which is NOT a password reset: the account already exists by then, so the server ignores it. Reset a forgotten password with `blctl`, not with this."
 }
 
 variable "session_secret_version" {

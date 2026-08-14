@@ -54,6 +54,10 @@ resource "random_string" "suffix" {
 }
 
 locals {
+  # Whether this deployment asks the app to create its first administrator. The
+  # address is the switch, here and in the application's own configuration.
+  create_admin = var.admin_email != null
+
   resource_group_name  = "${var.name}-rg"
   log_analytics_name   = "${var.name}-logs"
   environment_name     = "${var.name}-env"
@@ -152,6 +156,18 @@ ephemeral "random_password" "encryption_key" {
   numeric = true
 }
 
+# The initial password of the first administrator. Shorter than the two keys and
+# without symbols, because unlike them it is a password a person reads out of
+# Key Vault and types once — 24 characters of mixed case and digits is far past
+# the application's twelve-character policy either way.
+ephemeral "random_password" "admin_password" {
+  length  = 24
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
+}
+
 # The principal running `terraform apply` (the az-login user) writes these, so
 # it needs data-plane access to the vault before the secrets are created.
 resource "azurerm_key_vault_access_policy" "terraform" {
@@ -180,6 +196,25 @@ resource "azurerm_key_vault_secret" "encryption_key" {
   name             = "blacklight-encryption-key"
   value_wo         = coalesce(var.encryption_key, ephemeral.random_password.encryption_key.result)
   value_wo_version = var.encryption_key_version
+  key_vault_id     = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.terraform]
+}
+
+# The first administrator's initial password, handled exactly as the two secrets
+# above are: generated during apply, written to Key Vault write-only, and absent
+# from state and from the plan. Key Vault is where the operator reads it from —
+# `terraform output admin_password_command` prints the command.
+#
+# Unlike the two above, this one is *expected* to stop mattering. The server
+# uses it once, on a database with no accounts, and ignores it forever after;
+# the account's password is whatever its owner changes it to at first sign-in.
+resource "azurerm_key_vault_secret" "admin_password" {
+  count = local.create_admin ? 1 : 0
+
+  name             = "blacklight-bootstrap-admin-password"
+  value_wo         = coalesce(var.admin_password, ephemeral.random_password.admin_password.result)
+  value_wo_version = var.admin_password_version
   key_vault_id     = azurerm_key_vault.main.id
 
   depends_on = [azurerm_key_vault_access_policy.terraform]
@@ -225,6 +260,17 @@ resource "azurerm_container_app" "main" {
     name                = "encryption-key"
     identity            = azurerm_user_assigned_identity.app.id
     key_vault_secret_id = azurerm_key_vault_secret.encryption_key.versionless_id
+  }
+  # Present only when there is an administrator to create. A Container Apps
+  # secret is not readable back through the API or the portal; it is resolved
+  # from Key Vault by the app's identity, like the other two.
+  dynamic "secret" {
+    for_each = azurerm_key_vault_secret.admin_password
+    content {
+      name                = "bootstrap-admin-password"
+      identity            = azurerm_user_assigned_identity.app.id
+      key_vault_secret_id = secret.value.versionless_id
+    }
   }
 
   ingress {
@@ -277,6 +323,37 @@ resource "azurerm_container_app" "main" {
       env {
         name        = "BLACKLIGHT_ENCRYPTION_KEY"
         secret_name = "encryption-key"
+      }
+
+      # The first administrator. The server acts on these once — on a database
+      # with no accounts — and ignores them on every start after that, which is
+      # what makes leaving them configured harmless: they cannot reset a
+      # password, re-promote a demoted account or revive a disabled one.
+      #
+      # The password arrives as an environment variable rather than as a file,
+      # which is the weaker of the two ways the application accepts it: the
+      # value ends up in the process environment of the replica. Container Apps
+      # itself can mount secrets as files, but the azurerm volume block pinned
+      # here takes only AzureFile and EmptyDir, so that is not reachable from
+      # this configuration. Change the password at first sign-in and, if you
+      # want the variable off the revision entirely, clear admin_email and apply
+      # again.
+      dynamic "env" {
+        for_each = local.create_admin ? {
+          BLACKLIGHT_BOOTSTRAP_ADMIN_EMAIL = var.admin_email
+          BLACKLIGHT_BOOTSTRAP_ADMIN_NAME  = var.admin_name
+        } : {}
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = azurerm_key_vault_secret.admin_password
+        content {
+          name        = "BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD"
+          secret_name = "bootstrap-admin-password"
+        }
       }
 
       volume_mounts {

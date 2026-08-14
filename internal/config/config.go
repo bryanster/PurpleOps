@@ -71,6 +71,11 @@ const (
 	envLogFormat       = prefix + "LOG_FORMAT"
 	envChromePath      = prefix + "CHROME_PATH"
 	envBrandingDir     = prefix + "BRANDING_DIR"
+
+	envBootstrapEmail        = prefix + "BOOTSTRAP_ADMIN_EMAIL"
+	envBootstrapName         = prefix + "BOOTSTRAP_ADMIN_NAME"
+	envBootstrapPassword     = prefix + "BOOTSTRAP_ADMIN_PASSWORD"
+	envBootstrapPasswordFile = prefix + "BOOTSTRAP_ADMIN_PASSWORD_FILE"
 )
 
 // Config is the whole configuration of a Blacklight process. It is grouped by
@@ -95,6 +100,7 @@ type Config struct {
 	Throttle   Throttle
 	Log        Log
 	Report     Report
+	Bootstrap  Bootstrap
 }
 
 // Server is the HTTP listener and the public identity of this deployment.
@@ -434,6 +440,70 @@ type Report struct {
 	BrandingDir string
 }
 
+// Bootstrap is the first administrator of a deployment, declared in the
+// environment so that a deployment tool can create it.
+//
+// The account it describes is created once, at startup, and only on a database
+// that holds no accounts at all — see internal/bootstrap. That condition is
+// what makes this safe to leave configured: after the first start there is an
+// account, so the section does nothing on every restart afterwards, and it can
+// never overwrite a password, re-promote somebody who was demoted, or bring
+// back an account that was disabled.
+//
+// It exists because `blctl user create` needs the database file, and a
+// deployment where the database is inside a container — Container Apps, Cloud
+// Run, ECS — cannot run it without stopping the server first (DuckDB gives the
+// file to one process at a time). Terraform, in particular, could provision
+// everything except the one account needed to sign in. The whole section is
+// optional and every other deployment should keep using the CLI: a password
+// that goes through an orchestrator is a password that orchestrator has.
+type Bootstrap struct {
+	// Email is the address the account signs in with, and the switch for the
+	// whole section: with no address there is no bootstrap, and the other
+	// three values are inert.
+	Email string
+
+	// Name is the display name. It has a default because a deployment tool
+	// that knows an address rarely knows what to call the person, and an
+	// account has to be called something.
+	Name string
+
+	// Password is the initial password, subject to the same policy a person's
+	// own choice is (internal/authn/password). Prefer [Bootstrap.PasswordFile]:
+	// an environment variable is readable by anything that can describe the
+	// container and lands in whatever collects the process environment, which
+	// is why `blctl user create` refuses to take one at all.
+	//
+	// It is a [ForeignSecret] rather than a [Secret] because it is a password
+	// somebody will type, not key material this server generates: the strength
+	// rule that applies to it is the password policy, enforced when the account
+	// is created and reported as a startup error.
+	Password ForeignSecret
+
+	// PasswordFile is a file holding that password and nothing else — a mounted
+	// secret, one trailing newline tolerated. It is the better of the two: the
+	// contents never enter the process environment, so a deployment that can
+	// mount a secret as a file should use this one.
+	//
+	// Exactly one of Password and PasswordFile is set; the file is read at
+	// startup, and only when there is an account to create.
+	PasswordFile string
+}
+
+// Enabled reports whether this deployment has a first administrator to create.
+// The address is the switch, as [OIDC.Issuer] is for single sign-on.
+func (b Bootstrap) Enabled() bool { return strings.TrimSpace(b.Email) != "" }
+
+// The two names an initial password can arrive under, exported for the one
+// error that has to name them: a password the policy refuses is reported by
+// internal/bootstrap, which is where the policy is applied, and an operator
+// reading it needs to know which variable to change. They are the same
+// constants the bindings use, so the name cannot drift from what is read.
+const (
+	EnvBootstrapPassword     = envBootstrapPassword
+	EnvBootstrapPasswordFile = envBootstrapPasswordFile
+)
+
 // Tool is the configuration of an administrative process — blctl, which
 // shares this repository's packages with the server but serves no HTTP and
 // holds no sessions.
@@ -538,6 +608,11 @@ func (c *Config) bindings() []binding {
 		{name: envLogLevel, target: &c.Log.Level, def: string(LevelInfo), tool: true},
 		{name: envLogFormat, target: &c.Log.Format, def: string(FormatJSON), tool: true},
 		{name: envChromePath, target: &c.Report.ChromePath},
+
+		{name: envBootstrapEmail, target: &c.Bootstrap.Email},
+		{name: envBootstrapName, target: &c.Bootstrap.Name, def: "Administrator"},
+		{name: envBootstrapPassword, target: &c.Bootstrap.Password, sensitive: true},
+		{name: envBootstrapPasswordFile, target: &c.Bootstrap.PasswordFile},
 	}
 }
 

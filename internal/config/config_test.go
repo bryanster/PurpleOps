@@ -483,6 +483,72 @@ func TestFields(t *testing.T) {
 		env:     map[string]string{envOIDCProvision: "yes please"},
 		wantErr: `BLACKLIGHT_OIDC_AUTO_PROVISION: must be "true" or "false", got "yes please"`,
 	}, {
+		name: "no bootstrap administrator by default",
+		env:  map[string]string{},
+		check: func(t *testing.T, cfg Config) {
+			if cfg.Bootstrap.Enabled() {
+				t.Errorf("Bootstrap.Enabled() = true with no address configured (%+v)", cfg.Bootstrap)
+			}
+		},
+	}, {
+		name: "bootstrap administrator with a password file",
+		env: map[string]string{
+			envBootstrapEmail:        "admin@example.com",
+			envBootstrapPasswordFile: "/run/secrets/bootstrap-admin-password",
+		},
+		check: func(t *testing.T, cfg Config) {
+			if !cfg.Bootstrap.Enabled() {
+				t.Error("Bootstrap.Enabled() = false, want true when an address is set")
+			}
+			if got, want := cfg.Bootstrap.Name, "Administrator"; got != want {
+				t.Errorf("Bootstrap.Name = %q, want the default %q", got, want)
+			}
+			if !cfg.Bootstrap.Password.IsZero() {
+				t.Error("Bootstrap.Password is set, want the file to be the only source")
+			}
+		},
+	}, {
+		name: "bootstrap administrator with a password variable",
+		env: map[string]string{
+			envBootstrapEmail:    "admin@example.com",
+			envBootstrapName:     "Ada Lovelace",
+			envBootstrapPassword: "correct horse battery staple",
+		},
+		check: func(t *testing.T, cfg Config) {
+			if got, want := cfg.Bootstrap.Name, "Ada Lovelace"; got != want {
+				t.Errorf("Bootstrap.Name = %q, want %q", got, want)
+			}
+			// The policy is not applied here — that happens where the account
+			// is created — but the value has to arrive intact.
+			if got, want := string(cfg.Bootstrap.Password.Reveal()), "correct horse battery staple"; got != want {
+				t.Errorf("Bootstrap.Password = %q, want %q", got, want)
+			}
+		},
+	}, {
+		name: "bootstrap administrator needs a password",
+		env:  map[string]string{envBootstrapEmail: "admin@example.com"},
+		wantErr: envBootstrapPasswordFile + ": must be set when " + envBootstrapEmail +
+			" is, or " + envBootstrapPassword + " must be",
+	}, {
+		name: "bootstrap administrator takes one password, not two",
+		env: map[string]string{
+			envBootstrapEmail:        "admin@example.com",
+			envBootstrapPassword:     "correct horse battery staple",
+			envBootstrapPasswordFile: "/run/secrets/bootstrap-admin-password",
+		},
+		wantErr: envBootstrapPasswordFile + ": is set and so is " + envBootstrapPassword,
+	}, {
+		name:    "bootstrap password without an address does nothing",
+		env:     map[string]string{envBootstrapPassword: "correct horse battery staple"},
+		wantErr: envBootstrapPassword + ": is set, but " + envBootstrapEmail + " is not",
+	}, {
+		name: "bootstrap address must be an address",
+		env: map[string]string{
+			envBootstrapEmail:    "admin",
+			envBootstrapPassword: "correct horse battery staple",
+		},
+		wantErr: envBootstrapEmail + `: must be an email address, with exactly one "@"`,
+	}, {
 		name: "values are trimmed",
 		env:  map[string]string{envLogLevel: "  warn  "},
 		check: func(t *testing.T, cfg Config) {

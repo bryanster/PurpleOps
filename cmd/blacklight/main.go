@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/bryanster/blacklight/internal/bootstrap"
 	"github.com/bryanster/blacklight/internal/config"
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/httpapi"
@@ -101,6 +102,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) (err erro
 		return err
 	}); err != nil {
 		return fmt.Errorf("checkpoint after migration: %w", err)
+	}
+
+	// After the schema exists and before anything is listening: on a database
+	// with no accounts, and only then, this creates the administrator a
+	// deployment tool configured. It is a no-op on every other start.
+	if err := bootstrap.Apply(ctx, db, cfg.Bootstrap, log); err != nil {
+		return err
 	}
 
 	presenceReg := presence.New(presence.Options{})

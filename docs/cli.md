@@ -122,6 +122,11 @@ How the first administrator of a deployment exists at all: there is no sign-up, 
 interface has nothing to offer somebody who cannot sign in. It is also what the end-to-end suite
 seeds its accounts with.
 
+It is the better way wherever you have a shell: the password is typed on a terminal and goes
+nowhere else. Where you have no shell on the database — a managed container platform, where stopping
+the server is the price of running this — the server can create that first account from its own
+configuration instead; see ["The first account"](deploy.md#the-first-account).
+
 ```
 blctl user create --email alice@example.com --name Alice --admin
 Password:

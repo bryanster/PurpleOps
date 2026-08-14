@@ -331,15 +331,10 @@ func platformRole(admin bool) authz.PlatformRole {
 	return authz.PlatformRoleMember
 }
 
-// createUser writes the account and the local login method that points at it.
-//
-// The two are separate writes because they are separate repositories, and there
-// is a window between them. It is reported rather than hidden: an account
-// without its identity row can still sign in — local login resolves by email —
-// but M1-009's account linking reads that table, so a deployment should not be
-// left with a gap in it quietly.
+// createUser writes the account and the local login method that points at it,
+// and words the one failure an operator causes as a sentence for a terminal.
 func createUser(ctx context.Context, db *store.DB, in identity.NewUser) (identity.User, error) {
-	created, err := identity.NewUsers(db).Create(ctx, in)
+	created, err := identity.CreateWithLocalLogin(ctx, db, in)
 	if errors.Is(err, apierr.ErrConflict) {
 		// The repository's message is written for an API client, which is told a
 		// code and a sentence. Here it is the whole of what an operator sees, so
@@ -349,19 +344,6 @@ func createUser(ctx context.Context, db *store.DB, in identity.NewUser) (identit
 	}
 	if err != nil {
 		return identity.User{}, err
-	}
-
-	// The subject of a local identity is the normalized address, which is what
-	// the database stores as email_normalized and what every lookup uses.
-	_, err = identity.NewIdentities(db).Create(ctx, identity.NewIdentity{
-		UserID:   created.ID,
-		Provider: identity.ProviderLocal,
-		Subject:  strings.ToLower(strings.TrimSpace(created.Email)),
-	})
-	if err != nil {
-		return identity.User{}, fmt.Errorf(
-			"the account %s was created (id %s) but its local login method was not: %w",
-			created.Email, created.ID, err)
 	}
 	return created, nil
 }

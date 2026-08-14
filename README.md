@@ -69,7 +69,7 @@ Design and backlog live in [`PLAN.md`](PLAN.md) and [`docs/tickets/`](docs/ticke
 
 ## Status
 
-Blacklight `v1.0.0` is released. The product loop — baseline, retest, compare, report — is
+Blacklight `v1.0.1` is released. The product loop — baseline, retest, compare, report — is
 implemented and end-to-end tested.
 
 ## Licence

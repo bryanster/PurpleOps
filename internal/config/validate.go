@@ -102,6 +102,7 @@ func (c *Config) validate() []error {
 
 	errs = append(errs, c.validateOIDC()...)
 	errs = append(errs, c.validateSAML()...)
+	errs = append(errs, c.validateBootstrap()...)
 
 	if c.Evidence.MaxUploadBytes < 1 {
 		errs = append(errs, &FieldError{
@@ -338,6 +339,98 @@ func (c *Config) validateSAML() []error {
 	}
 
 	return errs
+}
+
+// validateBootstrap checks the first-administrator section (see [Bootstrap]),
+// which is all-or-nothing in the same way the two sign-on sections are: either
+// it is absent, or it describes an account that can actually be created.
+//
+// Two things are deliberately *not* checked here. The password is not held to
+// the password policy — that happens where the account is created, so the
+// message an operator gets is the same sentence a person choosing a password
+// would be shown — and [Bootstrap.PasswordFile] is not opened. A file check at
+// startup would mean a deployment that has long since created its administrator
+// refuses to start because the secret it no longer needs was unmounted; the
+// file is read by internal/bootstrap, and only when there is an account to
+// create.
+func (c *Config) validateBootstrap() []error {
+	var errs []error
+
+	if !c.Bootstrap.Enabled() {
+		// The display name is not in this list: it has a default, so it is
+		// always set, and complaining about it would mean complaining about
+		// every deployment that never asked for a bootstrap at all.
+		for _, set := range []struct {
+			name  string
+			isSet bool
+		}{
+			{envBootstrapPassword, !c.Bootstrap.Password.IsZero()},
+			{envBootstrapPasswordFile, c.Bootstrap.PasswordFile != ""},
+		} {
+			if set.isSet {
+				errs = append(errs, &FieldError{
+					Name: set.name,
+					Msg: fmt.Sprintf("is set, but %s is not, so no account would be created and this "+
+						"value does nothing. Set the address, or remove this", envBootstrapEmail),
+				})
+			}
+		}
+		return errs
+	}
+
+	if err := validateEmail(c.Bootstrap.Email); err != nil {
+		errs = append(errs, &FieldError{
+			Name: envBootstrapEmail, Value: c.Bootstrap.Email, Msg: err.Error(),
+		})
+	}
+	if strings.TrimSpace(c.Bootstrap.Name) == "" {
+		// Unreachable through Load — the binding has a default — but reachable
+		// through a hand-built Config, and an account has to be called
+		// something.
+		errs = append(errs, &FieldError{
+			Name: envBootstrapName,
+			Msg:  "must be the name to show for the first administrator",
+		})
+	}
+
+	switch {
+	case !c.Bootstrap.Password.IsZero() && c.Bootstrap.PasswordFile != "":
+		// Not resolved by preferring the file: the two can hold different
+		// passwords, and picking silently would mean an operator being handed a
+		// password that is not the one the account has.
+		errs = append(errs, &FieldError{
+			Name: envBootstrapPasswordFile, Value: c.Bootstrap.PasswordFile,
+			Msg: fmt.Sprintf("is set and so is %s; there is one password, so set one of them and "+
+				"remove the other", envBootstrapPassword),
+		})
+	case c.Bootstrap.Password.IsZero() && c.Bootstrap.PasswordFile == "":
+		errs = append(errs, &FieldError{
+			Name: envBootstrapPasswordFile,
+			Msg: fmt.Sprintf("must be set when %s is, or %s must be: an account with no password is "+
+				"one nobody can sign in to, which is the whole point of creating this one",
+				envBootstrapEmail, envBootstrapPassword),
+		})
+	}
+
+	return errs
+}
+
+// validateEmail accepts what this configuration can honestly check about an
+// address: that it is one address, with something on each side of a single "@".
+// Anything beyond that is a question only sending mail to it answers, and a
+// stricter pattern here would be this server refusing an address that works.
+func validateEmail(address string) error {
+	address = strings.TrimSpace(address)
+	local, domain, found := strings.Cut(address, "@")
+	switch {
+	case !found || strings.Contains(domain, "@"):
+		return errors.New(`must be an email address, with exactly one "@"`)
+	case local == "" || domain == "":
+		return errors.New(`must have something on each side of the "@"`)
+	case strings.ContainsAny(address, " \t"):
+		return errors.New("must be one address, without spaces")
+	}
+	return nil
 }
 
 // ensurePaths is the only part of loading that changes the machine: it creates

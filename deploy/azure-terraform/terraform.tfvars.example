@@ -3,9 +3,20 @@
 
 location         = "eastus"
 name             = "blacklight"
-image_tag        = "v1.0.0"
+image_tag        = "v1.0.1"
 container_cpu    = 1
 container_memory = "2Gi"
+
+# The first administrator, created by the app the first time it starts against
+# an empty database. Uncomment the address and Terraform generates a password,
+# keeps it in Key Vault, and prints the command that reads it back:
+#
+#   terraform output admin_password_command
+#
+# Leave it commented out to create the account yourself with `blctl` instead
+# (see README.md). Either way, change the password at first sign-in.
+#admin_email = "you@example.com"
+#admin_name  = "Your Name"
 
 # Rotation counters for the two Key Vault secrets. Their values are write-only,
 # so Terraform rewrites a secret only when its counter changes. Bumping the
@@ -14,7 +25,8 @@ container_memory = "2Gi"
 session_secret_version = 1
 encryption_key_version = 1
 
-# session_secret and encryption_key are deliberately absent: leave them unset and
-# Terraform generates both. To supply your own, prefer TF_VAR_session_secret /
-# TF_VAR_encryption_key over a file on disk — the variables are ephemeral either
-# way, so the values never enter state.
+# session_secret, encryption_key and admin_password are deliberately absent:
+# leave them unset and Terraform generates all three. To supply your own, prefer
+# TF_VAR_session_secret / TF_VAR_encryption_key / TF_VAR_admin_password over a
+# file on disk — the variables are ephemeral either way, so the values never
+# enter state.
