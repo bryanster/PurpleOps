@@ -6,3 +6,15 @@ name             = "blacklight"
 image_tag        = "v1.0.0"
 container_cpu    = 1
 container_memory = "2Gi"
+
+# Rotation counters for the two Key Vault secrets. Their values are write-only,
+# so Terraform rewrites a secret only when its counter changes. Bumping the
+# session secret signs everybody out; bumping the encryption key makes enrolled
+# MFA authenticators, recovery codes and service tokens unreadable.
+session_secret_version = 1
+encryption_key_version = 1
+
+# session_secret and encryption_key are deliberately absent: leave them unset and
+# Terraform generates both. To supply your own, prefer TF_VAR_session_secret /
+# TF_VAR_encryption_key over a file on disk — the variables are ephemeral either
+# way, so the values never enter state.

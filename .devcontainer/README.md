@@ -25,6 +25,7 @@ docker volume rm blacklight-go-mod blacklight-go-build
 | `make`, git, jq | The Makefile is the interface to this repository |
 | Docker CLI | Via the `docker-outside-of-docker` feature, pointed at the host daemon — so `make docker-build` and `make docker-smoke` work, sharing the host's layer cache |
 | Azure CLI (`az`) | Via the `azure-cli` feature. The Microsoft apt repo carries no trixie suite, so the feature falls back to a pipx install under `/usr/local/pipx` — a slower build, the same `az` on the PATH. Host `~/.azure` is bind-mounted, so `az login` survives rebuilds |
+| Terraform | Via the `terraform` feature, for `deploy/azure-terraform`. Terraform only — the feature's tflint and terragrunt defaults are turned off, since nothing in the repository runs them |
 | Claude Code | `npm install -g @anthropic-ai/claude-code` |
 | Oh My Pi (`omp`) | Prebuilt binary from [omp.sh](https://omp.sh/install) into `/usr/local/bin` (shared PATH; not root's `~/.local/bin`) |
 | **Not** golangci-lint or oapi-codegen | The Makefile pins both and installs them into `./bin`. A second copy in the image is a second version to drift. `make tools` runs as `postCreateCommand` |

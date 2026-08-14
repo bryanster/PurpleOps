@@ -20,6 +20,16 @@
     // /usr/local/pipx — slower to build, same command on the PATH.
     "ghcr.io/devcontainers/features/azure-cli:1": {
       "version": "latest"
+    },
+    // `terraform`, for deploy/azure-terraform. tflint and terragrunt default to
+    // being installed too; neither the Makefile nor CI runs them, so they are
+    // turned off rather than shipped as two more versions to keep current. The
+    // feature contributes the HashiCorp.terraform extension itself, so it is not
+    // repeated in the extensions list below.
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "latest",
+      "tflint": "none",
+      "terragrunt": "none"
     }
   },
   // Installs the pinned generators and linter into ./bin and runs `npm ci`.

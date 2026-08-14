@@ -44,3 +44,47 @@ variable "storage_share_quota_gb" {
   default     = 100
   description = "Quota for the Azure Files share holding the database and evidence, in GiB."
 }
+
+# ─── secrets ─────────────────────────────────────────────────────────────────
+#
+# The two secret variables are `ephemeral`: Terraform accepts them from tfvars,
+# -var or TF_VAR_*, uses them during the run, and never records them in state or
+# in a plan file. Leave both unset and Terraform generates the values instead.
+
+variable "session_secret" {
+  type        = string
+  default     = null
+  sensitive   = true
+  ephemeral   = true
+  description = "BLACKLIGHT_SESSION_SECRET to store in Key Vault. Leave unset to have Terraform generate one. Supply it to reuse an existing secret — e.g. when adopting a deployment created before this config wrote secrets write-only."
+
+  validation {
+    condition     = var.session_secret == null || length(coalesce(var.session_secret, "")) >= 32
+    error_message = "session_secret must carry at least 32 bytes of secret material."
+  }
+}
+
+variable "encryption_key" {
+  type        = string
+  default     = null
+  sensitive   = true
+  ephemeral   = true
+  description = "BLACKLIGHT_ENCRYPTION_KEY to store in Key Vault. Leave unset to have Terraform generate one. Must differ from session_secret; changing it makes every enrolled MFA authenticator, recovery code and service token unreadable."
+
+  validation {
+    condition     = var.encryption_key == null || length(coalesce(var.encryption_key, "")) >= 32
+    error_message = "encryption_key must carry at least 32 bytes of secret material."
+  }
+}
+
+variable "session_secret_version" {
+  type        = number
+  default     = 1
+  description = "Rotation counter for the session secret. The stored value is write-only, so it is only rewritten when this number changes. Bumping it signs every user out."
+}
+
+variable "encryption_key_version" {
+  type        = number
+  default     = 1
+  description = "Rotation counter for the encryption key. The stored value is write-only, so it is only rewritten when this number changes. Bumping it without re-encrypting first locks every user out of MFA — see README."
+}

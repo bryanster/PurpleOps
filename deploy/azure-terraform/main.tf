@@ -6,20 +6,28 @@
 #   * the database and evidence on an Azure Files share in a Storage Account,
 #   * the session secret and encryption key generated here and kept in Key Vault.
 #
+# The two application secrets are handled with Terraform's ephemeral values and
+# write-only arguments: they are generated during apply, sent straight to Key
+# Vault, and never written to state or to the plan file. See "secrets" below.
+#
 # The only prerequisite is an `az login` session. See README.md for the full
 # walkthrough, the first-administrator step, and the operational caveats.
 
 terraform {
-  required_version = ">= 1.5.0"
+  # 1.11 is the floor for write-only arguments (`value_wo`); ephemeral resources
+  # arrived in 1.10.
+  required_version = ">= 1.11.0"
 
   required_providers {
     azurerm = {
+      # 4.23.0 is the first release with `azurerm_key_vault_secret.value_wo`.
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      version = ">= 4.23.0, < 5.0.0"
     }
     random = {
+      # 3.7.0 is the first release with the `random_password` ephemeral resource.
       source  = "hashicorp/random"
-      version = "~> 3.6"
+      version = ">= 3.7.0, < 4.0.0"
     }
   }
 }
@@ -106,7 +114,12 @@ resource "azurerm_container_app_environment_storage" "data" {
   access_mode                  = "ReadWrite"
 }
 
-# ─── secrets: generated here, stored in Key Vault ────────────────────────────
+# ─── secrets: generated ephemerally, stored only in Key Vault ────────────────
+#
+# Nothing in this section reaches the state file. `ephemeral` resources exist
+# for the duration of one operation and are never persisted, and `value_wo` is
+# a write-only argument: the provider sends it to Azure and Terraform drops it.
+# The Key Vault is the only place the two values live.
 
 resource "azurerm_key_vault" "main" {
   name                = local.key_vault_name
@@ -118,7 +131,12 @@ resource "azurerm_key_vault" "main" {
 
 # Two independent values, so the encryption key can never equal the session
 # secret (the server refuses to start if the two match).
-resource "random_password" "session_secret" {
+#
+# These regenerate on every plan and apply, which is harmless: the generated
+# value is only written to Key Vault when the matching `..._version` variable
+# changes (see `value_wo_version` below). A run that does not bump the version
+# produces no diff and leaves the stored secret alone.
+ephemeral "random_password" "session_secret" {
   length  = 64
   special = false
   upper   = true
@@ -126,7 +144,7 @@ resource "random_password" "session_secret" {
   numeric = true
 }
 
-resource "random_password" "encryption_key" {
+ephemeral "random_password" "encryption_key" {
   length  = 64
   special = false
   upper   = true
@@ -144,18 +162,25 @@ resource "azurerm_key_vault_access_policy" "terraform" {
   secret_permissions = ["Get", "List", "Set", "Delete", "Recover", "Purge"]
 }
 
+# `value_wo` is write-only — Terraform sends it to Key Vault and keeps neither
+# the value nor a hash of it. Because the value is invisible to the plan,
+# `value_wo_version` is what drives updates: change the version variable and the
+# next apply writes a new secret version; leave it alone and the secret is left
+# untouched, whatever the ephemeral generator produced this run.
 resource "azurerm_key_vault_secret" "session_secret" {
-  name         = "blacklight-session-secret"
-  value        = random_password.session_secret.result
-  key_vault_id = azurerm_key_vault.main.id
+  name             = "blacklight-session-secret"
+  value_wo         = coalesce(var.session_secret, ephemeral.random_password.session_secret.result)
+  value_wo_version = var.session_secret_version
+  key_vault_id     = azurerm_key_vault.main.id
 
   depends_on = [azurerm_key_vault_access_policy.terraform]
 }
 
 resource "azurerm_key_vault_secret" "encryption_key" {
-  name         = "blacklight-encryption-key"
-  value        = random_password.encryption_key.result
-  key_vault_id = azurerm_key_vault.main.id
+  name             = "blacklight-encryption-key"
+  value_wo         = coalesce(var.encryption_key, ephemeral.random_password.encryption_key.result)
+  value_wo_version = var.encryption_key_version
+  key_vault_id     = azurerm_key_vault.main.id
 
   depends_on = [azurerm_key_vault_access_policy.terraform]
 }

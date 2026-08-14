@@ -85,6 +85,30 @@ updates:
       - "dependencies"
       - "javascript"
 
+  # The Azure deployment example (deploy/azure-terraform/). Dependabot bumps the
+  # `required_providers` constraints in main.tf and regenerates the committed
+  # .terraform.lock.hcl, which is what pins the provider hashes for anyone who
+  # runs the example.
+  - package-ecosystem: "terraform"
+    directory: "/deploy/azure-terraform"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      terraform-providers:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+    pull-request-branch-name:
+      separator: "/"
+    open-pull-requests-limit: 5
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "terraform"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
