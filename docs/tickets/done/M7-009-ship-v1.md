@@ -51,15 +51,15 @@ greenfield statement. M6-015 already proved the product thesis; this proves dist
 
 ## Acceptance criteria
 
-- [ ] `git rev-parse v1.0.0` matches the intended main SHA; tag annotated.
-- [ ] GHCR `v1.0.0` and `latest` digests verified; `--version` matches.
-- [ ] GitHub Release published and not draft (unless project always uses draft→manual publish —
+- [x] `git rev-parse v1.0.0` matches the intended main SHA; tag annotated.
+- [x] GHCR `v1.0.0` and `latest` digests verified; `--version` matches.
+- [x] GitHub Release published and not draft (unless project always uses draft→manual publish —
       then publish is still required to close this ticket).
-- [ ] Smoke against released image recorded in completion notes.
-- [ ] Greenfield / no v1 migration called out in release notes and changelog.
-- [ ] M7 epic state `done`; tickets index updated; ticket files in `done/`.
-- [ ] No Critical/High security findings still open from M7-007 **or** `docs/SECURITY_FINDINGS.md` (M7-010, M7-011, M7-012 merged).
-- [ ] Perf notes from M7-008 attached or linked.
+- [x] Smoke against released image recorded in completion notes.
+- [x] Greenfield / no v1 migration called out in release notes and changelog.
+- [x] M7 epic state `done`; tickets index updated; ticket files in `done/`.
+- [x] No Critical/High security findings still open from M7-007 **or** `docs/SECURITY_FINDINGS.md` (M7-010, M7-011, M7-012 merged).
+- [x] Perf notes from M7-008 attached or linked.
 
 ## Tests
 
@@ -72,3 +72,24 @@ greenfield statement. M6-015 already proved the product thesis; this proves dist
 - If the release workflow fails halfway, fix forward; do not leave `latest` pointing at a broken
   multi-arch manifest.
 - Never force-move `v1.0.0` after others may have pulled it. Bad release → `v1.0.1`.
+
+## Completion notes
+
+**Ship SHA:** `98029b0f52c83eb32176fd9e5bb3168ef35c98ea` — `main`, CI green (run 31828182534, all 8 jobs).
+
+**Preconditions:** `v1-final` annotated at `c053fb7…` (M7-001); M7-002…M7-008 and M7-010…M7-014 merged; High findings BL-001/002/003 closed by M7-010/011/012; Medium BL-004/005 closed by M7-013/014.
+
+**Tag:** annotated `v1.0.0` on `98029b0`; `git rev-parse v1.0.0^{}` == `git rev-parse main`.
+
+**Artifacts:** GitHub Release `v1.0.0` published (draft=false, prerelease=false) with the `[1.0.0]` changelog section + greenfield note. GHCR `ghcr.io/bryanster/blacklight:v1.0.0` and `:latest` resolve to the same multi-arch manifest (linux/amd64 + linux/arm64; amd64 platform digest `sha256:6151be56fa6401ed46e14fa8ccbc22931b3fb8f7e73ad77768bb11596acdfbdc`). `blacklight --version` → `v1.0.0 (commit 98029b0f…, built 2026-08-14T18:30:57Z)`.
+
+**Smoke (released image):** `SKIP_BUILD=1 IMAGE=ghcr.io/bryanster/blacklight:v1.0.0 deploy/smoke.sh` — all 17 checks passed. Fresh-volume login: first boot → `blctl user create --admin` (server stopped) → restart → `POST /api/v1/auth/login` returned `status: authenticated`.
+
+**Perf notes (M7-008):** `internal/report/loadtest/render_test.go` + `docs/testing.md` "Report render budget" — report HTML p95 141ms (budget ≤1s); regression gate verified.
+
+**Fixes applied at ship:**
+
+- `internal/report/pdf/pdf.go`: `chromedp.WSURLReadTimeout(60s)` — CI `go test -race` PDF smoke flaked with "websocket url timeout reached" on a contended runner.
+- `.github/workflows/release.yml`: changelog extractor now strips the leading `v` from the tag so `v1.0.0` matches the Keep-a-Changelog `## [1.0.0]` header (previously fell back to "Release v1.0.0" and dropped the changelog body). The already-published `v1.0.0` release body was corrected via the API.
+
+**Residual:** GitHub Dependabot reports 7 dependency advisories on `main` (1 critical, 2 high) — dependency CVEs outside the M7-007 application-surface checklist and `SECURITY_FINDINGS.md`; tracked by Dependabot, not a ship gate in this ticket.

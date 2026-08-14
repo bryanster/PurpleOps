@@ -1,6 +1,6 @@
 # M7 — Cutover (epic)
 
-**State:** refined · **Depends on:** M6 complete (including the **M6-015** product thesis gate)
+**State:** done · **Depends on:** M6 complete (including the **M6-015** product thesis gate)
 
 ## Goal
 
