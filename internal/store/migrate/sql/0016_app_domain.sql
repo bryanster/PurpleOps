@@ -405,8 +405,29 @@ CREATE INDEX evidence_blob_sha256_idx ON app.evidence (blob_sha256);
 -- the INSERT below fails — which is correct: the schema should not accept
 -- orphaned memberships, and this surfaces the data problem at migration time
 -- rather than letting it reach the application.
+--
+-- The rows are parked in an unconstrained stash so the replacement can be
+-- created under its final name. The obvious shape — build engagement_member_next,
+-- drop the old table, rename the new one into place — is a trap: DuckDB records
+-- the parent's list of dependent tables under the name the child had when the
+-- constraint was created, and RENAME TO does not rewrite it. app.engagement
+-- would be left pointing at "engagement_member_next", and every delete of an
+-- engagement would abort while resolving that name:
+--
+--     Catalog Error: Table with name engagement_member_next does not exist!
+--
+-- Not per-row: no engagement could be deleted at all, empty ones included,
+-- because that fails while resolving the constraint rather than while checking
+-- any data. Dropping the child does not clear the stale entry either. So never
+-- RENAME a table that is the child of a foreign key.
 
-CREATE TABLE app.engagement_member_next (
+CREATE TABLE app.engagement_member_stash AS
+    SELECT engagement_id, user_id, role, added_by, added_at
+    FROM app.engagement_member;
+
+DROP TABLE app.engagement_member;
+
+CREATE TABLE app.engagement_member (
     engagement_id TEXT NOT NULL REFERENCES app.engagement (id) ON DELETE RESTRICT,
     user_id       TEXT NOT NULL,
     role          TEXT NOT NULL,
@@ -418,12 +439,11 @@ CREATE TABLE app.engagement_member_next (
         CHECK (role IN ('lead', 'red', 'blue', 'observer'))
 );
 
-INSERT INTO app.engagement_member_next
+INSERT INTO app.engagement_member
     SELECT engagement_id, user_id, role, added_by, added_at
-    FROM app.engagement_member;
+    FROM app.engagement_member_stash;
 
-DROP TABLE app.engagement_member;
-ALTER TABLE app.engagement_member_next RENAME TO engagement_member;
+DROP TABLE app.engagement_member_stash;
 
 CREATE INDEX engagement_member_user_id_idx
     ON app.engagement_member (user_id);

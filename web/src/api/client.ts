@@ -146,3 +146,24 @@ export function unwrap<T>(result: { data?: T; error?: unknown; response: Respons
     status: result.response.status,
   })
 }
+
+/**
+ * [unwrap] for an operation whose success is 204 No Content.
+ *
+ * Those calls have nothing to unwrap — `data` is `undefined` on success — so
+ * they are written as a bare `await api.DELETE(…)`, and a bare await throws
+ * away the result. `problemMiddleware` catches most failures before they get
+ * that far, but not a non-2xx answering with plain `application/json`: it
+ * declines to throw for those, and the discarded result is the only place the
+ * failure was recorded. The mutation then reports success for a request the
+ * server refused — a toast saying the thing was deleted, and the thing still
+ * there on the next screen.
+ */
+export function unwrapVoid(result: { error?: unknown; response: Response }): void {
+  if (result.response.ok) {
+    return
+  }
+  throw new ApiError(`unexpected ${String(result.response.status)} response`, {
+    status: result.response.status,
+  })
+}

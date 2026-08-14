@@ -39,6 +39,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   holds no membership, and its permission predicates match the server's table
   for every role. This bit hardest on a fresh install, where the bootstrapped
   first account is an administrator and there is nobody else to be a lead yet.
+- **Deleting an engagement works.** Delete engagement confirmed the deletion,
+  said the engagement was gone and returned to the list — where it was still
+  sitting. It had never worked, for three reasons at once: a rename in the
+  migration that gave `engagement_member` its foreign key left DuckDB unable to
+  delete any engagement row at all; the statement emptying the workbook was a
+  multi-statement script with bound parameters, which DuckDB rejects outright;
+  and it never covered the engagement's reports or report templates, both of
+  which hold it down with a foreign key. Deleting now removes the whole graph —
+  published report versions, share links and grants, finding status history, and
+  the references evidence files hold on their blobs, so those become
+  collectable. The interface no longer reports success for a delete the server
+  refused. The delete is not atomic, because DuckDB will not let one transaction
+  remove a row and then the row it references; one interrupted partway leaves
+  the engagement partly emptied and still listed, and running it again finishes
+  the job.
 
 ## [1.0.1] — 2026-08-14
 

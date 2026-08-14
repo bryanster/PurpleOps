@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -192,55 +193,136 @@ func (r *Engagements) SetStatus(ctx context.Context, id string, status Engagemen
 	return result, nil
 }
 
-const deleteEngagementGraph = `
-	DELETE FROM app.activity WHERE engagement_id = ?;
-	DELETE FROM app.comment_revision WHERE comment_id IN (SELECT id FROM app."comment" WHERE execution_id IN (SELECT e.id FROM app.execution e JOIN app.step s ON e.step_id = s.id JOIN app.scenario sc ON s.scenario_id = sc.id WHERE sc.engagement_id = ?));
-	DELETE FROM app.evidence WHERE execution_id IN (SELECT e.id FROM app.execution e JOIN app.step s ON e.step_id = s.id JOIN app.scenario sc ON s.scenario_id = sc.id WHERE sc.engagement_id = ?) OR comment_id IN (SELECT id FROM app."comment" WHERE execution_id IN (SELECT e.id FROM app.execution e JOIN app.step s ON e.step_id = s.id JOIN app.scenario sc ON s.scenario_id = sc.id WHERE sc.engagement_id = ?));
-	DELETE FROM app."comment" WHERE execution_id IN (SELECT e.id FROM app.execution e JOIN app.step s ON e.step_id = s.id JOIN app.scenario sc ON s.scenario_id = sc.id WHERE sc.engagement_id = ?);
-	DELETE FROM app.finding_step WHERE finding_id IN (SELECT id FROM app.finding WHERE engagement_id = ?);
-	DELETE FROM app.finding WHERE engagement_id = ?;
-	DELETE FROM app.execution WHERE step_id IN (SELECT s.id FROM app.step s JOIN app.scenario sc ON s.scenario_id = sc.id WHERE sc.engagement_id = ?);
-	DELETE FROM app.step WHERE scenario_id IN (SELECT id FROM app.scenario WHERE engagement_id = ?);
-	DELETE FROM app.scenario WHERE engagement_id = ?;
-	DELETE FROM app.engagement_member WHERE engagement_id = ?;
-	DELETE FROM app.engagement WHERE id = ?;
-`
+// Sub-selects naming the rows under one engagement. Each ends with a single
+// `?` bound to the engagement id, so every statement built from them takes
+// exactly one parameter.
+const (
+	engagementExecutions = `SELECT e.id FROM app.execution e
+		JOIN app.step s ON e.step_id = s.id
+		JOIN app.scenario sc ON s.scenario_id = sc.id
+		WHERE sc.engagement_id = ?`
 
-// Delete removes an engagement and every row in its workbook graph.
-// The order in deleteEngagementGraph respects FK RESTRICT constraints so that
-// child rows are dropped before their parents.
+	engagementComments = `SELECT id FROM app."comment" WHERE execution_id IN (` + engagementExecutions + `)`
+
+	engagementReports = `SELECT id FROM app.report WHERE engagement_id = ?`
+
+	engagementReportVersions = `SELECT id FROM app.report_version WHERE report_id IN (` + engagementReports + `)`
+
+	engagementReportShares = `SELECT id FROM app.report_share WHERE version_id IN (` + engagementReportVersions + `)`
+
+	engagementTemplates = `SELECT id FROM app.report_template WHERE engagement_id = ?`
+)
+
+// deleteEngagementGraph is the ordered list of statements that erase an
+// engagement and everything hanging off it. The order respects the FK RESTRICT
+// constraints — children before parents.
+//
+// It is a list rather than one semicolon-separated script, and each statement
+// runs in a transaction of its own, for two separate DuckDB reasons:
+//
+// One: DuckDB cannot bind parameters across a multi-statement Exec. It prepares
+// the first statement only and rejects the call with "incorrect argument count
+// for command", so a script with a `?` in every statement never runs at all.
+//
+// Two: DuckDB enforces a RESTRICT foreign key against the child's index, which
+// does not reflect the current transaction's own deletes. Removing a child and
+// then its parent in one transaction therefore fails —
+//
+//	Violates foreign key constraint because key "report_id: …" is still
+//	referenced by a foreign key in a different table
+//
+// — even though the referencing row was deleted moments earlier. The child's
+// removal has to be committed before the parent's can be attempted, which is
+// exactly what one transaction per statement gives. See "foreign key
+// limitations" in the DuckDB docs.
+//
+// The cost is that the whole delete is not atomic. Every statement is a
+// `DELETE … WHERE` keyed on the engagement, so re-running the operation after a
+// failure picks up where it stopped and finishes the job; a caller that fails
+// midway leaves a partly emptied engagement, not a corrupt one.
+var deleteEngagementGraph = []string{
+	// Reports: grants → shares → versions/blocks → report.
+	`DELETE FROM app.report_share_grant WHERE share_id IN (` + engagementReportShares + `)`,
+	`DELETE FROM app.report_share WHERE version_id IN (` + engagementReportVersions + `)`,
+	`DELETE FROM app.report_version WHERE report_id IN (` + engagementReports + `)`,
+	`DELETE FROM app.report_block WHERE report_id IN (` + engagementReports + `)`,
+	`DELETE FROM app.report WHERE engagement_id = ?`,
+
+	// Report templates: blocks → template.
+	`DELETE FROM app.report_template_block WHERE template_id IN (` + engagementTemplates + `)`,
+	`DELETE FROM app.report_template WHERE engagement_id = ?`,
+
+	// Denormalized history and audit rows. Neither carries an FK, so nothing
+	// forces their removal — they are dropped here so the engagement leaves no
+	// orphans behind.
+	`DELETE FROM app.finding_status_history WHERE engagement_id = ?`,
+	`DELETE FROM app.activity WHERE engagement_id = ?`,
+
+	// Comment revisions sit under comments, which sit under executions.
+	`DELETE FROM app.comment_revision WHERE comment_id IN (` + engagementComments + `)`,
+
+	// Evidence rows hold a ref on their blob. Release those refs before the
+	// rows go, or the blobs never reach ref_count 0 and GC never reclaims the
+	// files. A blob referenced by several of these rows is decremented once per
+	// row, hence the correlated count rather than a flat -1.
+	`UPDATE app.evidence_blob SET ref_count = ref_count - (
+		SELECT COUNT(*) FROM app.evidence ev
+		WHERE ev.blob_sha256 = app.evidence_blob.sha256
+		  AND ev.execution_id IN (` + engagementExecutions + `)
+	) WHERE sha256 IN (
+		SELECT blob_sha256 FROM app.evidence WHERE execution_id IN (` + engagementExecutions + `)
+	)`,
+	`UPDATE app.evidence_blob SET ref_count = ref_count - (
+		SELECT COUNT(*) FROM app.evidence ev
+		WHERE ev.blob_sha256 = app.evidence_blob.sha256
+		  AND ev.comment_id IN (` + engagementComments + `)
+	) WHERE sha256 IN (
+		SELECT blob_sha256 FROM app.evidence WHERE comment_id IN (` + engagementComments + `)
+	)`,
+	`DELETE FROM app.evidence WHERE execution_id IN (` + engagementExecutions + `)`,
+	`DELETE FROM app.evidence WHERE comment_id IN (` + engagementComments + `)`,
+
+	// The workbook itself.
+	`DELETE FROM app."comment" WHERE execution_id IN (` + engagementExecutions + `)`,
+	`DELETE FROM app.finding_step WHERE finding_id IN (SELECT id FROM app.finding WHERE engagement_id = ?)`,
+	`DELETE FROM app.finding WHERE engagement_id = ?`,
+	`DELETE FROM app.execution WHERE step_id IN (SELECT s.id FROM app.step s JOIN app.scenario sc ON s.scenario_id = sc.id WHERE sc.engagement_id = ?)`,
+	`DELETE FROM app.step WHERE scenario_id IN (SELECT id FROM app.scenario WHERE engagement_id = ?)`,
+	`DELETE FROM app.scenario WHERE engagement_id = ?`,
+	`DELETE FROM app.engagement_member WHERE engagement_id = ?`,
+}
+
+const deleteEngagementRow = `DELETE FROM app.engagement WHERE id = ?`
+
+// Delete removes an engagement and every row in its workbook graph. It reports
+// a not-found error when no engagement has that id.
+//
+// The graph is emptied one committed statement at a time rather than in a
+// single transaction; see [deleteEngagementGraph] for why DuckDB leaves no
+// choice, and what that means if a statement fails partway through.
 func (r *Engagements) Delete(ctx context.Context, id string) error {
-	return r.db.Write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, deleteEngagementGraph,
-			// activity
-			id,
-			// comment_revision
-			id,
-			// evidence (execution parent)
-			id,
-			// evidence (comment parent) — second occurrence in third position
-			id,
-			// comment
-			id,
-			// finding_step
-			id,
-			// finding
-			id,
-			// execution
-			id,
-			// step
-			id,
-			// scenario
-			id,
-			// engagement_member
-			id,
-			// engagement
-			id,
-		)
+	for _, stmt := range deleteEngagementGraph {
+		args := make([]any, strings.Count(stmt, "?"))
+		for i := range args {
+			args[i] = id
+		}
+		err := r.db.Write(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, stmt, args...)
+			return err
+		})
 		if err != nil {
 			return fmt.Errorf("engagement: delete %q: %w", id, err)
 		}
-		return nil
+	}
+
+	// Last, so that a missing engagement is reported only after the graph
+	// statements have proved they run clean.
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, deleteEngagementRow, id)
+		if err != nil {
+			return fmt.Errorf("engagement: delete %q: %w", id, err)
+		}
+		return requireOneRow(result, "engagement", id)
 	})
 }
 

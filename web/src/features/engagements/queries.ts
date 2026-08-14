@@ -10,7 +10,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query'
 
-import { api, unwrap } from '@/api/client'
+import { api, unwrap, unwrapVoid } from '@/api/client'
 import type { components } from '@/api/schema'
 
 /**
@@ -220,9 +220,11 @@ export function useDeleteEngagement(): UseMutationResult<void, Error, { engageme
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ engagementId }) => {
-      await api.DELETE('/engagements/{engagementId}', {
-        params: { path: { engagementId } },
-      })
+      unwrapVoid(
+        await api.DELETE('/engagements/{engagementId}', {
+          params: { path: { engagementId } },
+        }),
+      )
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: engagementKeys.all })

@@ -2204,8 +2204,17 @@ paths:
       summary: Delete an engagement and every row in its workbook graph.
       description: |
         Lead and platform administrators. Hard delete: scenarios, steps,
-        executions, findings, evidence links, comments, members and
-        engagement-scoped activity are removed.
+        executions, findings, evidence links, comments, members,
+        engagement-scoped activity, finding status history, and the
+        engagement's reports and report templates — including published
+        versions and any share links and grants issued against them — are all
+        removed. Evidence blobs have their reference released, so a blob
+        nothing else points at becomes collectable.
+
+        Not atomic: the graph is emptied in committed steps, because DuckDB
+        will not let one transaction delete a row and then the row it
+        references. A delete that fails partway leaves the engagement partly
+        emptied and can be retried, which resumes it.
       tags:
         - engagements
       x-authz-action: engagement.delete
