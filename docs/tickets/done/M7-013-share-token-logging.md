@@ -47,12 +47,12 @@ A log line plus any local account (or a weak share password) is a published repo
 
 ## Acceptance criteria
 
-- [ ] An info-level request log for `GET /api/v1/report-views/{token}` does not contain the token.
-- [ ] A 401/404 problem log for the same path does not contain the token.
-- [ ] After N failed `POST .../password` attempts (existing account/source thresholds), the next
+- [x] An info-level request log for `GET /api/v1/report-views/{token}` does not contain the token.
+- [x] A 401/404 problem log for the same path does not contain the token.
+- [x] After N failed `POST .../password` attempts (existing account/source thresholds), the next
       is 429 with `Retry-After`.
-- [ ] `CreateShare` with a 3-character password is 400.
-- [ ] Two concurrent claims against `maxGrants=1` produce one grant and one 403, never two grants.
+- [x] `CreateShare` with a 3-character password is 400.
+- [x] Two concurrent claims against `maxGrants=1` produce one grant and one 403, never two grants.
 
 ## Tests
 
@@ -70,3 +70,19 @@ Argon2id on the password route is already expensive; throttling is still require
 token cannot be pounded from many sources without hitting the source limiter.
 
 Medium: not a silent defer, but not a `M7-009` blocker unless the ship owner promotes it.
+
+## Implementation notes
+
+- Password policy uses `password.Validate` (the one policy in
+  `internal/authn/password`), which raises the documented minimum from 8 to 12
+  characters and rejects common passwords — the ticket's "or at least 8"
+  fallback. OpenAPI `CreateReportShare.password` mirrors the bounds
+  (`minLength: 12`, `maxLength: 128`).
+- `Grants.Insert` and `Grants.GrantCount` were replaced by `Grants.ClaimInsert`,
+  which performs the cap check and the insert in one write transaction; the old
+  methods had no remaining callers and were removed.
+- Share-token redaction lives in `apierr.RedactPath` and is applied at every
+  `r.URL.Path` log site — access, authorization, problem, throttle, CSRF, MFA
+  gate, recover, and the two 404 paths — not just the access logger.
+- The throttle account key is a SHA-256 hash of the share token, not the token
+  itself, so a lockout log line cannot publish the credential.

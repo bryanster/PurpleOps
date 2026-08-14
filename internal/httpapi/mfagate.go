@@ -93,7 +93,7 @@ func requireMFAEnrolment(responder *apierr.Responder, log *slog.Logger) func(htt
 			// whose answer is this line.
 			log.InfoContext(r.Context(), "refused a request from a session confined to MFA enrolment",
 				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
+				slog.String("path", apierr.RedactPath(r.URL.Path)),
 				slog.String("user_id", subject.UserID),
 				slog.String("session_id", subject.SessionID))
 

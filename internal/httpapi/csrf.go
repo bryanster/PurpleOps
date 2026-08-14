@@ -156,7 +156,7 @@ func requireCSRF(sessions *session.Manager, responder *apierr.Responder,
 				// ticket. Nothing here records a token value, matching or not.
 				log.WarnContext(r.Context(), "refused a request with no valid CSRF token",
 					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
+					slog.String("path", apierr.RedactPath(r.URL.Path)),
 					slog.String("user_id", subject.UserID),
 					slog.Bool("header_present", header != ""),
 					slog.Bool("cookie_present", writer.presented != ""))

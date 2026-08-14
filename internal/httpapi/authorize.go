@@ -199,7 +199,7 @@ func authorize(doc *openapi3.T, own Ownership, responder *apierr.Responder,
 				// pattern of them, which is M1-015's job and not a log level's.
 				log.InfoContext(ctx, "refused a request the caller may not make",
 					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
+					slog.String("path", apierr.RedactPath(r.URL.Path)),
 					slog.Any("authorization", decided.authorization))
 				responder.Write(w, r, decided.refusal)
 				return

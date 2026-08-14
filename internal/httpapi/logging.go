@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
 
 // requestLogger writes one line per request, after it has been answered.
@@ -36,7 +38,7 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 					// Path, not RequestURI: a query string can carry a token, a
 					// share secret or a filter nobody meant to publish, and the
 					// log is the one place they would then live forever.
-					slog.String("path", r.URL.Path),
+					slog.String("path", apierr.RedactPath(r.URL.Path)),
 					slog.Int("status", statusOf(wrapped)),
 					slog.Int("bytes", wrapped.BytesWritten()),
 					slog.Duration("duration", time.Since(started)),

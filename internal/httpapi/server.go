@@ -239,7 +239,7 @@ func newServer(deps Deps, doc *openapi3.T, extraRoutes func(chi.Router)) (http.H
 	// this server says about a failure is a problem document, including the
 	// failures that never reach a handler.
 	notFound := func(w http.ResponseWriter, r *http.Request) {
-		responder.Write(w, r, apierr.NotFound("endpoint", r.URL.Path))
+		responder.Write(w, r, apierr.NotFound("endpoint", apierr.RedactPath(r.URL.Path)))
 	}
 	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		responder.Write(w, r, apierr.MethodNotAllowed(r.Method))

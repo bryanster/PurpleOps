@@ -71,3 +71,20 @@ func TestTheLogDoesNotCarryTheQueryString(t *testing.T) {
 		t.Errorf("the query string reached the log:\n%s", body)
 	}
 }
+
+// TestTheLogRedactsShareTokensInPaths is the M7-013 regression: a share token
+// travels in the path (/report-views/{token}), not the query string, so the
+// access logger's query-string discipline is not enough by itself.
+func TestTheLogRedactsShareTokensInPaths(t *testing.T) {
+	t.Parallel()
+
+	server, logs := newTestServer(t)
+	get(server, BasePath+"/report-views/0123abcd0123abcd")
+
+	if got, want := logs.find(t, "request")["path"], BasePath+"/report-views/[redacted]"; got != want {
+		t.Errorf("path = %v, want %v", got, want)
+	}
+	if body := logs.String(); strings.Contains(body, "0123abcd0123abcd") {
+		t.Errorf("the share token reached the log:\n%s", body)
+	}
+}

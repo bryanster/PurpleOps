@@ -6325,7 +6325,11 @@ export interface components {
         };
         /** @description Body of POST /report-versions/{versionId}/shares. */
         CreateReportShare: {
-            /** @description Optional password gate. Must be at least 8 characters. */
+            /**
+             * @description Optional password gate. When set, must satisfy the account password
+             *     policy (internal/authn/password): at least 12 characters, at most
+             *     128, and not a common password. Omit for a share with no gate.
+             */
             password?: string;
             /**
              * Format: date-time

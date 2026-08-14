@@ -200,7 +200,7 @@ func (s *spa) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// is the regression M0B-010 exists to prevent — see
 	// TestAnUnknownAPIPathIsAProblemAndNotTheSPA.
 	if isAPIPath(r.URL.Path) {
-		s.responder.Write(w, r, apierr.NotFound("endpoint", r.URL.Path))
+		s.responder.Write(w, r, apierr.NotFound("endpoint", apierr.RedactPath(r.URL.Path)))
 		return
 	}
 

@@ -114,7 +114,7 @@ func (rs *Responder) Write(w http.ResponseWriter, r *http.Request, err error) {
 		slog.String("code", string(problem.Code)),
 		slog.Int("status", problem.Status),
 		slog.String("method", r.Method),
-		slog.String("path", r.URL.Path),
+		slog.String("path", RedactPath(r.URL.Path)),
 		slog.String("request_id", instance),
 		slog.String("error", errorText(err)),
 	}

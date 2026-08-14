@@ -215,8 +215,14 @@ type Grants struct {
 // NewGrants returns a repository over db.
 func NewGrants(db DB) *Grants { return &Grants{db: db} }
 
-// Insert creates a new grant.
-func (g *Grants) Insert(ctx context.Context, in NewGrant) (ReportShareGrant, error) {
+// ClaimInsert inserts a grant for a share, refusing when the share's grant cap
+// is already met. The count and the insert run inside one write transaction, so
+// two concurrent claims against a capped share cannot both pass the check.
+//
+// maxGrants is the share's cap as the caller read it; nil (or non-positive)
+// means unlimited. The boolean is false, with a nil error, when the cap was
+// reached.
+func (g *Grants) ClaimInsert(ctx context.Context, in NewGrant, maxGrants *int) (ReportShareGrant, bool, error) {
 	id := newID()
 	nowTime := now()
 	grant := ReportShareGrant{
@@ -228,18 +234,35 @@ func (g *Grants) Insert(ctx context.Context, in NewGrant) (ReportShareGrant, err
 	if in.UserID != nil {
 		grant.ClaimedAt = &nowTime
 	}
+
+	inserted := false
 	err := g.db.Write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `
+		if maxGrants != nil && *maxGrants > 0 {
+			var count int
+			if err := tx.QueryRowContext(ctx, `
+				SELECT COUNT(*) FROM app.report_share_grant
+				WHERE share_id = ? AND revoked_at IS NULL`, in.ShareID,
+			).Scan(&count); err != nil {
+				return err
+			}
+			if count >= *maxGrants {
+				return nil
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO app.report_share_grant (id, share_id, user_id, claimed_at, created_at)
 			VALUES (?, ?, ?, ?, ?)`,
 			id, in.ShareID, in.UserID, grant.ClaimedAt, nowTime,
-		)
-		return err
+		); err != nil {
+			return err
+		}
+		inserted = true
+		return nil
 	})
 	if err != nil {
-		return ReportShareGrant{}, err
+		return ReportShareGrant{}, false, err
 	}
-	return grant, nil
+	return grant, inserted, nil
 }
 
 // ByShareAndUser returns a non-revoked grant for the given share+user, or nil.
@@ -303,18 +326,6 @@ func (g *Grants) Revoke(ctx context.Context, id string) error {
 func (g *Grants) DeleteByShare(tx *sql.Tx, shareID string) error {
 	_, err := tx.ExecContext(context.TODO(), `DELETE FROM app.report_share_grant WHERE share_id = ?`, shareID)
 	return err
-}
-
-// GrantCount returns the number of non-revoked grants for a share.
-func (g *Grants) GrantCount(ctx context.Context, shareID string) (int, error) {
-	var count int
-	if err := g.db.Read().QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM app.report_share_grant
-		WHERE share_id = ? AND revoked_at IS NULL`, shareID,
-	).Scan(&count); err != nil {
-		return 0, err
-	}
-	return count, nil
 }
 
 // scanGrant scans a grant row.

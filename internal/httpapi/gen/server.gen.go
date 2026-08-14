@@ -1956,7 +1956,9 @@ type CreateReportShare struct {
 	// MaxGrants Maximum number of claims. Omit for unlimited.
 	MaxGrants *int `json:"maxGrants,omitempty"`
 
-	// Password Optional password gate. Must be at least 8 characters.
+	// Password Optional password gate. When set, must satisfy the account password
+	// policy (internal/authn/password): at least 12 characters, at most
+	// 128, and not a common password. Omit for a share with no gate.
 	Password *string `json:"password,omitempty"`
 }
 

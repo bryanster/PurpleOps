@@ -44,7 +44,7 @@ func recoverer(log *slog.Logger, responder *apierr.Responder) func(http.Handler)
 					// marshal, and this line must not itself fail.
 					slog.String("panic", fmt.Sprint(recovered)),
 					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
+					slog.String("path", apierr.RedactPath(r.URL.Path)),
 					slog.String("request_id", middleware.GetReqID(ctx)),
 					slog.String("stack", string(debug.Stack())),
 				)

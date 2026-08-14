@@ -160,8 +160,11 @@ func (s *ShareService) CreateShare(ctx context.Context, in CreateShareInput) (*C
 	}
 
 	var passwordHash *string
-	if in.Password != nil && *in.Password != "" {
+	if in.Password != nil {
 		plain := password.Plaintext(*in.Password)
+		if err := password.Validate("password", plain); err != nil {
+			return nil, fmt.Errorf("report share: password policy: %w", err)
+		}
 		hash, err := password.Hash(plain)
 		if err != nil {
 			return nil, fmt.Errorf("report share: password hash: %w", err)
@@ -249,17 +252,6 @@ func (s *ShareService) ClaimShare(ctx context.Context, in ClaimShareInput) (*Cla
 		}
 	}
 
-	// Grant limit.
-	if share.MaxGrants != nil && *share.MaxGrants > 0 {
-		count, err := s.grants.GrantCount(ctx, share.ID)
-		if err != nil {
-			return nil, err
-		}
-		if count >= *share.MaxGrants {
-			return nil, apierr.Forbidden("share grant limit reached")
-		}
-	}
-
 	// Check if already claimed.
 	existing, gErr := s.grants.ByShareAndUser(ctx, share.ID, in.UserID)
 	if gErr != nil {
@@ -269,12 +261,18 @@ func (s *ShareService) ClaimShare(ctx context.Context, in ClaimShareInput) (*Cla
 		return nil, apierr.Conflict("share already claimed")
 	}
 
-	grant, err := s.grants.Insert(ctx, storereport.NewGrant{
+	// Insert under the write transaction, re-checking the cap there: the count
+	// and the insert are one operation, so concurrent claims against a capped
+	// share cannot both pass the check.
+	grant, inserted, err := s.grants.ClaimInsert(ctx, storereport.NewGrant{
 		ShareID: share.ID,
 		UserID:  &in.UserID,
-	})
+	}, share.MaxGrants)
 	if err != nil {
 		return nil, fmt.Errorf("report share: grant insert: %w", err)
+	}
+	if !inserted {
+		return nil, apierr.Forbidden("share grant limit reached")
 	}
 
 	if s.activity != nil {

@@ -12723,7 +12723,12 @@ components:
       properties:
         password:
           type: string
-          description: Optional password gate. Must be at least 8 characters.
+          minLength: 12
+          maxLength: 128
+          description: |
+            Optional password gate. When set, must satisfy the account password
+            policy (internal/authn/password): at least 12 characters, at most
+            128, and not a common password. Omit for a share with no gate.
         expiresAt:
           type: string
           format: date-time

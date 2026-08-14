@@ -3,6 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -108,7 +110,7 @@ func throttleCredentials(limiter *throttle.Limiter, accounts map[string]accountO
 				// derivation, which is the other half of what throttling is for.
 				log.InfoContext(ctx, "refused a throttled sign-in attempt",
 					slog.String("client_ip", attempt.Source),
-					slog.String("path", r.URL.Path))
+					slog.String("path", apierr.RedactPath(r.URL.Path)))
 				responder.Write(w, r, err)
 				return
 			}
@@ -192,11 +194,49 @@ func credentialAttempt(r *http.Request, accounts map[string]accountOf) (throttle
 		return throttle.Attempt{Account: tokenAccount(presented), Source: source}, true
 	}
 
+	if account, guarded := shareTokenAccount(r); guarded {
+		return throttle.Attempt{Account: account, Source: source}, true
+	}
+
 	account, guarded := accounts[routePath(r)]
 	if !guarded || r.Method != http.MethodPost {
 		return throttle.Attempt{}, false
 	}
 	return throttle.Attempt{Account: account(r), Source: source}, true
+}
+
+// shareTokenAccount names the share token a report-view claim or password
+// request is presenting, keyed by a hash of the token rather than the token
+// itself. The token is a credential carried in the URL path, and the account
+// key is the one value the throttler writes into a lockout log line (and the
+// M1-015 activity record); a hash is what keeps that line from publishing it.
+//
+// It returns "" and false for a request that is not one of the two share
+// credential routes.
+func shareTokenAccount(r *http.Request) (string, bool) {
+	if r.Method != http.MethodPost {
+		return "", false
+	}
+	path := routePath(r)
+	const prefix = BasePath + "/report-views/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	rest := strings.TrimPrefix(path, prefix)
+	var token string
+	switch {
+	case strings.HasSuffix(rest, "/claim"):
+		token = strings.TrimSuffix(rest, "/claim")
+	case strings.HasSuffix(rest, "/password"):
+		token = strings.TrimSuffix(rest, "/password")
+	default:
+		return "", false
+	}
+	if token == "" || strings.Contains(token, "/") {
+		return "", false
+	}
+	sum := sha256.Sum256([]byte(token))
+	return "share:" + hex.EncodeToString(sum[:]), true
 }
 
 // tokenAccount names the account a presented token is an attempt against: its
