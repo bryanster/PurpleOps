@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] — TBD
+## [1.0.0] — 2026-08-14
 
 > **Greenfield only.** Blacklight v1.0.0 is a ground-up rebuild of the prior
 > Python/Mongo application. There is **no migration path** from the old stack —

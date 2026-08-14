@@ -69,10 +69,8 @@ Design and backlog live in [`PLAN.md`](PLAN.md) and [`docs/tickets/`](docs/ticke
 
 ## Status
 
-Blacklight is a ground-up rebuild of the prior Python/Mongo codebase, approaching its first stable
-release. The product loop — baseline, retest, compare, report — is implemented and end-to-end tested.
-A pre-release status banner may remain on in-depth docs pages until `v1.0.0` is tagged; the
-quickstart path above is the supported install.
+Blacklight `v1.0.0` is released. The product loop — baseline, retest, compare, report — is
+implemented and end-to-end tested.
 
 ## Licence
 
