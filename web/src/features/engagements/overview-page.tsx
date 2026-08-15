@@ -67,7 +67,7 @@ function roleLabel(role: EngagementRole): string {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function OverviewPage(): ReactNode {
-  const { engagementId, role, closed } = useEngagementContext()
+  const { engagementId, role } = useEngagementContext()
   const engagement = useEngagement(engagementId)
   const members = useEngagementMembers(engagementId)
 
@@ -88,7 +88,7 @@ export function OverviewPage(): ReactNode {
 
   return (
     <div className="flex flex-col gap-6">
-      <MetadataCard engagement={engagement.data} role={role} closed={closed} />
+      <MetadataCard engagement={engagement.data} role={role} />
       <MembersCard
         members={members.data ?? []}
         isPending={members.isPending}
@@ -108,15 +108,16 @@ export function OverviewPage(): ReactNode {
 function MetadataCard({
   engagement,
   role,
-  closed,
 }: {
   engagement: Engagement
   role: EngagementRole
-  closed: boolean
 }): ReactNode {
   const canManageEng = canManage(role)
   const setStatus = useSetEngagementStatus()
-  const transitions = canManageEng && !closed ? validTransitions(engagement.status) : []
+  // Not gated on `closed`: archiving is the transition *out* of closed, so
+  // hiding the buttons there left a closed engagement with no way forward.
+  // validTransitions already ends at archived, which is terminal.
+  const transitions = canManageEng ? validTransitions(engagement.status) : []
 
   return (
     <section className="rounded-lg border p-5">

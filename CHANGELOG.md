@@ -33,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Moving an engagement through its lifecycle works.** Activate, Close and
+  Archive answered 500 and left the engagement where it was, on every
+  engagement — creating one seats its lead, and one referencing row was all it
+  took. `app.engagement(status)` was indexed; DuckDB rewrites an `UPDATE` that
+  touches an indexed column into `DELETE` + `INSERT`, and the delete half is
+  checked against the `RESTRICT` foreign keys that members, scenarios, findings
+  and reports hold the engagement down with. The index is gone — status has four
+  values over a table with tens of rows, so it was never earning its keep — and
+  the schema now says why, because the same trap is waiting for any index on a
+  mutable column of a table other rows point at. The overview page also hid the
+  transition buttons on a closed engagement, so even once the server answered,
+  Archive was reachable only from Settings; archiving is the way *out* of
+  closed, and the page offers it again.
 - **Importing a step from a template works again.** From Template in an
   engagement workbook hung for thirty seconds and then answered 500, every time
   — the step was never created. The activity entry recorded alongside the new

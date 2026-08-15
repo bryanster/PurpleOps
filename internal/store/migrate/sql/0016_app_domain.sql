@@ -95,7 +95,19 @@ CREATE TABLE app.engagement (
         CHECK (mode IN ('standard', 'blind'))
 );
 
-CREATE INDEX engagement_status_idx ON app.engagement (status);
+-- No index on status. DuckDB rewrites an UPDATE that touches an indexed column
+-- into DELETE + INSERT, and the delete half is checked against every RESTRICT
+-- foreign key pointing at the row — which cannot see the re-insert. So an index
+-- on status made every status transition fail on any engagement that had a
+-- member, a scenario or a report:
+--
+--     Constraint Error: Violates foreign key constraint because key
+--     "engagement_id: …" is still referenced by a foreign key in a different table
+--
+-- i.e. all of them, since creating an engagement seats its lead. Never index a
+-- mutable column of a table that is the parent of a foreign key. The index
+-- bought nothing anyway: status has four values over a table that holds tens of
+-- rows, and DuckDB's ART indexes serve point lookups, not filters.
 
 -- ---------------------------------------------------------------------------
 -- Scenario — ordered attack-chain section inside an engagement
