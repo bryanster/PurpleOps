@@ -132,6 +132,7 @@ func TestValidateParams(t *testing.T) {
 		"show":                 {Type: "boolean", Default: json.RawMessage(`true`)},
 		"baselineEngagementId": {Type: "string", Description: "Baseline engagement UUID"},
 		"tactic":               {Type: "string", Enum: []string{"recon", "execution", "persistence"}},
+		"limit":                {Type: "integer", Description: "Row cap"},
 	}
 
 	tests := []struct {
@@ -179,6 +180,24 @@ func TestValidateParams(t *testing.T) {
 			name:   "enum valid value accepted",
 			params: json.RawMessage(`{"tactic":"recon","title":"Hello"}`),
 			want:   json.RawMessage(`{"count":10,"show":true,"tactic":"recon","title":"Hello"}`),
+		},
+		{
+			// evidence_appendix declares "limit" as an integer and defaults it
+			// to 50, so this is the shape the builder sends back on every save
+			// after the first.
+			name:   "integer accepted",
+			params: json.RawMessage(`{"limit":50}`),
+			want:   json.RawMessage(`{"count":10,"limit":50,"show":true}`),
+		},
+		{
+			name:    "fractional integer rejected",
+			params:  json.RawMessage(`{"limit":1.5}`),
+			wantErr: `param "limit" must be a whole number`,
+		},
+		{
+			name:    "non-numeric integer rejected",
+			params:  json.RawMessage(`{"limit":"50"}`),
+			wantErr: `param "limit" must be an integer`,
 		},
 		{
 			name: "nil schema accepts anything (empty)",

@@ -31,19 +31,20 @@ import { expect, test, type SeedCommand } from '../harness/test'
  * content-library.spec.ts. If full report rendering is too slow, split
  * into nightly — document in the PR.
  *
- * ## Pre-existing bugs discovered and documented here
+ * ## Bugs this spec used to document
  *
- * 1. **DuckDB params scan** (putReportBlocks): column `params` is scanned
- *    as `map[string]interface{}` into `*string` — 500. The comparison
- *    block cannot be set via API. Builder UI is unaffected.
- * 2. **DuckDB nil scan** (createReportShare): column `blocks_json` on a
- *    version with no blocks is `<nil>` → `*json.RawMessage` scan fails.
- *    Publishing a report with no blocks produces an un-shareable version.
- * 3. **Authz engagement mapping** (putReportBlocks): `x-authz-resource`
- *    maps `reportId` as the engagement identifier. Admin session
- *    workaround used; member sessions get 404.
+ * Three failures were found while writing this spec and left recorded here
+ * until they could be fixed separately. All three are fixed and pinned by
+ * tests now:
  *
- * All three are in `internal/report/` and need separate fixes.
+ * 1. **DuckDB params scan** (putReportBlocks): `params` is a JSON column,
+ *    which DuckDB returns parsed. Fixed by casting to VARCHAR in the column
+ *    list — `internal/store/report.TestReportBlocksRoundTripCompareParams`.
+ * 2. **DuckDB nil scan** (createReportShare): `blocks_json` on a version with
+ *    no blocks. Fixed by storing '[]' rather than NULL — `jsonOrDefault` in
+ *    `internal/store/report/versions.go`.
+ * 3. **Authz engagement mapping** (putReportBlocks): a member's save reading
+ *    as 404. Pinned by `httpapi.TestReportBuilderMemberCanSave`.
  */
 
 const lEmail = 'thesis-lead@example.test'
@@ -322,9 +323,8 @@ test('full product thesis: content, engagements, scoring, report', async ({ requ
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Share and revoke are exercised by reports-share.spec.ts (M6-012) which
-  // covers the full browser share → view → revoke → 404 flow. The API path
-  // is blocked by DuckDB nil-scan bug on `blocks_json` for blockless versions.
-  // See file header for the three documented pre-existing bugs.
+  // covers the full browser share → view → revoke → 404 flow, and the builder
+  // UI by report-builder.spec.ts. This spec stops at publish.
   // ═══════════════════════════════════════════════════════════════════════════
 })
 /* eslint-enable @typescript-eslint/no-non-null-assertion, @typescript-eslint/array-type */

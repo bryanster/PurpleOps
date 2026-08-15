@@ -3,6 +3,7 @@ package report
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -14,7 +15,8 @@ type ParamSchema map[string]ParamProperty
 
 // ParamProperty describes one typed property in a block's parameter schema.
 type ParamProperty struct {
-	// Type is the JSON type: "string", "number", "boolean", "array".
+	// Type is the JSON type: "string", "number", "integer", "boolean",
+	// "array".
 	Type string `json:"type"`
 
 	// Description is a human-readable label for the builder UI.
@@ -98,6 +100,20 @@ func checkType(name, typ string, raw json.RawMessage, enum []string) error {
 		var n float64
 		if err := json.Unmarshal(raw, &n); err != nil {
 			return fmt.Errorf("report: param %q must be a number", name)
+		}
+	case "integer":
+		// Declared by evidence_appendix's "limit", and unhandled until the
+		// block's own default came back through this function on the second
+		// save of any report containing it: applyDefaults writes limit: 50
+		// into the stored params, the builder echoes what it read, and an
+		// unsupported type is an error rather than a pass — so the report
+		// became permanently unsaveable.
+		var n float64
+		if err := json.Unmarshal(raw, &n); err != nil {
+			return fmt.Errorf("report: param %q must be an integer", name)
+		}
+		if n != math.Trunc(n) {
+			return fmt.Errorf("report: param %q must be a whole number, got %v", name, n)
 		}
 	case "boolean":
 		var b bool

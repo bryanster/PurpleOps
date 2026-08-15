@@ -29,6 +29,7 @@ import {
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
+import { isApiError } from '@/api/errors'
 import { PageError, PageLoading } from '@/app/shell/page-state'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,7 +53,8 @@ import { useEngagements } from '@/features/engagements/queries'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-import { getBlockEntry, getCatalog } from './block-catalog'
+import { getBlockEntry, getCatalog, type BlockParamField, type BlockParams } from './block-catalog'
+import { RichTextEditor } from './rich-text-editor'
 import {
   useApplyTemplate,
   useCreateTemplateFromReport,
@@ -68,6 +70,43 @@ import { ReportSettingsPanel } from './report-settings-panel'
 import { PublishDialog } from './publish/publish-dialog'
 import { VersionsPanel } from './publish/versions-panel'
 
+/**
+ * The generated `params` type is `Record<string, never>` — openapi-typescript's
+ * rendering of a free-form JSON object, which no real value satisfies. These
+ * two are the only places that reconcile it with the object the block schemas
+ * actually describe, rather than every editor doing it with a cast.
+ */
+function asParams(params: ReportBlockInput['params']): BlockParams {
+  return params ?? {}
+}
+
+function toWireParams(params: BlockParams): ReportBlockInput['params'] {
+  return params as ReportBlockInput['params']
+}
+
+/**
+ * A one-line description of why a save was refused, naming the block rather
+ * than the wire path.
+ *
+ * The server reports a rejected parameter as `blocks[2].params`, which is the
+ * right thing to send and the wrong thing to show: the user sees a column of
+ * named blocks, not an array. Anything that is not a field-level rejection
+ * returns undefined, and the toast's own title carries it.
+ */
+function saveErrorDetail(error: unknown, blocks: ReportBlockInput[]): string | undefined {
+  if (!isApiError(error) || error.errors.length === 0) return undefined
+
+  return error.errors
+    .map((entry) => {
+      const index = /^blocks\[(\d+)\]/.exec(entry.field)?.[1]
+      if (index === undefined) return entry.message
+      const block = blocks[Number(index)]
+      const title = block ? (getBlockEntry(block.blockId)?.title ?? block.blockId) : 'Block'
+      return `${title}: ${entry.message}`
+    })
+    .join('; ')
+}
+
 export function BuilderPage(): ReactNode {
   const { engagementId, reportId } = useParams<{
     engagementId: string
@@ -81,17 +120,18 @@ export function BuilderPage(): ReactNode {
   const preview = usePreviewHtml(engagementId, reportId)
 
   const [showPreview, setShowPreview] = useState(false)
-  const [previewKey, setPreviewKey] = useState(0)
   const [localBlocks, setLocalBlocks] = useState<ReportBlockInput[] | null>(null)
 
-  const blocks: ReportBlockInput[] =
-    localBlocks ??
-    (report.data?.blocks
-      ? report.data.blocks.map((b) => ({
-          blockId: b.blockId,
-          params: b.params,
-        }))
-      : [])
+  const serverBlocks = useMemo<ReportBlockInput[]>(
+    () =>
+      (report.data?.blocks ?? []).map((b) => ({
+        blockId: b.blockId,
+        params: b.params,
+      })),
+    [report.data?.blocks],
+  )
+
+  const blocks: ReportBlockInput[] = localBlocks ?? serverBlocks
 
   const prevReportIdRef = useRef(report.data?.id)
   useEffect(() => {
@@ -109,42 +149,53 @@ export function BuilderPage(): ReactNode {
     }),
   )
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    setLocalBlocks((prev) => {
-      if (!prev) return prev
-      const oldIndex = prev.findIndex((_, i) => active.id === String(i))
-      const newIndex = prev.findIndex((_, i) => over.id === String(i))
-      if (oldIndex === -1 || newIndex === -1) return prev
-      return arrayMove(prev, oldIndex, newIndex)
-    })
-  }, [])
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      setLocalBlocks((prev) => {
+        const base = prev ?? serverBlocks
+        const oldIndex = base.findIndex((_, i) => active.id === String(i))
+        const newIndex = base.findIndex((_, i) => over.id === String(i))
+        if (oldIndex === -1 || newIndex === -1) return base
+        return arrayMove(base, oldIndex, newIndex)
+      })
+    },
+    [serverBlocks],
+  )
 
-  const handleAddBlock = useCallback((blockId: string) => {
-    setLocalBlocks((prev) => [...(prev ?? []), { blockId, params: {} }])
-  }, [])
+  const handleAddBlock = useCallback(
+    (blockId: string) => {
+      setLocalBlocks((prev) => [...(prev ?? serverBlocks), { blockId, params: {} }])
+    },
+    [serverBlocks],
+  )
 
-  const handleRemoveBlock = useCallback((index: number) => {
-    setLocalBlocks((prev) => {
-      if (!prev) return prev
-      return prev.filter((_, i) => i !== index)
-    })
-  }, [])
+  const handleRemoveBlock = useCallback(
+    (index: number) => {
+      setLocalBlocks((prev) => (prev ?? serverBlocks).filter((_, i) => i !== index))
+    },
+    [serverBlocks],
+  )
 
-  const handleUpdateBlockParams = useCallback((index: number, params: Record<string, never>) => {
-    setLocalBlocks((prev) => {
-      if (!prev) return prev
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const next = [...prev]
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      next[index] = { ...next[index]!, params }
-      return next
-    })
-  }, [])
+  const handleUpdateBlockParams = useCallback(
+    (index: number, params: BlockParams) => {
+      setLocalBlocks((prev) => {
+        const base = prev ?? serverBlocks
+        const next = [...base]
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        next[index] = { ...next[index]!, params: toWireParams(params) }
+        return next
+      })
+    },
+    [serverBlocks],
+  )
 
   const handleSave = useCallback(async () => {
-    const toSave = localBlocks ?? []
+    // `?? serverBlocks`, never `?? []`: PUT replaces the whole list, so a save
+    // with nothing edited must send back what is already there rather than
+    // clearing the report.
+    const toSave = localBlocks ?? serverBlocks
     try {
       await putBlocks.mutateAsync({
         engagementId: eid,
@@ -152,12 +203,14 @@ export function BuilderPage(): ReactNode {
         body: { blocks: toSave },
       })
       setLocalBlocks(null)
-      setPreviewKey((k) => k + 1)
       toast.success('Blocks saved')
-    } catch {
-      toast.error('Failed to save blocks')
+    } catch (err) {
+      // The server names the offending block and field on a 400 — a rejected
+      // param is the difference between "try again" and "fix this field", and
+      // a fixed sentence hides which one it is.
+      toast.error('Failed to save blocks', { description: saveErrorDetail(err, toSave) })
     }
-  }, [eid, rid, localBlocks, putBlocks])
+  }, [eid, rid, localBlocks, serverBlocks, putBlocks])
 
   const handlePublished = useCallback(
     (_version: ReportVersion) => {
@@ -220,7 +273,7 @@ export function BuilderPage(): ReactNode {
         </div>
       </div>
 
-      {preview.data && showPreview && (
+      {showPreview && (
         <div className="bg-muted/20 text-muted-foreground flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs">
           <ShieldAlertIcon className="size-3 shrink-0" />
           Preview reflects your current seat scope — blind blue seats may see less than the final
@@ -229,7 +282,10 @@ export function BuilderPage(): ReactNode {
       )}
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <div className="hidden w-56 shrink-0 overflow-y-auto lg:block">
+        {/* The palette folds away while the preview is open: three columns in
+            the width this page gets squeezes the block editors to a sliver.
+            The inline palette below takes over. */}
+        <div className={cn('hidden w-56 shrink-0 overflow-y-auto', !showPreview && 'lg:block')}>
           <BlockPalette existingBlocks={blocks.map((b) => b.blockId)} onAdd={handleAddBlock} />
         </div>
 
@@ -247,11 +303,9 @@ export function BuilderPage(): ReactNode {
                   <SortableBlock
                     key={sortableIds[i]}
                     block={block}
-                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                     index={i}
                     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                     sortableId={sortableIds[i]!}
-                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                     onRemove={() => {
                       handleRemoveBlock(i)
                     }}
@@ -263,7 +317,7 @@ export function BuilderPage(): ReactNode {
               </SortableContext>
             </DndContext>
           )}
-          <div className="lg:hidden">
+          <div className={cn(!showPreview && 'lg:hidden')}>
             <MobileBlockPalette
               existingBlocks={blocks.map((b) => b.blockId)}
               onAdd={handleAddBlock}
@@ -272,11 +326,13 @@ export function BuilderPage(): ReactNode {
         </div>
 
         {showPreview && (
-          <div className="hidden w-[420px] shrink-0 lg:block">
+          <div className="hidden min-w-0 flex-1 lg:block">
             <PreviewPane
               html={preview.data ?? ''}
-              isLoading={preview.isFetching}
-              previewKey={previewKey}
+              isLoading={preview.isPending || preview.isFetching}
+              error={preview.error}
+              savedBlockCount={serverBlocks.length}
+              hasUnsaved={hasUnsaved}
             />
           </div>
         )}
@@ -361,7 +417,7 @@ function SortableBlock({
   index: number
   sortableId: string
   onRemove: () => void
-  onParamsChange: (params: Record<string, never>) => void
+  onParamsChange: (params: BlockParams) => void
 }): ReactNode {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: sortableId,
@@ -401,70 +457,183 @@ function SortableBlock({
       </div>
       <BlockParamsForm
         blockId={block.blockId}
-        params={block.params ?? {}}
+        params={asParams(block.params)}
         onChange={onParamsChange}
       />
     </div>
   )
 }
 
+/**
+ * The editors for one block's parameters, driven by the catalogue's field list
+ * rather than a per-block component.
+ *
+ * The field names are the server's: `ValidateParams` rejects a key its schema
+ * does not declare, so a form that invents one — as the old rich-text editor
+ * did, writing `body` where the block declares `html` — fails the whole save
+ * with a 400 rather than dropping that one value.
+ */
 function BlockParamsForm({
   blockId,
   params,
   onChange,
 }: {
   blockId: string
-  params: Record<string, never>
-  onChange: (params: Record<string, never>) => void
+  params: BlockParams
+  onChange: (params: BlockParams) => void
 }): ReactNode {
-  if (blockId === 'rich_text') {
-    return <RichTextParams params={params} onChange={onChange} />
-  }
-  if (blockId === 'engagement_compare') {
-    return <CompareParams params={params} onChange={onChange} />
-  }
-  return null
-}
-
-function RichTextParams({
-  params,
-  onChange,
-}: {
-  params: Record<string, never>
-  onChange: (params: Record<string, never>) => void
-}): ReactNode {
-  const body = (params as { body?: string }).body ?? ''
+  const fields = getBlockEntry(blockId)?.params
+  if (!fields || fields.length === 0) return null
 
   return (
-    <div className="px-3 py-2">
-      <Label className="text-xs">Content</Label>
-      <textarea
-        className="bg-background mt-1 min-h-[100px] w-full rounded-md border px-3 py-2 text-sm"
-        placeholder="Write your content…"
-        value={body}
-        onChange={(e) => {
-          onChange({
-            ...params,
-            body: e.target.value,
-          } as unknown as Record<string, never>)
-        }}
-      />
+    <div className="flex flex-col gap-3 px-3 py-3">
+      {fields.map((field) => (
+        <BlockParamField
+          key={field.name}
+          field={field}
+          value={params[field.name]}
+          onChange={(value) => {
+            onChange({ ...params, [field.name]: value })
+          }}
+        />
+      ))}
     </div>
   )
 }
 
-function CompareParams({
-  params,
+function BlockParamField({
+  field,
+  value,
   onChange,
 }: {
-  params: Record<string, never>
-  onChange: (params: Record<string, never>) => void
+  field: BlockParamField
+  value: unknown
+  onChange: (value: unknown) => void
 }): ReactNode {
-  const compareParams = params as {
-    baselineEngagementId?: string
-  }
-  const baselineId = compareParams.baselineEngagementId ?? ''
+  const id = `param-${field.name}`
 
+  if (field.kind === 'toggle') {
+    return (
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="border-input size-4 rounded border"
+          checked={value === true}
+          onChange={(e) => {
+            onChange(e.target.checked)
+          }}
+        />
+        {field.label}
+      </label>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Label htmlFor={id} className="text-xs">
+        {field.label}
+      </Label>
+      <BlockParamControl id={id} field={field} value={value} onChange={onChange} />
+      {field.help !== undefined && <p className="text-muted-foreground text-xs">{field.help}</p>}
+    </div>
+  )
+}
+
+function BlockParamControl({
+  id,
+  field,
+  value,
+  onChange,
+}: {
+  id: string
+  field: BlockParamField
+  value: unknown
+  onChange: (value: unknown) => void
+}): ReactNode {
+  switch (field.kind) {
+    case 'html':
+      return (
+        <RichTextEditor
+          content={typeof value === 'string' ? value : ''}
+          onChange={(html) => {
+            // TipTap emits "<p></p>" for an empty document; store nothing so an
+            // untouched block renders as absent rather than as a blank section.
+            onChange(html === '<p></p>' ? '' : html)
+          }}
+        />
+      )
+    case 'textarea':
+      return (
+        <textarea
+          id={id}
+          className="bg-background min-h-[80px] w-full rounded-md border px-3 py-2 text-sm"
+          placeholder={field.placeholder}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => {
+            onChange(e.target.value)
+          }}
+        />
+      )
+    case 'integer':
+      return (
+        <Input
+          id={id}
+          type="number"
+          min={1}
+          step={1}
+          placeholder={field.placeholder}
+          value={typeof value === 'number' ? String(value) : ''}
+          onChange={(e) => {
+            const parsed = Number.parseInt(e.target.value, 10)
+            onChange(Number.isNaN(parsed) ? undefined : parsed)
+          }}
+        />
+      )
+    case 'select':
+      return (
+        <Select
+          value={typeof value === 'string' ? value : ''}
+          onValueChange={(next) => {
+            onChange(next)
+          }}
+        >
+          <SelectTrigger id={id}>
+            <SelectValue placeholder="Choose…" />
+          </SelectTrigger>
+          <SelectContent>
+            {(field.options ?? []).map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )
+    case 'engagement':
+      return <EngagementParamSelect id={id} value={value} onChange={onChange} />
+    default:
+      return (
+        <Input
+          id={id}
+          placeholder={field.placeholder}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => {
+            onChange(e.target.value)
+          }}
+        />
+      )
+  }
+}
+
+function EngagementParamSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: unknown
+  onChange: (value: unknown) => void
+}): ReactNode {
   const engagements = useEngagements({})
 
   const activeEngagements = useMemo(() => {
@@ -473,29 +642,23 @@ function CompareParams({
   }, [engagements.data])
 
   return (
-    <div className="px-3 py-2">
-      <Label className="text-xs">Baseline engagement</Label>
-      <Select
-        value={baselineId}
-        onValueChange={(value) => {
-          onChange({
-            ...params,
-            baselineEngagementId: value,
-          } as unknown as Record<string, never>)
-        }}
-      >
-        <SelectTrigger className="mt-1">
-          <SelectValue placeholder="Select an engagement…" />
-        </SelectTrigger>
-        <SelectContent>
-          {activeEngagements.map((e) => (
-            <SelectItem key={e.id} value={e.id}>
-              {e.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Select
+      value={typeof value === 'string' ? value : ''}
+      onValueChange={(next) => {
+        onChange(next)
+      }}
+    >
+      <SelectTrigger id={id}>
+        <SelectValue placeholder="Select an engagement…" />
+      </SelectTrigger>
+      <SelectContent>
+        {activeEngagements.map((e) => (
+          <SelectItem key={e.id} value={e.id}>
+            {e.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -511,39 +674,81 @@ function EmptyBlocks(): ReactNode {
   )
 }
 
+/**
+ * The rendered draft, in an iframe.
+ *
+ * The server renders the *saved* draft, and always returns a complete HTML
+ * document — a report with no blocks is a valid page with an empty body. So the
+ * empty state is decided from the saved block count rather than from whether
+ * there is any HTML: keying it off the HTML meant a report with nothing saved
+ * showed a blank white rectangle and no explanation of why.
+ */
 function PreviewPane({
   html,
   isLoading,
-  previewKey: _previewKey,
+  error,
+  savedBlockCount,
+  hasUnsaved,
 }: {
   html: string
   isLoading: boolean
-  previewKey: number
+  error: Error | null
+  savedBlockCount: number
+  hasUnsaved: boolean
 }): ReactNode {
   return (
-    <div className="sticky top-0 flex h-full flex-col">
-      <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
-        Preview
-      </h3>
-      <div className="flex-1 overflow-hidden rounded-lg border bg-white">
-        {isLoading ? (
-          <div className="text-muted-foreground flex items-center justify-center p-8 text-sm">
-            Rendering…
-          </div>
-        ) : html ? (
-          <iframe
-            className="h-full w-full"
-            srcDoc={html}
-            title="Report preview"
-            sandbox="allow-same-origin"
-          />
-        ) : (
-          <div className="text-muted-foreground flex items-center justify-center p-8 text-sm">
-            Save blocks to see preview.
-          </div>
+    <div className="sticky top-0 flex h-full min-h-0 flex-col">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+          Preview
+        </h3>
+        {hasUnsaved && (
+          <span className="text-muted-foreground text-xs">
+            Showing the last save — save to update.
+          </span>
         )}
       </div>
+      <div className="flex-1 overflow-hidden rounded-lg border bg-white">
+        <PreviewBody
+          html={html}
+          isLoading={isLoading}
+          error={error}
+          savedBlockCount={savedBlockCount}
+        />
+      </div>
     </div>
+  )
+}
+
+function PreviewBody({
+  html,
+  isLoading,
+  error,
+  savedBlockCount,
+}: {
+  html: string
+  isLoading: boolean
+  error: Error | null
+  savedBlockCount: number
+}): ReactNode {
+  const message = (text: string): ReactNode => (
+    <div className="text-muted-foreground flex h-full items-center justify-center p-8 text-center text-sm">
+      {text}
+    </div>
+  )
+
+  if (isLoading) return message('Rendering…')
+  if (error) return message('The preview could not be rendered. Try saving again.')
+  if (savedBlockCount === 0) return message('Add a block and save to see the report here.')
+  if (!html) return message('Nothing to preview yet.')
+
+  return (
+    <iframe
+      className="h-full w-full"
+      srcDoc={html}
+      title="Report preview"
+      sandbox="allow-same-origin"
+    />
   )
 }
 

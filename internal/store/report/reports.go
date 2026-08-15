@@ -12,7 +12,7 @@ import (
 
 const reportColumns = `id, engagement_id, title, client_name, logo_blob_ref, colours, created_by, created_at, updated_by, updated_at`
 
-const reportBlockColumns = `id, report_id, ordinal, block_id, params`
+const reportBlockColumns = `id, report_id, ordinal, block_id, CAST(params AS VARCHAR)`
 
 const selectReport = `SELECT ` + reportColumns + ` FROM app.report `
 

@@ -6431,8 +6431,12 @@ export interface components {
             /**
              * @description Block parameters, validated against the registry's ParamSchema.
              *     Defaults are used from the registry when absent.
-             *     HTML content within params (e.g. rich_text body) is limited to
+             *     HTML content within params (e.g. rich_text `html`) is limited to
              *     100 KiB raw and sanitized server-side on write (M6-005).
+             *
+             *     Parameter names come from the block's own ParamSchema and are not
+             *     interchangeable: a key the schema does not declare is rejected, so
+             *     a client that misspells one fails the whole save.
              */
             params?: Record<string, never>;
         };

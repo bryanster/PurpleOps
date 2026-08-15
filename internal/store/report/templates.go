@@ -11,7 +11,7 @@ import (
 
 const templateColumns = `id, engagement_id, name, created_by, created_at, updated_at`
 
-const templateBlockColumns = `template_id, ordinal, block_id, params`
+const templateBlockColumns = `template_id, ordinal, block_id, CAST(params AS VARCHAR)`
 
 const selectTemplate = `SELECT ` + templateColumns + ` FROM app.report_template `
 

@@ -7,6 +7,29 @@
  * catalogue is documentation for the UI, not a security boundary.
  */
 
+/** A block's parameter values, as stored and as sent back on save. */
+export type BlockParams = Record<string, unknown>
+
+/**
+ * One editable parameter, mirroring the server's `ParamProperty` for the same
+ * key. `kind` is the editor to render; the server's JSON type follows from it
+ * (html/text/textarea → string, toggle → boolean, integer → integer).
+ *
+ * The `name` must match the server schema exactly: `ValidateParams` rejects
+ * unknown keys, so a field the builder spells differently is a 400 on save and
+ * not a silently ignored value.
+ */
+export interface BlockParamField {
+  name: string
+  label: string
+  kind: 'html' | 'text' | 'textarea' | 'toggle' | 'integer' | 'select' | 'engagement'
+  /** Helper text under the field. */
+  help?: string
+  placeholder?: string
+  /** For `select`: the closed set the server's Enum declares. */
+  options?: { value: string; label: string }[]
+}
+
 export interface BlockCatalogEntry {
   id: string
   title: string
@@ -15,6 +38,8 @@ export interface BlockCatalogEntry {
   allowInTemplate: boolean
   /** Whether this block is omitted when publish has includeEvidence=false. */
   needsEvidenceOptIn: boolean
+  /** Editable parameters, in the order the builder shows them. */
+  params?: BlockParamField[]
 }
 
 // Block id constants matching server-side blockids.go.
@@ -45,6 +70,18 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Title page with engagement name, client, dates, and branding.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      {
+        name: 'title',
+        label: 'Title',
+        kind: 'text',
+        help: 'Defaults to the engagement name.',
+        placeholder: 'Engagement name',
+      },
+      { name: 'subtitle', label: 'Subtitle', kind: 'text' },
+      { name: 'showDate', label: 'Show the engagement dates', kind: 'toggle' },
+      { name: 'showLogo', label: 'Show the branding logo', kind: 'toggle' },
+    ],
   },
   {
     id: BLOCK_IDS.EXECUTIVE_SUMMARY,
@@ -52,6 +89,7 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Free-text summary of the assessment, findings, and recommendations.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [{ name: 'body', label: 'Summary', kind: 'html' }],
   },
   {
     id: BLOCK_IDS.SCOPE_ROE,
@@ -59,6 +97,16 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Defines what was tested, when, and under what constraints.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      { name: 'body', label: 'Scope narrative', kind: 'html' },
+      {
+        name: 'systems',
+        label: 'In-scope systems',
+        kind: 'textarea',
+        help: 'One per line.',
+        placeholder: 'dc01.corp.example.com',
+      },
+    ],
   },
   {
     id: BLOCK_IDS.RICH_TEXT,
@@ -66,6 +114,7 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Free-form section with headings, lists, links, and formatting.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [{ name: 'html', label: 'Content', kind: 'html' }],
   },
   {
     id: BLOCK_IDS.PAGE_BREAK,
@@ -80,6 +129,17 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'ATT&CK technique × tactic heatmap with detection coverage.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      {
+        name: 'verbosity',
+        label: 'Detail level',
+        kind: 'select',
+        options: [
+          { value: 'summary', label: 'Summary — tactic level' },
+          { value: 'full', label: 'Full — individual techniques' },
+        ],
+      },
+    ],
   },
   {
     id: BLOCK_IDS.TACTIC_SCORECARD,
@@ -101,6 +161,14 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Techniques with no detection coverage, sorted by risk/relevance.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      {
+        name: 'maxRows',
+        label: 'Maximum rows per section',
+        kind: 'integer',
+        help: 'Defaults to 50.',
+      },
+    ],
   },
   {
     id: BLOCK_IDS.MTTD,
@@ -115,6 +183,14 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Compare coverage, detections, and outcomes against a baseline engagement.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      {
+        name: 'baselineEngagementId',
+        label: 'Baseline engagement',
+        kind: 'engagement',
+        help: 'Required — the engagement this report is compared against.',
+      },
+    ],
   },
   {
     id: BLOCK_IDS.SCENARIO_WALKTHROUGH,
@@ -122,6 +198,17 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Per-scenario narrative with step-by-step red/blue results.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      {
+        name: 'verbosity',
+        label: 'Detail level',
+        kind: 'select',
+        options: [
+          { value: 'summary', label: 'Summary' },
+          { value: 'full', label: 'Full — every step' },
+        ],
+      },
+    ],
   },
   {
     id: BLOCK_IDS.FINDINGS_BACKLOG,
@@ -129,6 +216,13 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'All findings with severity, status, and linked techniques.',
     allowInTemplate: true,
     needsEvidenceOptIn: false,
+    params: [
+      {
+        name: 'includeResolved',
+        label: 'Include resolved and accepted-risk findings',
+        kind: 'toggle',
+      },
+    ],
   },
   {
     id: BLOCK_IDS.EVIDENCE_APPENDIX,
@@ -136,6 +230,10 @@ const CATALOGUE: BlockCatalogEntry[] = [
     description: 'Collected evidence files (screenshots, logs) — opt-in on publish.',
     allowInTemplate: true,
     needsEvidenceOptIn: true,
+    params: [
+      { name: 'limit', label: 'Maximum items', kind: 'integer', help: 'Defaults to 50.' },
+      { name: 'imagesOnly', label: 'Images only', kind: 'toggle' },
+    ],
   },
 ]
 

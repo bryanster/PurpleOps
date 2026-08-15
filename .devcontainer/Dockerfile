@@ -21,14 +21,14 @@ FROM golang:1.25-trixie
 #   in here usable rather than a puzzle.
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
-		ca-certificates \
-		git \
-		jq \
-		less \
-		make \
-		openssh-client \
-		sudo \
-		unzip \
+	ca-certificates \
+	git \
+	jq \
+	less \
+	make \
+	openssh-client \
+	sudo \
+	unzip \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Node, taken from the official image rather than installed from a distribution
@@ -46,6 +46,25 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 	&& node --version && npm --version
 
 RUN npm install -g @anthropic-ai/claude-code
+
+# Prime Agent. The installer resolves the latest release, verifies its checksum
+# and hands the tarball to `npm install -g`, so the command lands in
+# /usr/local/bin next to the others. Two of its steps are worth pinning down
+# rather than leaving to the defaults:
+#   PLAIN — the installer draws an animated full-screen TUI when stdout is a
+#     terminal. It is not, during a build, but the variable says so explicitly
+#     instead of relying on that.
+#   BOOTSTRAP_KERNEL=0 — it otherwise installs uv, Python 3.11 and an ipykernel
+#     at this point. That runtime lives in $HOME, which is still root's here;
+#     baked now it would be a root-owned tree the vscode user cannot write.
+#     Left off, prime-agent prepares it on first use, in the right home.
+# Node is already on the PATH and newer than the installer's floor, so its own
+# Node bootstrap (and the sudo that goes with it) never runs.
+RUN curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh \
+	| env PRIME_AGENT_INSTALLER_PLAIN=1 PRIME_AGENT_BOOTSTRAP_KERNEL_ON_INSTALL=0 sh \
+	&& prime-agent --version
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Non-root development user. remoteUser in devcontainer.json matches this name;
 # the docker-outside-of-docker feature then adds it to the docker group so

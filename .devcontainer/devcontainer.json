@@ -14,7 +14,7 @@
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "moby": false
     },
-    "ghcr.io/devcontainers/features/github-cli":1,
+    "ghcr.io/devcontainers/features/github-cli": 1,
     // `az`. The Microsoft apt repo has no trixie suite, so the feature's apt
     // path fails and it falls back to installing into a pipx venv under
     // /usr/local/pipx — slower to build, same command on the PATH.

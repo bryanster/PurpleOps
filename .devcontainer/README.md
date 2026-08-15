@@ -28,6 +28,7 @@ docker volume rm blacklight-go-mod blacklight-go-build
 | Terraform | Via the `terraform` feature, for `deploy/azure-terraform`. Terraform only — the feature's tflint and terragrunt defaults are turned off, since nothing in the repository runs them |
 | Claude Code | `npm install -g @anthropic-ai/claude-code` |
 | Oh My Pi (`omp`) | Prebuilt binary from [omp.sh](https://omp.sh/install) into `/usr/local/bin` (shared PATH; not root's `~/.local/bin`) |
+| Prime Agent (`prime-agent`) | The [installer](https://app.primeintellect.ai/prime-agent/install.sh) verifies the latest release and `npm install -g`s it. Its optional IPython runtime (uv, Python 3.11, ipykernel) is *not* baked — at build time `$HOME` is still root's, so it would be a tree the `vscode` user cannot write. It is prepared on first use instead |
 | **Not** golangci-lint or oapi-codegen | The Makefile pins both and installs them into `./bin`. A second copy in the image is a second version to drift. `make tools` runs as `postCreateCommand` |
 | **Not** a database container | v2's database is a file inside the process. v1 needed compose for MongoDB; there is nothing left to orchestrate |
 | **Not** any `BLACKLIGHT_*` value | The server refuses configuration it cannot use, so a container-wide default would be a value nobody chose, quietly in force. `cp .env.example .env` |
@@ -35,13 +36,13 @@ docker volume rm blacklight-go-mod blacklight-go-build
 Ports 8080 (the server) and 5173 (`npm --prefix web run dev`, which proxies `/api` to 8080) are
 forwarded.
 
-Host `~/.gitconfig`, `~/.ssh`, `~/.claude`, `~/.omp`, and `~/.azure` are bind-mounted into the
-`vscode` home so git identity, keys, agent config, and the Azure CLI session survive rebuilds.
-Docker creates a missing source path as a root-owned directory, so if you have never run `az` on the
-host, create it once before the first build:
+Host `~/.gitconfig`, `~/.ssh`, `~/.claude`, `~/.omp`, `~/.prime`, and `~/.azure` are bind-mounted
+into the `vscode` home so git identity, keys, agent config and credentials, and the Azure CLI
+session survive rebuilds. Docker creates a missing source path as a root-owned directory, so create
+any you have not used on the host once before the first build:
 
 ```sh
-mkdir -p ~/.azure
+mkdir -p ~/.azure ~/.prime
 ```
 
 ## Caches
