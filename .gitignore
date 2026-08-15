@@ -7,6 +7,8 @@
 # Local runtime state: the embedded database, its WAL, and uploaded evidence.
 *.duckdb*
 /evidence/
+# Archives `blctl backup` writes, which default to the working directory.
+*.backup.tar.gz
 
 # Local configuration and secrets
 .env
@@ -22,6 +24,7 @@
 # Editor and OS noise
 .DS_Store
 *.swp
+*.bak
 .idea/
 .vscode/*
 !.vscode/extensions.json
