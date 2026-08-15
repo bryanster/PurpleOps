@@ -1185,6 +1185,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read whether this installation has been through first-run setup.
+         * @description Administrators only (`settings.read`), because an administrator is the
+         *     only caller who can act on the answer: the first-run wizard installs
+         *     reference content, and installing content is `content.sync`.
+         *
+         *     A fresh installation boots with an empty library — nothing is fetched at
+         *     first boot — and answers `completed: false` until somebody finishes the
+         *     wizard. `completed` records a *decision*, not an outcome: finishing it
+         *     without installing anything is the right answer for an air-gapped
+         *     deployment that will import an offline bundle later, and that
+         *     installation must not be handed a screen it can never dismiss. What is
+         *     actually installed is `GET /content/attack/versions`.
+         */
+        get: operations["getSetupState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark first-run setup as finished.
+         * @description Administrators only (`settings.manage`). Records that somebody reached
+         *     the end of the wizard, so that the next sign-in lands on the product
+         *     rather than back at it.
+         *
+         *     Idempotent, and one-way from the API. A second call keeps the first
+         *     call's timestamp and actor — when an installation was set up is not
+         *     something a retried request should move — so a client that lost the
+         *     response can simply send it again. `blctl setup reset` is the only way
+         *     back to the wizard, and it is deliberately not an endpoint: putting an
+         *     installation back into first-run state is an operator's decision made at
+         *     the machine, not a button in a browser.
+         */
+        post: operations["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity": {
         parameters: {
             query?: never;
@@ -2779,6 +2839,42 @@ export interface paths {
          *     `docs/content-copy-on-use.md`.
          */
         get: operations["listContentAttackVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/content/attack/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the ATT&CK releases upstream offers, and which are installed.
+         * @description Any authenticated subject (`content.read`). Reads the ATT&CK source's
+         *     published release index — the same index a sync with no pin uses to
+         *     resolve "latest" — and merges it with the versions this installation
+         *     already holds. It is what the first-run version picker is built on.
+         *
+         *     This reaches upstream while the request is open. It takes no job slot
+         *     and writes nothing; choosing a release and calling
+         *     `POST /content/sources/{sourceId}/sync` is what installs one.
+         *
+         *     **An upstream that cannot be reached is a `200`, not a `502`.**
+         *     Air-gapped installations are supported, and for them an unreachable
+         *     index is the normal case rather than a fault. The answer says
+         *     `reachable: false`, carries the transport error in `unreachable`, and
+         *     still lists what is installed — so a client can offer the offline bundle
+         *     path (`docs/content-bundles.md`) instead of a dead end. `latest` is
+         *     absent from every item when upstream did not answer: nothing local knows
+         *     which release is newest, and ATT&CK labels do not sort.
+         */
+        get: operations["listContentAttackReleases"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5455,6 +5551,76 @@ export interface components {
         };
         ContentAttackVersionList: {
             items: components["schemas"]["ContentAttackVersion"][];
+        };
+        /** @description One ATT&CK release, as something to choose between. */
+        ContentAttackRelease: {
+            /**
+             * @description Upstream's own release label (for example `17.1`), and the string to
+             *     send back as a sync pin. Not normalized: what upstream calls it is
+             *     what a fetch will resolve.
+             */
+            version: string;
+            /**
+             * Format: date-time
+             * @description When upstream published it. Absent when upstream does not say, and
+             *     when the release is known only because it is installed here.
+             */
+            released?: string;
+            /**
+             * @description Whether this installation already holds a version row for this
+             *     label, in any state. `status` says which.
+             */
+            installed: boolean;
+            /**
+             * @description The installed version's state (`pending`, `syncing`, `ready`,
+             *     `failed`). Absent when `installed` is false. A release that is
+             *     installed but `failed` is still worth offering, which is why this is
+             *     a status rather than a second boolean.
+             */
+            status?: string;
+            /**
+             * @description Upstream's newest release. Exactly one item carries `true` when the
+             *     index was read, and none do when it was not.
+             */
+            latest: boolean;
+        };
+        ContentAttackReleaseList: {
+            items: components["schemas"]["ContentAttackRelease"][];
+            /**
+             * @description Whether the upstream index answered. `false` is a normal outcome on
+             *     an air-gapped installation, not a failed request.
+             */
+            reachable: boolean;
+            /**
+             * @description Why the index could not be read, when `reachable` is false — the
+             *     transport or parse error, for an administrator reading it beside the
+             *     source URL they configured. Null otherwise.
+             */
+            unreachable?: string | null;
+            /**
+             * @description Whether the ATT&CK source is enabled. A sync started against a
+             *     disabled source is refused, so a picker should say so before
+             *     offering one.
+             */
+            sourceEnabled: boolean;
+        };
+        /** @description Whether this installation has been through the first-run wizard. */
+        SetupState: {
+            /**
+             * @description Whether somebody finished the wizard. A decision, not an outcome:
+             *     it does not mean content is installed.
+             */
+            completed: boolean;
+            /**
+             * Format: date-time
+             * @description When it was finished. Absent while `completed` is false.
+             */
+            completedAt?: string;
+            /**
+             * @description The user who finished it, or null when nothing did — `blctl setup
+             *     complete` on a provisioning run has no person to attribute.
+             */
+            completedBy?: string | null;
         };
         /**
          * @description The lifecycle state of an assessment.
@@ -8313,6 +8479,70 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getSetupState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The first-run state of this installation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+                 *     `bl_csrf` cookie, echoed back in this header.
+                 *
+                 *     **Required in practice** on every state-changing request authenticated
+                 *     by the session cookie, even though it is declared optional here. The
+                 *     rule belongs to one middleware, which answers a missing or wrong token
+                 *     with `403` and `code: "forbidden"`; declaring the parameter required
+                 *     would make an *absent* header a `400` from the request validator and a
+                 *     *wrong* one a `403`, splitting one rule across two layers and two status
+                 *     codes for no gain to the caller.
+                 *
+                 *     A request authenticated by a service token does not send this and is not
+                 *     subject to the check — CSRF is a property of cookies, which browsers
+                 *     attach on their own.
+                 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The first-run state as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupState"];
+                };
+            };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
@@ -11498,6 +11728,33 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listContentAttackReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description The release catalog. Upstream's own order, newest first, with
+             *     installed-but-no-longer-offered labels appended.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentAttackReleaseList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

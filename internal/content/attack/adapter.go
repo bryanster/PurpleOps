@@ -164,22 +164,29 @@ func (a *Adapter) Apply(ctx context.Context, w content.Writer, objects []content
 	return applyCatalog(ctx, w, cat, prog)
 }
 
+// ListReleases implements [content.ReleaseLister]: every Enterprise release
+// upstream's index.json offers, newest first.
+//
+// This is the only content path that reaches upstream outside a job, and it
+// stays inside the same fence a fetch does — the caller's client, byte ceiling
+// and URL policy, and the index that latest discovery already reads. Nothing is
+// written and no job slot is taken: the answer is a list somebody is about to
+// choose from, and choosing is what starts a sync.
+func (a *Adapter) ListReleases(ctx context.Context, req content.FetchRequest) ([]content.Release, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	raw, err := a.index(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return enterpriseReleases(raw)
+}
+
 func (a *Adapter) discoverLatest(ctx context.Context, req content.FetchRequest, base string) (string, error) {
-	var raw []byte
-	if len(a.IndexBytes) > 0 {
-		raw = a.IndexBytes
-	} else {
-		indexURL := base + "/" + DefaultIndexPath
-		var err error
-		raw, err = content.ReadAll(ctx, content.HTTPSource{
-			URL:      indexURL,
-			MaxBytes: req.MaxBytes,
-			Client:   req.HTTP,
-			Policy:   req.Policy,
-		})
-		if err != nil {
-			return "", fmt.Errorf("attack: discover latest via %s: %w", indexURL, err)
-		}
+	raw, err := a.indexFrom(ctx, req, base)
+	if err != nil {
+		return "", err
 	}
 	version, err := latestEnterpriseVersion(raw)
 	if err != nil {
@@ -188,11 +195,42 @@ func (a *Adapter) discoverLatest(ctx context.Context, req content.FetchRequest, 
 	return version, nil
 }
 
+// index reads upstream's index.json for the source on req.
+func (a *Adapter) index(ctx context.Context, req content.FetchRequest) ([]byte, error) {
+	base := strings.TrimRight(strings.TrimSpace(req.Source.URL), "/")
+	if base == "" {
+		return nil, fmt.Errorf("attack: releases: source URL is empty")
+	}
+	return a.indexFrom(ctx, req, base)
+}
+
+// indexFrom is the fetch of index.json itself, honouring the IndexBytes
+// override tests use to keep the network out of it.
+func (a *Adapter) indexFrom(ctx context.Context, req content.FetchRequest, base string) ([]byte, error) {
+	if len(a.IndexBytes) > 0 {
+		return a.IndexBytes, nil
+	}
+	indexURL := base + "/" + DefaultIndexPath
+	raw, err := content.ReadAll(ctx, content.HTTPSource{
+		URL:      indexURL,
+		MaxBytes: req.MaxBytes,
+		Client:   req.HTTP,
+		Policy:   req.Policy,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attack: read the release index %s: %w", indexURL, err)
+	}
+	return raw, nil
+}
+
 func buildBundleURL(base, ref, version string) string {
 	path := strings.ReplaceAll(ref, "{version}", version)
 	path = strings.TrimLeft(path, "/")
 	return base + "/" + path
 }
 
-// Ensure Adapter satisfies the interface at compile time.
-var _ content.Adapter = (*Adapter)(nil)
+// Ensure Adapter satisfies both interfaces at compile time.
+var (
+	_ content.Adapter       = (*Adapter)(nil)
+	_ content.ReleaseLister = (*Adapter)(nil)
+)

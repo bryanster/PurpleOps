@@ -404,6 +404,11 @@ var csrfCoverage = map[string]struct {
 		body: `{"requiredForAll":true,"requiredForAdmins":true}`,
 	},
 
+	// Finishing the first-run wizard. Protected like every other browser-driven
+	// write: it takes no body, and a cross-site POST that dismissed somebody's
+	// setup screen would be a small thing done without them.
+	"POST " + BasePath + "/setup/complete": {body: ""},
+
 	// The service token endpoints (M1-011). Protected, not exempt: they are
 	// reached by a browser session like everything else here, and the one thing
 	// a service token *cannot* do is call them — so there is no

@@ -202,6 +202,37 @@ enrolling again (`M1-008`). An account that had no second factor is not an error
 nothing was removed. The reset is also written to the log at warn level, which is the audit record
 until `M1-015` gives it a durable home.
 
+### `blctl setup status` / `complete` / `reset`
+
+First-run state: whether anybody has been through the setup wizard, the screen the first
+administrator of a new installation lands on to choose a MITRE ATT&CK version
+([`first-run-setup.md`](first-run-setup.md)).
+
+```
+blctl setup status
+This installation has not been set up.
+
+completed  no
+
+The next administrator to sign in lands on the setup wizard,
+which asks which MITRE ATT&CK version to install.
+```
+
+`complete` marks it finished without installing anything, for a provisioning run that has already
+created an administrator and synced content — and for the end-to-end suite, which seeds it the way
+it seeds an account. Running it twice keeps the first timestamp: when an installation was set up is
+not something a repeated command should move. The row records no user, because nobody signed in to
+write it.
+
+`reset` forgets it, so the next administrator to sign in is shown the wizard again. Nothing else
+changes — users, engagements and every installed content version stay exactly where they are.
+**There is no endpoint for either**: putting an installation into or out of first-run state is a
+decision made at the machine, and a button that did it in a browser would be one somebody clicks by
+accident.
+
+"Completed" records a decision rather than an outcome. It does not mean content is installed —
+`blctl content sources` answers that one.
+
 ### `blctl content sources`
 
 Lists every content source (kind, enabled, status, item count), or shows one

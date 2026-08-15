@@ -11,6 +11,9 @@ import (
 	"io"
 	"path"
 	"strings"
+	"time"
+
+	"github.com/bryanster/blacklight/internal/content"
 )
 
 // stixDoc is the adapter-private AST.
@@ -244,17 +247,41 @@ func looksLikeTar(raw []byte) bool {
 }
 
 func latestEnterpriseVersion(indexJSON []byte) (string, error) {
+	releases, err := enterpriseReleases(indexJSON)
+	if err != nil {
+		return "", err
+	}
+	// releases[0] is latest: enterpriseReleases keeps MITRE's index order,
+	// which is newest first.
+	return releases[0].Version, nil
+}
+
+// enterpriseReleases is every Enterprise ATT&CK release the index offers,
+// newest first, and the one reader of index.json.
+//
+// Latest discovery and the version picker are the same question asked with
+// different greed — "what is there" and "what is the first of what is there" —
+// so they read the index once, here. When they were two readers, the picker
+// could offer a release the fetch would then decline to resolve.
+//
+// Order is upstream's, not sorted: ATT&CK labels are "15.1", "14.1", "4.0"…
+// which no string comparison orders correctly and no semver parser accepts
+// ("4.0" and "10.0" invert under both). MITRE publishes newest first and that
+// is the order a picker should show, so the honest thing is to preserve the
+// order rather than to invent one.
+func enterpriseReleases(indexJSON []byte) ([]content.Release, error) {
 	var idx struct {
 		Collections []struct {
 			Name     string `json:"name"`
 			Versions []struct {
-				Version string `json:"version"`
-				URL     string `json:"url"`
+				Version  string `json:"version"`
+				URL      string `json:"url"`
+				Modified string `json:"modified"`
 			} `json:"versions"`
 		} `json:"collections"`
 	}
 	if err := json.Unmarshal(indexJSON, &idx); err != nil {
-		return "", fmt.Errorf("attack: index.json: %w", err)
+		return nil, fmt.Errorf("attack: index.json: %w", err)
 	}
 	for _, c := range idx.Collections {
 		name := strings.ToLower(c.Name)
@@ -262,16 +289,46 @@ func latestEnterpriseVersion(indexJSON []byte) (string, error) {
 			continue
 		}
 		if len(c.Versions) == 0 {
-			return "", fmt.Errorf("attack: index.json: Enterprise collection has no versions")
+			return nil, fmt.Errorf("attack: index.json: Enterprise collection has no versions")
 		}
-		// versions[0] is latest per MITRE's index layout
-		v := strings.TrimSpace(c.Versions[0].Version)
-		if v == "" {
-			return "", fmt.Errorf("attack: index.json: empty latest version label")
+		releases := make([]content.Release, 0, len(c.Versions))
+		for _, v := range c.Versions {
+			label := strings.TrimSpace(v.Version)
+			if label == "" {
+				// A release with no label cannot be pinned, fetched or named,
+				// so it is dropped rather than offered. The first entry being
+				// the one that is dropped is the case latest discovery used to
+				// fail on outright; skipping means one malformed entry costs
+				// that entry and not the whole index.
+				continue
+			}
+			releases = append(releases, content.Release{
+				Version:  label,
+				Name:     strings.TrimSpace(c.Name),
+				Released: parseIndexTime(v.Modified),
+			})
 		}
-		return v, nil
+		if len(releases) == 0 {
+			return nil, fmt.Errorf("attack: index.json: Enterprise collection has no labelled versions")
+		}
+		return releases, nil
 	}
-	return "", fmt.Errorf("attack: index.json: no Enterprise ATT&CK collection found")
+	return nil, fmt.Errorf("attack: index.json: no Enterprise ATT&CK collection found")
+}
+
+// parseIndexTime reads a release date, and gives up quietly. The date is shown
+// beside a version and nothing decides anything by it, so an index that spells
+// it differently should cost the date rather than the release.
+func parseIndexTime(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
 }
 
 func mitreExternalID(refs []stixExtRef) string {

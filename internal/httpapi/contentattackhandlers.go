@@ -22,6 +22,29 @@ func (h *handlers) ListContentAttackVersions(ctx context.Context, _ gen.ListCont
 	return gen.ListContentAttackVersions200JSONResponse{Items: out}, nil
 }
 
+// ListContentAttackReleases answers what upstream offers next to what is
+// installed. An unreachable upstream is part of the answer rather than an
+// error — see the operation's description, and attackpin.ListReleases.
+func (h *handlers) ListContentAttackReleases(ctx context.Context, _ gen.ListContentAttackReleasesRequestObject) (gen.ListContentAttackReleasesResponseObject, error) {
+	catalog, err := h.attackpin.ListReleases(ctx)
+	if err != nil {
+		return nil, attackpin.MapError(err)
+	}
+	items := make([]gen.ContentAttackRelease, 0, len(catalog.Items))
+	for _, r := range catalog.Items {
+		items = append(items, contentAttackRelease(r))
+	}
+	out := gen.ContentAttackReleaseList{
+		Items:         items,
+		Reachable:     catalog.Reachable,
+		SourceEnabled: catalog.SourceEnabled,
+	}
+	if catalog.Unreachable != "" {
+		out.Unreachable.Set(catalog.Unreachable)
+	}
+	return gen.ListContentAttackReleases200JSONResponse(out), nil
+}
+
 func (h *handlers) GetContentAttackVersion(ctx context.Context, request gen.GetContentAttackVersionRequestObject) (gen.GetContentAttackVersionResponseObject, error) {
 	d, err := h.attackpin.ResolveDetail(ctx, request.Version)
 	if err != nil {
@@ -64,6 +87,23 @@ func contentAttackVersion(v attackpin.VersionInfo) gen.ContentAttackVersion {
 	if !v.SyncedAt.IsZero() {
 		t := v.SyncedAt
 		out.SyncedAt = &t
+	}
+	return out
+}
+
+func contentAttackRelease(r attackpin.ReleaseInfo) gen.ContentAttackRelease {
+	out := gen.ContentAttackRelease{
+		Version:   r.Version,
+		Installed: r.Installed,
+		Latest:    r.Latest,
+	}
+	if !r.Released.IsZero() {
+		at := r.Released
+		out.Released = &at
+	}
+	if r.Status != "" {
+		status := string(r.Status)
+		out.Status = &status
 	}
 	return out
 }

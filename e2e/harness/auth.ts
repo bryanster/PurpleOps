@@ -17,13 +17,27 @@ export const adminEmail = 'harness-admin@example.test'
 export const adminPassword = 'a harness administrator passphrase'
 
 /**
- * Seed steps that leave one administrator in the database.
+ * Seed steps that leave one administrator in the database, on an installation
+ * that is past its first run.
  *
  * `migrate up` comes first because seeding writes rows and the server has not
  * started yet — DuckDB admits one writer at a time, so a seed that writes has
  * to migrate for itself.
+ *
+ * `setup complete` is last, and is the difference between this and
+ * [seedFirstRunAdmin]: without it an administrator signing in lands on the
+ * first-run wizard, which is the right behaviour and the wrong starting point
+ * for a spec about some other screen.
  */
 export function seedAdmin(): SeedCommand[] {
+  return [...seedFirstRunAdmin(), ['setup', 'complete']]
+}
+
+/**
+ * The same administrator on an installation nobody has set up yet — what the
+ * very first sign-in actually meets. Only the setup spec wants this.
+ */
+export function seedFirstRunAdmin(): SeedCommand[] {
   return [
     ['migrate', 'up'],
     {

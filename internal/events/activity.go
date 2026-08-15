@@ -74,6 +74,12 @@ const (
 	VerbSSOProvisioned Verb = "sso.provisioned"
 	VerbSSOLinked      Verb = "sso.linked"
 
+	// VerbSetupCompleted is the first-run wizard being finished. Platform-scoped
+	// and recorded once per installation: it is the line that separates "the
+	// image as it shipped" from "an installation somebody configured", which is
+	// the first thing worth knowing when reading a feed from the top.
+	VerbSetupCompleted Verb = "setup.completed"
+
 	// Content source lifecycle (M2-002). Platform-scoped: engagement_id is null.
 	VerbContentSourceEnabled  Verb = "content.source.enabled"
 	VerbContentSourceDisabled Verb = "content.source.disabled"

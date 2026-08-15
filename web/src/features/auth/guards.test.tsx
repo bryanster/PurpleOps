@@ -34,6 +34,7 @@ function renderGuardedApp(route: string): ReturnType<typeof renderWithProviders>
 
       <Route element={<RequireAuth />}>
         <Route path="/login/enrol" element={<p>enrolment screen</p>} />
+        <Route path="/setup" element={<p>setup wizard</p>} />
         <Route path="/" element={<p>landing screen</p>} />
         <Route path="/settings/account" element={<p>account screen</p>} />
 
@@ -101,6 +102,53 @@ describe('RequireAuth', () => {
     renderGuardedApp('/login/enrol')
 
     expect(await screen.findByText('landing screen')).toBeInTheDocument()
+  })
+})
+
+describe('the first-run gate', () => {
+  it('sends an administrator to the wizard until this installation is set up', async () => {
+    server.use(
+      get('/auth/me', () => Response.json(adminUserFixture)),
+      get('/setup', () => Response.json({ completed: false })),
+    )
+
+    for (const address of ['/', '/settings/account', '/admin/users']) {
+      const { unmount } = renderGuardedApp(address)
+      expect(await screen.findByText('setup wizard')).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('leaves a member alone: an empty installation is not theirs to fill', async () => {
+    // No /setup handler is needed — a member's browser must not ask, because
+    // the endpoint is an administrator's to read and the answer is one only an
+    // administrator could act on.
+    server.use(get('/auth/me', () => Response.json(memberUserFixture)))
+
+    renderGuardedApp('/settings/account')
+
+    expect(await screen.findByText('account screen')).toBeInTheDocument()
+  })
+
+  it('keeps an administrator off the wizard once it has been finished', async () => {
+    server.use(get('/auth/me', () => Response.json(adminUserFixture)))
+
+    renderGuardedApp('/setup')
+
+    expect(await screen.findByText('landing screen')).toBeInTheDocument()
+  })
+
+  it('renders the application rather than the wizard when the state cannot be read', async () => {
+    // A hiccup on one query is not a reason to tell somebody their
+    // installation is unconfigured.
+    server.use(
+      get('/auth/me', () => Response.json(adminUserFixture)),
+      get('/setup', () => new Response('gateway is unwell', { status: 502 })),
+    )
+
+    renderGuardedApp('/settings/account')
+
+    expect(await screen.findByText('account screen')).toBeInTheDocument()
   })
 })
 

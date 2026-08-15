@@ -128,6 +128,16 @@ export const recoveryCodesFixture: components['schemas']['RecoveryCodes'] = {
   generatedAt: '2026-02-01T09:00:00Z',
 }
 
+/**
+ * The first-run state of an installation somebody has already configured, and
+ * the one the default handler serves. The wizard's tests serve the other one.
+ */
+export const setupCompleteFixture: components['schemas']['SetupState'] = {
+  completed: true,
+  completedAt: '2026-01-02T10:00:00Z',
+  completedBy: adminUserFixture.id,
+}
+
 export const handlers = [
   get('/version', () => HttpResponse.json(versionFixture)),
   get('/healthz', () => HttpResponse.json(healthyFixture)),
@@ -138,6 +148,12 @@ export const handlers = [
   get('/auth/me', () => HttpResponse.json(adminUserFixture)),
   get('/auth/providers', () => HttpResponse.json(authProvidersFixture)),
   get('/auth/sessions', () => HttpResponse.json(sessionsFixture)),
+
+  // An installation somebody has already set up, because that is the state
+  // every screen but the wizard is written for. `RequireAuth` reads this for
+  // administrators, so a test about any other screen would otherwise be a test
+  // about an unhandled request. The wizard's own tests override it.
+  get('/setup', () => HttpResponse.json(setupCompleteFixture)),
 ]
 
 /** The 401 an anonymous browser gets from `GET /auth/me`. */

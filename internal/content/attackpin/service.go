@@ -45,6 +45,7 @@ type Service struct {
 	paths    storecontent.Paths
 	activity *events.Log
 	refs     References
+	upstream Upstream
 }
 
 // Deps is everything a [Service] is built from.
@@ -56,6 +57,11 @@ type Deps struct {
 	Activity *events.Log        // optional; nil skips durable activity rows
 	// Refs counts external pins. Nil becomes [NopReferences].
 	Refs References
+	// Upstream reads the published release list for the version picker
+	// (see releases.go). Nil is a process with no content runner — blctl, and
+	// tests that never look upstream — and makes the catalog answer
+	// "unreachable" rather than pretending upstream offers nothing.
+	Upstream Upstream
 }
 
 // New returns a Service over deps, or an error naming what is missing.
@@ -79,6 +85,7 @@ func New(deps Deps) (*Service, error) {
 		paths:    deps.Paths,
 		activity: deps.Activity,
 		refs:     refs,
+		upstream: deps.Upstream,
 	}, nil
 }
 

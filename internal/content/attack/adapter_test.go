@@ -387,3 +387,78 @@ func mustSync(t *testing.T, rt *attackRuntime, version string) storecontent.Job 
 	}
 	return job
 }
+
+// The version picker reads the same index latest discovery does, and has to
+// come back with every Enterprise release rather than the first one.
+func TestListReleasesReadsEveryEnterpriseRelease(t *testing.T) {
+	t.Parallel()
+	a := attack.New()
+	a.IndexBytes = readTestdata(t, "index.json")
+
+	releases, err := a.ListReleases(context.Background(), content.FetchRequest{
+		Source: content.SourceInfo{URL: "https://example.test/base"},
+	})
+	if err != nil {
+		t.Fatalf("ListReleases: %v", err)
+	}
+	if len(releases) != 2 {
+		t.Fatalf("releases = %+v, want the two Enterprise entries (and neither Mobile one)", releases)
+	}
+	if releases[0].Version != "15.1" || releases[1].Version != "14.1" {
+		t.Errorf("releases = %q, %q; want MITRE's own newest-first order", releases[0].Version, releases[1].Version)
+	}
+	if releases[0].Name != "Enterprise ATT&CK" {
+		t.Errorf("name = %q, want the collection's own title", releases[0].Name)
+	}
+}
+
+// A release date is decoration: it is shown beside a version and decides
+// nothing, so an index that spells it differently should cost the date and not
+// the release.
+func TestListReleasesKeepsAReleaseWithAnUnreadableDate(t *testing.T) {
+	t.Parallel()
+	a := attack.New()
+	a.IndexBytes = []byte(`{"collections":[{"name":"Enterprise ATT&CK","versions":[
+		{"version":"17.1","modified":"2025-04-22T00:00:00.000Z"},
+		{"version":"17.0","modified":"last tuesday"},
+		{"version":"","modified":"2024-01-01T00:00:00Z"}]}]}`)
+
+	releases, err := a.ListReleases(context.Background(), content.FetchRequest{
+		Source: content.SourceInfo{URL: "https://example.test/base"},
+	})
+	if err != nil {
+		t.Fatalf("ListReleases: %v", err)
+	}
+	if len(releases) != 2 {
+		t.Fatalf("releases = %+v, want the two labelled entries and not the unlabelled one", releases)
+	}
+	if releases[0].Released.IsZero() {
+		t.Error("the readable date was dropped")
+	}
+	if !releases[1].Released.IsZero() {
+		t.Errorf("Released = %v for an unparseable date, want the zero time", releases[1].Released)
+	}
+}
+
+func TestListReleasesNeedsASourceURL(t *testing.T) {
+	t.Parallel()
+	if _, err := attack.New().ListReleases(context.Background(), content.FetchRequest{}); err == nil {
+		t.Fatal("ListReleases accepted a source with no URL")
+	}
+}
+
+// An index with no Enterprise collection is upstream having changed shape, and
+// it is an error rather than an empty picker: an empty list would read as "this
+// release stream has ended", which is a different and much worse claim.
+func TestListReleasesRefusesAnIndexWithNoEnterpriseCollection(t *testing.T) {
+	t.Parallel()
+	a := attack.New()
+	a.IndexBytes = []byte(`{"collections":[{"name":"Mobile ATT&CK","versions":[{"version":"15.1"}]}]}`)
+
+	_, err := a.ListReleases(context.Background(), content.FetchRequest{
+		Source: content.SourceInfo{URL: "https://example.test/base"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "Enterprise") {
+		t.Fatalf("error = %v, want it to name the collection that is missing", err)
+	}
+}

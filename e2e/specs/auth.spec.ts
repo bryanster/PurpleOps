@@ -39,6 +39,10 @@ test.use({
         args: ['user', 'create', '--email', adminEmail, '--name', 'Ada Lovelace', '--admin'],
         stdin: adminPassword,
       },
+      // Past its first run: this spec is about identity, and an installation
+      // that has never been set up would put the wizard in front of every
+      // sign-in here (see setup.spec.ts, which is about that).
+      ['setup', 'complete'],
     ],
   },
 })

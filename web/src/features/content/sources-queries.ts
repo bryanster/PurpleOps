@@ -33,6 +33,14 @@ export type UpdateContentSourceRequest = components['schemas']['UpdateContentSou
 /** Builtin custom seed — cannot be deleted or network-synced. */
 export const CUSTOM_SOURCE_ID = '01900000-0000-7000-8000-000000000005'
 
+/**
+ * The seeded MITRE ATT&CK source. Named because the first-run wizard installs
+ * exactly this one and has no list to pick it out of — see
+ * `features/setup/setup-page.tsx`. Both ids come from the migration that seeds
+ * the registry (`0011_content.sql`).
+ */
+export const ATTACK_SOURCE_ID = '01900000-0000-7000-8000-000000000001'
+
 const ACTIVE_JOB_STATUSES: ReadonlySet<ContentSyncJobStatus> = new Set([
   'queued',
   'running',

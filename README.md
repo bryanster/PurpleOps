@@ -62,6 +62,7 @@ can reach it, read [`docs/deploy.md`](docs/deploy.md): at minimum you must set
 | Use the admin CLI | [`docs/cli.md`](docs/cli.md) |
 | Understand authorization | [`docs/authz.md`](docs/authz.md) |
 | Run content sync / work with ATT&CK | [`docs/content-attack.md`](docs/content-attack.md) |
+| Understand the first-run wizard | [`docs/first-run-setup.md`](docs/first-run-setup.md) |
 | Contribute | [`docs/contributing.md`](docs/contributing.md) |
 | Run or write tests | [`docs/testing.md`](docs/testing.md) |
 

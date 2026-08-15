@@ -31,6 +31,9 @@ test.use({
       // but seeding runs *before* the server, because DuckDB admits one writer
       // at a time. So a seed that writes rows migrates first.
       ['migrate', 'up'],
+      // Past its first run: the wizard is setup.spec.ts's subject, not this
+      // spec's, and an administrator signing in would otherwise meet it.
+      ['setup', 'complete'],
       {
         args: ['user', 'create', '--email', admin, '--name', 'Ada', '--admin'],
         stdin: adminPassword,

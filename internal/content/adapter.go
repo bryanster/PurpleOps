@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io"
 	"net/http"
+	"time"
 
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
 )
@@ -44,6 +45,41 @@ type Adapter interface {
 	// Apply upserts objects through w. Report progress via prog at batch
 	// boundaries. Observe ctx.Done() between batches so cancel is prompt.
 	Apply(ctx context.Context, w Writer, objects []Object, prog Progress) error
+}
+
+// ReleaseLister is the optional half of [Adapter]: an upstream that publishes a
+// list of releases, rather than one that is only ever "whatever is there now".
+//
+// Only ATT&CK implements it today, and the split is on purpose. Atomic, Sigma
+// and CTID are rolling — they write the `current` version token and have no
+// releases to choose between — so a method on [Adapter] would be four
+// implementations of which three answer "not applicable", and an interface
+// nobody can implement honestly is one callers stop believing. A caller type
+// asserts, and an adapter that does not implement this has no release list;
+// that is an answer, not an error.
+//
+// Listing releases is a read of upstream's index and nothing else: no job, no
+// slot, no write. It is what the first-run wizard's version picker is built on.
+type ReleaseLister interface {
+	// ListReleases returns what upstream currently offers, newest first. The
+	// request carries the same source, HTTP client, byte ceiling and URL policy
+	// a Fetch would get, so a listing cannot reach anywhere a fetch could not.
+	ListReleases(ctx context.Context, req FetchRequest) ([]Release, error)
+}
+
+// Release is one version upstream offers for installation.
+type Release struct {
+	// Version is the release label, exactly as upstream spells it ("15.1").
+	// It is what a caller hands back as a pin, so it is not normalized here.
+	Version string
+
+	// Name is upstream's own title for the release, when it publishes one.
+	// Empty otherwise — it is a label for a human, never an identifier.
+	Name string
+
+	// Released is when upstream says it was published, or the zero time when
+	// upstream does not say.
+	Released time.Time
 }
 
 // FetchRequest is what the runner hands an adapter's Fetch.

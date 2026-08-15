@@ -32,6 +32,27 @@ A sync **without** `version` loads `{url}/index.json` and takes the latest
 version from the collection named **Enterprise ATT&CK** (`versions[0]` in
 MITRE's index layout). Mobile and ICS collections in the same index are ignored.
 
+`GET /content/attack/releases` reads the same index and returns *every*
+Enterprise release, merged with what is installed here — the version picker in
+the first-run wizard is built on it, and so is anything else that wants to offer
+a choice rather than assume "latest".
+
+| Field | Meaning |
+|---|---|
+| `items[].version` | Upstream's label, unmodified, and what to send back as a pin |
+| `items[].released` | Upstream's `modified` date, when it parses; absent otherwise |
+| `items[].installed` / `status` | Whether this installation holds that label, and in what state |
+| `items[].latest` | Upstream's newest. Absent from every item when the index was not read |
+| `reachable` / `unreachable` | Whether MITRE answered, and the error if not |
+
+It reaches upstream while the request is open, takes no job slot, and writes
+nothing. **An unreachable index answers `200`, not `502`**: air-gapped
+installations are supported and for them that is the normal case, so the answer
+still lists what is installed and says why there is nothing to choose from.
+Order is upstream's own, newest first — ATT&CK labels (`4.0`, `10.0`, `17.1`)
+sort correctly under neither string comparison nor semver, so nothing here
+invents an order. Installed labels upstream no longer offers are appended.
+
 ## What is ingested
 
 Enterprise domain only:
@@ -109,13 +130,15 @@ helpers so that column has one definition:
 
 | Method | Path | Authz |
 |---|---|---|
+| GET | `/content/attack/releases` | `content.read` — upstream's catalog merged with what is installed |
 | GET | `/content/attack/versions` | `content.read` |
 | GET | `/content/attack/versions/{version}` | `content.read` (includes per-family counts) |
 | GET | `/content/attack/versions/{version}/techniques/{externalId}` | `content.read` — **never** cross-version |
 | DELETE | `/content/attack/versions/{version}` | `content.manage` — 409 if referenced |
 
 Domain package: `internal/content/attackpin`
-(`ListVersions`, `Resolve`, `ResolveTechnique`, `AssertPinned`, `DeleteVersion`).
+(`ListVersions`, `ListReleases`, `Resolve`, `ResolveTechnique`, `AssertPinned`,
+`DeleteVersion`).
 
 `AssertPinned` requires: version exists, ATT&CK source enabled, status `ready`,
 `item_count > 0`.

@@ -1164,6 +1164,51 @@ type CompareRow struct {
 	TechniqueId             string                 `json:"techniqueId"`
 }
 
+// ContentAttackRelease One ATT&CK release, as something to choose between.
+type ContentAttackRelease struct {
+	// Installed Whether this installation already holds a version row for this
+	// label, in any state. `status` says which.
+	Installed bool `json:"installed"`
+
+	// Latest Upstream's newest release. Exactly one item carries `true` when the
+	// index was read, and none do when it was not.
+	Latest bool `json:"latest"`
+
+	// Released When upstream published it. Absent when upstream does not say, and
+	// when the release is known only because it is installed here.
+	Released *time.Time `json:"released,omitempty"`
+
+	// Status The installed version's state (`pending`, `syncing`, `ready`,
+	// `failed`). Absent when `installed` is false. A release that is
+	// installed but `failed` is still worth offering, which is why this is
+	// a status rather than a second boolean.
+	Status *string `json:"status,omitempty"`
+
+	// Version Upstream's own release label (for example `17.1`), and the string to
+	// send back as a sync pin. Not normalized: what upstream calls it is
+	// what a fetch will resolve.
+	Version string `json:"version"`
+}
+
+// ContentAttackReleaseList defines model for ContentAttackReleaseList.
+type ContentAttackReleaseList struct {
+	Items []ContentAttackRelease `json:"items"`
+
+	// Reachable Whether the upstream index answered. `false` is a normal outcome on
+	// an air-gapped installation, not a failed request.
+	Reachable bool `json:"reachable"`
+
+	// SourceEnabled Whether the ATT&CK source is enabled. A sync started against a
+	// disabled source is refused, so a picker should say so before
+	// offering one.
+	SourceEnabled bool `json:"sourceEnabled"`
+
+	// Unreachable Why the index could not be read, when `reachable` is false — the
+	// transport or parse error, for an administrator reading it beside the
+	// source URL they configured. Null otherwise.
+	Unreachable nullable.Nullable[string] `json:"unreachable,omitempty"`
+}
+
 // ContentAttackVersion One installed ATT&CK release as the pin surface exposes it. The
 // `version` string is what engagements will store as `attack_version`
 // (M3) — opaque equality to `content_source_version.version`.
@@ -3376,6 +3421,20 @@ type SetEngagementStatus struct {
 	Status EngagementStatus `json:"status"`
 }
 
+// SetupState Whether this installation has been through the first-run wizard.
+type SetupState struct {
+	// Completed Whether somebody finished the wizard. A decision, not an outcome:
+	// it does not mean content is installed.
+	Completed bool `json:"completed"`
+
+	// CompletedAt When it was finished. Absent while `completed` is false.
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+
+	// CompletedBy The user who finished it, or null when nothing did — `blctl setup
+	// complete` on a provisioning run has no person to attribute.
+	CompletedBy nullable.Nullable[string] `json:"completedBy,omitempty"`
+}
+
 // SeverityBucket defines model for SeverityBucket.
 type SeverityBucket struct {
 	AcceptedRisk int    `json:"acceptedRisk"`
@@ -5388,6 +5447,25 @@ type UploadReportBrandingLogoParams struct {
 	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
 }
 
+// CompleteSetupParams defines parameters for CompleteSetup.
+type CompleteSetupParams struct {
+	// XCSRFToken The double-submit CSRF token (M1-005): the value of the non-`HttpOnly`
+	// `bl_csrf` cookie, echoed back in this header.
+	//
+	// **Required in practice** on every state-changing request authenticated
+	// by the session cookie, even though it is declared optional here. The
+	// rule belongs to one middleware, which answers a missing or wrong token
+	// with `403` and `code: "forbidden"`; declaring the parameter required
+	// would make an *absent* header a `400` from the request validator and a
+	// *wrong* one a `403`, splitting one rule across two layers and two status
+	// codes for no gain to the caller.
+	//
+	// A request authenticated by a service token does not send this and is not
+	// subject to the check — CSRF is a property of cookies, which browsers
+	// attach on their own.
+	XCSRFToken *CSRFToken `json:"X-CSRF-Token,omitempty"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	// Limit Maximum number of items to return.
@@ -5817,6 +5895,9 @@ type ServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams)
+	// ListContentAttackReleases List the ATT&CK releases upstream offers, and which are installed.
+	// (GET /content/attack/releases)
+	ListContentAttackReleases(w http.ResponseWriter, r *http.Request)
 	// ListContentAttackVersions List installed ATT&CK versions.
 	// (GET /content/attack/versions)
 	ListContentAttackVersions(w http.ResponseWriter, r *http.Request)
@@ -6246,6 +6327,12 @@ type ServerInterface interface {
 	// UploadReportBrandingLogo Upload a logo for install-wide report branding.
 	// (POST /settings/report-branding/logo)
 	UploadReportBrandingLogo(w http.ResponseWriter, r *http.Request, params UploadReportBrandingLogoParams)
+	// GetSetupState Read whether this installation has been through first-run setup.
+	// (GET /setup)
+	GetSetupState(w http.ResponseWriter, r *http.Request)
+	// CompleteSetup Mark first-run setup as finished.
+	// (POST /setup/complete)
+	CompleteSetup(w http.ResponseWriter, r *http.Request, params CompleteSetupParams)
 	// ListUsers List the accounts on this installation.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -6429,6 +6516,12 @@ func (_ Unimplemented) CreateServiceToken(w http.ResponseWriter, r *http.Request
 // RevokeServiceToken Revoke one of your own service tokens.
 // (DELETE /auth/tokens/{tokenId})
 func (_ Unimplemented) RevokeServiceToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID, params RevokeServiceTokenParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListContentAttackReleases List the ATT&CK releases upstream offers, and which are installed.
+// (GET /content/attack/releases)
+func (_ Unimplemented) ListContentAttackReleases(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7287,6 +7380,18 @@ func (_ Unimplemented) SetReportBranding(w http.ResponseWriter, r *http.Request,
 // UploadReportBrandingLogo Upload a logo for install-wide report branding.
 // (POST /settings/report-branding/logo)
 func (_ Unimplemented) UploadReportBrandingLogo(w http.ResponseWriter, r *http.Request, params UploadReportBrandingLogoParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSetupState Read whether this installation has been through first-run setup.
+// (GET /setup)
+func (_ Unimplemented) GetSetupState(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CompleteSetup Mark first-run setup as finished.
+// (POST /setup/complete)
+func (_ Unimplemented) CompleteSetup(w http.ResponseWriter, r *http.Request, params CompleteSetupParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8166,6 +8271,20 @@ func (siw *ServerInterfaceWrapper) RevokeServiceToken(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeServiceToken(w, r, tokenId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListContentAttackReleases operation middleware
+func (siw *ServerInterfaceWrapper) ListContentAttackReleases(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListContentAttackReleases(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14151,6 +14270,61 @@ func (siw *ServerInterfaceWrapper) UploadReportBrandingLogo(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// GetSetupState operation middleware
+func (siw *ServerInterfaceWrapper) GetSetupState(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSetupState(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteSetup operation middleware
+func (siw *ServerInterfaceWrapper) CompleteSetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CompleteSetupParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = &XCSRFToken
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteSetup(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -14927,6 +15101,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/settings/report-branding/logo", wrapper.UploadReportBrandingLogo)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/setup", wrapper.GetSetupState)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/setup/complete", wrapper.CompleteSetup)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/activity", wrapper.ListActivity)
 	})
 	r.Group(func(r chi.Router) {
@@ -15186,6 +15366,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/content/attack/versions", wrapper.ListContentAttackVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/content/attack/releases", wrapper.ListContentAttackReleases)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/content/attack/versions/{version}", wrapper.DeleteContentAttackVersion)
@@ -17357,6 +17540,91 @@ type RevokeServiceToken500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeServiceToken500ApplicationProblemPlusJSONResponse) VisitRevokeServiceTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackReleasesRequestObject struct {
+}
+
+type ListContentAttackReleasesResponseObject interface {
+	VisitListContentAttackReleasesResponse(w http.ResponseWriter) error
+}
+
+type ListContentAttackReleases200JSONResponse ContentAttackReleaseList
+
+func (response ListContentAttackReleases200JSONResponse) VisitListContentAttackReleasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackReleases401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackReleases401ApplicationProblemPlusJSONResponse) VisitListContentAttackReleasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackReleases403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackReleases403ApplicationProblemPlusJSONResponse) VisitListContentAttackReleasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackReleases404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackReleases404ApplicationProblemPlusJSONResponse) VisitListContentAttackReleasesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListContentAttackReleases500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListContentAttackReleases500ApplicationProblemPlusJSONResponse) VisitListContentAttackReleasesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -31457,6 +31725,145 @@ func (response UploadReportBrandingLogo500ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type GetSetupStateRequestObject struct {
+}
+
+type GetSetupStateResponseObject interface {
+	VisitGetSetupStateResponse(w http.ResponseWriter) error
+}
+
+type GetSetupState200JSONResponse SetupState
+
+func (response GetSetupState200JSONResponse) VisitGetSetupStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSetupState401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetSetupState401ApplicationProblemPlusJSONResponse) VisitGetSetupStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSetupState403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetSetupState403ApplicationProblemPlusJSONResponse) VisitGetSetupStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSetupState500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetSetupState500ApplicationProblemPlusJSONResponse) VisitGetSetupStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetupRequestObject struct {
+	Params CompleteSetupParams
+}
+
+type CompleteSetupResponseObject interface {
+	VisitCompleteSetupResponse(w http.ResponseWriter) error
+}
+
+type CompleteSetup200JSONResponse SetupState
+
+func (response CompleteSetup200JSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSetup401ApplicationProblemPlusJSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSetup403ApplicationProblemPlusJSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetup500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteSetup500ApplicationProblemPlusJSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -32678,6 +33085,9 @@ type StrictServerInterface interface {
 	// RevokeServiceToken Revoke one of your own service tokens.
 	// (DELETE /auth/tokens/{tokenId})
 	RevokeServiceToken(ctx context.Context, request RevokeServiceTokenRequestObject) (RevokeServiceTokenResponseObject, error)
+	// ListContentAttackReleases List the ATT&CK releases upstream offers, and which are installed.
+	// (GET /content/attack/releases)
+	ListContentAttackReleases(ctx context.Context, request ListContentAttackReleasesRequestObject) (ListContentAttackReleasesResponseObject, error)
 	// ListContentAttackVersions List installed ATT&CK versions.
 	// (GET /content/attack/versions)
 	ListContentAttackVersions(ctx context.Context, request ListContentAttackVersionsRequestObject) (ListContentAttackVersionsResponseObject, error)
@@ -33107,6 +33517,12 @@ type StrictServerInterface interface {
 	// UploadReportBrandingLogo Upload a logo for install-wide report branding.
 	// (POST /settings/report-branding/logo)
 	UploadReportBrandingLogo(ctx context.Context, request UploadReportBrandingLogoRequestObject) (UploadReportBrandingLogoResponseObject, error)
+	// GetSetupState Read whether this installation has been through first-run setup.
+	// (GET /setup)
+	GetSetupState(ctx context.Context, request GetSetupStateRequestObject) (GetSetupStateResponseObject, error)
+	// CompleteSetup Mark first-run setup as finished.
+	// (POST /setup/complete)
+	CompleteSetup(ctx context.Context, request CompleteSetupRequestObject) (CompleteSetupResponseObject, error)
 	// ListUsers List the accounts on this installation.
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -33857,6 +34273,30 @@ func (sh *strictHandler) RevokeServiceToken(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeServiceTokenResponseObject); ok {
 		if err := validResponse.VisitRevokeServiceTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListContentAttackReleases operation middleware
+func (sh *strictHandler) ListContentAttackReleases(w http.ResponseWriter, r *http.Request) {
+	var request ListContentAttackReleasesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListContentAttackReleases(ctx, request.(ListContentAttackReleasesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListContentAttackReleases")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListContentAttackReleasesResponseObject); ok {
+		if err := validResponse.VisitListContentAttackReleasesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -37997,6 +38437,56 @@ func (sh *strictHandler) UploadReportBrandingLogo(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UploadReportBrandingLogoResponseObject); ok {
 		if err := validResponse.VisitUploadReportBrandingLogoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSetupState operation middleware
+func (sh *strictHandler) GetSetupState(w http.ResponseWriter, r *http.Request) {
+	var request GetSetupStateRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSetupState(ctx, request.(GetSetupStateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSetupState")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSetupStateResponseObject); ok {
+		if err := validResponse.VisitGetSetupStateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteSetup operation middleware
+func (sh *strictHandler) CompleteSetup(w http.ResponseWriter, r *http.Request, params CompleteSetupParams) {
+	var request CompleteSetupRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteSetup(ctx, request.(CompleteSetupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteSetup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteSetupResponseObject); ok {
+		if err := validResponse.VisitCompleteSetupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

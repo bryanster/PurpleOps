@@ -43,6 +43,7 @@ import (
 	"github.com/bryanster/blacklight/internal/report"
 	"github.com/bryanster/blacklight/internal/report/blocks"
 	pdfreport "github.com/bryanster/blacklight/internal/report/pdf"
+	"github.com/bryanster/blacklight/internal/setup"
 	"github.com/bryanster/blacklight/internal/store"
 	"github.com/bryanster/blacklight/internal/store/activity"
 	storecontent "github.com/bryanster/blacklight/internal/store/content"
@@ -689,6 +690,12 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		panic("httpapi: report branding: " + err.Error())
 	}
 
+	// First-run state: whether anybody has been through the setup wizard.
+	setupSvc, err := setup.New(setup.Deps{Settings: settingsStore, Activity: activityLog})
+	if err != nil {
+		panic("httpapi: setup: " + err.Error())
+	}
+
 	// Branding resolver + publish service (M6-011).
 	brandingResolver := report.NewBrandingResolver(brandingSvc)
 	versionRepo := storereport.NewVersions(deps.Store)
@@ -773,6 +780,13 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		panic("httpapi: content runner: " + err.Error())
 	}
 
+	// The version picker reads upstream's release index through the runner,
+	// which is built after the pin service that exposes it. A setter rather
+	// than a reordering: the pin service is a dependency of the engagement
+	// service above, and moving its construction down here to satisfy a
+	// read-only extra would move that too.
+	pin.SetUpstream(runner)
+
 	hub := events.NewHub(events.Options{
 		MaxSubscribers: deps.Config.Events.MaxSubscribers,
 		Buffer:         deps.Config.Events.Buffer,
@@ -837,6 +851,7 @@ func strictHandler(deps Deps, auth *authn.Service, sessions *session.Manager,
 		custom:          customSvc,
 
 		attackpin:             pin,
+		setup:                 setupSvc,
 		evidenceMIMEAllowlist: evidenceMIMEAllowlist,
 		shareSvc:              shareSvc,
 		reports:               reportSvc,

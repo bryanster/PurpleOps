@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A first-run setup wizard, and it is a MITRE ATT&CK version picker.** A fresh
+  installation boots with an empty content library — nothing is fetched at first
+  boot — so the first administrator to sign in used to land in a product that
+  could not map a step to a technique, with no prompt to say so. They now land
+  on `/setup`, which lists every Enterprise release MITRE publishes, newest
+  first, marks anything already installed, and installs the chosen one: enabling
+  the seeded ATT&CK source and starting the same sync job the sources screen
+  starts. Members are not redirected — an empty library is not theirs to fill.
+  On a host with no route to MITRE the screen says so, carries the transport
+  error, points at the offline bundle path, and still lets a release be
+  installed by label. Skipping finishes setup without installing anything, which
+  is the right answer for an air-gapped deployment. See
+  [`docs/first-run-setup.md`](docs/first-run-setup.md).
+- **`GET /content/attack/releases`** — the ATT&CK releases upstream offers,
+  merged with what is installed, in MITRE's own order. An unreachable index is a
+  `200` saying so rather than a `502`: air-gapped installations are supported,
+  and for them that is the normal case.
+- **`blctl setup status` / `complete` / `reset`.** `complete` marks first-run
+  setup done without installing anything, for a provisioning run that has
+  already created an administrator and synced content — and for the end-to-end
+  suite. `reset` brings the wizard back and is deliberately not an endpoint.
+
 ### Fixed
 
 - **Importing a step from a template works again.** From Template in an

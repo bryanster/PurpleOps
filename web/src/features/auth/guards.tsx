@@ -4,6 +4,9 @@ import { Navigate, Outlet, useLocation } from 'react-router'
 import { isApiError } from '@/api/errors'
 import { PageError, PageLoading } from '@/app/shell/page-state'
 
+import { SETUP_PATH } from '@/features/setup/paths'
+import { useSetupState } from '@/features/setup/queries'
+
 import { CurrentUserContext } from './current-user'
 import { isAdmin, mustEnrol, useCurrentUser } from './queries'
 import { ENROLMENT_PATH } from './paths'
@@ -35,6 +38,18 @@ import { loginUrlFor, returnToFor } from './return-to'
 export function RequireAuth(): ReactNode {
   const location = useLocation()
   const { data: user, error, isPending, refetch } = useCurrentUser()
+
+  // The first-run gate. `GET /setup` needs `settings.read`, and only an
+  // administrator can act on the answer anyway — the wizard installs content —
+  // so the query is off for everybody else rather than asked and refused. A
+  // member of an installation nobody has set up sees the product as it is:
+  // empty, and not their problem to fix.
+  //
+  // It is off during forced enrolment too, because that gate is stricter: the
+  // server answers 403 for every endpoint but the enrolment ones, and asking
+  // this one would be asking for a refusal we already know is coming.
+  const setupApplies = user !== undefined && isAdmin(user) && !mustEnrol(user)
+  const setup = useSetupState(setupApplies)
 
   if (isPending) {
     // A full-height container rather than a bare spinner in the corner: at this
@@ -76,6 +91,29 @@ export function RequireAuth(): ReactNode {
   // And the other direction: somebody who has enrolled has no business on the
   // blocking screen, however they got the address.
   if (!mustEnrol(user) && location.pathname === ENROLMENT_PATH) {
+    return <Navigate to="/" replace />
+  }
+
+  // The first-run gate. An installation nobody has set up sends its
+  // administrators to the wizard, from wherever they were going, until one of
+  // them finishes it. Unlike enrolment this is not enforced by the server —
+  // every endpoint works normally — so it is a redirect for the sake of landing
+  // somewhere useful, not a confinement.
+  //
+  // Only a definite `false` redirects. While the state is unknown — in flight,
+  // or a request that failed — the application renders: a wizard shown because
+  // one query hiccuped would be worse than a first boot that took one more
+  // click to notice.
+  const needsSetup = setupApplies && setup.data?.completed === false
+  if (needsSetup && location.pathname !== SETUP_PATH) {
+    return <Navigate to={SETUP_PATH} replace />
+  }
+  // And the other direction, once it is definitely done: the wizard is not a
+  // screen to wander back into, and it has nothing left to ask. "Definitely" is
+  // the load-bearing word — sending somebody off the wizard while the state is
+  // still in flight would bounce them straight back onto it a moment later.
+  const setupSettled = !setupApplies || setup.data?.completed === true
+  if (location.pathname === SETUP_PATH && setupSettled) {
     return <Navigate to="/" replace />
   }
 

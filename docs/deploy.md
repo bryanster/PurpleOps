@@ -244,6 +244,13 @@ change the password.
 [`deploy/azure-terraform`](../deploy/azure-terraform) is a worked example: it generates the password,
 keeps it in Key Vault, and hands it to the app.
 
+**The first sign-in.** Whichever way that account came to exist, it lands on the setup wizard rather
+than on the product: an installation this new has an empty content library, and the wizard asks
+which MITRE ATT&CK version to install. It can be skipped, and on a host with no route to MITRE it
+says so and points at the offline bundle path. A provisioning run that has already installed content
+can mark it done with `blctl setup complete`. See
+[`docs/first-run-setup.md`](first-run-setup.md).
+
 Everybody after the first is created from the running application instead, by an administrator:
 `POST /users`, with a password for a local account or without one for an account that signs in
 through the identity provider. There is no mail transport, so nothing is sent — the response carries

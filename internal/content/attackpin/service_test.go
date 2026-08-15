@@ -279,6 +279,7 @@ func newPinRuntime(t *testing.T) *pinRuntime {
 		Paths:    paths,
 		Activity: events.New(activity.New(db)),
 		Refs:     refs,
+		Upstream: r,
 	})
 	if err != nil {
 		t.Fatalf("attackpin.New: %v", err)

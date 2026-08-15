@@ -32,6 +32,8 @@ import { AnalyticsPage } from '@/features/engagements/analytics-page'
 
 import { WorkbookPage } from '@/features/engagements/workbook-page'
 import { ENGAGEMENTS_PATH } from '@/features/engagements/paths'
+import { SETUP_PATH } from '@/features/setup/paths'
+import { SetupPage } from '@/features/setup/setup-page'
 import { HealthPage } from '@/features/system/health-page'
 import { VersionPage } from '@/features/system/version-page'
 import { TokensPage } from '@/features/tokens/tokens-page'
@@ -55,6 +57,10 @@ export function AppRoutes(): ReactNode {
 
       <Route element={<RequireAuth />}>
         <Route path={ENROLMENT_PATH} element={<EnrolmentPage />} />
+
+        {/* Outside the shell, like enrolment: while setup is unfinished every
+            link the shell would draw goes somewhere the guard sends back. */}
+        <Route path={SETUP_PATH} element={<SetupPage />} />
 
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/system/version" replace />} />

@@ -2015,6 +2015,79 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /setup:
+    get:
+      operationId: getSetupState
+      summary: Read whether this installation has been through first-run setup.
+      description: |
+        Administrators only (`settings.read`), because an administrator is the
+        only caller who can act on the answer: the first-run wizard installs
+        reference content, and installing content is `content.sync`.
+
+        A fresh installation boots with an empty library — nothing is fetched at
+        first boot — and answers `completed: false` until somebody finishes the
+        wizard. `completed` records a *decision*, not an outcome: finishing it
+        without installing anything is the right answer for an air-gapped
+        deployment that will import an offline bundle later, and that
+        installation must not be handed a screen it can never dismiss. What is
+        actually installed is `GET /content/attack/versions`.
+      tags:
+        - settings
+      x-authz-action: settings.read
+      x-authz-resource:
+        type: platform
+      responses:
+        "200":
+          description: The first-run state of this installation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupState"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /setup/complete:
+    post:
+      operationId: completeSetup
+      summary: Mark first-run setup as finished.
+      description: |
+        Administrators only (`settings.manage`). Records that somebody reached
+        the end of the wizard, so that the next sign-in lands on the product
+        rather than back at it.
+
+        Idempotent, and one-way from the API. A second call keeps the first
+        call's timestamp and actor — when an installation was set up is not
+        something a retried request should move — so a client that lost the
+        response can simply send it again. `blctl setup reset` is the only way
+        back to the wizard, and it is deliberately not an endpoint: putting an
+        installation back into first-run state is an operator's decision made at
+        the machine, not a button in a browser.
+      tags:
+        - settings
+      x-authz-action: settings.manage
+      x-authz-resource:
+        type: platform
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: The first-run state as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupState"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /activity:
     get:
       operationId: listActivity
@@ -5265,6 +5338,51 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /content/attack/releases:
+    get:
+      operationId: listContentAttackReleases
+      summary: List the ATT&CK releases upstream offers, and which are installed.
+      description: |
+        Any authenticated subject (`content.read`). Reads the ATT&CK source's
+        published release index — the same index a sync with no pin uses to
+        resolve "latest" — and merges it with the versions this installation
+        already holds. It is what the first-run version picker is built on.
+
+        This reaches upstream while the request is open. It takes no job slot
+        and writes nothing; choosing a release and calling
+        `POST /content/sources/{sourceId}/sync` is what installs one.
+
+        **An upstream that cannot be reached is a `200`, not a `502`.**
+        Air-gapped installations are supported, and for them an unreachable
+        index is the normal case rather than a fault. The answer says
+        `reachable: false`, carries the transport error in `unreachable`, and
+        still lists what is installed — so a client can offer the offline bundle
+        path (`docs/content-bundles.md`) instead of a dead end. `latest` is
+        absent from every item when upstream did not answer: nothing local knows
+        which release is newest, and ATT&CK labels do not sort.
+      tags:
+        - content
+      x-authz-action: content.read
+      x-authz-resource:
+        type: content
+      responses:
+        "200":
+          description: |
+            The release catalog. Upstream's own order, newest first, with
+            installed-but-no-longer-offered labels appended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentAttackReleaseList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -10804,6 +10922,94 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ContentAttackVersion"
+
+    ContentAttackRelease:
+      type: object
+      description: One ATT&CK release, as something to choose between.
+      required:
+        - version
+        - installed
+        - latest
+      properties:
+        version:
+          type: string
+          description: |
+            Upstream's own release label (for example `17.1`), and the string to
+            send back as a sync pin. Not normalized: what upstream calls it is
+            what a fetch will resolve.
+        released:
+          type: string
+          format: date-time
+          description: |
+            When upstream published it. Absent when upstream does not say, and
+            when the release is known only because it is installed here.
+        installed:
+          type: boolean
+          description: |
+            Whether this installation already holds a version row for this
+            label, in any state. `status` says which.
+        status:
+          type: string
+          description: |
+            The installed version's state (`pending`, `syncing`, `ready`,
+            `failed`). Absent when `installed` is false. A release that is
+            installed but `failed` is still worth offering, which is why this is
+            a status rather than a second boolean.
+        latest:
+          type: boolean
+          description: |
+            Upstream's newest release. Exactly one item carries `true` when the
+            index was read, and none do when it was not.
+
+    ContentAttackReleaseList:
+      type: object
+      required:
+        - items
+        - reachable
+        - sourceEnabled
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentAttackRelease"
+        reachable:
+          type: boolean
+          description: |
+            Whether the upstream index answered. `false` is a normal outcome on
+            an air-gapped installation, not a failed request.
+        unreachable:
+          type: [string, "null"]
+          description: |
+            Why the index could not be read, when `reachable` is false — the
+            transport or parse error, for an administrator reading it beside the
+            source URL they configured. Null otherwise.
+        sourceEnabled:
+          type: boolean
+          description: |
+            Whether the ATT&CK source is enabled. A sync started against a
+            disabled source is refused, so a picker should say so before
+            offering one.
+
+    SetupState:
+      type: object
+      description: Whether this installation has been through the first-run wizard.
+      required:
+        - completed
+      properties:
+        completed:
+          type: boolean
+          description: |
+            Whether somebody finished the wizard. A decision, not an outcome:
+            it does not mean content is installed.
+        completedAt:
+          type: string
+          format: date-time
+          description: When it was finished. Absent while `completed` is false.
+        completedBy:
+          type: [string, "null"]
+          description: |
+            The user who finished it, or null when nothing did — `blctl setup
+            complete` on a provisioning run has no person to attribute.
 
     EngagementStatus:
       type: string

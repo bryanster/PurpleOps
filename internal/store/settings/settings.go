@@ -145,3 +145,33 @@ func (s *Store) Put(ctx context.Context, values map[string]string, updatedBy str
 	}
 	return nil
 }
+
+// Delete removes keys, and does not mind which of them were there.
+//
+// Deleting rather than writing a zero is for the one case where "never set" is
+// the state a caller means to restore: `blctl setup reset` puts an installation
+// back to the one the image ships, and the first-run wizard's whole question is
+// whether anybody has written that row. Every other setting in this table turns
+// off by storing false, for the reason 0006_platform_setting sets out — "never
+// set" and "set and then turned off" should stay distinguishable — so reach for
+// [Store.Put] unless absence is genuinely the value.
+//
+// Missing keys are not an error: the caller asked for them gone, and they are.
+func (s *Store) Delete(ctx context.Context, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	err := s.db.Write(ctx, func(tx *sql.Tx) error {
+		for _, key := range keys {
+			if _, err := tx.ExecContext(ctx,
+				`DELETE FROM app.platform_setting WHERE key = ?`, key); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("settings: delete %d platform settings: %w", len(keys), err)
+	}
+	return nil
+}

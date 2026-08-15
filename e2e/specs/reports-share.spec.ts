@@ -27,6 +27,8 @@ const attackFixture = path.join(
 function seedSteps(): SeedCommand[] {
   return [
     ['migrate', 'up'],
+    // Past its first run: the wizard belongs to setup.spec.ts.
+    ['setup', 'complete'],
     ['content', 'enable', '--id', attackSourceID],
     {
       args: ['user', 'create', '--email', adminEmail, '--name', 'Publish Lead', '--admin'],

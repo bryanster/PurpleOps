@@ -16,6 +16,7 @@ import (
 	"github.com/bryanster/blacklight/internal/events"
 	"github.com/bryanster/blacklight/internal/events/presence"
 	"github.com/bryanster/blacklight/internal/evidence"
+	"github.com/bryanster/blacklight/internal/setup"
 
 	"github.com/bryanster/blacklight/internal/analytics"
 	"github.com/bryanster/blacklight/internal/report"
@@ -79,6 +80,10 @@ type handlers struct {
 
 	// attackpin is the ATT&CK version catalog and pin surface (M2-007).
 	attackpin *attackpin.Service
+
+	// setup is the first-run state behind the setup wizard. Nil only in tests
+	// that never hit the two /setup endpoints.
+	setup *setup.Service
 
 	// engagements is the engagement CRUD, status lifecycle, and membership
 	// management service (M3-002, M3-003).

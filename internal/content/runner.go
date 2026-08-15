@@ -290,6 +290,50 @@ func (r *Runner) publish(ev ProgressEvent) {
 	}
 }
 
+// ListReleases asks a source's upstream what it offers, newest first.
+//
+// It is a read and only a read: no job row, no global slot, nothing written. A
+// caller is about to choose a version — the first-run wizard's picker is the
+// reason this exists — and the choosing is what starts a sync.
+//
+// A source whose adapter does not implement [ReleaseLister] has no release list
+// to give: that is a rolling upstream, and the answer is an empty list rather
+// than an error, because "there are no releases to choose between" is true and
+// is what the caller needs to know.
+//
+// Network failure is reported as an error and not swallowed. The wizard has an
+// offline path to fall back to, and it can only offer it if it is told.
+func (r *Runner) ListReleases(ctx context.Context, sourceID string) ([]Release, error) {
+	if sourceID == "" {
+		return nil, apierr.Validation(apierr.Field("sourceId", "is required"))
+	}
+	src, err := r.sources.ByID(ctx, sourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	r.mu.Lock()
+	adapter := r.adapters[src.Kind]
+	r.mu.Unlock()
+
+	lister, ok := adapter.(ReleaseLister)
+	if !ok {
+		return []Release{}, nil
+	}
+	return lister.ListReleases(ctx, FetchRequest{
+		Source: SourceInfo{
+			ID:   src.ID,
+			Kind: src.Kind,
+			Name: src.Name,
+			URL:  src.URL,
+			Ref:  src.Ref,
+		},
+		MaxBytes: r.maxBytes,
+		HTTP:     r.httpClient(),
+		Policy:   r.policy,
+	})
+}
+
 // StartSyncRequest is the caller half of enqueueing a sync job.
 type StartSyncRequest struct {
 	SourceID string

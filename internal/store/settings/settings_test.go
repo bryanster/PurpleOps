@@ -178,3 +178,42 @@ func TestAValueMayBeLongAndAwkward(t *testing.T) {
 		t.Errorf("the value came back %d bytes, want the %d that went in", len(got), len(value))
 	}
 }
+
+// Delete is the one way back to "never set", and the only caller that wants it
+// is `blctl setup reset`. What matters is that it removes the row rather than
+// blanking it — the first-run wizard reads absence, not emptiness — and that
+// asking for a key that was never there is not a failure.
+func TestDeleteRemovesTheRowAndForgivesAMissingKey(t *testing.T) {
+	t.Parallel()
+
+	store := newStore(t)
+	if err := store.Put(t.Context(), map[string]string{
+		"setup.completed_at":   "2026-01-01T00:00:00Z",
+		"mfa.required_for_all": "true",
+	}, "user-1"); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	if err := store.Delete(t.Context(), "setup.completed_at", "never.written"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	all, err := store.All(t.Context())
+	if err != nil {
+		t.Fatalf("All: %v", err)
+	}
+	if _, ok := all["setup.completed_at"]; ok {
+		t.Error("the deleted key is still present; absence is what the wizard reads")
+	}
+	if _, ok := all["mfa.required_for_all"]; !ok {
+		t.Error("Delete removed a key it was not asked about")
+	}
+}
+
+func TestDeletingNothingIsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	if err := newStore(t).Delete(t.Context()); err != nil {
+		t.Errorf("Delete with no keys = %v, want nil: a caller that computed no removals has nothing to say", err)
+	}
+}
