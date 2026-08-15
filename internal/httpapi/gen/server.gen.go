@@ -3072,6 +3072,9 @@ type ReorderSteps struct {
 
 // Report defines model for Report.
 type Report struct {
+	// BlockCount How many draft blocks the report holds. Always present, including on list endpoints, which omit `blocks` itself — a list row that wants to show a count must read this rather than measuring `blocks`.
+	BlockCount int `json:"blockCount"`
+
 	// Blocks Draft blocks in ordinal order. Present in GET /reports/{reportId} responses; absent from list endpoints.
 	Blocks     *[]ReportBlock            `json:"blocks,omitempty"`
 	ClientName nullable.Nullable[string] `json:"clientName,omitempty"`

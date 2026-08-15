@@ -29,9 +29,9 @@ import {
   FilterSelect,
   IdBadges,
   MetaRow,
-  UseInScenarioPlaceholder,
   VersionSelect,
 } from './shared'
+import { UseInScenarioButton } from './use-in-scenario'
 
 /**
  * ATT&CK techniques for one installed version: search, tactic/subtechnique
@@ -279,7 +279,7 @@ function TechniqueDetail({
                 </MetaRow>
               )}
             </dl>
-            <UseInScenarioPlaceholder />
+            <UseInScenarioButton kind="technique" id={detail.data.externalId} />
           </div>
 
           <section className="flex flex-col gap-2">

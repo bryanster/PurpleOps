@@ -50,7 +50,9 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
+import { useSearchParams } from 'react-router'
 import { useEngagementContext } from './engagement-layout'
+import { parseWorkbookUseKind, WORKBOOK_USE_ID_PARAM, WORKBOOK_USE_PARAM } from './paths'
 import { markCommentRead, useCommentUnread } from './use-comment-unread'
 import { usePlans, useProcedures } from '@/features/content/queries'
 import {
@@ -177,6 +179,7 @@ const MODIFIER_LABEL: Record<string, string> = {
 
 export function WorkbookPage(): ReactNode {
   const { engagementId, role, closed } = useEngagementContext()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const scenarios = useScenarios(engagementId)
   const steps = useAllEngagementSteps(engagementId)
@@ -185,11 +188,18 @@ export function WorkbookPage(): ReactNode {
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set())
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const [addScenarioOpen, setAddScenarioOpen] = useState(false)
+  // Dialog field state is an *override*: null means "not touched yet, use the
+  // derived default" (first scenario, or the object the content library handed
+  // off in the query string). Overrides reset to null on close so the next
+  // hand-off is not shadowed by the previous one.
   const [addStepOpen, setAddStepOpen] = useState(false)
-  const [addStepScenarioId, setAddStepScenarioId] = useState<string>('')
+  const [addStepScenarioId, setAddStepScenarioId] = useState<string | null>(null)
+  const [addStepTechniqueId, setAddStepTechniqueId] = useState<string | null>(null)
   const [importCtidOpen, setImportCtidOpen] = useState(false)
+  const [importPlanId, setImportPlanId] = useState<string | null>(null)
   const [fromTemplateOpen, setFromTemplateOpen] = useState(false)
-  const [fromTemplateScenarioId, setFromTemplateScenarioId] = useState<string>('')
+  const [fromTemplateScenarioId, setFromTemplateScenarioId] = useState<string | null>(null)
+  const [fromTemplateTemplateId, setFromTemplateTemplateId] = useState<string | null>(null)
 
   const stepsByScenario = useMemo(() => {
     const map = new Map<string, Step[]>()
@@ -248,6 +258,81 @@ export function WorkbookPage(): ReactNode {
     return executionByStepId.get(selectedStepId) ?? null
   }, [selectedStepId, executionByStepId])
 
+  // ── Library hand-off ────────────────────────────────────────────────────────
+  //
+  // The content library has no engagement in scope, so its "Use in scenario"
+  // button sends the operator here with the object named in the query string.
+  // The matching dialog is *derived* open and pre-filled from those params — no
+  // effect copies them into state — and closing the dialog strips them so a
+  // reload or a back-navigation cannot re-open it.
+  const handoffKind = parseWorkbookUseKind(searchParams.get(WORKBOOK_USE_PARAM))
+  const handoffId = searchParams.get(WORKBOOK_USE_ID_PARAM) ?? ''
+  const canAddContent = canWriteWorkbook(role) && !closed
+  const handoff = handoffId !== '' && canAddContent ? handoffKind : null
+  const handoffRefused = handoffKind !== null && handoffId !== '' && !canAddContent
+
+  const clearHandoff = useCallback(() => {
+    if (!searchParams.has(WORKBOOK_USE_PARAM) && !searchParams.has(WORKBOOK_USE_ID_PARAM)) return
+    const next = new URLSearchParams(searchParams)
+    next.delete(WORKBOOK_USE_PARAM)
+    next.delete(WORKBOOK_USE_ID_PARAM)
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  // Defaults the dialogs fall back to while their field state is untouched.
+  // `?? []` before indexing: the list endpoint sends `items: null`, not `[]`,
+  // for an engagement with no scenarios yet, whatever the generated type says.
+  const firstScenarioId = (scenarios.data?.items ?? [])[0]?.id ?? ''
+  const addStepValues = {
+    open: addStepOpen || handoff === 'technique',
+    scenarioId: addStepScenarioId ?? firstScenarioId,
+    techniqueId: addStepTechniqueId ?? (handoff === 'technique' ? handoffId : ''),
+  }
+  const importCtidValues = {
+    open: importCtidOpen || handoff === 'plan',
+    planId: importPlanId ?? (handoff === 'plan' ? handoffId : ''),
+  }
+  const fromTemplateValues = {
+    open: fromTemplateOpen || handoff === 'procedure',
+    scenarioId: fromTemplateScenarioId ?? firstScenarioId,
+    templateId: fromTemplateTemplateId ?? (handoff === 'procedure' ? handoffId : ''),
+  }
+
+  const closeAddStep = useCallback(
+    (open: boolean) => {
+      setAddStepOpen(open)
+      if (!open) {
+        setAddStepScenarioId(null)
+        setAddStepTechniqueId(null)
+        clearHandoff()
+      }
+    },
+    [clearHandoff],
+  )
+
+  const closeImportCtid = useCallback(
+    (open: boolean) => {
+      setImportCtidOpen(open)
+      if (!open) {
+        setImportPlanId(null)
+        clearHandoff()
+      }
+    },
+    [clearHandoff],
+  )
+
+  const closeFromTemplate = useCallback(
+    (open: boolean) => {
+      setFromTemplateOpen(open)
+      if (!open) {
+        setFromTemplateScenarioId(null)
+        setFromTemplateTemplateId(null)
+        clearHandoff()
+      }
+    },
+    [clearHandoff],
+  )
+
   // Loading / error states
   if (scenarios.isLoading || steps.isLoading || executions.isLoading) {
     return <PageLoading label="Loading workbook..." />
@@ -284,6 +369,15 @@ export function WorkbookPage(): ReactNode {
 
   return (
     <div className="space-y-4">
+      {/* The library sent content here, but this engagement will not take it. */}
+      {handoffRefused && (
+        <p className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm">
+          {closed
+            ? 'That library content cannot be added: this engagement is closed.'
+            : 'That library content cannot be added: your role on this engagement is read-only.'}
+        </p>
+      )}
+
       {/* Toolbar */}
       {canWriteWorkbook(role) && !closed && (
         <div className="flex flex-wrap items-center gap-2">
@@ -299,10 +393,6 @@ export function WorkbookPage(): ReactNode {
             size="sm"
             variant="outline"
             onClick={() => {
-              const first = scenarioItems[0]
-              if (first) {
-                setAddStepScenarioId(first.id)
-              }
               setAddStepOpen(true)
             }}
           >
@@ -321,10 +411,6 @@ export function WorkbookPage(): ReactNode {
             size="sm"
             variant="outline"
             onClick={() => {
-              const first = scenarioItems[0]
-              if (first) {
-                setFromTemplateScenarioId(first.id)
-              }
               setFromTemplateOpen(true)
             }}
           >
@@ -377,25 +463,31 @@ export function WorkbookPage(): ReactNode {
         engagementId={engagementId}
       />
       <AddStepDialog
-        open={addStepOpen}
-        onOpenChange={setAddStepOpen}
+        open={addStepValues.open}
+        onOpenChange={closeAddStep}
         engagementId={engagementId}
         scenarios={scenarioItems}
-        scenarioId={addStepScenarioId}
+        scenarioId={addStepValues.scenarioId}
         onScenarioIdChange={setAddStepScenarioId}
+        techniqueId={addStepValues.techniqueId}
+        onTechniqueIdChange={setAddStepTechniqueId}
       />
       <ImportCtidDialog
-        open={importCtidOpen}
-        onOpenChange={setImportCtidOpen}
+        open={importCtidValues.open}
+        onOpenChange={closeImportCtid}
         engagementId={engagementId}
+        planId={importCtidValues.planId}
+        onPlanIdChange={setImportPlanId}
       />
       <StepFromTemplateDialog
-        open={fromTemplateOpen}
-        onOpenChange={setFromTemplateOpen}
+        open={fromTemplateValues.open}
+        onOpenChange={closeFromTemplate}
         engagementId={engagementId}
         scenarios={scenarioItems}
-        scenarioId={fromTemplateScenarioId}
+        scenarioId={fromTemplateValues.scenarioId}
         onScenarioIdChange={setFromTemplateScenarioId}
+        templateId={fromTemplateValues.templateId}
+        onTemplateIdChange={setFromTemplateTemplateId}
       />
     </div>
   )
@@ -1878,6 +1970,8 @@ function AddStepDialog({
   scenarios,
   scenarioId,
   onScenarioIdChange,
+  techniqueId,
+  onTechniqueIdChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -1885,11 +1979,12 @@ function AddStepDialog({
   scenarios: Scenario[]
   scenarioId: string
   onScenarioIdChange: (scenarioId: string) => void
+  techniqueId: string
+  onTechniqueIdChange: (techniqueId: string) => void
 }) {
   const createStep = useCreateStep()
   const [name, setName] = useState('')
   const [objective, setObjective] = useState('')
-  const [techniqueId, setTechniqueId] = useState('')
   const [targetAsset, setTargetAsset] = useState('')
 
   const handleSubmit = (e: SyntheticEvent) => {
@@ -1916,7 +2011,7 @@ function AddStepDialog({
           toast.success('Step created')
           setName('')
           setObjective('')
-          setTechniqueId('')
+          onTechniqueIdChange('')
           setTargetAsset('')
           onOpenChange(false)
         },
@@ -1974,7 +2069,7 @@ function AddStepDialog({
             <Input
               value={techniqueId}
               onChange={(e) => {
-                setTechniqueId(e.target.value)
+                onTechniqueIdChange(e.target.value)
               }}
               placeholder="e.g. T1059"
             />
@@ -2015,15 +2110,18 @@ function ImportCtidDialog({
   open,
   onOpenChange,
   engagementId,
+  planId,
+  onPlanIdChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   engagementId: string
+  planId: string
+  onPlanIdChange: (planId: string) => void
 }) {
   const plans = usePlans({})
   const importPlan = useImportPlan()
 
-  const [planId, setPlanId] = useState('')
   const [name, setName] = useState('')
   const [startingOrdinal, setStartingOrdinal] = useState('1')
 
@@ -2045,7 +2143,7 @@ function ImportCtidDialog({
           if (data.warnings.length > 0) {
             toast.warning(`${String(data.warnings.length)} technique(s) could not be resolved`)
           }
-          setPlanId('')
+          onPlanIdChange('')
           setName('')
           setStartingOrdinal('1')
           onOpenChange(false)
@@ -2067,7 +2165,7 @@ function ImportCtidDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Plan</Label>
-            <Select value={planId} onValueChange={setPlanId}>
+            <Select value={planId} onValueChange={onPlanIdChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a plan..." />
               </SelectTrigger>
@@ -2130,6 +2228,8 @@ function StepFromTemplateDialog({
   scenarios,
   scenarioId,
   onScenarioIdChange,
+  templateId,
+  onTemplateIdChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -2137,11 +2237,12 @@ function StepFromTemplateDialog({
   scenarios: Scenario[]
   scenarioId: string
   onScenarioIdChange: (scenarioId: string) => void
+  templateId: string
+  onTemplateIdChange: (templateId: string) => void
 }) {
   const procedures = useProcedures({})
   const createFromTemplate = useCreateStepFromTemplate()
 
-  const [templateId, setTemplateId] = useState('')
   const [name, setName] = useState('')
   const [objective, setObjective] = useState('')
   const [targetAsset, setTargetAsset] = useState('')
@@ -2175,7 +2276,7 @@ function StepFromTemplateDialog({
       {
         onSuccess: () => {
           toast.success('Step created from template')
-          setTemplateId('')
+          onTemplateIdChange('')
           setName('')
           setObjective('')
           setTargetAsset('')
@@ -2214,7 +2315,7 @@ function StepFromTemplateDialog({
           </div>
           <div className="space-y-2">
             <Label>Template</Label>
-            <Select value={templateId} onValueChange={setTemplateId}>
+            <Select value={templateId} onValueChange={onTemplateIdChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a template..." />
               </SelectTrigger>

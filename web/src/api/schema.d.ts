@@ -6411,6 +6411,8 @@ export interface components {
             updatedBy?: string | null;
             /** Format: date-time */
             updatedAt: string;
+            /** @description How many draft blocks the report holds. Always present, including on list endpoints, which omit `blocks` itself — a list row that wants to show a count must read this rather than measuring `blocks`. */
+            blockCount: number;
             /** @description Draft blocks in ordinal order. Present in GET /reports/{reportId} responses; absent from list endpoints. */
             blocks?: components["schemas"]["ReportBlock"][];
         };

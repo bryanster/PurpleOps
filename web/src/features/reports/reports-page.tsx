@@ -149,8 +149,8 @@ export function ReportsPage(): ReactNode {
         confirmLabel="Delete"
         description={
           <>
-            Delete <strong>{deleteTarget?.title ?? 'this report'}</strong> and all its draft blocks?
-            Published versions are unaffected.
+            Delete <strong>{deleteTarget?.title ?? 'this report'}</strong>? Its draft blocks,
+            published versions, and any share links to them go with it. This cannot be undone.
           </>
         }
         onConfirm={() => {
@@ -194,7 +194,8 @@ function ReportRow({
   engagementId: string
   onDelete: () => void
 }): ReactNode {
-  const blockCount = report.blocks?.length ?? 0
+  // `blocks` is absent from the list response — the count is its own field.
+  const blockCount = report.blockCount
   return (
     <div className="flex items-center justify-between px-4 py-3 first:rounded-t-lg last:rounded-b-lg">
       <Link

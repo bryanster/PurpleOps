@@ -7,7 +7,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query'
 
-import { api, unwrap } from '@/api/client'
+import { api, unwrap, unwrapVoid } from '@/api/client'
 import type { components } from '@/api/schema'
 
 /**
@@ -160,7 +160,11 @@ export function useDeleteReport(): UseMutationResult<
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ engagementId, reportId }) => {
-      unwrap(
+      // unwrapVoid, not unwrap: this operation succeeds with 204 and no body,
+      // and unwrap throws on an undefined `data` — so a delete that worked
+      // reported "unexpected 204 response", left the confirm dialog open, and
+      // never invalidated the list.
+      unwrapVoid(
         await api.DELETE('/engagements/{engagementId}/reports/{reportId}', {
           params: { path: { engagementId, reportId } },
         }),

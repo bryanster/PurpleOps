@@ -12727,6 +12727,7 @@ components:
         - createdBy
         - createdAt
         - updatedAt
+        - blockCount
       properties:
         id:
           type: string
@@ -12754,6 +12755,13 @@ components:
         updatedAt:
           type: string
           format: date-time
+        blockCount:
+          type: integer
+          minimum: 0
+          description: >-
+            How many draft blocks the report holds. Always present, including on
+            list endpoints, which omit `blocks` itself — a list row that wants
+            to show a count must read this rather than measuring `blocks`.
         blocks:
           type: array
           description: Draft blocks in ordinal order. Present in GET /reports/{reportId} responses; absent from list endpoints.

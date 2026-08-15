@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **"Use in scenario" works, from the library side.** The button on a technique,
+  procedure template, and emulation plan had been a disabled placeholder since
+  the library shipped: importing needs an engagement to import _into_, and the
+  library has none in scope. It now asks which one. Only engagements that would
+  accept the content are offered — closed and archived ones refuse new scenarios
+  server-side, so they are not listed — and choosing one hands off to that
+  engagement's Workbook, where the import dialog opens with the object already
+  chosen. Nothing is imported from the library itself: the confirmation stays on
+  the engagement, which is where the ATT&CK pin and the workbook role apply. A
+  read-only role or a closed engagement gets told so instead of a dialog it
+  could not have used. The hand-off travels as `?use=&useId=` on the workbook
+  URL and is stripped once consumed, so a reload does not re-open the dialog.
 - **A first-run setup wizard, and it is a MITRE ATT&CK version picker.** A fresh
   installation boots with an empty content library — nothing is fetched at first
   boot — so the first administrator to sign in used to land in a product that
@@ -63,6 +75,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Deleting a report from the reports list works, and it took two fixes.** The
+  server end was the DuckDB foreign-key limitation this codebase has hit before:
+  a RESTRICT constraint is checked against the child's index, which does not see
+  the deleting transaction's own work, so removing `report_block` and `report`
+  in one transaction failed with "still referenced by a foreign key" — on any
+  report that had a block, which is any report anybody had opened. Deletion now
+  walks the whole graph one committed statement at a time: share grants, shares,
+  published versions, draft blocks, then the report. The browser end was
+  separate and would have outlived the first fix: the mutation wrapped a 204
+  endpoint in `unwrap`, which throws when there is no body, so a delete the
+  server had honoured came back as "unexpected 204 response", left the confirm
+  dialog sitting open, and never refreshed the list. It uses `unwrapVoid` now.
+  The confirmation copy no longer promises that published versions survive —
+  `report_version` has a RESTRICT key to `report`, so they never could.
+- **The reports list shows how many blocks each report holds.** It said "0
+  blocks" for every row, always. The row measured `report.blocks`, an array the
+  list response has never carried — the spec says so in the field's own
+  description — so it was counting an absent value. `Report` now carries a
+  `blockCount` the list fills from a single grouped query, and the row reads
+  that. The count is on every report response, including the one a rename
+  returns, so a page that re-reads the list after an edit cannot flip back to
+  zero.
 - **The analytics MTTD panel reports an engagement that is still running.** It
   measured only executions red had concluded, so a step that had been started
   and detected — the ordinary state of an exercise in progress, and now the

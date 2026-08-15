@@ -159,7 +159,7 @@ func (h *handlers) ApplyReportTemplate(ctx context.Context,
 		return nil, err
 	}
 
-	w, err := reportToWire(r, blocks)
+	w, err := reportToWire(r, blocks, len(blocks))
 	if err != nil {
 		return nil, err
 	}

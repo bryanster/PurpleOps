@@ -306,6 +306,13 @@ func (s *Service) Blocks(ctx context.Context, reportID string) ([]storereport.Re
 	return s.reports.BlocksByReport(ctx, reportID)
 }
 
+// BlockCounts returns how many blocks each report in an engagement holds,
+// keyed by report id. The report list needs a count per row and nothing else
+// from the blocks, so it reads counts rather than every block's params.
+func (s *Service) BlockCounts(ctx context.Context, engagementID string) (map[string]int, error) {
+	return s.reports.BlockCountsByEngagement(ctx, engagementID)
+}
+
 // applyDefaults merges block params with registry defaults.
 func applyDefaults(schema ParamSchema, defaults json.RawMessage, provided json.RawMessage) json.RawMessage {
 	merged := make(map[string]any)

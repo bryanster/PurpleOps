@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import type { components } from '@/api/schema'
@@ -9,7 +9,7 @@ import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/render'
 
 import { EngagementCtx, type EngagementContextValue } from './engagement-layout'
-import { engagementWorkbookPath } from './paths'
+import { engagementWorkbookPath, engagementWorkbookUsePath } from './paths'
 import { engagementKeys, type EngagementRole } from './queries'
 import { WorkbookPage } from './workbook-page'
 
@@ -219,11 +219,12 @@ function stubWorkbookData(): void {
 function renderWorkbook(
   user: components['schemas']['CurrentUser'],
   contextRole: EngagementRole,
+  options: { route?: string; closed?: boolean } = {},
 ): ReturnType<typeof renderWithProviders> {
   const ctx: EngagementContextValue = {
     engagementId: ENGAGEMENT_ID,
     role: contextRole,
-    closed: false,
+    closed: options.closed ?? false,
   }
   return renderWithProviders(
     <EngagementCtx value={ctx}>
@@ -231,7 +232,7 @@ function renderWorkbook(
     </EngagementCtx>,
     {
       user,
-      route: engagementWorkbookPath(ENGAGEMENT_ID),
+      route: options.route ?? engagementWorkbookPath(ENGAGEMENT_ID),
     },
   )
 }
@@ -1229,5 +1230,92 @@ describe('WorkbookPage — adding a step', () => {
     // The red and blue editors only render once the execution is in cache.
     expect(await screen.findByRole('button', { name: 'Save Red' })).toBeDefined()
     expect(screen.getByRole('button', { name: 'Save Blue' })).toBeDefined()
+  })
+})
+
+// ── Library hand-off ─────────────────────────────────────────────────────────
+
+const planFixture: components['schemas']['ContentEmulationPlan'] = {
+  id: '0192a000-0000-7000-8000-0000000plan1',
+  sourceId: '0192a000-0000-7000-8000-00000000src1',
+  version: 'current',
+  externalId: 'ctid-fin7',
+  name: 'FIN7 Emulation',
+  description: 'Two-phase plan.',
+  adversaryName: 'FIN7',
+  metadata: {},
+  createdAt: '2025-12-01T00:00:00Z',
+  updatedAt: '2025-12-01T00:00:00Z',
+}
+
+function stubPlans(): void {
+  server.use(get('/content/emulation-plans', () => Response.json({ items: [planFixture] })))
+}
+
+describe('WorkbookPage — content library hand-off', () => {
+  test('a plan hand-off opens the import dialog with the plan chosen', async () => {
+    stubWorkbookData()
+    stubPlans()
+    renderWorkbook(leadUser, 'lead', {
+      route: engagementWorkbookUsePath(ENGAGEMENT_ID, 'plan', planFixture.id),
+    })
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Import CTID Plan')).toBeDefined()
+    // Import is only live once a plan is chosen, so an enabled button is the
+    // observable proof that the hand-off arrived pre-filled. (Radix renders the
+    // chosen item's label from its content, which is unmounted while closed.)
+    expect(within(dialog).getByRole('button', { name: /^import$/i })).toHaveProperty(
+      'disabled',
+      false,
+    )
+  })
+
+  test('a technique hand-off opens Add Step with the technique filled in', async () => {
+    stubWorkbookData()
+    renderWorkbook(leadUser, 'lead', {
+      route: engagementWorkbookUsePath(ENGAGEMENT_ID, 'technique', 'T1059'),
+    })
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByPlaceholderText('e.g. T1059')).toHaveProperty('value', 'T1059')
+  })
+
+  test('closing the dialog strips the hand-off so it cannot re-open', async () => {
+    stubWorkbookData()
+    stubPlans()
+    renderWorkbook(leadUser, 'lead', {
+      route: engagementWorkbookUsePath(ENGAGEMENT_ID, 'plan', planFixture.id),
+    })
+
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    // The dialog is derived open from the query params, so it staying shut is
+    // exactly the proof that Cancel stripped them.
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+  })
+
+  test('a read-only role is told the content cannot be added', async () => {
+    stubWorkbookData()
+    renderWorkbook(blueUser, 'blue', {
+      route: engagementWorkbookUsePath(ENGAGEMENT_ID, 'technique', 'T1059'),
+    })
+
+    expect(await screen.findByText(/your role on this engagement is read-only/)).toBeDefined()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  test('a closed engagement says so instead of opening the dialog', async () => {
+    stubWorkbookData()
+    renderWorkbook(leadUser, 'lead', {
+      closed: true,
+      route: engagementWorkbookUsePath(ENGAGEMENT_ID, 'technique', 'T1059'),
+    })
+
+    expect(await screen.findByText(/this engagement is closed/)).toBeDefined()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

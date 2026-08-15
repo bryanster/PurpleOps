@@ -148,3 +148,84 @@ test('report builder: add blocks, save, and preview', async ({ page, request }) 
   await expect(page.getByText('Blocks saved')).toBeVisible()
   await expect(frame.getByText('Revised narrative paragraph.')).toBeVisible()
 })
+
+// The reports list: what it says about each report, and whether its Delete
+// button works. Both were broken in the product — the row measured a `blocks`
+// array the list response does not carry, so every report read "0 blocks", and
+// Delete hit a DuckDB foreign-key limitation on any report that had a block,
+// which is every report anybody had opened.
+test('reports list: block counts are real, and Delete removes the report', async ({
+  page,
+  request,
+}) => {
+  const s = await apiLogin(request)
+
+  const engResp = await request.post('/api/v1/engagements', {
+    headers: mh(s),
+    data: {
+      name: 'List Engagement',
+      client: 'List Co',
+      description: 'E2E',
+      attackVersion: '15.1',
+      mode: 'standard',
+      startsOn: '2026-10-01',
+      endsOn: '2026-10-15',
+    },
+    failOnStatusCode: true,
+  })
+  const engId = ((await engResp.json()) as { id: string }).id
+
+  const withBlocks = await request.post(`/api/v1/engagements/${engId}/reports`, {
+    headers: mh(s),
+    data: { title: 'Has Blocks' },
+    failOnStatusCode: true,
+  })
+  const withBlocksId = ((await withBlocks.json()) as { id: string }).id
+
+  await request.post(`/api/v1/engagements/${engId}/reports`, {
+    headers: mh(s),
+    data: { title: 'Stays Empty' },
+    failOnStatusCode: true,
+  })
+
+  await request.put(`/api/v1/engagements/${engId}/reports/${withBlocksId}/blocks`, {
+    headers: mh(s),
+    data: {
+      blocks: [
+        { blockId: 'cover', params: {} },
+        { blockId: 'rich_text', params: { html: '<p>Narrative.</p>' } },
+      ],
+    },
+    failOnStatusCode: true,
+  })
+
+  await page.goto('/login')
+  await page.getByLabel('Email').fill(adminEmail)
+  await page.getByLabel('Password').fill(adminPassword)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+
+  await page.goto(`/engagements/${engId}/reports`)
+
+  // Each count is read from its own row, so a per-row number cannot pass by
+  // being right somewhere else on the page.
+  const rowOf = (title: string) => page.getByRole('link', { name: title }).locator('..')
+  await expect(rowOf('Has Blocks').getByText('2 blocks')).toBeVisible()
+  await expect(rowOf('Stays Empty').getByText('0 blocks')).toBeVisible()
+
+  // Delete the one that has blocks — the case the foreign keys refused.
+  await page.getByRole('button', { name: 'Delete Has Blocks' }).click()
+  const confirm = page.getByRole('alertdialog')
+  await expect(confirm).toBeVisible()
+  await confirm.getByRole('button', { name: 'Delete' }).click()
+
+  // The dialog closes only when the mutation reports success, and the row goes
+  // only when the refreshed list no longer carries it.
+  await expect(confirm).toBeHidden()
+  await expect(page.getByRole('link', { name: 'Has Blocks' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Stays Empty' })).toBeVisible()
+
+  // And it is gone on the server, not just off the screen.
+  await page.reload()
+  await expect(page.getByRole('link', { name: 'Has Blocks' })).toHaveCount(0)
+})

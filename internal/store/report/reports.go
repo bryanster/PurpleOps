@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/bryanster/blacklight/internal/httpapi/apierr"
 )
@@ -202,14 +203,63 @@ func (r *Reports) Update(ctx context.Context, id string, changes ReportUpdate, a
 	return rep, nil
 }
 
-// Delete removes a report and cascades to its draft blocks.
-// The order respects FK RESTRICT constraints: blocks first, then report.
+const (
+	reportVersionIDs = `SELECT id FROM app.report_version WHERE report_id = ?`
+
+	reportShareIDs = `SELECT id FROM app.report_share WHERE version_id IN (` + reportVersionIDs + `)`
+)
+
+// deleteReportGraph erases everything hanging off a report: the share grants
+// under its shares, the shares under its published versions, those versions,
+// and its draft blocks. Children before parents, one statement per element.
+//
+// Each statement runs in a transaction of its own because DuckDB checks a
+// RESTRICT foreign key against the child's index, and that index does not
+// reflect the current transaction's own deletes. Removing the blocks and then
+// the report in one transaction therefore fails with
+//
+//	Violates foreign key constraint because key "report_id: …" is still
+//	referenced by a foreign key in a different table
+//
+// even though the blocks were deleted moments before — which is exactly what
+// the Delete button in the UI hit on any report that had a block. The child's
+// removal has to be committed before the parent's is attempted. This is the
+// same shape as [engagement.deleteEngagementGraph]; see the note there.
+//
+// The cost is that the delete is not atomic. Every statement is a
+// `DELETE … WHERE` keyed on the report, so re-running after a failure resumes
+// rather than corrupting.
+var deleteReportGraph = []string{
+	`DELETE FROM app.report_share_grant WHERE share_id IN (` + reportShareIDs + `)`,
+	`DELETE FROM app.report_share WHERE version_id IN (` + reportVersionIDs + `)`,
+	`DELETE FROM app.report_version WHERE report_id = ?`,
+	`DELETE FROM app.report_block WHERE report_id = ?`,
+}
+
+const deleteReportRow = `DELETE FROM app.report WHERE id = ?`
+
+// Delete removes a report and everything that references it — draft blocks,
+// published versions, and the share links and grants issued against those
+// versions. It reports a not-found error when no report has that id.
 func (r *Reports) Delete(ctx context.Context, id string) error {
-	return r.db.Write(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM app.report_block WHERE report_id = ?`, id); err != nil {
-			return fmt.Errorf("report: delete blocks %s: %w", id, err)
+	for _, stmt := range deleteReportGraph {
+		args := make([]any, strings.Count(stmt, "?"))
+		for i := range args {
+			args[i] = id
 		}
-		result, err := tx.ExecContext(ctx, `DELETE FROM app.report WHERE id = ?`, id)
+		err := r.db.Write(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, stmt, args...)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("report: delete %s: %w", id, err)
+		}
+	}
+
+	// Last, so a missing report is reported only after the graph statements
+	// have proved they run clean.
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, deleteReportRow, id)
 		if err != nil {
 			return fmt.Errorf("report: delete %s: %w", id, err)
 		}
@@ -246,6 +296,44 @@ func (r *Reports) BlocksByReport(ctx context.Context, reportID string) ([]Report
 		return nil, fmt.Errorf("report block: rows: %w", err)
 	}
 	return blocks, nil
+}
+
+const countBlocksByEngagement = `
+	SELECT b.report_id, COUNT(*)
+	FROM app.report_block b
+	JOIN app.report r ON b.report_id = r.id
+	WHERE r.engagement_id = ?
+	GROUP BY b.report_id
+`
+
+// BlockCountsByEngagement returns how many draft blocks each report in an
+// engagement holds, keyed by report id. Reports with no blocks are absent from
+// the map rather than present with a zero — callers reading a missing key get
+// Go's zero value, which is the same answer.
+//
+// One grouped query rather than a read per report: the report list renders a
+// block count for every row, and that is the only thing it needs the blocks
+// for.
+func (r *Reports) BlockCountsByEngagement(ctx context.Context, engagementID string) (map[string]int, error) {
+	rows, err := r.db.Read().QueryContext(ctx, countBlocksByEngagement, engagementID)
+	if err != nil {
+		return nil, fmt.Errorf("report block: counts %s: %w", engagementID, err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var reportID string
+		var count int
+		if err := rows.Scan(&reportID, &count); err != nil {
+			return nil, fmt.Errorf("report block: count scan: %w", err)
+		}
+		counts[reportID] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("report block: count rows: %w", err)
+	}
+	return counts, nil
 }
 
 // ReplaceBlocks atomically replaces all blocks in a report.

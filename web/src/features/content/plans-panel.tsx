@@ -14,7 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-import { DetailDrawer, FilterChrome, MetaRow, UseInScenarioPlaceholder } from './shared'
+import { DetailDrawer, FilterChrome, MetaRow } from './shared'
+import { UseInScenarioButton } from './use-in-scenario'
 import { usePlan, usePlans, type ContentEmulationPlan, type PlanFilters } from './queries'
 
 /**
@@ -170,7 +171,7 @@ function PlanDetail({
               <MetaRow label="Adversary">{detail.data.adversaryName || '—'}</MetaRow>
               <MetaRow label="Steps">{detail.data.steps.length}</MetaRow>
             </dl>
-            <UseInScenarioPlaceholder />
+            <UseInScenarioButton kind="plan" id={detail.data.id} />
           </div>
 
           {detail.data.description !== '' && (

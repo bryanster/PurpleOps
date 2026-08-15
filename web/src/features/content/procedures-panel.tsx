@@ -27,8 +27,8 @@ import {
   FilterSelect,
   IdBadges,
   MetaRow,
-  UseInScenarioPlaceholder,
 } from './shared'
+import { UseInScenarioButton } from './use-in-scenario'
 import {
   useProcedure,
   useProcedures,
@@ -251,7 +251,7 @@ function ProcedureDetail({
                 <IdBadges ids={detail.data.techniqueExternalIds} />
               </MetaRow>
             </dl>
-            <UseInScenarioPlaceholder />
+            <UseInScenarioButton kind="procedure" id={detail.data.id} />
           </div>
 
           {detail.data.description !== '' && (

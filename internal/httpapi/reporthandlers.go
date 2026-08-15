@@ -31,9 +31,16 @@ func (h *handlers) ListReports(ctx context.Context,
 		return nil, err
 	}
 
+	// One grouped query for the whole page: the list shows a block count per
+	// row, and reading the blocks report by report would be a query each.
+	counts, err := h.reports.BlockCounts(ctx, request.EngagementId.String())
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]gen.Report, 0, len(reports))
 	for _, r := range reports {
-		w, err := reportToWire(r, nil)
+		w, err := reportToWire(r, nil, counts[r.ID])
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +72,8 @@ func (h *handlers) CreateReport(ctx context.Context,
 		return nil, err
 	}
 
-	w, err := reportToWire(r, nil)
+	// A report is created empty, so the count is known without a read.
+	w, err := reportToWire(r, nil, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +94,7 @@ func (h *handlers) GetReport(ctx context.Context,
 		return nil, err
 	}
 
-	w, err := reportToWire(r, blocks)
+	w, err := reportToWire(r, blocks, len(blocks))
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +148,14 @@ func (h *handlers) PatchReport(ctx context.Context,
 		return nil, err
 	}
 
-	w, err := reportToWire(r, nil)
+	// A patch leaves the blocks alone but still has to report their number,
+	// so the count is read back rather than guessed at.
+	blocks, err := h.reports.Blocks(ctx, request.ReportId.String())
+	if err != nil {
+		return nil, err
+	}
+
+	w, err := reportToWire(r, nil, len(blocks))
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +223,7 @@ func (h *handlers) PutReportBlocks(ctx context.Context,
 		return nil, err
 	}
 
-	w, err := reportToWire(r, reportBlocks)
+	w, err := reportToWire(r, reportBlocks, len(reportBlocks))
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +231,11 @@ func (h *handlers) PutReportBlocks(ctx context.Context,
 }
 
 // reportToWire converts a store report to the wire format.
-func reportToWire(r storereport.Report, blocks []storereport.ReportBlock) (gen.Report, error) {
+//
+// blockCount is passed rather than derived from blocks because the list
+// endpoints send no blocks at all and still owe the caller a count; a caller
+// that does have the blocks passes len(blocks).
+func reportToWire(r storereport.Report, blocks []storereport.ReportBlock, blockCount int) (gen.Report, error) {
 	engID, err := uuid.Parse(r.EngagementID)
 	if err != nil {
 		return gen.Report{}, fmt.Errorf("reportToWire: engagement_id: %w", err)
@@ -233,6 +252,7 @@ func reportToWire(r storereport.Report, blocks []storereport.ReportBlock) (gen.R
 		CreatedBy:    r.CreatedBy,
 		CreatedAt:    r.CreatedAt,
 		UpdatedAt:    r.UpdatedAt,
+		BlockCount:   blockCount,
 	}
 
 	if r.ClientName != nil {
