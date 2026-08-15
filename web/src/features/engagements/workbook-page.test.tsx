@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import type { components } from '@/api/schema'
@@ -160,6 +160,21 @@ function scoredExecution(): components['schemas']['Execution'] {
     createdAt: '2025-12-03T12:00:00Z',
     updatedAt: '2025-12-03T12:00:00Z',
   }
+}
+
+/** Stub the workbook with one revealed step carrying `exec`. */
+function stubWorkbookWithExecution(exec: components['schemas']['Execution']): void {
+  server.use(
+    get('/engagements/{engagementId}/scenarios', () =>
+      Response.json({ items: [scenarioFixture] }, { status: 200 }),
+    ),
+    get('/engagements/{engagementId}/steps', () =>
+      Response.json({ items: [revealedStep] }, { status: 200 }),
+    ),
+    get('/engagements/{engagementId}/executions', () =>
+      Response.json({ items: [exec] }, { status: 200 }),
+    ),
+  )
 }
 
 function stubScoredWorkbook(): void {
@@ -965,5 +980,159 @@ describe('M4-007 — comment editing', () => {
     // Check PATCH body
     const body = patchedBody as Record<string, unknown>
     expect(body.body).toBe('First comment — edited')
+  })
+})
+
+describe('RedExecutionEditor — execution timer', () => {
+  const EXEC_ID = '0192a000-0000-7000-8000-000000000005'
+
+  /** A pending execution: never started, no timestamps. */
+  function pendingExecution(): components['schemas']['Execution'] {
+    return executionFor(revealedStep.id, EXEC_ID)
+  }
+
+  /** An execution started `secondsAgo` ago and still running. */
+  function runningExecution(secondsAgo: number): components['schemas']['Execution'] {
+    return {
+      ...executionFor(revealedStep.id, EXEC_ID),
+      status: 'running',
+      startedAt: new Date(Date.now() - secondsAgo * 1000).toISOString(),
+    }
+  }
+
+  /** Capture the body of the next red PATCH, answering with `next`. */
+  function captureRedPatch(next: components['schemas']['Execution']): () => unknown {
+    let captured: unknown = null
+    server.use(
+      patch(
+        '/engagements/{engagementId}/executions/{executionId}/execution',
+        async ({ request }) => {
+          captured = await request.json()
+          return Response.json(next, { status: 200 })
+        },
+      ),
+    )
+    return () => captured
+  }
+
+  async function openDrawer(exec: components['schemas']['Execution']): Promise<void> {
+    stubWorkbookWithExecution(exec)
+    renderWorkbook(redUser, 'red')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+  }
+
+  test('an execution that has not run shows a blank clock and a Start button', async () => {
+    await openDrawer(pendingExecution())
+
+    expect(screen.getByLabelText('Elapsed time').textContent).toBe('--:--')
+    expect(screen.getByRole('button', { name: /start/i })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /stop/i })).toBeNull()
+  })
+
+  test('Start registers the action time and moves the execution to running', async () => {
+    const exec = pendingExecution()
+    const body = captureRedPatch({ ...exec, version: 2, status: 'running' })
+    await openDrawer(exec)
+
+    const before = Date.now()
+    await userEvent.click(screen.getByRole('button', { name: /start/i }))
+
+    await waitFor(() => {
+      expect(body()).not.toBeNull()
+    })
+    const patched = body() as Record<string, unknown>
+    expect(patched.version).toBe(1)
+    expect(patched.status).toBe('running')
+    // The recorded moment is the press, not the save.
+    const startedAt = new Date(patched.startedAt as string).getTime()
+    expect(startedAt).toBeGreaterThanOrEqual(before - 1000)
+    expect(startedAt).toBeLessThanOrEqual(Date.now() + 1000)
+  })
+
+  test('a running execution shows the elapsed time and a Stop button', async () => {
+    await openDrawer(runningExecution(65))
+
+    expect(screen.getByLabelText('Elapsed time').textContent).toMatch(/^01:0\d$/)
+    expect(screen.getByRole('button', { name: /stop/i })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /^start$/i })).toBeNull()
+  })
+
+  test('Stop registers the end time and completes the execution', async () => {
+    const exec = runningExecution(65)
+    const body = captureRedPatch({ ...exec, version: 2, status: 'complete' })
+    await openDrawer(exec)
+
+    await userEvent.click(screen.getByRole('button', { name: /stop/i }))
+
+    await waitFor(() => {
+      expect(body()).not.toBeNull()
+    })
+    const patched = body() as Record<string, unknown>
+    expect(patched.status).toBe('complete')
+    expect(typeof patched.endedAt).toBe('string')
+    // The unedited start is left out of the body entirely rather than echoed
+    // back through the seconds-resolution field, which would drop its millis.
+    expect(patched.startedAt).toBeUndefined()
+  })
+
+  test('a start time typed by hand is sent on Save Red', async () => {
+    const exec = pendingExecution()
+    const body = captureRedPatch({ ...exec, version: 2 })
+    await openDrawer(exec)
+
+    // datetime-local is driven with fireEvent: userEvent types per segment.
+    fireEvent.change(screen.getByLabelText('Started At'), {
+      target: { value: '2025-12-03T11:00:30' },
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
+
+    await waitFor(() => {
+      expect(body()).not.toBeNull()
+    })
+    const patched = body() as Record<string, unknown>
+    // Local time in, UTC out — with the seconds MTTD is measured at.
+    expect(patched.startedAt).toBe(new Date('2025-12-03T11:00:30').toISOString())
+  })
+
+  test('an inverted manual range is refused before it reaches the server', async () => {
+    const exec = pendingExecution()
+    const body = captureRedPatch({ ...exec, version: 2 })
+    await openDrawer(exec)
+
+    fireEvent.change(screen.getByLabelText('Started At'), {
+      target: { value: '2025-12-03T11:00:30' },
+    })
+    fireEvent.change(screen.getByLabelText('Ended At'), {
+      target: { value: '2025-12-03T10:00:30' },
+    })
+
+    expect(screen.getByText(/ended at cannot precede started at/i)).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: 'Save Red' }))
+    expect(body()).toBeNull()
+  })
+
+  test('a finished execution shows its duration and the MTTD against blue', async () => {
+    // Started 11:00, ended 11:15, detected 12:00 → 15:00 run, 1h MTTD.
+    await openDrawer({ ...scoredExecution(), mttdSeconds: 3600 })
+
+    expect(screen.getByLabelText('Elapsed time').textContent).toBe('15:00')
+    expect(screen.getByText('1h 0m')).toBeDefined()
+  })
+
+  test('MTTD says what is missing while blue has not scored', async () => {
+    await openDrawer(runningExecution(65))
+
+    expect(screen.getByText('awaiting detection')).toBeDefined()
+  })
+
+  test('the timer is read-only for blue', async () => {
+    stubWorkbookWithExecution(pendingExecution())
+    renderWorkbook(blueUser, 'blue')
+    await expandFirstScenario()
+    await userEvent.click(screen.getByText('Phishing'))
+
+    expect(screen.queryByRole('button', { name: /^start$/i })).toBeNull()
+    expect(screen.getByLabelText('Started At')).toHaveProperty('disabled', true)
   })
 })

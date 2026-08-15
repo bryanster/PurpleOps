@@ -30,27 +30,29 @@ type MTTDResult struct {
 	// detected.
 	Max *int `json:"max,omitempty"`
 
-	// DetectedCount is the number of attempted executions with both
+	// DetectedCount is the number of begun executions with both
 	// started_at and detected_at set, and a detection category other
 	// than 'none' — the denominator for the percentiles.
 	DetectedCount int `json:"detectedCount"`
 
-	// UndetectedCount is the number of attempted executions with
+	// UndetectedCount is the number of begun executions with
 	// detection_category set and no detected_at, or category 'none'
 	// regardless of detected_at.
 	UndetectedCount int `json:"undetectedCount"`
 
-	// UnscoredCount is the number of attempted executions blue has not
-	// scored at all (detection_category IS NULL).
+	// UnscoredCount is the number of begun executions blue has not
+	// scored at all (detection_category IS NULL). A step red is running
+	// right now lands here until blue scores it.
 	UnscoredCount int `json:"unscoredCount"`
 
 	// UnmeasurableCount is the number of detected executions where
 	// started_at is NULL, so no duration exists.
 	UnmeasurableCount int `json:"unmeasurableCount"`
 
-	// AttemptedCount is the total number of attempted executions visible
-	// under the scope. It equals DetectedCount + UndetectedCount +
-	// UnscoredCount + UnmeasurableCount.
+	// AttemptedCount is the total number of executions red has begun that
+	// are visible under the scope — see [mttdBegunPredicate], which is one
+	// status wider than the engagement-wide attempted definition. It equals
+	// DetectedCount + UndetectedCount + UnscoredCount + UnmeasurableCount.
 	AttemptedCount int `json:"attemptedCount"`
 }
 
@@ -69,6 +71,9 @@ type MTTDResult struct {
 // Category 'none' counts as undetected even where a stray detected_at exists
 // (M5-EPIC decision). detected_at before started_at is guarded — a negative
 // duration is excluded from the percentiles and counted as unmeasurable.
+//
+// The scope is [mttdBegunPredicate], which counts running executions as well
+// as concluded ones — read the rationale there before narrowing it.
 func (q *Queries) MTTD(ctx context.Context, scope Scope) (*MTTDResult, error) {
 	query := fmt.Sprintf(mttdQuery, scope.stepPredicate())
 
@@ -105,6 +110,21 @@ func (q *Queries) MTTD(ctx context.Context, scope Scope) (*MTTDResult, error) {
 	return r, nil
 }
 
+// mttdBegunPredicate is MTTD's scope, and it is deliberately one status wider
+// than [attemptedPredicate].
+//
+// MTTD measures detection latency, not attempt accounting. A detection can
+// land while the attack is still in flight, and since the step view grew a
+// stopwatch — Start writes started_at and moves the execution to running, Stop
+// completes it — that is the ordinary case rather than an edge one. While red
+// held an execution open, this query dropped it from every bucket including
+// the denominator, so the analytics panel reported "nothing scored yet" for a
+// step whose own step view was showing an MTTD. That disagreement is the bug.
+//
+// pending and skipped stay out: neither has a started_at to measure from, and
+// a skipped step is evidence of nothing (docs/analytics.md § Attempted).
+const mttdBegunPredicate = `status IN ('complete', 'blocked', 'running')`
+
 // mttdQuery buckets every execution in the engagement into one of five
 // categories, then aggregates into counts and percentiles.
 //
@@ -116,7 +136,7 @@ func (q *Queries) MTTD(ctx context.Context, scope Scope) (*MTTDResult, error) {
 // returns seconds as a double; the ANSI equivalent is
 // EXTRACT(EPOCH FROM timestamp) which DuckDB also supports.
 const mttdQuery = `
-WITH attempted AS (
+WITH begun AS (
 	SELECT e.status, e.detection_category, e.detected_at, e.started_at
 	FROM app.step s
 	JOIN app.execution e ON e.step_id = s.id
@@ -128,7 +148,7 @@ WITH attempted AS (
 categorized AS (
 	SELECT
 		CASE
-			WHEN status NOT IN ('complete', 'blocked') THEN 0
+			WHEN NOT (` + mttdBegunPredicate + `) THEN 0
 			WHEN detection_category IS NULL           THEN 1
 			WHEN detection_category = 'none'          THEN 2
 			WHEN detected_at IS NULL                  THEN 2
@@ -137,7 +157,7 @@ categorized AS (
 			ELSE 4
 		END AS bucket,
 		CASE
-			WHEN status IN ('complete', 'blocked')
+			WHEN ` + mttdBegunPredicate + `
 			 AND detection_category IS NOT NULL
 			 AND detection_category != 'none'
 			 AND detected_at IS NOT NULL
@@ -145,7 +165,7 @@ categorized AS (
 			 AND EPOCH(detected_at) - EPOCH(started_at) >= 0
 			THEN EPOCH(detected_at) - EPOCH(started_at)
 		END AS mttd_seconds
-	FROM attempted
+	FROM begun
 )
 SELECT
 	COALESCE(SUM(CASE WHEN bucket > 0 THEN 1 ELSE 0 END), 0) AS attempted_count,

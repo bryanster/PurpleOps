@@ -64,3 +64,15 @@ Mean Time To Detect = `detected_at − started_at`. Computed only when both
 timestamps are set. The HTTP layer enforces `detected_at ≥ started_at` on
 write, so inverted values indicate a programming error and are rejected by
 the domain function.
+
+Where the two timestamps come from:
+
+| Timestamp | Written by |
+|---|---|
+| `started_at` | The **Start** button in the step view's red panel, which PATCHes the moment it was pressed; the server also sets it on a `→ running` transition that carries no time of its own; or the **Started At** field, typed by hand for a run that happened away from the workbook. |
+| `detected_at` | The **Detected At** field in the blue panel. |
+
+Both fields carry seconds, because a minute-resolution field would round the
+measurement — and a start rounded up past the detection is the `400` above.
+Neither timestamp can be cleared through the API: absent means "leave it", so
+the UI omits an untouched field rather than echoing it back.

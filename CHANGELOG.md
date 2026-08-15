@@ -30,9 +30,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup done without installing anything, for a provisioning run that has
   already created an administrator and synced content — and for the end-to-end
   suite. `reset` brings the wizard back and is deliberately not an endpoint.
+- **A stopwatch on the red side of the step view.** MTTD is
+  `detected_at − started_at`, and until now the red half of that subtraction had
+  no control in the interface at all: a start time only appeared if the server
+  happened to stamp one on a `→ running` transition, so the measurement blue's
+  Detected At fed into was either an accident of when somebody changed a
+  dropdown or missing entirely. The red panel now opens with a clock. **Start**
+  records the moment it is pressed — it writes immediately rather than waiting
+  for Save, because a stopwatch that saves later measures the save — moves a
+  pending execution to Running, and the clock ticks until **Stop**, which
+  records the end and completes the execution. **Started At** and **Ended At**
+  sit under it for a run that happened away from the workbook or needs
+  correcting afterwards, and an end before its start is refused at the field
+  rather than by a `400`. The resulting MTTD is shown in the bar under the step
+  title, between the two panels, since neither team owns it: a duration once
+  both times exist, and which half is missing when they do not.
+
+### Changed
+
+- **The step view puts red and blue side by side.** Opening a step in the
+  workbook stacked the red execution above the blue detection in a dialog barely
+  wider than a phone, so the two halves of a purple team exercise were never on
+  screen together and reconciling an execution against a detection meant
+  scrolling between them. They are now two columns — red left, blue right, each
+  under its own coloured header, stacking again below `md` — in a dialog wide
+  enough for both, with the step's status, derived outcome and Reveal to Blue
+  gathered into one bar under the title instead of taking a row each. The panel
+  colours are theme tokens, so they hold up in dark mode rather than being two
+  hardcoded reds.
 
 ### Fixed
 
+- **The analytics MTTD panel reports an engagement that is still running.** It
+  measured only executions red had concluded, so a step that had been started
+  and detected — the ordinary state of an exercise in progress, and now the
+  normal one, since the step view's Start button leaves an execution `running`
+  until Stop — was dropped from the percentiles, from the detected count and
+  from the denominator alike. The panel said "nothing scored yet" for a step
+  whose own step view was showing an MTTD. MTTD now measures every execution
+  red has begun (`complete`, `blocked` or `running`), which is one status wider
+  than the engagement-wide attempted definition every other rollup uses, and
+  deliberately so: MTTD is detection latency, not attempt coverage, and the
+  latency exists from the moment red starts. `pending` and `skipped` are still
+  excluded — neither has a start to measure from. Expect an engagement mid-run
+  to report MTTD while Coverage and Protection rate still show nothing;
+  [`docs/analytics.md`](docs/analytics.md) § MTTD carries the reasoning. The
+  empty panel now says no executions have been *started*, which is what it has
+  always meant, rather than blaming blue for not scoring.
+- **Detection and execution times keep their seconds.** The step view's
+  timestamp fields were minute-resolution, which rounded every MTTD by up to 59
+  seconds and could round a detection back before the start it was measured
+  from — a `400` on save for a detection that really did follow the attack. An
+  unedited timestamp is now also left out of its PATCH rather than echoed back
+  through the field, so an unrelated save no longer drops the milliseconds off a
+  time the server recorded.
 - **Moving an engagement through its lifecycle works.** Activate, Close and
   Archive answered 500 and left the engagement where it was, on every
   engagement — creating one seats its lead, and one referencing row was all it

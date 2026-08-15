@@ -25,6 +25,9 @@ derive from this document; a term that changes here must update the copy.
 - **Workbook size** — `attempted + notAttempted` equals the total step count
   in the engagement. Every rollup that reports `attempted` carries a
   `notAttempted` count alongside it, so the buckets sum to a known total.
+- **One exception** — [MTTD](#mttd) counts `running` executions too. It
+  measures detection latency, which exists the moment red starts, not
+  attempt coverage. Every other rollup uses the definition above.
 
 ## Scored vs unscored
 
@@ -94,6 +97,26 @@ Mean Time To Detect = `detected_at − started_at` for **detected executions
 only** (category is not `none` and not NULL, both timestamps set). Reported
 as p50 / p90 / max over those executions, in integer seconds.
 
+### Scope: one status wider than attempted
+
+MTTD is the **only** rollup that does not use the `attempted` definition
+above. Its scope is `status IN ('complete', 'blocked', 'running')`, because
+MTTD measures detection latency rather than attempt coverage: a detection can
+land while the attack is still in flight, and the step view's Start button
+leaves an execution `running` from the press until Stop. Under the narrower
+definition a step red had started and blue had detected was dropped from every
+bucket — percentiles and denominator alike — so the analytics panel reported
+nothing for an execution whose own step view was showing an MTTD.
+
+`pending` and `skipped` stay out: neither has a `started_at` to measure from.
+
+The consequence to expect: an engagement mid-run reports MTTD percentiles
+while Coverage, Detection mix and Protection rate still show nothing, because
+those count attempted executions and a running one is not attempted. The
+`attemptedCount` in the MTTD payload therefore counts what red has *begun*,
+which can exceed the `attempted` reported elsewhere. Widening the others is a
+product decision, not an oversight.
+
 Percentiles use DuckDB's `PERCENTILE_CONT` (continuous percentile) with linear
 interpolation. For a single sample all percentiles return that value; for two
 samples p50 is the midpoint. Interpolation is stated here so a report consumer
@@ -104,9 +127,9 @@ can reproduce the numbers independently.
 | `p50`, `p90`, `max` | Percentile and maximum MTTD in integer seconds. Absent when nothing was detected (nil, not zero). |
 | `detectedCount` | Executions with a computable MTTD — the percentile denominator. |
 | `undetectedCount` | Attempted executions with `detection_category` set and no `detected_at`, or category `none` even when `detected_at` exists. |
-| `unscoredCount` | Attempted executions blue has not scored (`detection_category IS NULL`). |
+| `unscoredCount` | Begun executions blue has not scored (`detection_category IS NULL`). A step red is running right now lands here until blue scores it. |
 | `unmeasurableCount` | Detected (category ≠ `none`) but `started_at` is NULL, so no duration exists. |
-| `attemptedCount` | The sum of the four component counts above. |
+| `attemptedCount` | The sum of the four component counts above — every execution red has begun, per the scope note above. |
 
 Category `none` counts as undetected even where a stray `detected_at` exists.
 `detected_at` before `started_at` cannot occur by product rules, but the SQL

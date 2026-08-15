@@ -6,6 +6,10 @@ package analytics
 //
 // Per M5-EPIC: red status ∈ {complete, blocked}. pending, running and
 // skipped are NOT attempted.
+//
+// One query deliberately does not use this: MTTD measures detection latency
+// rather than attempt coverage, and counts running executions too — see
+// [mttdBegunPredicate] for why. Any other divergence is a bug.
 const attemptedPredicate = `execution.status IN ('complete', 'blocked')`
 
 // outcomeCase returns the SQL CASE expression that derives an outcome

@@ -191,8 +191,16 @@ function ProtectionRateCard({ data }: { data: AnalyticsDistribution }) {
 }
 
 function MttdCard({ data }: { data: AnalyticsMttd }) {
+  // The denominator counts every execution red has begun, running ones
+  // included, so an empty panel means nothing has been started — not that
+  // blue is behind on scoring.
   if (data.attemptedCount === 0) {
-    return <PageEmpty title="Nothing scored yet" />
+    return (
+      <PageEmpty
+        title="No executions started"
+        description="MTTD is measured from the red start time. Start a step in the workbook."
+      />
+    )
   }
   const fmt = (seconds: number) => {
     if (seconds < 60) return `${String(seconds)}s`

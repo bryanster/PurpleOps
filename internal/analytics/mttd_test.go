@@ -261,6 +261,153 @@ func TestMTTD_DegenerateCases(t *testing.T) {
 	})
 }
 
+// ============================================================================
+// Running executions — a detection can land while the attack is in flight
+// ============================================================================
+
+// TestMTTD_RunningExecutions pins the scope MTTD measures over.
+//
+// The shared fixture has a pending and a skipped execution but no running one,
+// which is how MTTD came to drop every in-flight execution — denominator and
+// all — while the step view showed an MTTD for the same execution.
+func TestMTTD_RunningExecutions(t *testing.T) {
+	f := analyticstest.Seed(t)
+	q := NewQueries(f.DB)
+	ctx := t.Context()
+
+	// Detected while still running: measured, exactly as if it had concluded.
+	t.Run("running and detected is measured", func(t *testing.T) {
+		engID := "01900000-0000-7000-Z000-000000000020"
+		scID := "01900000-0000-7000-ZS00-000000000020"
+		sID := "01900000-0000-7000-ZP00-000000000020"
+		eID := "01900000-0000-7000-ZX00-000000000020"
+		seedEngagement(t, f, ctx, engID, "RunningDetected")
+		seedScenario(t, f, ctx, scID, engID, "S", 1)
+		seedStepExec(t, f, ctx, scID, sID, eID, "T1190", "running",
+			ns("technique"), ns("not_blocked"),
+			ntStr("2026-06-02 09:00:00"), sql.NullTime{}, ntStr("2026-06-02 09:10:00"))
+
+		result, err := q.MTTD(ctx, scope(engID, false, authz.EngagementRoleLead))
+		if err != nil {
+			t.Fatalf("MTTD(running detected): %v", err)
+		}
+		assertIntPtr(t, result.P50, 600, "p50")
+		assertIntPtr(t, result.P90, 600, "p90")
+		assertIntPtr(t, result.Max, 600, "max")
+		assertCountEq(t, result.DetectedCount, 1, "detectedCount")
+		assertCountEq(t, result.AttemptedCount, 1, "attemptedCount")
+		assertSumMatches(t, result)
+	})
+
+	// Started but not yet scored: in the denominator as unscored, which is the
+	// honest statement — not absent, which reads as "nothing to report".
+	t.Run("running and unscored is counted, not dropped", func(t *testing.T) {
+		engID := "01900000-0000-7000-Z000-000000000021"
+		scID := "01900000-0000-7000-ZS00-000000000021"
+		sID := "01900000-0000-7000-ZP00-000000000021"
+		eID := "01900000-0000-7000-ZX00-000000000021"
+		seedEngagement(t, f, ctx, engID, "RunningUnscored")
+		seedScenario(t, f, ctx, scID, engID, "S", 1)
+		seedStepExec(t, f, ctx, scID, sID, eID, "T1190", "running",
+			sql.NullString{}, sql.NullString{},
+			ntStr("2026-06-02 09:00:00"), sql.NullTime{}, sql.NullTime{})
+
+		result, err := q.MTTD(ctx, scope(engID, false, authz.EngagementRoleLead))
+		if err != nil {
+			t.Fatalf("MTTD(running unscored): %v", err)
+		}
+		assertCountEq(t, result.UnscoredCount, 1, "unscoredCount")
+		assertCountEq(t, result.AttemptedCount, 1, "attemptedCount")
+		assertCountEq(t, result.DetectedCount, 0, "detectedCount")
+		assertIntPtrNil(t, result.P50, "p50")
+		assertSumMatches(t, result)
+	})
+
+	// A running execution blue scored 'none' is undetected, same as a
+	// concluded one — the status does not change what a score means.
+	t.Run("running and scored none is undetected", func(t *testing.T) {
+		engID := "01900000-0000-7000-Z000-000000000022"
+		scID := "01900000-0000-7000-ZS00-000000000022"
+		sID := "01900000-0000-7000-ZP00-000000000022"
+		eID := "01900000-0000-7000-ZX00-000000000022"
+		seedEngagement(t, f, ctx, engID, "RunningNone")
+		seedScenario(t, f, ctx, scID, engID, "S", 1)
+		seedStepExec(t, f, ctx, scID, sID, eID, "T1190", "running",
+			ns("none"), ns("not_blocked"),
+			ntStr("2026-06-02 09:00:00"), sql.NullTime{}, sql.NullTime{})
+
+		result, err := q.MTTD(ctx, scope(engID, false, authz.EngagementRoleLead))
+		if err != nil {
+			t.Fatalf("MTTD(running none): %v", err)
+		}
+		assertCountEq(t, result.UndetectedCount, 1, "undetectedCount")
+		assertCountEq(t, result.AttemptedCount, 1, "attemptedCount")
+		assertSumMatches(t, result)
+	})
+
+	// pending and skipped stay out: neither has a start to measure from, and
+	// a skipped step is evidence of nothing.
+	t.Run("pending and skipped are still excluded", func(t *testing.T) {
+		engID := "01900000-0000-7000-Z000-000000000023"
+		scID := "01900000-0000-7000-ZS00-000000000023"
+		sA := "01900000-0000-7000-ZP00-000000000023"
+		eA := "01900000-0000-7000-ZX00-000000000023"
+		sB := "01900000-0000-7000-ZP00-000000000024"
+		eB := "01900000-0000-7000-ZX00-000000000024"
+		seedEngagement(t, f, ctx, engID, "PendingSkipped")
+		seedScenario(t, f, ctx, scID, engID, "S", 1)
+		seedStepExec(t, f, ctx, scID, sA, eA, "T1190", "pending",
+			sql.NullString{}, sql.NullString{},
+			sql.NullTime{}, sql.NullTime{}, sql.NullTime{})
+		// A skipped execution with a full set of timestamps: excluded on its
+		// status alone, never because the data happened to be missing.
+		seedStepExecOrd(t, f, ctx, scID, sB, eB, "T1566", "skipped", 2,
+			ns("technique"), ns("not_blocked"),
+			ntStr("2026-06-02 09:00:00"), ntStr("2026-06-02 09:30:00"), ntStr("2026-06-02 09:10:00"))
+
+		result, err := q.MTTD(ctx, scope(engID, false, authz.EngagementRoleLead))
+		if err != nil {
+			t.Fatalf("MTTD(pending+skipped): %v", err)
+		}
+		assertCountEq(t, result.AttemptedCount, 0, "attemptedCount")
+		assertCountEq(t, result.DetectedCount, 0, "detectedCount")
+		assertIntPtrNil(t, result.P50, "p50")
+		assertSumMatches(t, result)
+	})
+
+	// The whole point, end to end: red starts three steps and stops none of
+	// them, blue detects all three. The panel used to have nothing to show.
+	t.Run("an engagement mid-run reports percentiles", func(t *testing.T) {
+		engID := "01900000-0000-7000-Z000-000000000025"
+		scID := "01900000-0000-7000-ZS00-000000000025"
+		seedEngagement(t, f, ctx, engID, "MidRun")
+		seedScenario(t, f, ctx, scID, engID, "S", 1)
+		// 30s, 120s and 600s to detect.
+		detectedAt := []string{"2026-06-02 09:00:30", "2026-06-02 09:02:00", "2026-06-02 09:10:00"}
+		for i, at := range detectedAt {
+			seedStepExecOrd(t, f, ctx, scID,
+				fmt.Sprintf("01900000-0000-7000-ZP00-00000000003%d", i),
+				fmt.Sprintf("01900000-0000-7000-ZX00-00000000003%d", i),
+				"T1190", "running", i+1,
+				ns("technique"), ns("not_blocked"),
+				ntStr("2026-06-02 09:00:00"), sql.NullTime{}, ntStr(at))
+		}
+
+		result, err := q.MTTD(ctx, scope(engID, false, authz.EngagementRoleLead))
+		if err != nil {
+			t.Fatalf("MTTD(mid-run): %v", err)
+		}
+		// Sorted [30, 120, 600]: p50 rank 1.0 → 120; p90 rank 1.8 →
+		// 120 + 0.8×(600−120) = 504.
+		assertIntPtr(t, result.P50, 120, "p50")
+		assertIntPtr(t, result.P90, 504, "p90")
+		assertIntPtr(t, result.Max, 600, "max")
+		assertCountEq(t, result.DetectedCount, 3, "detectedCount")
+		assertCountEq(t, result.AttemptedCount, 3, "attemptedCount")
+		assertSumMatches(t, result)
+	})
+}
+
 func TestMTTD_EdgeCases(t *testing.T) {
 	f := analyticstest.Seed(t)
 	q := NewQueries(f.DB)

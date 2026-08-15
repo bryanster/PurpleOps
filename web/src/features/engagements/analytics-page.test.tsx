@@ -308,18 +308,111 @@ describe('Colour ramp agreement', () => {
   })
 })
 
-describe('MTTD required denominator', () => {
-  test('AnalyticsMttd carries undetectedCount and detectedCount', () => {
-    const mttd: components['schemas']['AnalyticsMttd'] = {
-      detectedCount: 1,
-      undetectedCount: 2,
-      unscoredCount: 0,
-      unmeasurableCount: 0,
-      attemptedCount: 3,
-      blindFiltered: false,
-    }
-    expect(mttd.undetectedCount).toBe(2)
-    expect(mttd.detectedCount).toBe(1)
-    expect(mttd.attemptedCount).toBe(3)
+describe('MTTD panel', () => {
+  test('renders the percentiles as durations', async () => {
+    stubAll({ mttd: { p50: 120, p90: 360, max: 720 } })
+    renderAnalytics()
+
+    // p50 is the headline; p90 and max share the line under it.
+    expect(await screen.findByText('2m 0s')).toBeDefined()
+    expect(screen.getByText(/p90: 6m 0s/)).toBeDefined()
+    expect(screen.getByText(/max: 12m 0s/)).toBeDefined()
+  })
+
+  test('carries its denominator alongside the percentiles', async () => {
+    // M5-EPIC: a percentile without the count it was taken over is not a
+    // number a reader can act on, so the counts render with it or not at all.
+    stubAll({ mttd: { detectedCount: 3, undetectedCount: 1, unscoredCount: 2, attemptedCount: 6 } })
+    renderAnalytics()
+
+    expect(await screen.findByText(/3 detected/)).toBeDefined()
+    expect(screen.getByText(/1 undetected/)).toBeDefined()
+    expect(screen.getByText(/2 unscored/)).toBeDefined()
+  })
+
+  test('an engagement mid-run reports its MTTD', async () => {
+    // The regression this panel had: red starts steps and stops none of them,
+    // blue detects them, and the analytics MTTD came back empty while the step
+    // view showed a number. The server counts running executions now; what
+    // matters here is that a payload describing one renders as data.
+    stubAll({
+      mttd: {
+        p50: 120,
+        p90: 504,
+        max: 600,
+        detectedCount: 3,
+        undetectedCount: 0,
+        unscoredCount: 0,
+        attemptedCount: 3,
+      },
+    })
+    renderAnalytics()
+
+    expect(await screen.findByText('2m 0s')).toBeDefined()
+    expect(screen.getByText(/p90: 8m 24s/)).toBeDefined()
+    expect(screen.getByText(/3 detected/)).toBeDefined()
+    expect(screen.queryByText('No executions started')).toBeNull()
+  })
+
+  test('nothing detected yet shows dashes, not an empty panel', async () => {
+    // Started but unscored: there is a denominator, so the panel reports the
+    // three executions waiting on blue rather than claiming nothing happened.
+    stubAll({
+      mttd: {
+        p50: null,
+        p90: null,
+        max: null,
+        detectedCount: 0,
+        undetectedCount: 0,
+        unscoredCount: 3,
+        attemptedCount: 3,
+      },
+    })
+    renderAnalytics()
+
+    expect(await screen.findByText(/3 unscored/)).toBeDefined()
+    expect(screen.getByText(/p90: — · max: —/)).toBeDefined()
+    expect(screen.queryByText('No executions started')).toBeNull()
+  })
+
+  test('zero seconds is a measurement, not a missing value', async () => {
+    // A detection in the same second as the attack is MTTD 0, which must not
+    // render as the em dash that means "no data".
+    stubAll({ mttd: { p50: 0, p90: 0, max: 0, detectedCount: 1, attemptedCount: 1 } })
+    renderAnalytics()
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/0s/).length).toBeGreaterThan(0)
+    })
+    expect(screen.getByText(/p90: 0s · max: 0s/)).toBeDefined()
+  })
+
+  test('formats sub-minute and multi-hour durations', async () => {
+    stubAll({ mttd: { p50: 45, p90: 5400, max: 7260 } })
+    renderAnalytics()
+
+    expect(await screen.findByText('45s')).toBeDefined()
+    expect(screen.getByText(/p90: 1h 30m/)).toBeDefined()
+    expect(screen.getByText(/max: 2h 1m/)).toBeDefined()
+  })
+
+  test('empty panel says nothing was started, not nothing was scored', async () => {
+    // attemptedCount counts every execution red began, running ones included,
+    // so an empty MTTD panel is a red-side statement, not a blue-side one.
+    stubAll({
+      mttd: {
+        p50: null,
+        p90: null,
+        max: null,
+        detectedCount: 0,
+        undetectedCount: 0,
+        unscoredCount: 0,
+        attemptedCount: 0,
+      },
+    })
+    renderAnalytics()
+
+    expect(await screen.findByText('No executions started')).toBeDefined()
+    expect(screen.getByText(/measured from the red start time/)).toBeDefined()
   })
 })

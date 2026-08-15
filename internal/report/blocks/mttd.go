@@ -61,7 +61,7 @@ func (MTTDRenderer) Render(ctx context.Context, env report.RenderEnv, inst repor
 	b.WriteString(fmt.Sprintf(`<tr><td>Undetected</td><td class="bl-report__num">%s</td><td>Attempted executions with category &ldquo;none&rdquo; or no detected_at</td></tr>`, f.Count(m.UndetectedCount)))
 	b.WriteString(fmt.Sprintf(`<tr><td>Unscored</td><td class="bl-report__num">%s</td><td>Attempted executions blue has not scored</td></tr>`, f.Count(m.UnscoredCount)))
 	b.WriteString(fmt.Sprintf(`<tr><td>Unmeasurable</td><td class="bl-report__num">%s</td><td>Detected but no started_at timestamp</td></tr>`, f.Count(m.UnmeasurableCount)))
-	b.WriteString(`<tr class="bl-report__mttd-total"><td>Attempted</td><td class="bl-report__num">` + f.Count(m.AttemptedCount) + `</td><td>All attempted executions</td></tr>`)
+	b.WriteString(`<tr class="bl-report__mttd-total"><td>Attempted</td><td class="bl-report__num">` + f.Count(m.AttemptedCount) + `</td><td>All executions red began, including any still running</td></tr>`)
 	b.WriteString(`</tbody></table>`)
 
 	b.WriteString(`</div></section>`)

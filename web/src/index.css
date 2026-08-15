@@ -21,6 +21,14 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-team-red: var(--team-red);
+  --color-team-red-foreground: var(--team-red-foreground);
+  --color-team-red-surface: var(--team-red-surface);
+  --color-team-red-border: var(--team-red-border);
+  --color-team-blue: var(--team-blue);
+  --color-team-blue-foreground: var(--team-blue-foreground);
+  --color-team-blue-surface: var(--team-blue-surface);
+  --color-team-blue-border: var(--team-blue-border);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -73,6 +81,15 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
+  /* Red / blue team panel colours (workbook step view). */
+  --team-red: oklch(0.48 0.17 25);
+  --team-red-foreground: oklch(0.985 0 0);
+  --team-red-surface: oklch(0.975 0.012 25);
+  --team-red-border: oklch(0.895 0.045 25);
+  --team-blue: oklch(0.45 0.1 245);
+  --team-blue-foreground: oklch(0.985 0 0);
+  --team-blue-surface: oklch(0.975 0.012 245);
+  --team-blue-border: oklch(0.895 0.035 245);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -107,6 +124,14 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  --team-red: oklch(0.42 0.145 25);
+  --team-red-foreground: oklch(0.985 0 0);
+  --team-red-surface: oklch(0.245 0.03 25);
+  --team-red-border: oklch(0.38 0.07 25);
+  --team-blue: oklch(0.39 0.09 245);
+  --team-blue-foreground: oklch(0.985 0 0);
+  --team-blue-surface: oklch(0.24 0.025 245);
+  --team-blue-border: oklch(0.36 0.05 245);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

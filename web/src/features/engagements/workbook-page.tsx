@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { PlayIcon, SquareIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/errors'
 
@@ -85,6 +86,7 @@ import {
   type EngagementRole,
   type Execution,
   type ImportPlanRequest,
+  type RedExecutionPatch,
   type Scenario,
   type Step,
 } from './queries'
@@ -624,7 +626,7 @@ function ExecutionDrawer({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-7xl overflow-y-auto sm:max-w-7xl">
         <DialogHeader>
           <DialogTitle>{visible ? step.name : '[Unrevealed]'}</DialogTitle>
           <DialogDescription>{step.objective && <span>{step.objective}</span>}</DialogDescription>
@@ -648,46 +650,67 @@ function ExecutionDrawer({
               {STATUS_LABEL[execution.status] ?? execution.status}
             </Badge>
           )}
+          {/* Outcome (read-only, server-derived) */}
+          {execution && (
+            <span className="flex items-center gap-1.5">
+              <span>Outcome:</span>
+              {execution.outcome ? (
+                <Badge variant="outline">
+                  {OUTCOME_LABEL[execution.outcome] ?? execution.outcome}
+                </Badge>
+              ) : (
+                <span>—</span>
+              )}
+            </span>
+          )}
+          {/* MTTD — the diff between the red start and the blue detection.
+              It sits in the shared bar because neither team owns it. */}
+          {execution && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1.5">
+                  <span>MTTD:</span>
+                  {execution.mttdSeconds != null ? (
+                    <Badge variant="secondary" className="tabular-nums">
+                      {formatDuration(execution.mttdSeconds)}
+                    </Badge>
+                  ) : (
+                    <span>
+                      {execution.startedAt == null ? 'not started' : 'awaiting detection'}
+                    </span>
+                  )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[260px] text-xs">
+                Time to detect: the blue detection time minus the red start time. Both must be set.
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {/* Reveal button */}
+          {canSee && !revealed && !closed && (
+            <RevealButton
+              engagementId={engagementId}
+              scenarioId={step.scenarioId}
+              stepId={step.id}
+            />
+          )}
         </div>
 
-        {/* Reveal button */}
-        {canSee && !revealed && !closed && (
-          <RevealButton engagementId={engagementId} scenarioId={step.scenarioId} stepId={step.id} />
-        )}
-
-        <Separator />
-
-        {/* Red section */}
+        {/* Red team on the left, blue team on the right */}
         {execution && (
-          <RedExecutionEditor
-            engagementId={engagementId}
-            execution={execution}
-            closed={closed}
-            readOnly={!canWriteRed(role)}
-          />
-        )}
-
-        {/* Blue section */}
-        {execution && (
-          <BlueDetectionEditor
-            engagementId={engagementId}
-            execution={execution}
-            closed={closed}
-            readOnly={!canWriteBlue(role)}
-          />
-        )}
-
-        {/* Outcome (read-only, server-derived) */}
-        {execution && (
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">Outcome</Label>
-            {execution.outcome ? (
-              <Badge variant="outline">
-                {OUTCOME_LABEL[execution.outcome] ?? execution.outcome}
-              </Badge>
-            ) : (
-              <span className="text-muted-foreground text-xs">—</span>
-            )}
+          <div className="grid gap-4 md:grid-cols-2">
+            <RedExecutionEditor
+              engagementId={engagementId}
+              execution={execution}
+              closed={closed}
+              readOnly={!canWriteRed(role)}
+            />
+            <BlueDetectionEditor
+              engagementId={engagementId}
+              execution={execution}
+              closed={closed}
+              readOnly={!canWriteBlue(role)}
+            />
           </div>
         )}
 
@@ -737,6 +760,42 @@ function RevealButton({
   )
 }
 
+// ── Team panels ───────────────────────────────────────────────────────────────
+
+/** Coloured panel wrapping one team's half of the step view (red left, blue right). */
+function TeamPanel({
+  team,
+  title,
+  children,
+}: {
+  team: 'red' | 'blue'
+  title: string
+  children: ReactNode
+}) {
+  const red = team === 'red'
+  return (
+    <section
+      className={cn(
+        'flex h-full flex-col overflow-hidden rounded-lg border',
+        red
+          ? 'border-team-red-border bg-team-red-surface'
+          : 'border-team-blue-border bg-team-blue-surface',
+      )}
+    >
+      <h4
+        className={cn(
+          'px-3 py-2 text-sm font-semibold',
+          red ? 'bg-team-red text-team-red-foreground' : 'bg-team-blue text-team-blue-foreground',
+        )}
+      >
+        {title}
+      </h4>
+      {/* `min-h-0` keeps a notes field that grows from pushing past the panel. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">{children}</div>
+    </section>
+  )
+}
+
 function RedExecutionEditor({
   engagementId,
   execution,
@@ -756,6 +815,8 @@ function RedExecutionEditor({
   const [sourceHost, setSourceHost] = useState(execution.sourceHost)
   const [targetHost, setTargetHost] = useState(execution.targetHost)
   const [redNotes, setRedNotes] = useState(execution.redNotes)
+  const [startedAt, setStartedAt] = useState(toLocalDatetime(execution.startedAt))
+  const [endedAt, setEndedAt] = useState(toLocalDatetime(execution.endedAt))
 
   // Reset local state when the execution version changes (remote update or
   // 409 recovery refetch).  This ensures the editor always reflects the
@@ -770,28 +831,37 @@ function RedExecutionEditor({
       setSourceHost(execution.sourceHost)
       setTargetHost(execution.targetHost)
       setRedNotes(execution.redNotes)
+      setStartedAt(toLocalDatetime(execution.startedAt))
+      setEndedAt(toLocalDatetime(execution.endedAt))
     }
   }, [execution.version]) // eslint-disable-line react-hooks/exhaustive-deps
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const disabled = closed || readOnly
 
-  const handleSave = () => {
+  /**
+   * The PATCH body for everything the editor currently holds, with `overrides`
+   * applied last. The timer buttons go through this too: a stopwatch press is
+   * also a save, so pressing Start mid-sentence does not discard the notes the
+   * operator is typing when the version bump resyncs this editor.
+   */
+  const redBody = (overrides?: Partial<RedExecutionPatch>): RedExecutionPatch => ({
+    version: execution.version,
+    status,
+    commandRun,
+    sourceHost,
+    targetHost,
+    redNotes,
+    startedAt: editedDatetime(execution.startedAt, startedAt),
+    endedAt: editedDatetime(execution.endedAt, endedAt),
+    ...overrides,
+  })
+
+  const submit = (body: RedExecutionPatch, success: string) => {
     patchRed.mutate(
+      { engagementId, executionId: execution.id, body },
       {
-        engagementId,
-        executionId: execution.id,
-        body: {
-          version: execution.version,
-          status,
-          commandRun,
-          sourceHost,
-          targetHost,
-          redNotes,
-        },
-      },
-      {
-        onSuccess: () => toast.success('Red execution saved'),
+        onSuccess: () => toast.success(success),
         onError: (err) => {
           if (isApiError(err, 'conflict')) {
             toast.error('This execution was modified by someone else. Reloading current state.')
@@ -809,31 +879,75 @@ function RedExecutionEditor({
     )
   }
 
+  const handleSave = () => {
+    if (isInverted(startedAt, endedAt)) {
+      toast.error('Ended at cannot precede started at.')
+      return
+    }
+    submit(redBody(), 'Red execution saved')
+  }
+
+  // The timer writes on the press rather than waiting for Save: the whole point
+  // of a stopwatch is that the moment it records is the moment the button went
+  // down, not the moment somebody remembered to save the form. MTTD is measured
+  // off this timestamp, so a save-later timer would measure the save.
+  const handleStart = () => {
+    submit(
+      redBody({
+        startedAt: new Date().toISOString(),
+        status: status === 'pending' ? 'running' : status,
+      }),
+      'Execution started',
+    )
+  }
+
+  const handleStop = () => {
+    submit(
+      redBody({
+        endedAt: new Date().toISOString(),
+        status: status === 'running' ? 'complete' : status,
+      }),
+      'Execution ended',
+    )
+  }
+
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-semibold">Red Execution</h4>
+    <TeamPanel team="red" title="Red Execution">
+      <div className="space-y-1">
+        <Label className="text-xs">Status</Label>
+        <Select
+          value={status}
+          onValueChange={(v) => {
+            setStatus(v as Execution['status'])
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(STATUS_LABEL).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <ExecutionTimer
+        execution={execution}
+        startedAt={startedAt}
+        endedAt={endedAt}
+        onStartedAtChange={setStartedAt}
+        onEndedAtChange={setEndedAt}
+        onStart={handleStart}
+        onStop={handleStop}
+        disabled={disabled}
+        pending={patchRed.isPending}
+      />
+
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Status</Label>
-          <Select
-            value={status}
-            onValueChange={(v) => {
-              setStatus(v as Execution['status'])
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <div className="space-y-1">
           <Label className="text-xs">Source Host</Label>
           <Input
@@ -854,21 +968,23 @@ function RedExecutionEditor({
             disabled={disabled}
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Command Run</Label>
-          <Input
-            value={commandRun}
-            onChange={(e) => {
-              setCommandRun(e.target.value)
-            }}
-            disabled={disabled}
-          />
-        </div>
       </div>
       <div className="space-y-1">
+        <Label className="text-xs">Command Run</Label>
+        <Input
+          className="font-mono"
+          value={commandRun}
+          onChange={(e) => {
+            setCommandRun(e.target.value)
+          }}
+          disabled={disabled}
+        />
+      </div>
+      <div className="flex flex-1 flex-col space-y-1">
         <Label className="text-xs">Red Notes</Label>
         <Textarea
-          rows={3}
+          rows={5}
+          className="min-h-24 flex-1"
           value={redNotes}
           onChange={(e) => {
             setRedNotes(e.target.value)
@@ -877,10 +993,160 @@ function RedExecutionEditor({
         />
       </div>
       {!disabled && (
-        <Button size="sm" onClick={handleSave} disabled={patchRed.isPending}>
+        <Button size="sm" className="self-start" onClick={handleSave} disabled={patchRed.isPending}>
           {patchRed.isPending ? 'Saving...' : 'Save Red'}
         </Button>
       )}
+    </TeamPanel>
+  )
+}
+
+// ── Execution timer ───────────────────────────────────────────────────────────
+
+/**
+ * Seconds between two instants, ticking once a second while the second one is
+ * still open. The clock is external state, so it is held in state and pushed by
+ * an interval rather than read from `Date.now()` during render.
+ */
+function useElapsedSeconds(from?: string, to?: string): number | null {
+  const [now, setNow] = useState(() => Date.now())
+  const live = from != null && to == null
+
+  /* eslint-disable react-hooks/set-state-in-effect -- a wall clock is external state; the first reading has to land when the timer starts, not a second after it */
+  useEffect(() => {
+    if (!live) return undefined
+    setNow(Date.now())
+    const id = setInterval(() => {
+      setNow(Date.now())
+    }, 1000)
+    return () => {
+      clearInterval(id)
+    }
+  }, [live, from])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  if (from == null) return null
+  const start = new Date(from).getTime()
+  const end = to != null ? new Date(to).getTime() : now
+  if (Number.isNaN(start) || Number.isNaN(end)) return null
+  return Math.max(0, Math.round((end - start) / 1000))
+}
+
+/**
+ * The red operator's stopwatch, and the manual entry beside it.
+ *
+ * Start and Stop write immediately (their handlers own the mutation); the two
+ * datetime fields are ordinary editor state saved by Save Red, for the exercise
+ * that was run before anyone opened the workbook — a timer nobody can override
+ * is a timer that loses the run it was meant to record.
+ *
+ * `started_at` is one half of MTTD (`detected_at − started_at`, docs/scoring.md),
+ * which is why the fields carry seconds: minute-truncated times would round the
+ * measurement, and a start rounded up past blue's detection is a `400`.
+ */
+function ExecutionTimer({
+  execution,
+  startedAt,
+  endedAt,
+  onStartedAtChange,
+  onEndedAtChange,
+  onStart,
+  onStop,
+  disabled,
+  pending,
+}: {
+  execution: Execution
+  startedAt: string
+  endedAt: string
+  onStartedAtChange: (v: string) => void
+  onEndedAtChange: (v: string) => void
+  onStart: () => void
+  onStop: () => void
+  disabled: boolean
+  pending: boolean
+}) {
+  // The clock reads committed server state, not the editor's unsaved fields:
+  // it shows the run, not the draft.
+  const elapsed = useElapsedSeconds(execution.startedAt, execution.endedAt)
+  const running = execution.startedAt != null && execution.endedAt == null
+  const inverted = isInverted(startedAt, endedAt)
+
+  let caption = 'Not started'
+  if (running) caption = 'Running'
+  else if (elapsed != null) caption = 'Duration'
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">Timing</Label>
+      <div className="bg-background/60 flex items-center gap-3 rounded-md border px-3 py-2">
+        <span
+          className={cn(
+            'font-mono text-2xl tabular-nums',
+            running ? 'text-foreground' : 'text-muted-foreground',
+          )}
+          aria-label="Elapsed time"
+        >
+          {elapsed == null ? '--:--' : formatClock(elapsed)}
+        </span>
+        <span className="text-muted-foreground text-xs">{caption}</span>
+        {!disabled && execution.startedAt == null && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={onStart}
+            disabled={pending}
+          >
+            <PlayIcon className="size-3.5" />
+            Start
+          </Button>
+        )}
+        {!disabled && running && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={onStop}
+            disabled={pending}
+          >
+            <SquareIcon className="size-3.5" />
+            Stop
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="red-started-at" className="text-xs">
+            Started At
+          </Label>
+          <Input
+            id="red-started-at"
+            type="datetime-local"
+            step={1}
+            value={startedAt}
+            onChange={(e) => {
+              onStartedAtChange(e.target.value)
+            }}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="red-ended-at" className="text-xs">
+            Ended At
+          </Label>
+          <Input
+            id="red-ended-at"
+            type="datetime-local"
+            step={1}
+            value={endedAt}
+            onChange={(e) => {
+              onEndedAtChange(e.target.value)
+            }}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      {inverted && <p className="text-destructive text-xs">Ended at cannot precede started at.</p>}
     </div>
   )
 }
@@ -902,9 +1168,7 @@ function BlueDetectionEditor({
   const [detectionCategory, setDetectionCategory] = useState(execution.detectionCategory ?? '')
   const [selectedModifiers, setSelectedModifiers] = useState<string[]>(execution.detectionModifiers)
   const [protection, setProtection] = useState(execution.protection ?? '')
-  const [detectedAt, setDetectedAt] = useState(
-    execution.detectedAt ? toLocalDatetime(execution.detectedAt) : '',
-  )
+  const [detectedAt, setDetectedAt] = useState(toLocalDatetime(execution.detectedAt))
   const [detectingSource, setDetectingSource] = useState(execution.detectingSource)
   const [detectingRuleRef, setDetectingRuleRef] = useState(execution.detectingRuleRef)
   const [alertSeverity, setAlertSeverity] = useState(execution.alertSeverity)
@@ -920,7 +1184,7 @@ function BlueDetectionEditor({
       setDetectionCategory(execution.detectionCategory ?? '')
       setSelectedModifiers(execution.detectionModifiers)
       setProtection(execution.protection ?? '')
-      setDetectedAt(execution.detectedAt ? toLocalDatetime(execution.detectedAt) : '')
+      setDetectedAt(toLocalDatetime(execution.detectedAt))
       setDetectingSource(execution.detectingSource)
       setDetectingRuleRef(execution.detectingRuleRef)
       setAlertSeverity(execution.alertSeverity)
@@ -931,6 +1195,10 @@ function BlueDetectionEditor({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const disabled = closed || readOnly
+
+  // MTTD is `detected_at − started_at`, so the server rejects a detection that
+  // precedes the red start. Say so at the field rather than as a 400 on save.
+  const beforeStart = isInverted(toLocalDatetime(execution.startedAt), detectedAt)
 
   const toggleModifier = (mod: string) => {
     setSelectedModifiers((prev) =>
@@ -955,7 +1223,7 @@ function BlueDetectionEditor({
               : undefined,
           protection:
             protection === '' ? undefined : (protection as BlueDetectionPatch['protection']),
-          detectedAt: detectedAt ? new Date(detectedAt).toISOString() : undefined,
+          detectedAt: editedDatetime(execution.detectedAt, detectedAt),
           detectingSource: detectingSource || undefined,
           detectingRuleRef: detectingRuleRef || undefined,
           alertSeverity:
@@ -997,13 +1265,11 @@ function BlueDetectionEditor({
   ]
 
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-semibold">Blue Detection</h4>
-
+    <TeamPanel team="blue" title="Blue Detection">
       {/* Detection category — 5-button scale */}
       <div className="space-y-1.5">
         <Label className="text-xs">Detection Category</Label>
-        <div className="flex gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {categories.map((cat) => {
             const selected = detectionCategory === cat.key
             return (
@@ -1016,7 +1282,7 @@ function BlueDetectionEditor({
                       setDetectionCategory(cat.key)
                     }}
                     className={cn(
-                      'flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                      'rounded-md border px-1.5 py-1.5 text-[11px] font-medium transition-colors',
                       'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
                       disabled && 'cursor-not-allowed opacity-60',
                       selected
@@ -1041,7 +1307,7 @@ function BlueDetectionEditor({
         <div className="space-y-1">
           <Label className="text-xs">Protection</Label>
           <Select value={protection} onValueChange={setProtection} disabled={disabled}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
             <SelectContent>
@@ -1057,9 +1323,13 @@ function BlueDetectionEditor({
 
         {/* Detected At + MTTD */}
         <div className="space-y-1">
-          <Label className="text-xs">Detected At</Label>
+          <Label htmlFor="blue-detected-at" className="text-xs">
+            Detected At
+          </Label>
           <Input
+            id="blue-detected-at"
             type="datetime-local"
+            step={1}
             value={detectedAt}
             onChange={(e) => {
               setDetectedAt(e.target.value)
@@ -1067,7 +1337,14 @@ function BlueDetectionEditor({
             disabled={disabled}
           />
           {execution.mttdSeconds != null && (
-            <p className="text-muted-foreground text-xs">MTTD: {execution.mttdSeconds}s</p>
+            <p className="text-muted-foreground text-xs">
+              MTTD: {formatDuration(execution.mttdSeconds)}
+            </p>
+          )}
+          {beforeStart && (
+            <p className="text-destructive text-xs">
+              Detected at cannot precede the red start time.
+            </p>
           )}
         </div>
       </div>
@@ -1084,19 +1361,9 @@ function BlueDetectionEditor({
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Detecting Rule Ref</Label>
-          <Input
-            value={detectingRuleRef}
-            onChange={(e) => {
-              setDetectingRuleRef(e.target.value)
-            }}
-            disabled={disabled}
-          />
-        </div>
-        <div className="space-y-1">
           <Label className="text-xs">Alert Severity</Label>
           <Select value={alertSeverity} onValueChange={setAlertSeverity} disabled={disabled}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select..." />
             </SelectTrigger>
             <SelectContent>
@@ -1109,6 +1376,17 @@ function BlueDetectionEditor({
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">Detecting Rule Ref</Label>
+        <Input
+          value={detectingRuleRef}
+          onChange={(e) => {
+            setDetectingRuleRef(e.target.value)
+          }}
+          disabled={disabled}
+        />
       </div>
 
       {/* Advanced — modifiers */}
@@ -1148,10 +1426,11 @@ function BlueDetectionEditor({
         </CollapsibleContent>
       </Collapsible>
 
-      <div className="space-y-1">
+      <div className="flex flex-1 flex-col space-y-1">
         <Label className="text-xs">Blue Notes</Label>
         <Textarea
-          rows={3}
+          rows={5}
+          className="min-h-24 flex-1"
           value={blueNotes}
           onChange={(e) => {
             setBlueNotes(e.target.value)
@@ -1161,11 +1440,16 @@ function BlueDetectionEditor({
       </div>
 
       {!disabled && (
-        <Button size="sm" onClick={handleSave} disabled={patchBlue.isPending}>
+        <Button
+          size="sm"
+          className="self-start"
+          onClick={handleSave}
+          disabled={patchBlue.isPending}
+        >
           {patchBlue.isPending ? 'Saving...' : 'Save Blue'}
         </Button>
       )}
-    </div>
+    </TeamPanel>
   )
 }
 
@@ -2025,10 +2309,67 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/** Convert an ISO 8601 UTC string to a datetime-local value (no timezone suffix). */
-function toLocalDatetime(iso: string): string {
+/**
+ * Convert an ISO 8601 UTC string to a datetime-local value (no timezone
+ * suffix). Seconds are kept: they are the resolution MTTD is measured at.
+ */
+function toLocalDatetime(iso: string | undefined): string {
+  if (iso == null || iso === '') return ''
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+/**
+ * Convert a datetime-local value back to ISO 8601 UTC, or `undefined` when the
+ * field is empty or half-typed — the API has no way to say "clear this", so an
+ * absent value means "leave it alone".
+ */
+function fromLocalDatetime(local: string): string | undefined {
+  if (local === '') return undefined
+  const d = new Date(local)
+  if (isNaN(d.getTime())) return undefined
+  return d.toISOString()
+}
+
+/**
+ * What to PATCH for a timestamp field: the edited value, or `undefined` when
+ * the field still holds what the server sent.
+ *
+ * An untouched field is left out rather than echoed back, because the round
+ * trip through `datetime-local` drops milliseconds — a timer press recorded at
+ * `…:32.324Z` would come back as `…:32.000Z` on the next unrelated save, moving
+ * a timestamp MTTD is measured from.
+ */
+function editedDatetime(current: string | undefined, local: string): string | undefined {
+  if (local === toLocalDatetime(current)) return undefined
+  return fromLocalDatetime(local)
+}
+
+/** True when both datetime-local fields are set and the second precedes the first. */
+function isInverted(from: string, to: string): boolean {
+  if (from === '' || to === '') return false
+  const a = new Date(from).getTime()
+  const b = new Date(to).getTime()
+  if (isNaN(a) || isNaN(b)) return false
+  return b < a
+}
+
+/** A stopwatch reading: `mm:ss`, growing to `h:mm:ss` past the hour. */
+function formatClock(seconds: number): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  return h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
+}
+
+/** A duration in prose, matching the analytics MTTD card. */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${String(seconds)}s`
+  if (seconds < 3600) return `${String(Math.floor(seconds / 60))}m ${String(seconds % 60)}s`
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  return `${String(h)}h ${String(m)}m`
 }
