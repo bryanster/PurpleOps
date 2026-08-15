@@ -11,7 +11,7 @@ variable "name" {
 
 variable "location" {
   type        = string
-  default     = "eastus"
+  default     = "westeurope"
   description = "Azure region for every resource."
 }
 
