@@ -72,31 +72,42 @@ describe('queryKeysForVerb', () => {
     expect(keysEqual(keys, [engagementKeys.scenarios(ENG), ACTIVITY])).toBe(true)
   })
 
-  it('scenario.imported invalidates scenarios, allSteps, and activity', () => {
+  it('scenario.imported invalidates scenarios, the step tree, and activity', () => {
     const keys = queryKeysForVerb('scenario.imported', ENG, {})
     expect(
-      keysEqual(keys, [engagementKeys.scenarios(ENG), engagementKeys.allSteps(ENG), ACTIVITY]),
-    ).toBe(true)
-  })
-
-  // ── Steps ─────────────────────────────────────────────────────────────
-  it('step.created invalidates allSteps, analytics coverage, scenario steps, and activity', () => {
-    const keys = queryKeysForVerb('step.created', ENG, { scenarioId: SCENARIO })
-    expect(
       keysEqual(keys, [
+        engagementKeys.scenarios(ENG),
         engagementKeys.allSteps(ENG),
+        engagementKeys.executions(ENG),
         engagementKeys.analyticsCoverage(ENG),
         ACTIVITY,
-        engagementKeys.steps(ENG, SCENARIO),
       ]),
     ).toBe(true)
   })
 
-  it('step.created without scenarioId invalidates allSteps, analytics coverage, and activity', () => {
+  // ── Steps ─────────────────────────────────────────────────────────────
+  // The executions list is in here because a step is created together with its
+  // execution row: a watcher told about the step but not about the execution
+  // renders it as "Pending" with an empty drawer until they reload.
+  it('step.created invalidates allSteps, executions, coverage, scenario steps, and activity', () => {
+    const keys = queryKeysForVerb('step.created', ENG, { scenarioId: SCENARIO })
+    expect(
+      keysEqual(keys, [
+        engagementKeys.allSteps(ENG),
+        engagementKeys.executions(ENG),
+        engagementKeys.analyticsCoverage(ENG),
+        engagementKeys.steps(ENG, SCENARIO),
+        ACTIVITY,
+      ]),
+    ).toBe(true)
+  })
+
+  it('step.created without scenarioId invalidates allSteps, executions, coverage, and activity', () => {
     const keys = queryKeysForVerb('step.created', ENG, {})
     expect(
       keysEqual(keys, [
         engagementKeys.allSteps(ENG),
+        engagementKeys.executions(ENG),
         engagementKeys.analyticsCoverage(ENG),
         ACTIVITY,
       ]),
@@ -123,14 +134,15 @@ describe('queryKeysForVerb', () => {
     ).toBe(true)
   })
 
-  it('step.reordered invalidates allSteps, analytics coverage, scenario steps, and activity', () => {
+  it('step.reordered invalidates allSteps, executions, coverage, scenario steps, and activity', () => {
     const keys = queryKeysForVerb('step.reordered', ENG, { scenarioId: SCENARIO })
     expect(
       keysEqual(keys, [
         engagementKeys.allSteps(ENG),
+        engagementKeys.executions(ENG),
         engagementKeys.analyticsCoverage(ENG),
-        ACTIVITY,
         engagementKeys.steps(ENG, SCENARIO),
+        ACTIVITY,
       ]),
     ).toBe(true)
   })

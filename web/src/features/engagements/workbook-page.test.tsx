@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 
 import type { components } from '@/api/schema'
 import { adminUserFixture, get, memberUserFixture } from '@/test/msw/handlers'
-import { patch } from '@/test/msw/handlers'
+import { patch, post } from '@/test/msw/handlers'
 import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/render'
 
@@ -1134,5 +1134,100 @@ describe('RedExecutionEditor — execution timer', () => {
 
     expect(screen.queryByRole('button', { name: /^start$/i })).toBeNull()
     expect(screen.getByLabelText('Started At')).toHaveProperty('disabled', true)
+  })
+})
+
+// ── Adding a step ─────────────────────────────────────────────────────────────
+
+const NEW_STEP_ID = '0192a000-0000-7000-8000-000000000007'
+const NEW_EXEC_ID = '0192a000-0000-7000-8000-000000000008'
+
+/**
+ * A workbook whose server accepts new steps the way the real one does: the POST
+ * creates the step *and* its execution row in one go, and the two list
+ * endpoints serve whatever exists at the moment they are asked.
+ *
+ * That is what makes these tests about invalidation rather than about mocks —
+ * the new step is only reachable if the page refetches after the mutation.
+ */
+function stubWorkbookAcceptingSteps(): void {
+  const steps: components['schemas']['Step'][] = [revealedStep]
+  const executions: components['schemas']['Execution'][] = [
+    executionFor(revealedStep.id, '0192a000-0000-7000-8000-000000000005'),
+  ]
+
+  server.use(
+    get('/engagements/{engagementId}/scenarios', () =>
+      Response.json({ items: [scenarioFixture] }, { status: 200 }),
+    ),
+    get('/engagements/{engagementId}/steps', () =>
+      Response.json({ items: steps }, { status: 200 }),
+    ),
+    get('/engagements/{engagementId}/executions', () =>
+      Response.json({ items: executions }, { status: 200 }),
+    ),
+    post('/engagements/{engagementId}/scenarios/{scenarioId}/steps', async ({ request }) => {
+      const body = (await request.json()) as components['schemas']['CreateStep']
+      const step: components['schemas']['Step'] = {
+        ...revealedStep,
+        id: NEW_STEP_ID,
+        ordinal: steps.length + 1,
+        name: body.name,
+        objective: body.objective,
+      }
+      steps.push(step)
+      executions.push(executionFor(step.id, NEW_EXEC_ID))
+      return Response.json(step, { status: 201 })
+    }),
+  )
+}
+
+/** Open the Add Step dialog, name the step, submit. */
+async function addStep(name: string): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: /add step/i }))
+  await userEvent.type(await screen.findByPlaceholderText('Step name'), name)
+  await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+}
+
+describe('WorkbookPage — adding a step', () => {
+  // Regression: creating a step invalidated only the per-scenario step list,
+  // which nothing on this page reads. The workbook renders from the whole-
+  // engagement step list and the executions list, so the new step — and the
+  // execution the server created with it — stayed invisible until a reload.
+  test('the new step appears in its scenario without a reload', async () => {
+    stubWorkbookAcceptingSteps()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+
+    await addStep('Credential Dump')
+
+    expect(await screen.findByText('Credential Dump')).toBeDefined()
+  })
+
+  // The toolbar picks the scenario before it opens the dialog; the dialog kept
+  // its own copy, seeded once at mount when nothing was picked yet, so Create
+  // stayed disabled until the scenario was chosen a second time by hand.
+  test('the scenario the toolbar picked arrives selected, so Create is live', async () => {
+    stubWorkbookAcceptingSteps()
+    renderWorkbook(leadUser, 'lead')
+    await screen.findByText(/Initial Access/)
+
+    await userEvent.click(screen.getByRole('button', { name: /add step/i }))
+    await userEvent.type(await screen.findByPlaceholderText('Step name'), 'Credential Dump')
+
+    expect(screen.getByRole('button', { name: /^create$/i })).toHaveProperty('disabled', false)
+  })
+
+  test('the new step opens a drawer wired to its execution', async () => {
+    stubWorkbookAcceptingSteps()
+    renderWorkbook(leadUser, 'lead')
+    await expandFirstScenario()
+
+    await addStep('Credential Dump')
+    await userEvent.click(await screen.findByText('Credential Dump'))
+
+    // The red and blue editors only render once the execution is in cache.
+    expect(await screen.findByRole('button', { name: 'Save Red' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Save Blue' })).toBeDefined()
   })
 })

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-08-15
+
 ### Added
 
 - **A first-run setup wizard, and it is a MITRE ATT&CK version picker.** A fresh
@@ -75,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   excluded — neither has a start to measure from. Expect an engagement mid-run
   to report MTTD while Coverage and Protection rate still show nothing;
   [`docs/analytics.md`](docs/analytics.md) § MTTD carries the reasoning. The
-  empty panel now says no executions have been *started*, which is what it has
+  empty panel now says no executions have been _started_, which is what it has
   always meant, rather than blaming blue for not scoring.
 - **Detection and execution times keep their seconds.** The step view's
   timestamp fields were minute-resolution, which rounded every MTTD by up to 59
@@ -95,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the schema now says why, because the same trap is waiting for any index on a
   mutable column of a table other rows point at. The overview page also hid the
   transition buttons on a closed engagement, so even once the server answered,
-  Archive was reachable only from Settings; archiving is the way *out* of
+  Archive was reachable only from Settings; archiving is the way _out_ of
   closed, and the page offers it again.
 - **Importing a step from a template works again.** From Template in an
   engagement workbook hung for thirty seconds and then answered 500, every time
@@ -142,6 +144,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remove a row and then the row it references; one interrupted partway leaves
   the engagement partly emptied and still listed, and running it again finishes
   the job.
+- **A new step now shows up in the workbook without a reload.** Creating a step
+  refreshed only the per-scenario step list, which nothing on the workbook
+  reads: the page renders from the whole-engagement step list and the executions
+  list. So the step stayed invisible, and once a reload made it appear its
+  drawer had no execution behind it — no status, no red or blue editor, no
+  comments or evidence to attach. Both lists, and coverage, are now refreshed by
+  every step mutation and by the matching live event, so a step arrives complete
+  for the person who created it and for everyone watching.
+- **Add Step and Add Step From Template open with a scenario already chosen.**
+  The toolbar picked one before opening the dialog, but the dialog read that
+  choice once when the page mounted — before anything had been picked — so
+  **Create** stayed disabled until the scenario was selected a second time by
+  hand.
 
 ## [1.0.1] — 2026-08-14
 
@@ -236,5 +251,6 @@ older binary.
 - **Static asset directory.** The binary is the whole application; nothing is
   served from disk.
 
+[1.0.2]: https://github.com/bryanster/blacklight/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bryanster/blacklight/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bryanster/blacklight/releases/tag/v1.0.0

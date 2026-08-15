@@ -5,6 +5,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
@@ -97,6 +98,43 @@ export const engagementKeys = {
     [...engagementKeys.all, 'analytics', engagementId, 'compare', baselineId] as const,
   analyticsComparePrefix: (engagementId: string) =>
     [...engagementKeys.all, 'analytics', engagementId, 'compare'] as const,
+}
+
+/**
+ * The keys that go stale when the step tree of an engagement changes — a step
+ * created, edited, deleted or reordered.
+ *
+ * The executions list belongs in here because a step is created together with
+ * its execution row in one transaction, and the workbook joins the two: it
+ * reads the executions list for a step's status badge and for the red and blue
+ * editors in the drawer. Invalidating only the step lists left a freshly
+ * created step with no execution in cache, so it opened an empty drawer until
+ * the page was reloaded.
+ *
+ * Shared by the mutation hooks below and by the SSE path in
+ * `event-invalidation.ts`, so that the person who made the change and everyone
+ * watching it arrive refresh exactly the same views.
+ */
+export function stepTreeKeys(
+  engagementId: string,
+  scenarioId?: string,
+): readonly (readonly unknown[])[] {
+  const keys: readonly (readonly unknown[])[] = [
+    engagementKeys.allSteps(engagementId),
+    engagementKeys.executions(engagementId),
+    engagementKeys.analyticsCoverage(engagementId),
+  ]
+  if (scenarioId) {
+    return [...keys, engagementKeys.steps(engagementId, scenarioId)]
+  }
+  return keys
+}
+
+/** Invalidate every key in `keys` — the mutation-side counterpart of the SSE fan-out. */
+function invalidateAll(qc: QueryClient, keys: readonly (readonly unknown[])[]): void {
+  for (const key of keys) {
+    void qc.invalidateQueries({ queryKey: key })
+  }
 }
 
 // ── Engagements ──────────────────────────────────────────────────────────────
@@ -475,9 +513,7 @@ export function useCreateStep(): UseMutationResult<
         }),
       ),
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
-      })
+      invalidateAll(qc, stepTreeKeys(variables.engagementId, variables.scenarioId))
     },
   })
 }
@@ -497,9 +533,7 @@ export function usePatchStep(): UseMutationResult<
         }),
       ),
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
-      })
+      invalidateAll(qc, stepTreeKeys(variables.engagementId, variables.scenarioId))
     },
   })
 }
@@ -517,9 +551,7 @@ export function useDeleteStep(): UseMutationResult<
       })
     },
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
-      })
+      invalidateAll(qc, stepTreeKeys(variables.engagementId, variables.scenarioId))
     },
   })
 }
@@ -562,9 +594,7 @@ export function useReorderSteps(): UseMutationResult<
       })
     },
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
-      })
+      invalidateAll(qc, stepTreeKeys(variables.engagementId, variables.scenarioId))
     },
   })
 }
@@ -822,9 +852,11 @@ export function useImportPlan(): UseMutationResult<
         }),
       ),
     onSuccess: (_data, variables) => {
+      // An import lands scenarios and their steps at once.
       void qc.invalidateQueries({
         queryKey: engagementKeys.scenarios(variables.engagementId),
       })
+      invalidateAll(qc, stepTreeKeys(variables.engagementId))
     },
   })
 }
@@ -848,9 +880,7 @@ export function useCreateStepFromTemplate(): UseMutationResult<
         }),
       ),
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({
-        queryKey: engagementKeys.steps(variables.engagementId, variables.scenarioId),
-      })
+      invalidateAll(qc, stepTreeKeys(variables.engagementId, variables.scenarioId))
     },
   })
 }

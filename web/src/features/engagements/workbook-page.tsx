@@ -381,7 +381,8 @@ export function WorkbookPage(): ReactNode {
         onOpenChange={setAddStepOpen}
         engagementId={engagementId}
         scenarios={scenarioItems}
-        defaultScenarioId={addStepScenarioId}
+        scenarioId={addStepScenarioId}
+        onScenarioIdChange={setAddStepScenarioId}
       />
       <ImportCtidDialog
         open={importCtidOpen}
@@ -393,7 +394,8 @@ export function WorkbookPage(): ReactNode {
         onOpenChange={setFromTemplateOpen}
         engagementId={engagementId}
         scenarios={scenarioItems}
-        defaultScenarioId={fromTemplateScenarioId}
+        scenarioId={fromTemplateScenarioId}
+        onScenarioIdChange={setFromTemplateScenarioId}
       />
     </div>
   )
@@ -1874,26 +1876,21 @@ function AddStepDialog({
   onOpenChange,
   engagementId,
   scenarios,
-  defaultScenarioId,
+  scenarioId,
+  onScenarioIdChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   engagementId: string
   scenarios: Scenario[]
-  defaultScenarioId: string
+  scenarioId: string
+  onScenarioIdChange: (scenarioId: string) => void
 }) {
   const createStep = useCreateStep()
-  const [scenarioId, setScenarioId] = useState(defaultScenarioId)
   const [name, setName] = useState('')
   const [objective, setObjective] = useState('')
   const [techniqueId, setTechniqueId] = useState('')
   const [targetAsset, setTargetAsset] = useState('')
-
-  // Sync defaultScenarioId when dialog opens
-  const handleOpenChange = (open: boolean) => {
-    if (open && defaultScenarioId) setScenarioId(defaultScenarioId)
-    onOpenChange(open)
-  }
 
   const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
@@ -1929,7 +1926,7 @@ function AddStepDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Step</DialogTitle>
@@ -1938,7 +1935,7 @@ function AddStepDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Scenario</Label>
-            <Select value={scenarioId} onValueChange={setScenarioId}>
+            <Select value={scenarioId} onValueChange={onScenarioIdChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select scenario..." />
               </SelectTrigger>
@@ -2131,28 +2128,24 @@ function StepFromTemplateDialog({
   onOpenChange,
   engagementId,
   scenarios,
-  defaultScenarioId,
+  scenarioId,
+  onScenarioIdChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   engagementId: string
   scenarios: Scenario[]
-  defaultScenarioId: string
+  scenarioId: string
+  onScenarioIdChange: (scenarioId: string) => void
 }) {
   const procedures = useProcedures({})
   const createFromTemplate = useCreateStepFromTemplate()
 
-  const [scenarioId, setScenarioId] = useState(defaultScenarioId)
   const [templateId, setTemplateId] = useState('')
   const [name, setName] = useState('')
   const [objective, setObjective] = useState('')
   const [targetAsset, setTargetAsset] = useState('')
   const [argValuesText, setArgValuesText] = useState('')
-
-  const handleOpenChange = (open: boolean) => {
-    if (open && defaultScenarioId) setScenarioId(defaultScenarioId)
-    onOpenChange(open)
-  }
 
   const handleSubmit = (e: SyntheticEvent) => {
     e.preventDefault()
@@ -2195,7 +2188,7 @@ function StepFromTemplateDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Step From Template</DialogTitle>
@@ -2206,7 +2199,7 @@ function StepFromTemplateDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Scenario</Label>
-            <Select value={scenarioId} onValueChange={setScenarioId}>
+            <Select value={scenarioId} onValueChange={onScenarioIdChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select scenario..." />
               </SelectTrigger>

@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 
-import { engagementKeys } from './queries'
+import { engagementKeys, stepTreeKeys } from './queries'
 
 /**
  * Payload shape inside a hub Event envelope for engagement-scoped activity.
@@ -60,7 +60,7 @@ export function queryKeysForVerb(
     case 'scenario.imported':
       return [
         engagementKeys.scenarios(engagementId),
-        engagementKeys.allSteps(engagementId),
+        ...stepTreeKeys(engagementId),
         ...activityKeys,
       ]
 
@@ -68,17 +68,8 @@ export function queryKeysForVerb(
     case 'step.created':
     case 'step.updated':
     case 'step.deleted':
-    case 'step.reordered': {
-      const keys: readonly (readonly unknown[])[] = [
-        engagementKeys.allSteps(engagementId),
-        engagementKeys.analyticsCoverage(engagementId),
-        ...activityKeys,
-      ]
-      if (parents.scenarioId) {
-        return [...keys, engagementKeys.steps(engagementId, parents.scenarioId)]
-      }
-      return keys
-    }
+    case 'step.reordered':
+      return [...stepTreeKeys(engagementId, parents.scenarioId), ...activityKeys]
 
     case 'step.revealed': {
       const base: readonly (readonly unknown[])[] = [
