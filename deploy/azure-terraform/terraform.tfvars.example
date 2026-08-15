@@ -1,7 +1,7 @@
 # Copy to terraform.tfvars and edit. Every value is optional; these are the
 # defaults from variables.tf.
 
-location         = "westeurope"
+location         = "northeurope"
 name             = "blacklight"
 image_tag        = "v1.0.2"
 container_cpu    = 1
