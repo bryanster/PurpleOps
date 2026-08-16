@@ -43,6 +43,8 @@ can reach it, read [`docs/deploy.md`](docs/deploy.md): at minimum you must set
 - **Evidence on disk.** Content-addressed blob store; back it up with the database.
 - **Full OpenAPI API.** Spec-first, strict-mode server, typed TypeScript client. External automation
   authenticates with scoped, expiring service tokens.
+- **Client SDKs for four languages.** Go, TypeScript/JavaScript, Python and Rust, all generated from
+  the same document as the server and regenerated on every change — [`sdk/`](sdk/).
 - **Authentication.** Local accounts with Argon2id passwords and admin-enforceable TOTP. OIDC and
   SAML 2.0 for enterprise single sign-on, with group-to-role mapping.
 - **Admin CLI.** `blctl` ships in the image for migrations, user creation, content management, and
@@ -58,6 +60,7 @@ can reach it, read [`docs/deploy.md`](docs/deploy.md): at minimum you must set
 | Understand the security model | [`docs/security.md`](docs/security.md) |
 | Set up SSO (OIDC / SAML) | [`docs/sso-oidc.md`](docs/sso-oidc.md) · [`docs/sso-saml.md`](docs/sso-saml.md) |
 | Use the API | [`docs/api.md`](docs/api.md) |
+| Use a client SDK (Go, TS, Python, Rust) | [`docs/sdk.md`](docs/sdk.md) · [`sdk/`](sdk/) |
 | Manage service tokens | [`docs/api-tokens.md`](docs/api-tokens.md) |
 | Use the admin CLI | [`docs/cli.md`](docs/cli.md) |
 | Understand authorization | [`docs/authz.md`](docs/authz.md) |

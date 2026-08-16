@@ -1,0 +1,53 @@
+# Hand-written, unlike everything under blacklight/ except deployment.py and
+# py.typed.
+#
+# openapi-python-client can write a pyproject.toml of its own (`--meta uv`), and
+# it is generated with `--meta none` precisely so that it does not: a generated
+# project file cannot carry a test dependency group, and a package this repository
+# publishes should have its metadata reviewed in a diff rather than rewritten by
+# a generator upgrade.
+[project]
+name = "blacklight-sdk"
+# The SDK's version, not the server's — `GET /version` reports what a deployment
+# is running. 0.0.0 is the unpublished placeholder.
+version = "0.0.0"
+description = "Typed Python client for the Blacklight API, generated from api/openapi.yaml."
+readme = "README.md"
+license = "Apache-2.0"
+# The generated code is written with `X | None` unions and other 3.10+ syntax,
+# and openapi-python-client itself supports 3.11 upwards. Claiming an older
+# floor would mean a package that installs and then fails to import.
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.23.1,<0.29.0",
+    "attrs>=22.2.0",
+]
+
+[dependency-groups]
+# `uv run --project sdk/python --frozen pytest`, which is what `make test-sdk`
+# does. respx patches httpx's transport, so the tests exercise the real client
+# against fake responses rather than a hand-written stand-in for httpx.
+dev = [
+    "pytest>=8,<9",
+    "respx>=0.22,<0.23",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "blacklight"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Matches what the generator's post-hook formats the package with, so a
+# developer running `ruff` over the whole directory does not reformat 400
+# generated files.
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "I", "UP"]

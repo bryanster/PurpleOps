@@ -1,8 +1,8 @@
 # The HTTP API
 
-`api/openapi.yaml` is the source of truth. The Go server interface and the TypeScript client are
-generated from it, so the two sides cannot describe the API differently — which is what happened in
-v1, silently, for months.
+`api/openapi.yaml` is the source of truth. The Go server interface, the SPA's TypeScript client and
+the four published SDKs in [`sdk/`](../sdk) are generated from it, so no two of them can describe
+the API differently — which is what happened in v1, silently, for months.
 
 Nothing is hand-written on both sides. A handler signature or a `fetch` call that is not in the spec
 is a review rejection.
@@ -14,8 +14,9 @@ is a review rejection.
    requires of its caller** — see [Authorization](#authorization). Leaving the last one out fails
    `go test ./api` and, if you get that far, stops the server from starting.
 2. **`make generate`.** `oapi-codegen` rewrites `internal/httpapi/gen/server.gen.go` from
-   `api/codegen-server.yaml`, and `openapi-typescript` rewrites `web/src/api/schema.d.ts`. Never
-   edit either; both are overwritten and CI compares them against a fresh run.
+   `api/codegen-server.yaml`, `openapi-typescript` rewrites `web/src/api/schema.d.ts`, and the four
+   SDKs under `sdk/` are regenerated too — [`docs/sdk.md`](sdk.md). Never edit any of them; they are
+   all overwritten and CI compares them against a fresh run.
 3. **Implement the new method** on the handler type that satisfies `gen.StrictServerInterface`. It
    takes a typed request and returns a typed response, one implementation per documented status
    code — there is no `http.ResponseWriter` to write something undocumented to.
@@ -26,6 +27,8 @@ is a review rejection.
 6. **On the frontend**, add a `queryOptions()` factory and a hook to the feature's `queries.ts` and
    call `api.GET("/your-path")`. The path and both bodies are checked against the regenerated
    schema. See [`web/src/api/README.md`](../web/src/api/README.md).
+7. **The SDKs need nothing.** The operation appears in all four the moment step 2 runs; commit them
+   with the rest.
 
 Removing or renaming an operation is the same loop. The generated method disappears, and the
 handler that still implements it stops compiling — as does the TypeScript that read the field that
@@ -49,6 +52,7 @@ costs; if one is wrong, argue with the message.
 | No `additionalProperties: true` on a request body | A request type that accepts unknown fields is how a caller writes a field it has no right to (`PLAN.md` §4) |
 | `limit` and `cursor` come from `components/parameters` | One page contract everywhere: `{items, nextCursor}`, `limit` defaulting to 50 and capped at 200 |
 | One server, `/api/v1`, relative | The SPA is same-origin; an absolute URL would pin every deployment to one host |
+| No schema is named `<OperationId>Response` | That is the name the Go SDK generates for the operation's response wrapper, in the same package — the collision stops `sdk/go` compiling. Use `…Result` |
 
 Two more the reader should know, though a test cannot check them:
 

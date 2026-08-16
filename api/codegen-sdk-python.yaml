@@ -1,0 +1,44 @@
+# openapi-python-client configuration for the Python SDK (sdk/python).
+#
+# Passed with --config by the `sdk-python` rule in the Makefile, which also
+# passes `--meta uv` (the generated project's own pyproject.toml) and
+# `--output-path ../sdk/python`.
+#
+# The generator is pinned in tools/pygen/uv.lock rather than here — that lock is
+# what makes two machines produce the same bytes, which is what the codegen
+# drift gate in CI is asserting.
+
+# The distribution and the import name. Without these they are derived from the
+# document's title, which would make the package `blacklight-api-client` and the
+# import `blacklight_api_client` — the SDK for an API is not a thing anyone
+# should have to say twice.
+project_name_override: blacklight-sdk
+package_name_override: blacklight
+# The SDK's version, not the server's: `GET /version` reports what a deployment
+# is running. 0.0.0 is the unpublished placeholder; a release sets the real one.
+package_version_override: "0.0.0"
+
+# Put each field's description on the attribute rather than only in the class
+# docstring, so an editor shows it at the point of use.
+docstrings_on_attributes: true
+
+# Binary downloads. Without these the generator cannot parse the response —
+# `application/pdf` and `application/zip` are not media types it knows — and
+# quietly omits it, leaving four operations that return None on success:
+# the engagement archive, and the three PDF renderers. Mapped to
+# octet-stream they come back as `File`, which is what they are.
+#
+# `text/event-stream` is deliberately not mapped. The live event stream is a
+# long-lived connection, not a document to buffer into a File, and pretending
+# otherwise here would generate a call that never returns. Read it with `httpx`
+# directly — sdk/python/README.md shows how.
+content_type_overrides:
+  application/pdf: application/octet-stream
+  application/zip: application/octet-stream
+
+# `ruff format` runs over the output, and its version is pinned alongside the
+# generator's in tools/pygen/uv.lock. `ruff check --fix` is deliberately not
+# here: it rewrites code by rule, so a ruff upgrade could change the generated
+# output in ways that have nothing to do with the API document.
+post_hooks:
+  - "ruff format --no-cache ."

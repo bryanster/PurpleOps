@@ -54,7 +54,7 @@ export type Comment = components['schemas']['Comment']
 export type CreateComment = components['schemas']['CreateComment']
 export type PatchComment = components['schemas']['PatchComment']
 export type ImportPlanRequest = components['schemas']['ImportPlanRequest']
-export type ImportPlanResponse = components['schemas']['ImportPlanResponse']
+export type ImportPlanResult = components['schemas']['ImportPlanResult']
 export type CreateStepFromTemplate = components['schemas']['CreateStepFromTemplate']
 
 // ── Query keys ───────────────────────────────────────────────────────────────
@@ -838,7 +838,7 @@ export function useCreateFinding(): UseMutationResult<
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 export function useImportPlan(): UseMutationResult<
-  ImportPlanResponse,
+  ImportPlanResult,
   Error,
   { engagementId: string; body: ImportPlanRequest }
 > {

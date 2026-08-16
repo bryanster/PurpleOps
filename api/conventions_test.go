@@ -249,6 +249,37 @@ func TestNoSchemaUsesTheOpenAPI30NullableFlag(t *testing.T) {
 	})
 }
 
+// TestNoSchemaCollidesWithAGeneratedResponseWrapper is a rule the server half
+// cannot notice. The Go SDK (api/codegen-sdk-go.yaml) generates one wrapper type
+// per operation, named `<OperationID>Response`, into the same package as the
+// schema types — so a schema called `ImportPlanResponse` alongside an operation
+// called `importPlan` declares that name twice and sdk/go stops compiling. The
+// server's wrappers are named `...ResponseObject`, which is why this went
+// unnoticed until there was a client.
+//
+// The generator can be told to rename the loser to `…Response2`. That is not a
+// name to publish in an SDK, so the collision is refused here instead, where it
+// costs one schema rename in the document. `ImportPlanResult` — like
+// `LoginResult` and `GuestRegisterResult` — is the shape the rest of the
+// document already uses for "what this operation produced".
+func TestNoSchemaCollidesWithAGeneratedResponseWrapper(t *testing.T) {
+	doc := mustLoad(t)
+
+	for _, o := range operations(t) {
+		id := o.op.OperationID
+		if id == "" {
+			continue // TestEveryOperationHasAUniqueOperationID reports this.
+		}
+
+		wrapper := strings.ToUpper(id[:1]) + id[1:] + "Response"
+		if _, taken := doc.Components.Schemas[wrapper]; !taken {
+			continue
+		}
+		t.Errorf("schema %q has the name the Go SDK generates for %s's response wrapper; one of the two has to be renamed, and it should be the schema (try %sResult)",
+			wrapper, o, strings.TrimSuffix(wrapper, "Response"))
+	}
+}
+
 // TestNoRequestBodyAcceptsUnknownFields is a structural version of PLAN.md §4:
 // a blue user cannot submit a red field if no such field exists in their request
 // type. `additionalProperties: true` puts the field back.

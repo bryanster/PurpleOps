@@ -48,6 +48,12 @@ e2e/
 .vscode/
 .devcontainer/
 
+# The client SDKs. Nothing in the image imports them: sdk/go is a module of its
+# own, so the server's build never reaches it, and the other three are not Go at
+# all. Sending them would add several megabytes to every build context and let a
+# regenerated SDK invalidate a layer that has nothing to do with it.
+sdk/
+
 # Documentation and the backlog: nothing in the image reads them, and a docs
 # edit should not invalidate a build layer. deploy/ is *not* excluded — the
 # entrypoint and health-check scripts are copied from it.

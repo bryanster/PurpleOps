@@ -29,10 +29,17 @@ make e2e            # builds, then runs the Playwright suite
 
 [`docs/testing.md`](testing.md) covers headed runs, the trace viewer, and how to seed a spec.
 
-`make generate` is not optional bookkeeping. `internal/httpapi/gen/server.gen.go` and
-`web/src/api/schema.d.ts` are committed, so editing [`api/openapi.yaml`](../api/openapi.yaml)
-without regenerating leaves a tree that still compiles and is still wrong. See
-[`docs/api.md`](api.md).
+`make generate` is not optional bookkeeping. `internal/httpapi/gen/server.gen.go`,
+`web/src/api/schema.d.ts` and the four SDKs in [`sdk/`](../sdk) are committed, so editing
+[`api/openapi.yaml`](../api/openapi.yaml) without regenerating leaves a tree that still compiles and
+is still wrong. See [`docs/api.md`](api.md) and [`docs/sdk.md`](sdk.md).
+
+If you touched the API document or an SDK's hand-written seam, run their tests too — four
+toolchains, so they are not part of `make test`:
+
+```sh
+make test-sdk       # Go, TypeScript, Python and Rust clients
+```
 
 The container is the supported artifact, so if you changed anything it depends on — the Dockerfile,
 the entrypoint, the embedded SPA, startup — run its checks too:
@@ -49,9 +56,10 @@ a branch here.
 
 | Job | What it proves |
 |---|---|
-| `Lint` | `golangci-lint`, the spec's own conventions, `tsc --noEmit`, eslint, prettier |
+| `Lint` | `golangci-lint`, the spec's own conventions, `tsc --noEmit`, eslint, prettier — over `web/`, `e2e/` and `sdk/typescript/` |
 | `Go tests` | `go test -race`, with the coverage number in the run summary |
 | `Web tests` | `vitest` |
+| `SDK tests` | The four clients in `sdk/` compile, and their hand-written seams behave |
 | `Generated code is current` | `make generate` leaves the tree clean |
 | `Build linux/amd64`, `Build linux/arm64` | The CGO build works on both, and produces a binary of the architecture it claims |
 | `Container smoke test` | The image builds, boots with no network, persists data, and still has a working Chromium |

@@ -1,0 +1,44 @@
+# oapi-codegen configuration for the Go client SDK (sdk/go).
+#
+# Deliberately the same generator, at the same pinned version, as the server
+# half in codegen-server.yaml: the two sides of the wire then agree about what a
+# nullable field or a prefixed enum constant is, because one program decided
+# both. A different generator here would be a second opinion about the same
+# document.
+#
+# Run from this directory by the `//go:generate` line in api/spec.go, so the
+# path below is relative to api/. sdk/go is its own Go module — see
+# sdk/go/go.mod for why a caller must not inherit this repository's
+# dependencies.
+package: blacklight
+output: ../sdk/go/client.gen.go
+
+generate:
+  # A client, not a server: request builders plus `*WithResponse` wrappers that
+  # parse each documented status code into its own typed field.
+  #
+  # Those wrappers are named `<OperationID>Response`, in the same Go package as
+  # the schema types — so a schema named after an operation's response has two
+  # declarations of one name and the SDK does not compile. The generator can be
+  # told to rename the loser to `…Response2`, which is not a name to put in a
+  # published SDK; `TestNoSchemaCollidesWithAGeneratedResponseWrapper` in
+  # api/conventions_test.go rejects the collision in the document instead, where
+  # it costs one rename to fix.
+  client: true
+  models: true
+  # The SDK is a client for whatever server it is pointed at, so it has no use
+  # for a copy of the document it was generated from. api/spec.go embeds the one
+  # copy that exists.
+  embedded-spec: false
+
+compatibility:
+  # Same reason as the server: name every enum constant after its type, so that
+  # adding an enum with an `ok` value cannot silently rename another enum's
+  # constants and break callers' code at the next upgrade.
+  always-prefix-enum-values: true
+
+output-options:
+  # `type: [string, "null"]` becomes a nullable wrapper rather than a bare
+  # pointer, so an SDK caller can tell "field absent" from "field explicitly
+  # null" — the distinction the PATCH endpoints depend on.
+  nullable-type: true

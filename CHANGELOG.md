@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Client SDKs for Go, TypeScript/JavaScript, Python and Rust**, in
+  [`sdk/`](sdk/). All four are generated from `api/openapi.yaml` — the same
+  document the server is generated from — so a script written against any of
+  them is checked against the API by its own compiler rather than by trial and
+  error against a running deployment. `make generate` rewrites all four and the
+  `codegen` job in CI fails if a spec change was not regenerated, which means an
+  endpoint added, renamed or removed reaches every SDK in the same commit as the
+  server. Each has one small hand-written seam holding the two things the
+  document cannot say: that a deployment's origin needs `/api/v1` appended (the
+  document's one server is relative, because the SPA is same-origin), and how a
+  service token is presented. Each uses the best generator its language has
+  rather than one tool for all four — the document is OpenAPI 3.1 and uses it,
+  and `openapi-generator` reads 3.1 by converting it to 3.0, where "absent" and
+  "explicitly null" stop being different things. Rust is the exception and the
+  reason a container image is pinned at all: no Rust generator reads 3.1. See
+  [`docs/sdk.md`](docs/sdk.md).
+- **`make test-sdk`** — the four SDKs' own tests, and proof that each still
+  compiles. A new `SDK tests` job runs it in CI.
+
+### Changed
+
+- **The `ImportPlanResponse` schema is now `ImportPlanResult`.** The Go client
+  generates a wrapper type per operation named `<OperationId>Response`, in the
+  same package as the schema types, so a schema with that name alongside the
+  `importPlan` operation declared one name twice and `sdk/go` did not compile.
+  `…Result` is what the document already uses for this shape (`LoginResult`,
+  `GuestRegisterResult`). The wire format is unchanged — the field names and the
+  JSON a caller sends and receives are identical — but the generated type's name
+  changed in the SPA's types and in the server's. A new rule in
+  `api/conventions_test.go` refuses the collision from now on.
+
 ## [1.0.2] — 2026-08-15
 
 ### Added

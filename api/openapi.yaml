@@ -2940,7 +2940,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ImportPlanResponse"
+                $ref: "#/components/schemas/ImportPlanResult"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -11424,7 +11424,7 @@ components:
           type: string
           description: Human-readable explanation.
 
-    ImportPlanResponse:
+    ImportPlanResult:
       type: object
       required:
         - scenario

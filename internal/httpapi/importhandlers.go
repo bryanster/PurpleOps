@@ -92,7 +92,7 @@ func (h *handlers) ImportPlan(ctx context.Context,
 		})
 	}
 
-	return gen.ImportPlan201JSONResponse(gen.ImportPlanResponse{
+	return gen.ImportPlan201JSONResponse(gen.ImportPlanResult{
 		Scenario:  scenarioWire,
 		Steps:     stepWires,
 		StepCount: len(result.Steps),

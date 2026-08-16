@@ -4,6 +4,20 @@
 /web/node_modules/
 /e2e/node_modules/
 
+# The SDKs. Their *generated sources* are committed — that is what the codegen
+# drift gate compares — but everything below is a local build or a toolchain
+# directory that gets rebuilt from the committed lock files.
+/sdk/typescript/node_modules/
+/sdk/typescript/dist/
+/sdk/rust/target/
+/sdk/python/dist/
+/sdk/python/.venv/
+/tools/pygen/.venv/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
 # Local runtime state: the embedded database, its WAL, and uploaded evidence.
 *.duckdb*
 /evidence/

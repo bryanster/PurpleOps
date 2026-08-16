@@ -1,0 +1,16 @@
+{
+  /* The build config type-checks only what ships, because dist/ must not
+     contain the tests. This one checks everything, including them — a test that
+     no longer compiles against the regenerated schema is exactly the signal the
+     drift gate is for, and `tsc --build` would never see it. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.lint.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": []
+}

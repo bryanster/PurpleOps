@@ -1,0 +1,55 @@
+# Hand-written, unlike everything under src/apis and src/models.
+#
+# tools/generate-rust-sdk.sh copies only those two directories (and
+# .openapi-generator) out of the generator's container, so this file, src/lib.rs
+# and src/deployment.rs survive a regeneration. openapi-generator would
+# otherwise write a Cargo.toml crediting "OpenAPI Generator team and
+# contributors" as the author and carrying no dev-dependencies, which is not the
+# manifest of a crate anybody publishes.
+#
+# The dependency versions below are the ones the generator's own manifest asks
+# for. When a generator upgrade changes them, change them here — a crate that
+# does not compile is the signal, and there is a compile job in CI for it.
+[package]
+name = "blacklight"
+# The SDK's version, not the server's: `GET /version` reports what a deployment
+# is running. 0.0.0 is the unpublished placeholder.
+version = "0.0.0"
+edition = "2021"
+# The floor the generated code actually needs. Raising it is a breaking change
+# for callers pinned to an older toolchain, so it is stated rather than left to
+# whatever happens to compile today.
+rust-version = "1.75"
+description = "Typed Rust client for the Blacklight API, generated from api/openapi.yaml."
+license = "Apache-2.0"
+repository = "https://github.com/bryanster/blacklight"
+readme = "README.md"
+keywords = ["blacklight", "openapi", "purple-team", "api-client"]
+categories = ["api-bindings"]
+
+[dependencies]
+serde = { version = "^1.0", features = ["derive"] }
+serde_with = { version = "^3.8", default-features = false, features = ["base64", "std", "macros"] }
+serde_json = "^1.0"
+serde_repr = "^0.1"
+url = "^2.5"
+uuid = { version = "^1.8", features = ["serde", "v4"] }
+chrono = { version = "^0.4", features = ["serde"] }
+tokio = { version = "^1.46.0", features = ["fs"] }
+tokio-util = { version = "^0.7", features = ["codec"] }
+reqwest = { version = "^0.13", default-features = false, features = ["json", "multipart", "stream", "query", "form"] }
+
+[dev-dependencies]
+# A real HTTP server on a real port, so the tests exercise reqwest rather than a
+# stand-in for it: what the client sends is the thing under test.
+wiremock = "^0.6"
+tokio = { version = "^1.46.0", features = ["macros", "rt-multi-thread"] }
+
+[features]
+# TLS has to come from somewhere, and which one is the caller's decision:
+# native-tls links the platform's library, rustls needs nothing installed. The
+# default matches the generator's, so a caller who thinks about neither gets
+# what the rest of the ecosystem defaults to.
+default = ["native-tls"]
+native-tls = ["reqwest/native-tls"]
+rustls = ["reqwest/rustls"]

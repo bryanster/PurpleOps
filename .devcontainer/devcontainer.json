@@ -30,6 +30,14 @@
       "version": "latest",
       "tflint": "none",
       "terragrunt": "none"
+    },
+    // `cargo`, for sdk/rust. Nothing in this repository is written in Rust —
+    // the crate is generated — but `make test-sdk` compiles and runs its tests,
+    // and an SDK nobody can build locally is one that only CI ever checks.
+    // Generating it needs no toolchain at all: that runs in a container.
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "latest",
+      "profile": "minimal"
     }
   },
   // Installs the pinned generators and linter into ./bin and runs `npm ci`.

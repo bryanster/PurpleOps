@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
+
+from typing import cast
+
+if TYPE_CHECKING:
+    from ..models.technique_coverage_row import TechniqueCoverageRow
+
+
+T = TypeVar("T", bound="TechniqueCoverage")
+
+
+@_attrs_define
+class TechniqueCoverage:
+    rows: list[TechniqueCoverageRow]
+    attempted: int
+    not_attempted: int
+    matrix: int
+    unmatched: int
+
+    def to_dict(self) -> dict[str, Any]:
+        from ..models.technique_coverage_row import TechniqueCoverageRow
+
+        rows = []
+        for rows_item_data in self.rows:
+            rows_item = rows_item_data.to_dict()
+            rows.append(rows_item)
+
+        attempted = self.attempted
+
+        not_attempted = self.not_attempted
+
+        matrix = self.matrix
+
+        unmatched = self.unmatched
+
+        field_dict: dict[str, Any] = {}
+
+        field_dict.update(
+            {
+                "rows": rows,
+                "attempted": attempted,
+                "notAttempted": not_attempted,
+                "matrix": matrix,
+                "unmatched": unmatched,
+            }
+        )
+
+        return field_dict
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.technique_coverage_row import TechniqueCoverageRow
+
+        d = dict(src_dict)
+        rows = []
+        _rows = d.pop("rows")
+        for rows_item_data in _rows:
+            rows_item = TechniqueCoverageRow.from_dict(rows_item_data)
+
+            rows.append(rows_item)
+
+        attempted = d.pop("attempted")
+
+        not_attempted = d.pop("notAttempted")
+
+        matrix = d.pop("matrix")
+
+        unmatched = d.pop("unmatched")
+
+        technique_coverage = cls(
+            rows=rows,
+            attempted=attempted,
+            not_attempted=not_attempted,
+            matrix=matrix,
+            unmatched=unmatched,
+        )
+
+        return technique_coverage

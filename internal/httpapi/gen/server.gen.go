@@ -2572,8 +2572,8 @@ type ImportPlanRequest struct {
 	StartingOrdinal *int `json:"startingOrdinal,omitempty"`
 }
 
-// ImportPlanResponse defines model for ImportPlanResponse.
-type ImportPlanResponse struct {
+// ImportPlanResult defines model for ImportPlanResult.
+type ImportPlanResult struct {
 	Scenario Scenario `json:"scenario"`
 
 	// StepCount Total number of steps imported.
@@ -24826,7 +24826,7 @@ type ImportPlanResponseObject interface {
 	VisitImportPlanResponse(w http.ResponseWriter) error
 }
 
-type ImportPlan201JSONResponse ImportPlanResponse
+type ImportPlan201JSONResponse ImportPlanResult
 
 func (response ImportPlan201JSONResponse) VisitImportPlanResponse(w http.ResponseWriter) error {
 

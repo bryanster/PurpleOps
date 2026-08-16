@@ -2,10 +2,15 @@
 // and is the only place that parses it.
 //
 // openapi.yaml is the source of truth: the Go server interface in
-// internal/httpapi/gen and the TypeScript client in web/ are generated from it,
-// and the request-validation middleware (M0B-006) enforces it at runtime against
-// the copy embedded here — never against a file on disk, which a deployed binary
-// has no reason to have.
+// internal/httpapi/gen, the TypeScript client in web/, and the four published
+// SDKs in sdk/ are all generated from it, and the request-validation middleware
+// (M0B-006) enforces it at runtime against the copy embedded here — never
+// against a file on disk, which a deployed binary has no reason to have.
+//
+// The two //go:generate lines below are the server and the Go SDK: the same
+// generator at the same version, so both sides of the wire agree about what a
+// nullable field or a prefixed enum constant is. docs/sdk.md covers the other
+// three.
 package api
 
 import (
@@ -16,6 +21,7 @@ import (
 )
 
 //go:generate oapi-codegen --config=codegen-server.yaml openapi.yaml
+//go:generate oapi-codegen --config=codegen-sdk-go.yaml openapi.yaml
 
 //go:embed openapi.yaml
 var specYAML []byte

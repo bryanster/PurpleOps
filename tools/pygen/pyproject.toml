@@ -1,0 +1,37 @@
+# The Python code generator, pinned.
+#
+# tools/tools.go does this for the Go generators, and for the same reason: the
+# generated code is committed, and CI fails the build if regenerating it changes
+# anything. That gate only means something when every machine runs the same
+# generator — and, here, the same `ruff`, since the formatter that runs over the
+# output decides the bytes as much as the generator does.
+#
+# It is a project rather than a `uv tool install` because only a project has a
+# lock file. `uv sync --project tools/pygen` resolves it from tools/pygen/uv.lock
+# and never from PyPI's current best answer; `make generate` then runs it from
+# that environment, offline.
+#
+# This is not the SDK's own project — that is sdk/python/pyproject.toml, written
+# by the generator, and it depends on httpx and attrs rather than on any of this.
+[project]
+name = "blacklight-pygen"
+version = "0.0.0"
+description = "Pinned toolchain for generating sdk/python. Not published, not importable."
+# The generator's own floor, which is the interpreter a developer or CI runs it
+# with — not a constraint on the SDK. sdk/python/pyproject.toml states that
+# package's own requirement, which happens to be the same 3.11 because the code
+# this generator emits uses `X | None` unions.
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "openapi-python-client==0.29.0",
+    # Pinned explicitly even though the generator depends on it: `ruff format`
+    # runs as a post-hook over the generated code, so a ruff release that
+    # changed one line of formatting would show up as codegen drift in a pull
+    # request that never touched the API document.
+    "ruff==0.14.5",
+]
+
+# Nothing here is importable — it exists to bring two executables into one
+# locked environment.
+[tool.uv]
+package = false

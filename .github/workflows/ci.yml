@@ -69,9 +69,11 @@ jobs:
           cache-dependency-path: |
             web/package-lock.json
             e2e/package-lock.json
+            sdk/typescript/package-lock.json
 
       - run: npm --prefix web ci
       - run: npm --prefix e2e ci
+      - run: npm --prefix sdk/typescript ci
 
       # tsc --noEmit, eslint and prettier --check, in that order.
       - name: Web lint
@@ -82,6 +84,12 @@ jobs:
       # and no unconditional skips.
       - name: End-to-end lint
         run: npm --prefix e2e run lint
+
+      # tsc over the SDK's sources *and* its tests (tsconfig.lint.json), then
+      # prettier. The published package is the one place where a type that no
+      # longer compiles is someone else's build breaking rather than ours.
+      - name: TypeScript SDK lint
+        run: npm --prefix sdk/typescript run lint
 
   # ── Go tests ────────────────────────────────────────────────────────────────
   test-go:
@@ -133,8 +141,8 @@ jobs:
   # ── codegen drift ───────────────────────────────────────────────────────────
   #
   # PLAN.md §4: "CI fails if generated code is stale." Editing api/openapi.yaml
-  # without committing the regenerated server and TypeScript types is the
-  # failure mode; it is silent everywhere else, because the stale files still
+  # without committing the regenerated server, TypeScript types and four SDKs is
+  # the failure mode; it is silent everywhere else, because the stale files still
   # compile.
   codegen:
     name: Generated code is current
@@ -151,12 +159,32 @@ jobs:
         with:
           node-version-file: web/.nvmrc
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            sdk/typescript/package-lock.json
 
       - run: npm --prefix web ci
+      - run: npm --prefix sdk/typescript ci
 
-      # Generator versions come from go.mod and web/package-lock.json, never
-      # from the runner's PATH — see tools/tools.go.
+      # uv runs the Python generator out of tools/pygen/uv.lock. Installed by
+      # its own pinned script rather than an action, so the version this job uses
+      # is stated here and not decided by somebody else's tag.
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/0.12.5/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync the pinned Python generator
+        run: uv sync --project tools/pygen --frozen
+
+      # The Rust generator is a container image pinned by digest, which is why
+      # this job needs no Rust toolchain at all. Docker is on the runner already.
+      - name: Pull the pinned Rust generator
+        run: tools/generate-rust-sdk.sh --pull
+
+      # Every generator's version comes from go.mod, a package-lock.json,
+      # tools/pygen/uv.lock or an image digest — never from the runner's PATH.
+      # See tools/tools.go and docs/sdk.md.
       - run: make generate
 
       # `git diff` alone would miss a generator that starts emitting a *new*
@@ -171,6 +199,80 @@ jobs:
           git status --porcelain
           git --no-pager diff
           exit 1
+
+  # ── SDK tests ───────────────────────────────────────────────────────────────
+  #
+  # The four clients in sdk/ are generated, but each has a hand-written seam —
+  # where `/api/v1` comes from, how a service token is presented, how a problem
+  # document becomes an error — and those are what these suites cover.
+  #
+  # Compiling them is half the point. A generated client that no longer builds
+  # is a broken package for everyone who installed it, and nothing else in this
+  # pipeline would notice: the Go SDK is its own module, the TypeScript one is
+  # only type-checked by its own lint, and neither Python nor Rust is compiled
+  # anywhere else at all.
+  test-sdk:
+    name: SDK tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: sdk/go/go.sum
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+
+      - run: npm --prefix sdk/typescript ci
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/0.12.5/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sync the Python SDK's environment
+        run: uv sync --project sdk/python --frozen --all-groups
+
+      # Cargo's registry index and the compiled dependencies, keyed on the
+      # lock file. Without it every run recompiles reqwest and tokio from
+      # scratch, which is most of this job's wall clock.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            sdk/rust/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('sdk/rust/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # rustup and a stable toolchain are preinstalled on the runner image, so
+      # there is no action here to pin — `cargo --version` in the log is the
+      # record of what built it.
+      - name: Toolchain versions
+        run: |
+          {
+            echo '### SDK toolchains'
+            echo '```'
+            go version
+            node --version
+            uv --version
+            cargo --version
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The TypeScript SDK is built as well as tested: `dist/` is what a
+      # consumer installs, and `tsc` emitting it is the only thing that proves
+      # the declarations resolve.
+      - name: Build the TypeScript SDK
+        run: npm --prefix sdk/typescript run build
+
+      - name: make test-sdk
+        run: make test-sdk
 
   # ── build matrix ────────────────────────────────────────────────────────────
   #
@@ -336,7 +438,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [lint, test-go, test-web, codegen, build, docker, e2e]
+    needs: [lint, test-go, test-web, test-sdk, codegen, build, docker, e2e]
     runs-on: ubuntu-24.04
     steps:
       - name: Every job succeeded

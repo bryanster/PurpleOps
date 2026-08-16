@@ -1,0 +1,44 @@
+{
+  "name": "blacklight-sdk",
+  "version": "0.0.0",
+  "description": "Typed TypeScript and JavaScript client for the Blacklight API, generated from api/openapi.yaml.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "generate": "openapi-typescript ../../api/openapi.yaml --output src/schema.ts",
+    "build": "tsc --build --force",
+    "lint": "tsc --noEmit -p tsconfig.lint.json && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.9.6",
+    "typescript": "~6.0",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  }
+}

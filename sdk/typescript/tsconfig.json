@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    /* ES2022 and ESNext modules, like web/tsconfig.app.json, but none of its
+       `vite/client` or testing-library types: this package is published, and
+       most of its callers are Node scripts and CI jobs.
+
+       `DOM` is here for exactly three declarations — `fetch`, `Request` and
+       `Response` — which TypeScript ships nowhere else, and which Node has had
+       as globals since 18. Nothing in src/ may touch `window`, `document` or
+       any other browser-only API; a caller running this under Node would get a
+       ReferenceError, and the compiler will not stop them. */
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    /* This one *does* emit: consumers install the built JavaScript and its
+       declarations, not the TypeScript. */
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+
+    /* The same bar as the SPA: strict, plus the checks it leaves off. An SDK
+       that is loose about `undefined` moves the problem into its callers. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo"
+  },
+  /* Tests are type-checked by `npm run lint` but are not part of the build:
+     nothing in dist/ should import vitest. */
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}
