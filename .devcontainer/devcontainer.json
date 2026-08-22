@@ -38,6 +38,12 @@
     "ghcr.io/devcontainers/features/rust:1": {
       "version": "latest",
       "profile": "minimal"
+    },
+    // `nix`, to build and test deploy/nixos-azure — the native (no-container)
+    // NixOS deployment. Flakes are enabled so `nix build .#blacklight` works.
+    "ghcr.io/devcontainers/features/nix:1": {
+      "version": "latest",
+      "extraNixConfig": "experimental-features = nix-command flakes"
     }
   },
   // Installs the pinned generators and linter into ./bin and runs `npm ci`.

@@ -84,6 +84,11 @@ The walkthrough — including the first-administrator step and the caveats of ru
 DuckDB database on a managed filesystem — is in
 [`deploy/terraform/README.md`](../deploy/terraform/README.md).
 
+The same server can run on a NixOS VM you control end to end: `deploy/nixos-azure` builds the
+binary natively (no container) and deploys it to an Azure VM as a systemd service, with the
+database on the VM's own disk — which is where DuckDB wants to be — and a Caddy reverse proxy for
+TLS. The walkthrough is in [`deploy/nixos-azure/README.md`](../deploy/nixos-azure/README.md).
+
 ---
 
 ## Configuration

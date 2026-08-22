@@ -1,0 +1,3 @@
+# `nix build` / `nixos-rebuild build-image` output symlink.
+result
+result-*

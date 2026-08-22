@@ -26,6 +26,7 @@ docker volume rm blacklight-go-mod blacklight-go-build
 | Docker CLI | Via the `docker-outside-of-docker` feature, pointed at the host daemon — so `make docker-build` and `make docker-smoke` work, sharing the host's layer cache |
 | Azure CLI (`az`) | Via the `azure-cli` feature. The Microsoft apt repo carries no trixie suite, so the feature falls back to a pipx install under `/usr/local/pipx` — a slower build, the same `az` on the PATH. Host `~/.azure` is bind-mounted, so `az login` survives rebuilds |
 | Terraform | Via the `terraform` feature, for `deploy/azure-terraform`. Terraform only — the feature's tflint and terragrunt defaults are turned off, since nothing in the repository runs them |
+| Nix (flakes) | Via the `nix` feature, to build and test `deploy/nixos-azure` — the native (no-container) NixOS deployment. Flakes are enabled, so `nix build .#blacklight` compiles the server without leaving the container |
 | Claude Code | `npm install -g @anthropic-ai/claude-code` |
 | Oh My Pi (`omp`) | Prebuilt binary from [omp.sh](https://omp.sh/install) into `/usr/local/bin` (shared PATH; not root's `~/.local/bin`) |
 | Prime Agent (`prime-agent`) | The [installer](https://app.primeintellect.ai/prime-agent/install.sh) verifies the latest release and `npm install -g`s it. Its optional IPython runtime (uv, Python 3.11, ipykernel) is *not* baked — at build time `$HOME` is still root's, so it would be a tree the `vscode` user cannot write. It is prepared on first use instead |
@@ -57,6 +58,7 @@ docker volume rm blacklight-go-mod blacklight-go-build
 
 ## Chromium is not here
 
-The image has no Chromium, so PDF rendering (M6) cannot be exercised in the dev container itself.
-Use the real image for that — `make docker-build`, then run it — which is what
+The dev container has no Chromium, so PDF rendering (M6) cannot be exercised in it directly. Use
+the real container image (`make docker-build`) or the NixOS deployment
+([`deploy/nixos-azure`](../deploy/nixos-azure)) — both carry Chromium — which is what
 [`docs/deploy.md`](../docs/deploy.md) describes and what CI tests.
