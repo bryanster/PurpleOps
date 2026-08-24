@@ -280,17 +280,99 @@ func TestParametersThatCannotHashAreAnErrorAndNotAPanic(t *testing.T) {
 	}
 }
 
-// BenchmarkHash measures one hash at the current [password.Default] settings.
+// TestTheShippedCostMeetsTheOWASPFloor guards the numbers in
+// [password.Production], which no other test can see any more: a benchmark is
+// the only other thing that runs them, and a benchmark is not run by `make
+// test`. Weakening them now costs a failing test rather than a code review
+// nobody asked for.
+//
+// The floor is OWASP's Password Storage Cheat Sheet (2025) Argon2id minimum,
+// m=19456 (19 MiB), t=2, p=1. The assertion is ">= the floor", not "== today's
+// numbers": raising the cost is the expected direction of travel and should not
+// need this test edited, while lowering it below what OWASP will defend should
+// not be possible by accident.
+func TestTheShippedCostMeetsTheOWASPFloor(t *testing.T) {
+	t.Parallel()
+
+	const (
+		owaspMemory = 19456
+		owaspTime   = 2
+	)
+	shipped := password.Production()
+
+	if shipped.Memory < owaspMemory {
+		t.Errorf("Production().Memory = %d KiB, want at least OWASP's %d KiB",
+			shipped.Memory, owaspMemory)
+	}
+	if shipped.Time < owaspTime {
+		t.Errorf("Production().Time = %d, want at least OWASP's %d", shipped.Time, owaspTime)
+	}
+	// One lane: a login should cost one core, so that a burst of them queues
+	// rather than saturating the host. More lanes at the same memory also give
+	// an offline attacker more to parallelize.
+	if shipped.Parallelism != 1 {
+		t.Errorf("Production().Parallelism = %d, want 1", shipped.Parallelism)
+	}
+	// The reference implementation's recommendations, and what the PHC test
+	// vectors use.
+	if shipped.SaltLength != 16 || shipped.KeyLength != 32 {
+		t.Errorf("Production() salt/key = %d/%d bytes, want 16/32",
+			shipped.SaltLength, shipped.KeyLength)
+	}
+	// And they have to be usable: validate() is unexported, so hashing under
+	// them is how a test asks.
+	if _, err := shipped.Hash(correct); err != nil {
+		t.Errorf("hashing under Production() = %v, want nil", err)
+	}
+}
+
+// TestTheTestCostIsWeakerThanTheShippedOne pins the relationship the suite
+// depends on: [password.Default] under `go test` is a deliberate downgrade of
+// [password.Production], and the tests that build "an old hash" do it by
+// dividing today's memory or dropping to one pass. If the test cost ever
+// reached the shipped one, those fixtures would stop being weaker and their
+// needsRehash assertions would pass for the wrong reason.
+func TestTheTestCostIsWeakerThanTheShippedOne(t *testing.T) {
+	t.Parallel()
+
+	current := password.Default()
+	if current == password.Production() {
+		t.Fatal("Default() is Production() inside a test binary, so the suite is hashing at full cost")
+	}
+	// Memory/4 must stay at or above Argon2's own 8 KiB-per-lane floor, or a
+	// "weaker" fixture is silently raised back to it and encodes a lie.
+	if got := current.Memory / 4; got < 8*uint32(current.Parallelism) {
+		t.Errorf("Default().Memory/4 = %d KiB, below Argon2's floor of %d KiB",
+			got, 8*uint32(current.Parallelism))
+	}
+	// t=1 has to remain a downgrade.
+	if current.Time < 2 {
+		t.Errorf("Default().Time = %d, want at least 2 so t=1 is still weaker", current.Time)
+	}
+	// The sizes are not part of the discount: the "shorter salt" and "shorter
+	// key" fixtures are relative to these.
+	if current.SaltLength != password.Production().SaltLength ||
+		current.KeyLength != password.Production().KeyLength {
+		t.Error("the test cost changes the salt or key size, which the length fixtures assume it does not")
+	}
+}
+
+// BenchmarkHash measures one hash at the shipped [password.Production]
+// settings — not [password.Default], which is deliberately cheap inside a test
+// binary and would report a number nothing runs on.
+//
 // M1-002 wants roughly 100–500 ms: below that the parameters are too cheap to
 // slow an offline attacker, above it a login is slow and a burst of logins is a
 // way to exhaust the server.
 //
-// Run it on the target hardware before changing Default:
+// Run it on the target hardware before changing Production:
 //
 //	go test ./internal/authn/password -run '^$' -bench BenchmarkHash -benchtime 20x
 func BenchmarkHash(b *testing.B) {
+	shipped := password.Production()
+
 	for b.Loop() {
-		if _, err := password.Hash(correct); err != nil {
+		if _, err := shipped.Hash(correct); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -299,14 +381,20 @@ func BenchmarkHash(b *testing.B) {
 // BenchmarkVerify is the number that matters for login latency, and should be
 // within noise of BenchmarkHash — the derivation is the same work.
 func BenchmarkVerify(b *testing.B) {
-	encoded, err := password.Hash(correct)
+	shipped := password.Production()
+
+	encoded, err := shipped.Hash(correct)
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 
 	for b.Loop() {
-		ok, _, err := password.Verify(correct, encoded)
+		// Params.Verify, not the package-level one: Verify derives under the
+		// parameters in the string either way, but the receiver is what decides
+		// needsRehash, and Default()'s cheap settings would call every one of
+		// these hashes up to date for the wrong reason.
+		ok, _, err := shipped.Verify(correct, encoded)
 		if err != nil || !ok {
 			b.Fatalf("Verify() = (%t, _, %v)", ok, err)
 		}

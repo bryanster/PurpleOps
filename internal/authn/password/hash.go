@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"testing"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -34,7 +35,7 @@ type Params struct {
 	KeyLength  uint32
 }
 
-// Default returns the parameters new hashes are made with.
+// Production returns the parameters a shipped binary makes new hashes with.
 //
 // OWASP's Password Storage Cheat Sheet (2025) gives m=19456 (19 MiB), t=2, p=1
 // as its Argon2id minimum. That is a floor for hardware nobody controls; on the
@@ -52,7 +53,11 @@ type Params struct {
 //
 // A 16-byte salt and a 32-byte key are the reference implementation's
 // recommendations, and are what the PHC format's own test vectors use.
-func Default() Params {
+//
+// Call this, not [Default], when the question is "how strong is this build's
+// hashing" — [Default] answers "what will the next hash cost", and under `go
+// test` those are deliberately different. See [testCost].
+func Production() Params {
 	return Params{
 		Memory:      64 * 1024,
 		Time:        3,
@@ -60,6 +65,57 @@ func Default() Params {
 		SaltLength:  16,
 		KeyLength:   32,
 	}
+}
+
+// testCost is what [Default] returns inside a test binary: the same algorithm,
+// the same code path, and the same salt and key sizes, for about a thousandth
+// of the work (157 µs against 148 ms on this hardware).
+//
+// Argon2's cost is a tuning knob, not behaviour. Every branch in [Params.Hash],
+// [Verify], [Decode], [Params.encode] and [Params.strongerThan] runs the same
+// way at 64 KiB as at 64 MiB, so a suite that hashes cheaply is testing exactly
+// what it was before — it just is not also re-proving, several hundred times a
+// run, that Argon2 is slow on purpose. Before this existed, hashing was 44% of
+// the CPU the internal/httpapi suite burned, because most of its tests seed a
+// user and sign in.
+//
+// The two settings that are not simply "as low as possible" are there to keep
+// the cost-comparison fixtures honest, and moving them will break tests rather
+// than silently weaken them:
+//
+//   - Memory is 64 KiB, not the 8 KiB floor, because those fixtures build a
+//     deliberately weak hash as Memory/4 and Argon2 quietly raises anything
+//     under 8 KiB per lane to its own floor.
+//   - Time is 2, not 1, so that t=1 is still a downgrade [Verify] must ask to
+//     replace.
+//
+// What is genuinely no longer covered by running the suite is that
+// [Production]'s numbers are strong ones. That was never an assertion — it was
+// a comment — so TestTheShippedCostMeetsTheOWASPFloor now asserts it instead,
+// and the benchmarks below measure [Production] explicitly.
+var testCost = Params{
+	Memory:      64,
+	Time:        2,
+	Parallelism: 1,
+	SaltLength:  16,
+	KeyLength:   32,
+}
+
+// Default returns the parameters new hashes are made with, and the yardstick
+// [Verify] measures a stored hash against when it decides needsRehash.
+//
+// It is [Production], except in a test binary, where it is [testCost].
+//
+// The switch is [testing.Testing], which is not a runtime condition: the go
+// command sets it with a linker flag when it builds a test binary, so a shipped
+// binary has it constant-folded to false. No environment variable, no
+// configuration file and no stray call can turn a production install's hashing
+// down — the only way to reach [testCost] is to be running `go test`.
+func Default() Params {
+	if testing.Testing() {
+		return testCost
+	}
+	return Production()
 }
 
 // MaxPlaintextBytes bounds what [Hash] and [Verify] will process.
