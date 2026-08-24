@@ -128,10 +128,17 @@ export function createClient(options: CreateClientOptions): BlacklightClient {
     )
   }
 
+  // Trailing slashes on both halves would produce `//api/v1`, which some
+  // reverse proxies redirect and others 404. Trimmed a character at a time
+  // rather than with `/\/+$/`: that expression backtracks quadratically over a
+  // run of slashes, and a caller passing one is not worth the stall.
+  let origin = baseUrl
+  while (origin.endsWith('/')) {
+    origin = origin.slice(0, -1)
+  }
+
   const client = createOpenapiFetchClient<paths>({
-    // Trailing slashes on both halves would produce `//api/v1`, which some
-    // reverse proxies redirect and others 404.
-    baseUrl: `${baseUrl.replace(/\/+$/, '')}${API_BASE_PATH}`,
+    baseUrl: `${origin}${API_BASE_PATH}`,
     ...(options.headers !== undefined && { headers: options.headers }),
     // openapi-fetch reads `globalThis.fetch` once, when the client is created.
     // Calling it through a closure binds it per request instead, which costs

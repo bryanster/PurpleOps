@@ -8,7 +8,8 @@
   "overrides": {
     "openapi-typescript": {
       "typescript": "$typescript"
-    }
+    },
+    "js-yaml": "^4.3.1"
   },
   "scripts": {
     "dev": "vite",
