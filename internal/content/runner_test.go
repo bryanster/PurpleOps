@@ -79,13 +79,8 @@ func TestRunnerSuccessWritesNotesAndRawSnapshot(t *testing.T) {
 		t.Fatalf("on-disk sha mismatch")
 	}
 
-	src, err := rt.sources.ByID(ctx, storecontent.SourceIDAtomic)
-	if err != nil {
-		t.Fatalf("source: %v", err)
-	}
-	if src.Status != storecontent.SourceStatusIdle {
-		t.Fatalf("source status = %s, want idle", src.Status)
-	}
+	src := awaitSourceStatus(t, ctx, rt.sources, storecontent.SourceIDAtomic,
+		storecontent.SourceStatusIdle)
 	if src.ItemCount != 2 {
 		t.Fatalf("item_count = %d, want 2", src.ItemCount)
 	}
@@ -433,4 +428,46 @@ func manyNotes(n int) []FixtureNote {
 		}
 	}
 	return out
+}
+
+// awaitSourceStatus polls a source until it reaches want, and returns it.
+//
+// [Runner.Wait] is not enough on its own. succeedJob marks the job succeeded
+// and puts the source back to idle in two separate transactions — jobs.Update
+// then sources.SetSyncState — and Wait polls the job, so it returns as soon as
+// it can see the first of the two. A test that reads the source in the moment
+// between them sees it still syncing.
+//
+// That is a race in the reader rather than in the runner: nothing promises a
+// terminal job and a settled source are one observation. It was worth about one
+// failure in twenty full-suite runs, and only under load, because the gap is
+// two DuckDB write transactions wide and widens when the machine is busy.
+//
+// If the two ever do become one transaction, this helper stops being necessary
+// rather than starting to lie: it would find the source already settled on its
+// first read.
+func awaitSourceStatus(t *testing.T, ctx context.Context, sources *storecontent.Sources,
+	id string, want storecontent.SourceStatus,
+) storecontent.Source {
+	t.Helper()
+
+	// Generous on purpose: the wait is normally one poll long, and the only
+	// thing a tight deadline would buy is this test flaking on a loaded machine
+	// for the same reason it used to.
+	deadline := time.Now().Add(10 * time.Second)
+	var last storecontent.SourceStatus
+	for {
+		src, err := sources.ByID(ctx, id)
+		if err != nil {
+			t.Fatalf("source: %v", err)
+		}
+		if src.Status == want {
+			return src
+		}
+		last = src.Status
+		if time.Now().After(deadline) {
+			t.Fatalf("source status = %s after 10s, want %s", last, want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }

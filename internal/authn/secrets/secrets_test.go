@@ -92,6 +92,15 @@ func TestOpenRefusesWhatThisKeyDidNotSeal(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
+	// A sealed value is a nonce, then the ciphertext, then GCM's tag. Editing
+	// any of the three has to be refused, so each gets a case: the tag is what
+	// catches the first two, and the tag catching an edit to itself is what
+	// stops an attacker simply recomputing it.
+	raw, err := encoding.DecodeString(sealed)
+	if err != nil {
+		t.Fatalf("decoding a value Seal produced: %v", err)
+	}
+
 	tests := []struct {
 		name   string
 		cipher *Cipher
@@ -100,7 +109,9 @@ func TestOpenRefusesWhatThisKeyDidNotSeal(t *testing.T) {
 		{"a different key", other, sealed},
 		{"not base64", cipher, "not base64 at all!"},
 		{"shorter than a nonce", cipher, base64.RawURLEncoding.EncodeToString([]byte("short"))},
-		{"an altered ciphertext", cipher, flipLastChar(sealed)},
+		{"an altered nonce", cipher, flipByte(t, sealed, 0)},
+		{"an altered ciphertext", cipher, flipByte(t, sealed, cipher.aead.NonceSize())},
+		{"an altered tag", cipher, flipByte(t, sealed, len(raw)-1)},
 		{"empty", cipher, ""},
 	}
 	for _, tt := range tests {
@@ -203,13 +214,31 @@ func TestTheZeroCipherEncryptsNothing(t *testing.T) {
 	}
 }
 
-// flipLastChar changes one character of a base64url string to a different legal
-// one, which is an edit GCM's tag has to catch.
-func flipLastChar(s string) string {
-	last := s[len(s)-1]
-	replacement := byte('A')
-	if last == 'A' {
-		replacement = 'B'
+// flipByte returns sealed with one bit of its index-th decoded byte inverted
+// and the result re-encoded: an edit GCM's tag has to catch.
+//
+// It edits the decoded bytes. Editing a character of the base64 instead — which
+// is what this helper did until it was found to be flaky — does not reliably
+// edit anything at all. base64url is lenient about the bits at the end of a
+// string that no byte uses: when the payload's length is not a multiple of
+// three, its final character carries only two or four significant bits and the
+// rest are ignored on the way back in. Replacing that character left the
+// decoded bytes identical whenever its significant bits already matched the
+// replacement's — four values in sixty-four for a sealed 13-byte secret, so
+// about one run in sixteen — and then Open succeeded and the test failed over
+// base64 rather than over GCM.
+func flipByte(t *testing.T, sealed string, index int) string {
+	t.Helper()
+
+	raw, err := encoding.DecodeString(sealed)
+	if err != nil {
+		t.Fatalf("decoding a value Seal produced: %v", err)
 	}
-	return s[:len(s)-1] + string(replacement)
+	if index < 0 || index >= len(raw) {
+		t.Fatalf("byte %d is outside a %d-byte sealed value", index, len(raw))
+	}
+
+	// One bit, not a whole byte: the smallest edit the tag has to notice.
+	raw[index] ^= 1
+	return encoding.EncodeToString(raw)
 }
