@@ -21,8 +21,14 @@ The two application secrets are generated during the deployment, stored in Key V
 by the container app through the managed identity — the values never appear in the container app's
 own secret list. Each is two fresh GUIDs with the hyphens stripped: 64 hexadecimal characters, 244
 bits of randomness, taken from the GUIDs' own bytes rather than through `uniqueString`, whose 64-bit
-hash would throw most of that away. They are `securestring` parameters, so the deployment history
-records the name and the type and no value. Key Vault is where they live.
+hash would throw most of that away. They are `securestring` values, so the deployment history records
+their names and types and no value; Key Vault is where they live.
+
+The generation happens in a nested, inner-scoped deployment (`<name>-secrets`) rather than in this
+template's parameter defaults, and that placement is load-bearing — see
+[Troubleshooting](#troubleshooting) for what goes wrong otherwise. Leave `sessionSecret`,
+`encryptionKey` and `adminPassword` empty and each is generated; fill one in and that value is used
+verbatim.
 
 ## Prerequisites
 
@@ -55,7 +61,7 @@ Everything is optional; these are the defaults.
 | `adminEmail` | *(empty)* | Set it and the app creates that first administrator; leave it empty and no account is created |
 | `adminName` | `Administrator` | Display name for that account |
 | `createSecrets` | `true` | Whether to write the three Key Vault secrets. **Set it to `false` when redeploying** — see below |
-| `sessionSecret` / `encryptionKey` / `adminPassword` | generated | Supply your own instead of the generated values |
+| `sessionSecret` / `encryptionKey` / `adminPassword` | *(empty)* | **Leave these empty** — each is generated during the deployment. Fill one in only to reuse a value you already have |
 
 The Storage Account and Key Vault take a generated name (`st…`/`kv…` plus a hash of the resource
 group and `name`), because both must be globally unique.
@@ -145,6 +151,34 @@ too — the session secret and encryption key live there and nowhere else, and a
 without its encryption key is one where nobody with MFA can sign in.
 
 ## Troubleshooting
+
+**The Key Vault secrets contain `[replace(concat(newGuid(),newGuid()),'-','')]`** — the literal
+expression rather than a value — and the app never starts: its revision sits in `Activating` and the
+health endpoint never answers.
+
+Versions of this template before the nested `<name>-secrets` deployment generated the secrets in
+their parameter *defaults*, and that does not survive the portal. The portal cannot evaluate ARM
+expressions in the browser, so its deployment form pre-fills every field with the default's raw text
+and submits it as an explicit value — and ARM evaluates a `defaultValue` only when no value is
+supplied. The expression is stored verbatim as the secret. Neither `az deployment group validate`
+nor `what-if` reproduces it, because neither goes through the form; deploying from the CLI does not
+either, which is what makes it a trap.
+
+The app refusing to start is the one piece of luck in it: both keys get the same literal string, and
+the server rejects a configuration where the session secret equals the encryption key, so nothing is
+ever served. To check a deployment you are unsure of:
+
+```sh
+az keyvault secret show --vault-name <kv> --name blacklight-session-secret --query value -o tsv
+```
+
+If the value starts with `[`, treat all three secrets as public — they are a string from a file in
+this repository — and the bootstrap administrator's password as known. Nothing was served, so there
+is nothing to salvage: delete the resource group and deploy again with a current template.
+
+```sh
+az group delete --name <your-rg>
+```
 
 **`RequestDisallowedByAzure` — "The selected region is currently not accepting new customers"**, on
 every resource at once:
