@@ -1,0 +1,13 @@
+# Deps for the example agents and their tests, on top of the SDK's own runtime
+# deps (httpx, attrs). Install from sdk/python:
+#     pip install -r examples/requirements.txt
+#
+# `pydantic-ai` (the full package) bundles the Anthropic provider the agents infer
+# from the "anthropic:claude-opus-5" model string. To run the tests you also need
+# respx + pytest, which the SDK's own dev group already provides
+# (uv run --project sdk/python --group dev ...).
+pydantic-ai>=0.2
+
+# Test-only (already present in the SDK's dev group; listed here for `pip` users):
+respx>=0.22,<0.23
+pytest>=9.0.3,<10
