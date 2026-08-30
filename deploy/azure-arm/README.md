@@ -21,8 +21,14 @@ The two application secrets are generated during the deployment, stored in Key V
 by the container app through the managed identity — the values never appear in the container app's
 own secret list. Each is two fresh GUIDs with the hyphens stripped: 64 hexadecimal characters, 244
 bits of randomness, taken from the GUIDs' own bytes rather than through `uniqueString`, whose 64-bit
-hash would throw most of that away. They are `securestring` parameters, so the deployment history
-records the name and the type and no value. Key Vault is where they live.
+hash would throw most of that away. They are `securestring` values, so the deployment history records
+their names and types and no value; Key Vault is where they live.
+
+The generation happens in a nested, inner-scoped deployment (`<name>-secrets`) rather than in this
+template's parameter defaults, and that placement is load-bearing — see
+[Troubleshooting](#troubleshooting) for what goes wrong otherwise. Leave `sessionSecret`,
+`encryptionKey` and `adminPassword` empty and each is generated; fill one in and that value is used
+verbatim.
 
 ## Prerequisites
 
@@ -48,14 +54,14 @@ Everything is optional; these are the defaults.
 | Parameter | Default | What it does |
 |---|---|---|
 | `name` | `blacklight` | Names the Container App, environment, workspace and identity, and the first label of the app's hostname |
-| `location` | the resource group's region | Region for every resource |
+| `locationOverride` | *(empty)* | Region for every resource. Empty means the resource group's own region, which is what you want when the button creates the group. Set it only to place the resources somewhere else — see [Troubleshooting](#troubleshooting) |
 | `image` / `imageTag` | `ghcr.io/bryanster/blacklight` / `v1.0.2` | The image to run. Pin a release |
 | `containerCpu` / `containerMemory` | `1` / `2Gi` | Container size. Must be a valid Consumption-plan pair |
 | `storageShareQuotaGb` | `100` | Size of the Azure Files share |
 | `adminEmail` | *(empty)* | Set it and the app creates that first administrator; leave it empty and no account is created |
 | `adminName` | `Administrator` | Display name for that account |
 | `createSecrets` | `true` | Whether to write the three Key Vault secrets. **Set it to `false` when redeploying** — see below |
-| `sessionSecret` / `encryptionKey` / `adminPassword` | generated | Supply your own instead of the generated values |
+| `sessionSecret` / `encryptionKey` / `adminPassword` | *(empty)* | **Leave these empty** — each is generated during the deployment. Fill one in only to reuse a value you already have |
 
 The Storage Account and Key Vault take a generated name (`st…`/`kv…` plus a hash of the resource
 group and `name`), because both must be globally unique.
@@ -143,6 +149,77 @@ deliberate re-enrollment.
 stop the app, run the command against the same share, start it again. Back up the Key Vault secrets
 too — the session secret and encryption key live there and nowhere else, and a restored database
 without its encryption key is one where nobody with MFA can sign in.
+
+## Troubleshooting
+
+**The Key Vault secrets contain `[replace(concat(newGuid(),newGuid()),'-','')]`** — the literal
+expression rather than a value — and the app never starts: its revision sits in `Activating` and the
+health endpoint never answers.
+
+Versions of this template before the nested `<name>-secrets` deployment generated the secrets in
+their parameter *defaults*, and that does not survive the portal. The portal cannot evaluate ARM
+expressions in the browser, so its deployment form pre-fills every field with the default's raw text
+and submits it as an explicit value — and ARM evaluates a `defaultValue` only when no value is
+supplied. The expression is stored verbatim as the secret. Neither `az deployment group validate`
+nor `what-if` reproduces it, because neither goes through the form; deploying from the CLI does not
+either, which is what makes it a trap.
+
+The app refusing to start is the one piece of luck in it: both keys get the same literal string, and
+the server rejects a configuration where the session secret equals the encryption key, so nothing is
+ever served. To check a deployment you are unsure of:
+
+```sh
+az keyvault secret show --vault-name <kv> --name blacklight-session-secret --query value -o tsv
+```
+
+If the value starts with `[`, treat all three secrets as public — they are a string from a file in
+this repository — and the bootstrap administrator's password as known. Nothing was served, so there
+is nothing to salvage: delete the resource group and deploy again with a current template.
+
+```sh
+az group delete --name <your-rg>
+```
+
+**`RequestDisallowedByAzure` — "The selected region is currently not accepting new customers"**, on
+every resource at once:
+
+```json
+{"code": "InvalidTemplateDeployment", "details": [
+  {"code": "RequestDisallowedByAzure", "target": "blacklight-logs",
+   "message": "Resource 'blacklight-logs' was disallowed by Azure: The selected region is currently not accepting new customers"}]}
+```
+
+Nothing was created, and nothing is wrong with the template: Azure caps capacity per region and per
+subscription, and closes a region to subscriptions that have never deployed there. `westeurope` is a
+common one to hit.
+
+The resources are created in the resource group's own region, so this is the region of the group you
+picked. They do not have to live there, though, which is what `locationOverride` is for: set it to a
+region your subscription can use and everything is created there instead, in the same group.
+
+```sh
+az deployment group create --resource-group <your-rg> \
+  --template-file deploy/azure-arm/azuredeploy.json --parameters locationOverride=northeurope
+```
+
+The override exists because of a portal behaviour worth knowing about: **when you deploy into a group
+that already exists, the blade's Region control is locked to that group's region.** There is nothing
+else on the form that moves the resources, so on an existing group in a closed region the override is
+the only way through — and choosing a region elsewhere on the form will look like it worked and fail
+identically. When you let the button create the group, the Region you pick there is the group's
+region, the override stays empty, and everything follows it.
+
+Try a neighbouring region — `northeurope` for `westeurope`, `swedencentral` or `uksouth` after that.
+There is no API that reports which regions are open to you, so trying is how you find out; a closed
+region fails in seconds, at preflight, before anything is provisioned (the attempt is not even
+recorded in the group's deployment history).
+
+To check a region supports every resource type in the first place:
+
+```sh
+az provider show --namespace Microsoft.App \
+  --query "resourceTypes[?resourceType=='managedEnvironments'].locations" -o tsv
+```
 
 ## Caveats
 

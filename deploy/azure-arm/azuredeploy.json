@@ -14,11 +14,11 @@
         "description": "Base name for the deployment. Names the Container App, its environment, the Log Analytics workspace and the managed identity, and seeds the first label of the app's hostname. Lowercase alphanumeric, hyphens allowed in the middle."
       }
     },
-    "location": {
+    "locationOverride": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]",
+      "defaultValue": "",
       "metadata": {
-        "description": "Azure region for every resource. Defaults to the resource group's region."
+        "description": "Azure region for every resource. Leave it empty \u2014 the normal case \u2014 and everything is created in the resource group's own region, which is the Region you pick above when you create the group here. Set it only to put the resources somewhere other than their group: a region closed to new subscriptions fails the deployment with RequestDisallowedByAzure, and the portal locks the Region control when you deploy into a group that already exists, so this is the way past that. Example: northeurope."
       }
     },
     "image": {
@@ -62,7 +62,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Email address of the first administrator. Set it and the app creates that account the first time it starts against an empty database; leave it empty and no account is created (create one with blctl instead — see the README). It is ignored on a deployment whose database already has accounts, so it is safe to leave in place."
+        "description": "Email address of the first administrator. Set it and the app creates that account the first time it starts against an empty database; leave it empty and no account is created (create one with blctl instead \u2014 see the README). It is ignored on a deployment whose database already has accounts, so it is safe to leave in place."
       }
     },
     "adminName": {
@@ -76,32 +76,33 @@
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "Whether to write the three secrets below into Key Vault. Leave it true for a first deployment. Set it to FALSE when you redeploy this template over an existing deployment — otherwise the generated defaults write new values, which signs every user out and makes every enrolled MFA authenticator, recovery code and service token unreadable. With it false the Key Vault secrets are left exactly as they are and everything else still updates."
+        "description": "Whether to write the three secrets below into Key Vault. Leave it true for a first deployment. Set it to FALSE when you redeploy this template over an existing deployment \u2014 otherwise the generated defaults write new values, which signs every user out and makes every enrolled MFA authenticator, recovery code and service token unreadable. With it false the Key Vault secrets are left exactly as they are and everything else still updates."
       }
     },
     "sessionSecret": {
       "type": "securestring",
-      "defaultValue": "[replace(concat(newGuid(), newGuid()), '-', '')]",
+      "defaultValue": "",
       "metadata": {
-        "description": "BLACKLIGHT_SESSION_SECRET, stored in Key Vault. Leave it alone and a fresh value is generated during the deployment: two new GUIDs, hyphens stripped, giving 64 hexadecimal characters carrying 244 bits of randomness. It is a securestring, so the value is not recorded in the deployment history. Supply your own to reuse an existing secret."
+        "description": "BLACKLIGHT_SESSION_SECRET, stored in Key Vault. LEAVE THIS EMPTY unless you are reusing an existing secret: empty means the deployment generates one for you \u2014 two new GUIDs with the hyphens stripped, 64 hexadecimal characters carrying 244 bits of randomness. The generation happens inside a nested deployment, because a parameter default cannot be used for it: the portal's deployment form fills every field with the default's raw text, so a generator expression here would be stored verbatim as the secret."
       }
     },
     "encryptionKey": {
       "type": "securestring",
-      "defaultValue": "[replace(concat(newGuid(), newGuid()), '-', '')]",
+      "defaultValue": "",
       "metadata": {
-        "description": "BLACKLIGHT_ENCRYPTION_KEY, stored in Key Vault. Generated like sessionSecret, from its own GUIDs, so the two can never match (the server refuses to start if they do). Changing it on a live deployment makes every enrolled MFA authenticator, recovery code and service token unreadable."
+        "description": "BLACKLIGHT_ENCRYPTION_KEY, stored in Key Vault. Leave it empty to have one generated, exactly as sessionSecret is and from its own GUIDs, so the two can never match (the server refuses to start if they do). Changing it on a live deployment makes every enrolled MFA authenticator, recovery code and service token unreadable."
       }
     },
     "adminPassword": {
       "type": "securestring",
-      "defaultValue": "[replace(newGuid(), '-', '')]",
+      "defaultValue": "",
       "metadata": {
-        "description": "Initial password for the first administrator, stored in Key Vault. Generated by default: one new GUID with its hyphens stripped, 32 hexadecimal characters, well past the application's twelve-character policy. The adminPasswordCommand output prints the az command that reads it back. Change it at first sign-in either way."
+        "description": "Initial password for the first administrator, stored in Key Vault. Leave it empty to have one generated: one new GUID with its hyphens stripped, 32 hexadecimal characters, well past the application's twelve-character policy. The adminPasswordCommand output prints the az command that reads it back. Change it at first sign-in either way."
       }
     }
   },
   "variables": {
+    "location": "[if(empty(parameters('locationOverride')), resourceGroup().location, parameters('locationOverride'))]",
     "suffix": "[uniqueString(resourceGroup().id, parameters('name'))]",
     "storageAccountName": "[take(toLower(concat('st', variables('suffix'))), 24)]",
     "keyVaultName": "[take(toLower(concat('kv', variables('suffix'))), 24)]",
@@ -163,7 +164,8 @@
         "name": "BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD",
         "secretRef": "bootstrap-admin-password"
       }
-    ]
+    ],
+    "secretsDeploymentName": "[concat(parameters('name'), '-secrets')]"
   },
   "resources": [
     {
@@ -171,7 +173,7 @@
       "type": "Microsoft.OperationalInsights/workspaces",
       "apiVersion": "2023-09-01",
       "name": "[variables('logAnalyticsName')]",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "properties": {
         "sku": {
           "name": "PerGB2018"
@@ -184,7 +186,7 @@
       "type": "Microsoft.App/managedEnvironments",
       "apiVersion": "2024-03-01",
       "name": "[variables('environmentName')]",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "dependsOn": [
         "[variables('logAnalyticsId')]"
       ],
@@ -203,7 +205,7 @@
       "type": "Microsoft.Storage/storageAccounts",
       "apiVersion": "2023-05-01",
       "name": "[variables('storageAccountName')]",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "kind": "StorageV2",
       "sku": {
         "name": "Standard_LRS"
@@ -249,14 +251,14 @@
       "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
       "apiVersion": "2023-01-31",
       "name": "[variables('identityName')]",
-      "location": "[parameters('location')]"
+      "location": "[variables('location')]"
     },
     {
       "comments": "Key Vault, in access-policy mode: the app's identity gets Get on secrets, and the secrets below are written through the ARM control plane by whoever runs the deployment.",
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2023-07-01",
       "name": "[variables('keyVaultName')]",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "dependsOn": [
         "[variables('identityId')]"
       ],
@@ -284,40 +286,125 @@
       }
     },
     {
+      "comments": "Generates the secrets and writes them to Key Vault. It is a separate, inner-scoped deployment for one reason: the expressions below are evaluated by ARM at deployment time, out of reach of anything that fills parameters in beforehand. newGuid() is only legal in a parameter default, and a default on the parent template is exactly what the portal's deployment form overwrites with its own literal text \u2014 so the generators live in this template's parameters instead, where no form can see them. Supplying a value on the parent overrides the generated one; an empty string means generate.",
       "condition": "[parameters('createSecrets')]",
-      "type": "Microsoft.KeyVault/vaults/secrets",
-      "apiVersion": "2023-07-01",
-      "name": "[format('{0}/{1}', variables('keyVaultName'), variables('sessionSecretName'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('secretsDeploymentName')]",
       "dependsOn": [
         "[variables('keyVaultId')]"
       ],
       "properties": {
-        "value": "[parameters('sessionSecret')]"
-      }
-    },
-    {
-      "condition": "[parameters('createSecrets')]",
-      "type": "Microsoft.KeyVault/vaults/secrets",
-      "apiVersion": "2023-07-01",
-      "name": "[format('{0}/{1}', variables('keyVaultName'), variables('encryptionKeySecretName'))]",
-      "dependsOn": [
-        "[variables('keyVaultId')]"
-      ],
-      "properties": {
-        "value": "[parameters('encryptionKey')]"
-      }
-    },
-    {
-      "comments": "The first administrator's initial password. Written only when an address was given, and used once, by the server, on a database with no accounts.",
-      "condition": "[and(parameters('createSecrets'), variables('createAdmin'))]",
-      "type": "Microsoft.KeyVault/vaults/secrets",
-      "apiVersion": "2023-07-01",
-      "name": "[format('{0}/{1}', variables('keyVaultName'), variables('adminSecretName'))]",
-      "dependsOn": [
-        "[variables('keyVaultId')]"
-      ],
-      "properties": {
-        "value": "[parameters('adminPassword')]"
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "Inner"
+        },
+        "parameters": {
+          "keyVaultName": {
+            "value": "[variables('keyVaultName')]"
+          },
+          "sessionSecretName": {
+            "value": "[variables('sessionSecretName')]"
+          },
+          "encryptionKeySecretName": {
+            "value": "[variables('encryptionKeySecretName')]"
+          },
+          "adminSecretName": {
+            "value": "[variables('adminSecretName')]"
+          },
+          "createAdmin": {
+            "value": "[variables('createAdmin')]"
+          },
+          "suppliedSessionSecret": {
+            "value": "[parameters('sessionSecret')]"
+          },
+          "suppliedEncryptionKey": {
+            "value": "[parameters('encryptionKey')]"
+          },
+          "suppliedAdminPassword": {
+            "value": "[parameters('adminPassword')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "keyVaultName": {
+              "type": "string"
+            },
+            "sessionSecretName": {
+              "type": "string"
+            },
+            "encryptionKeySecretName": {
+              "type": "string"
+            },
+            "adminSecretName": {
+              "type": "string"
+            },
+            "createAdmin": {
+              "type": "bool"
+            },
+            "suppliedSessionSecret": {
+              "type": "securestring"
+            },
+            "suppliedEncryptionKey": {
+              "type": "securestring"
+            },
+            "suppliedAdminPassword": {
+              "type": "securestring"
+            },
+            "generatedSessionSecret": {
+              "type": "securestring",
+              "defaultValue": "[replace(concat(newGuid(), newGuid()), '-', '')]",
+              "metadata": {
+                "description": "Never passed in: ARM evaluates this default at deployment time."
+              }
+            },
+            "generatedEncryptionKey": {
+              "type": "securestring",
+              "defaultValue": "[replace(concat(newGuid(), newGuid()), '-', '')]",
+              "metadata": {
+                "description": "Never passed in: ARM evaluates this default at deployment time."
+              }
+            },
+            "generatedAdminPassword": {
+              "type": "securestring",
+              "defaultValue": "[replace(newGuid(), '-', '')]",
+              "metadata": {
+                "description": "Never passed in: ARM evaluates this default at deployment time."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('sessionSecretName'))]",
+              "properties": {
+                "value": "[if(empty(parameters('suppliedSessionSecret')), parameters('generatedSessionSecret'), parameters('suppliedSessionSecret'))]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('encryptionKeySecretName'))]",
+              "properties": {
+                "value": "[if(empty(parameters('suppliedEncryptionKey')), parameters('generatedEncryptionKey'), parameters('suppliedEncryptionKey'))]"
+              }
+            },
+            {
+              "comments": "The first administrator's initial password. Written only when an address was given, and used once, by the server, on a database with no accounts.",
+              "condition": "[parameters('createAdmin')]",
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('adminSecretName'))]",
+              "properties": {
+                "value": "[if(empty(parameters('suppliedAdminPassword')), parameters('generatedAdminPassword'), parameters('suppliedAdminPassword'))]"
+              }
+            }
+          ],
+          "outputs": {}
+        }
       }
     },
     {
@@ -325,7 +412,7 @@
       "type": "Microsoft.App/containerApps",
       "apiVersion": "2024-03-01",
       "name": "[variables('containerAppName')]",
-      "location": "[parameters('location')]",
+      "location": "[variables('location')]",
       "identity": {
         "type": "UserAssigned",
         "userAssignedIdentities": {
@@ -334,9 +421,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments/storages', variables('environmentName'), variables('storageMountName'))]",
-        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('sessionSecretName'))]",
-        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('encryptionKeySecretName'))]",
-        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('adminSecretName'))]"
+        "[resourceId('Microsoft.Resources/deployments', variables('secretsDeploymentName'))]"
       ],
       "properties": {
         "managedEnvironmentId": "[variables('environmentId')]",
