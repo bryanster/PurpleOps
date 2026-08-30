@@ -46,7 +46,7 @@ Everything is optional; these are the defaults.
 | Parameter | Default | What it does |
 |---|---|---|
 | `name` | `blacklight` | Names the Container App, environment, workspace and identity, and the first label of the app's hostname |
-| `location` | the resource group's region | Region for every resource |
+| `locationOverride` | *(empty)* | Region for every resource. Empty means the resource group's own region, which is what you want when the button creates the group. Set it only to place the resources somewhere else — see [Troubleshooting](#troubleshooting) |
 | `image` / `imageTag` | `ghcr.io/bryanster/blacklight` / `v1.0.2` | The image to run. Pin a release |
 | `containerCpu` / `containerMemory` | `1` / `2Gi` | Container size. Must be a valid Consumption-plan pair |
 | `storageShareQuotaGb` | `100` | Size of the Azure Files share |
@@ -141,6 +141,49 @@ deliberate re-enrollment.
 stop the app, run the command against the same share, start it again. Back up the Key Vault secrets
 too — the session secret and encryption key live there and nowhere else, and a restored database
 without its encryption key is one where nobody with MFA can sign in.
+
+## Troubleshooting
+
+**`RequestDisallowedByAzure` — "The selected region is currently not accepting new customers"**, on
+every resource at once:
+
+```json
+{"code": "InvalidTemplateDeployment", "details": [
+  {"code": "RequestDisallowedByAzure", "target": "blacklight-logs",
+   "message": "Resource 'blacklight-logs' was disallowed by Azure: The selected region is currently not accepting new customers"}]}
+```
+
+Nothing was created, and nothing is wrong with the template: Azure caps capacity per region and per
+subscription, and closes a region to subscriptions that have never deployed there. `westeurope` is a
+common one to hit.
+
+The resources are created in the resource group's own region, so this is the region of the group you
+picked. They do not have to live there, though, which is what `locationOverride` is for: set it to a
+region your subscription can use and everything is created there instead, in the same group.
+
+```sh
+az deployment group create --resource-group <your-rg> \
+  --template-file deploy/azure-arm/azuredeploy.json --parameters locationOverride=northeurope
+```
+
+The override exists because of a portal behaviour worth knowing about: **when you deploy into a group
+that already exists, the blade's Region control is locked to that group's region.** There is nothing
+else on the form that moves the resources, so on an existing group in a closed region the override is
+the only way through — and choosing a region elsewhere on the form will look like it worked and fail
+identically. When you let the button create the group, the Region you pick there is the group's
+region, the override stays empty, and everything follows it.
+
+Try a neighbouring region — `northeurope` for `westeurope`, `swedencentral` or `uksouth` after that.
+There is no API that reports which regions are open to you, so trying is how you find out; a closed
+region fails in seconds, at preflight, before anything is provisioned (the attempt is not even
+recorded in the group's deployment history).
+
+To check a region supports every resource type in the first place:
+
+```sh
+az provider show --namespace Microsoft.App \
+  --query "resourceTypes[?resourceType=='managedEnvironments'].locations" -o tsv
+```
 
 ## Caveats
 
