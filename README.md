@@ -70,6 +70,7 @@ which is the better option for anything with a lifecycle.
 
 | You want to… | Read |
 |---|---|
+| Run an engagement as red | [`docs/red-team-guide.md`](docs/red-team-guide.md) |
 | Deploy or configure | [`docs/deploy.md`](docs/deploy.md) |
 | Understand the security model | [`docs/security.md`](docs/security.md) |
 | Set up SSO (OIDC / SAML) | [`docs/sso-oidc.md`](docs/sso-oidc.md) · [`docs/sso-saml.md`](docs/sso-saml.md) |

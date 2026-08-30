@@ -185,24 +185,36 @@ func recordLoginThrottled(ctx context.Context, activity *events.Log, log *slog.L
 //     value an attacker would have to vary to escape the count, at which point
 //     the source limiter is what is left holding them.
 //
-// A bearer credential wins over a route entry, which matters for no route
-// today and would matter the moment a sign-in endpoint accepted one.
+// A bearer credential is tried last. Sign-in routes and share-claim routes
+// identify their credential from the body, the pending cookie, or the URL
+// path, and a caller can manufacture any `Authorization: Bearer …` header they
+// like. Checking the bearer token first would let a malformed header redirect
+// the count away from the account (or share token) actually being guessed —
+// tokenAccount maps a malformed token to the empty string, which the account
+// limiter ignores — defeating the per-account lockout entirely. A token is
+// only the credential in view when no route has named a different one.
 func credentialAttempt(r *http.Request, accounts map[string]accountOf) (throttle.Attempt, bool) {
 	source := ClientIP(r.Context())
 
-	if presented, ok := bearerToken(r); ok {
-		return throttle.Attempt{Account: tokenAccount(presented), Source: source}, true
+	// Sign-in routes first: their account is the password, TOTP or recovery
+	// target named in the body or behind the pending cookie, whatever else the
+	// request happens to carry.
+	if account, guarded := accounts[routePath(r)]; guarded && r.Method == http.MethodPost {
+		return throttle.Attempt{Account: account(r), Source: source}, true
 	}
 
+	// A report-share claim or password request presents the share token in the
+	// URL path, keyed by its hash.
 	if account, guarded := shareTokenAccount(r); guarded {
 		return throttle.Attempt{Account: account, Source: source}, true
 	}
 
-	account, guarded := accounts[routePath(r)]
-	if !guarded || r.Method != http.MethodPost {
-		return throttle.Attempt{}, false
+	// Otherwise, a bearer token on any route and method (M1-011).
+	if presented, ok := bearerToken(r); ok {
+		return throttle.Attempt{Account: tokenAccount(presented), Source: source}, true
 	}
-	return throttle.Attempt{Account: account(r), Source: source}, true
+
+	return throttle.Attempt{}, false
 }
 
 // shareTokenAccount names the share token a report-view claim or password

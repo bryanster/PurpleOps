@@ -6731,6 +6731,8 @@ paths:
       x-authz-resource:
         type: report
         engagement: engagementId
+        param: versionId
+        kind: version
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6766,6 +6768,8 @@ paths:
       x-authz-resource:
         type: report
         engagement: engagementId
+        param: versionId
+        kind: version
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
@@ -6802,6 +6806,8 @@ paths:
       x-authz-resource:
         type: report
         engagement: engagementId
+        param: versionId
+        kind: version
       parameters:
         - $ref: "#/components/parameters/EngagementId"
         - $ref: "#/components/parameters/ReportId"
