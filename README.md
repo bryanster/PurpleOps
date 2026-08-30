@@ -35,6 +35,20 @@ That works with no configuration — fine for a laptop, not fine for anything el
 can reach it, read [`docs/deploy.md`](docs/deploy.md): at minimum you must set
 `BLACKLIGHT_BASE_URL`, `BLACKLIGHT_SESSION_SECRET` and `BLACKLIGHT_ENCRYPTION_KEY`.
 
+### Deploy to Azure
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fbryanster%2Fblacklight%2Fmain%2Fdeploy%2Fazure-arm%2Fazuredeploy.json)
+
+One click, about five minutes: the image on Azure Container Apps, the database and evidence on an
+Azure Files share, and the session secret, encryption key and first administrator's password
+generated during the deployment and kept in Key Vault, read by the app through a managed identity.
+Fill in an address for the first administrator and it creates that account for you.
+
+[`deploy/azure-arm/`](deploy/azure-arm/README.md) explains the parameters, how to read the initial
+password back out of Key Vault, and what to set when redeploying.
+[`deploy/azure-terraform/`](deploy/azure-terraform/README.md) is the same deployment as Terraform,
+which is the better option for anything with a lifecycle.
+
 ## What you get
 
 - **Single binary** (Go, CGO). The container image is the supported artefact: `linux/amd64` and
