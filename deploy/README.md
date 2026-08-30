@@ -10,7 +10,8 @@ context. This file is the map.
 | `entrypoint.sh` | Generates and persists a session secret when the operator did not supply one, then `exec`s the server. Nothing else |
 | `healthcheck.sh` | The image's `HEALTHCHECK` command: `GET /api/v1/healthz` on the configured port |
 | `smoke.sh` | Builds the image, runs it, and asserts every claim `docs/deploy.md` makes. `make docker-smoke`; CI runs the same script |
-| `terraform/` | Azure Container Apps example — app, Azure Files data volume, Key Vault secrets. See `deploy/terraform/README.md` |
+| `azure-terraform/` | Azure Container Apps example — app, Azure Files data volume, Key Vault secrets. See `deploy/azure-terraform/README.md` |
+| `azure-arm/` | The same deployment as an ARM template, behind a **Deploy to Azure** button — no Terraform, no state file. See `deploy/azure-arm/README.md` |
 | `nixos-azure/` | NixOS VM on Azure — builds a Gen 1 VHD and runs the server natively (no container) as a systemd service behind Caddy, data on the VM's own disk. See `deploy/nixos-azure/README.md` |
 
 [`compose.yml`](../compose.yml) is at the repository root rather than here, so that

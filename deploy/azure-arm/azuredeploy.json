@@ -1,0 +1,469 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Blacklight on Azure Container Apps. The one-click equivalent of deploy/azure-terraform: the published container image on Container Apps, the database and evidence on an Azure Files share, and the session secret, encryption key and first administrator's password generated here and kept in Key Vault, read by the app through a user-assigned managed identity. Deployed at resource-group scope, so the portal's Deploy to Azure form is where the resource group is chosen or created."
+  },
+  "parameters": {
+    "name": {
+      "type": "string",
+      "defaultValue": "blacklight",
+      "minLength": 2,
+      "maxLength": 32,
+      "metadata": {
+        "description": "Base name for the deployment. Names the Container App, its environment, the Log Analytics workspace and the managed identity, and seeds the first label of the app's hostname. Lowercase alphanumeric, hyphens allowed in the middle."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for every resource. Defaults to the resource group's region."
+      }
+    },
+    "image": {
+      "type": "string",
+      "defaultValue": "ghcr.io/bryanster/blacklight",
+      "metadata": {
+        "description": "Container image repository."
+      }
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "v1.0.2",
+      "metadata": {
+        "description": "Container image tag. Pin to a release for reproducible deployments. v1.0.1 is the first release that can create the first administrator from adminEmail below."
+      }
+    },
+    "containerCpu": {
+      "type": "string",
+      "defaultValue": "1",
+      "metadata": {
+        "description": "vCPU for the app container, as a number in a string (Container Apps accepts fractional values such as 0.5). Must pair with containerMemory in a valid Consumption-plan combination."
+      }
+    },
+    "containerMemory": {
+      "type": "string",
+      "defaultValue": "2Gi",
+      "metadata": {
+        "description": "Memory for the app container. Pairs with containerCpu: 1 vCPU goes with 2Gi."
+      }
+    },
+    "storageShareQuotaGb": {
+      "type": "int",
+      "defaultValue": 100,
+      "minValue": 1,
+      "maxValue": 5120,
+      "metadata": {
+        "description": "Quota for the Azure Files share holding the database and evidence, in GiB."
+      }
+    },
+    "adminEmail": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Email address of the first administrator. Set it and the app creates that account the first time it starts against an empty database; leave it empty and no account is created (create one with blctl instead — see the README). It is ignored on a deployment whose database already has accounts, so it is safe to leave in place."
+      }
+    },
+    "adminName": {
+      "type": "string",
+      "defaultValue": "Administrator",
+      "metadata": {
+        "description": "Name to show for the first administrator. Only used when the account is actually created."
+      }
+    },
+    "createSecrets": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Whether to write the three secrets below into Key Vault. Leave it true for a first deployment. Set it to FALSE when you redeploy this template over an existing deployment — otherwise the generated defaults write new values, which signs every user out and makes every enrolled MFA authenticator, recovery code and service token unreadable. With it false the Key Vault secrets are left exactly as they are and everything else still updates."
+      }
+    },
+    "sessionSecret": {
+      "type": "securestring",
+      "defaultValue": "[concat(uniqueString(newGuid(), 'session-1'), uniqueString(newGuid(), 'session-2'), uniqueString(newGuid(), 'session-3'), uniqueString(newGuid(), 'session-4'), uniqueString(newGuid(), 'session-5'))]",
+      "metadata": {
+        "description": "BLACKLIGHT_SESSION_SECRET, stored in Key Vault. Leave it alone and a fresh 65-character value is generated from new GUIDs during the deployment; it is a securestring, so it is not recorded in the deployment history. Supply it to reuse an existing secret."
+      }
+    },
+    "encryptionKey": {
+      "type": "securestring",
+      "defaultValue": "[concat(uniqueString(newGuid(), 'encryption-1'), uniqueString(newGuid(), 'encryption-2'), uniqueString(newGuid(), 'encryption-3'), uniqueString(newGuid(), 'encryption-4'), uniqueString(newGuid(), 'encryption-5'))]",
+      "metadata": {
+        "description": "BLACKLIGHT_ENCRYPTION_KEY, stored in Key Vault. Generated like sessionSecret and from independent GUIDs, so the two can never match (the server refuses to start if they do). Changing it on a live deployment makes every enrolled MFA authenticator, recovery code and service token unreadable."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "defaultValue": "[concat(uniqueString(newGuid(), 'admin-1'), uniqueString(newGuid(), 'admin-2'))]",
+      "metadata": {
+        "description": "Initial password for the first administrator, stored in Key Vault. Generated by default — the adminPasswordCommand output prints the az command that reads it back. At least 12 characters (the policy the application applies), and change it at first sign-in either way."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id, parameters('name'))]",
+    "storageAccountName": "[take(toLower(concat('st', variables('suffix'))), 24)]",
+    "keyVaultName": "[take(toLower(concat('kv', variables('suffix'))), 24)]",
+    "logAnalyticsName": "[concat(parameters('name'), '-logs')]",
+    "environmentName": "[concat(parameters('name'), '-env')]",
+    "identityName": "[concat(parameters('name'), '-identity')]",
+    "containerAppName": "[parameters('name')]",
+    "fileShareName": "blacklight-data",
+    "storageMountName": "blacklight-data",
+    "sessionSecretName": "blacklight-session-secret",
+    "encryptionKeySecretName": "blacklight-encryption-key",
+    "adminSecretName": "blacklight-bootstrap-admin-password",
+    "createAdmin": "[not(empty(parameters('adminEmail')))]",
+    "identityId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]",
+    "logAnalyticsId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]",
+    "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+    "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+    "keyVaultId": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+    "vaultUri": "[format('https://{0}{1}/', variables('keyVaultName'), environment().suffixes.keyvaultDns)]",
+    "appSecrets": [
+      {
+        "name": "session-secret",
+        "keyVaultUrl": "[concat(variables('vaultUri'), 'secrets/', variables('sessionSecretName'))]",
+        "identity": "[variables('identityId')]"
+      },
+      {
+        "name": "encryption-key",
+        "keyVaultUrl": "[concat(variables('vaultUri'), 'secrets/', variables('encryptionKeySecretName'))]",
+        "identity": "[variables('identityId')]"
+      }
+    ],
+    "adminSecrets": [
+      {
+        "name": "bootstrap-admin-password",
+        "keyVaultUrl": "[concat(variables('vaultUri'), 'secrets/', variables('adminSecretName'))]",
+        "identity": "[variables('identityId')]"
+      }
+    ],
+    "coreEnv": [
+      {
+        "name": "BLACKLIGHT_SESSION_SECRET",
+        "secretRef": "session-secret"
+      },
+      {
+        "name": "BLACKLIGHT_ENCRYPTION_KEY",
+        "secretRef": "encryption-key"
+      }
+    ],
+    "adminEnv": [
+      {
+        "name": "BLACKLIGHT_BOOTSTRAP_ADMIN_EMAIL",
+        "value": "[parameters('adminEmail')]"
+      },
+      {
+        "name": "BLACKLIGHT_BOOTSTRAP_ADMIN_NAME",
+        "value": "[parameters('adminName')]"
+      },
+      {
+        "name": "BLACKLIGHT_BOOTSTRAP_ADMIN_PASSWORD",
+        "secretRef": "bootstrap-admin-password"
+      }
+    ]
+  },
+  "resources": [
+    {
+      "comments": "Log Analytics workspace. A Container Apps environment needs somewhere to send container logs.",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "comments": "The Container Apps environment: the network and logging boundary the app runs in.",
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('environmentName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('logAnalyticsId')]"
+      ],
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(variables('logAnalyticsId'), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(variables('logAnalyticsId'), '2023-09-01').primarySharedKey]"
+          }
+        }
+      }
+    },
+    {
+      "comments": "Storage for the DuckDB database, its WAL and uploaded evidence. Nothing in it is public.",
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/default/{1}', variables('storageAccountName'), variables('fileShareName'))]",
+      "dependsOn": [
+        "[variables('storageAccountId')]"
+      ],
+      "properties": {
+        "shareQuota": "[parameters('storageShareQuotaGb')]",
+        "enabledProtocols": "SMB"
+      }
+    },
+    {
+      "comments": "Links the share to the environment. The app's volume references this link by name, not by share name.",
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', variables('environmentName'), variables('storageMountName'))]",
+      "dependsOn": [
+        "[variables('environmentId')]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('storageAccountName'), 'default', variables('fileShareName'))]"
+      ],
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(variables('storageAccountId'), '2023-05-01').keys[0].value]",
+          "shareName": "[variables('fileShareName')]",
+          "accessMode": "ReadWrite"
+        }
+      }
+    },
+    {
+      "comments": "The identity the app reads its Key Vault secrets with. It is the only principal this template grants data-plane access to.",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('identityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "comments": "Key Vault, in access-policy mode: the app's identity gets Get on secrets, and the secrets below are written through the ARM control plane by whoever runs the deployment.",
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('identityId')]"
+      ],
+      "properties": {
+        "tenantId": "[subscription().tenantId]",
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "enableRbacAuthorization": false,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 7,
+        "publicNetworkAccess": "Enabled",
+        "accessPolicies": [
+          {
+            "tenantId": "[subscription().tenantId]",
+            "objectId": "[reference(variables('identityId'), '2023-01-31').principalId]",
+            "permissions": {
+              "secrets": [
+                "get"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[parameters('createSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), variables('sessionSecretName'))]",
+      "dependsOn": [
+        "[variables('keyVaultId')]"
+      ],
+      "properties": {
+        "value": "[parameters('sessionSecret')]"
+      }
+    },
+    {
+      "condition": "[parameters('createSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), variables('encryptionKeySecretName'))]",
+      "dependsOn": [
+        "[variables('keyVaultId')]"
+      ],
+      "properties": {
+        "value": "[parameters('encryptionKey')]"
+      }
+    },
+    {
+      "comments": "The first administrator's initial password. Written only when an address was given, and used once, by the server, on a database with no accounts.",
+      "condition": "[and(parameters('createSecrets'), variables('createAdmin'))]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), variables('adminSecretName'))]",
+      "dependsOn": [
+        "[variables('keyVaultId')]"
+      ],
+      "properties": {
+        "value": "[parameters('adminPassword')]"
+      }
+    },
+    {
+      "comments": "The app itself. One replica, always: DuckDB gives the database file to one process at a time.",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('containerAppName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[variables('identityId')]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments/storages', variables('environmentName'), variables('storageMountName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('sessionSecretName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('encryptionKeySecretName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('adminSecretName'))]"
+      ],
+      "properties": {
+        "managedEnvironmentId": "[variables('environmentId')]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "transport": "http",
+            "allowInsecure": false,
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          },
+          "secrets": "[if(variables('createAdmin'), concat(variables('appSecrets'), variables('adminSecrets')), variables('appSecrets'))]"
+        },
+        "template": {
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "data",
+              "storageType": "AzureFile",
+              "storageName": "[variables('storageMountName')]",
+              "mountOptions": "uid=10001,gid=10001,dir_mode=0750,file_mode=0750"
+            },
+            {
+              "name": "shm",
+              "storageType": "EmptyDir"
+            }
+          ],
+          "containers": [
+            {
+              "name": "blacklight",
+              "image": "[format('{0}:{1}', parameters('image'), parameters('imageTag'))]",
+              "resources": {
+                "cpu": "[json(parameters('containerCpu'))]",
+                "memory": "[parameters('containerMemory')]"
+              },
+              "env": "[concat(createArray(createObject('name', 'BLACKLIGHT_BASE_URL', 'value', format('https://{0}.{1}', variables('containerAppName'), reference(variables('environmentId'), '2024-03-01').defaultDomain))), variables('coreEnv'), if(variables('createAdmin'), variables('adminEnv'), json('[]')))]",
+              "volumeMounts": [
+                {
+                  "volumeName": "data",
+                  "mountPath": "/var/lib/blacklight"
+                },
+                {
+                  "volumeName": "shm",
+                  "mountPath": "/dev/shm"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Readiness",
+                  "httpGet": {
+                    "path": "/api/v1/healthz",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  }
+                },
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/api/v1/healthz",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 30,
+                  "periodSeconds": 30,
+                  "timeoutSeconds": 5,
+                  "failureThreshold": 3
+                },
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/api/v1/healthz",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "timeoutSeconds": 5,
+                  "failureThreshold": 30
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "appUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', variables('containerAppName')), '2024-03-01').configuration.ingress.fqdn)]"
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[resourceGroup().name]"
+    },
+    "containerAppName": {
+      "type": "string",
+      "value": "[variables('containerAppName')]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[variables('keyVaultName')]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "adminEmail": {
+      "type": "string",
+      "value": "[parameters('adminEmail')]"
+    },
+    "adminPasswordCommand": {
+      "type": "string",
+      "value": "[if(variables('createAdmin'), format('az keyvault secret show --vault-name {0} --name {1} --query value -o tsv', variables('keyVaultName'), variables('adminSecretName')), 'No administrator was created: adminEmail was empty.')]"
+    },
+    "managedIdentityClientId": {
+      "type": "string",
+      "value": "[reference(variables('identityId'), '2023-01-31').clientId]"
+    }
+  }
+}

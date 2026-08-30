@@ -26,6 +26,12 @@ exist for the duration of one operation and are not persisted — and they feed
 the provider sends to Azure without Terraform recording it in state or in the plan file. Key Vault is
 the only place `BLACKLIGHT_SESSION_SECRET` and `BLACKLIGHT_ENCRYPTION_KEY` exist.
 
+There is a one-click equivalent of all of this in [`deploy/azure-arm/`](../azure-arm/README.md) — the
+same resources as an ARM template behind a **Deploy to Azure** button, with no Terraform to install
+and no state to keep. Use it for a first deployment or a demo; use this for anything with a
+lifecycle, where planning a change before making it and keeping the secrets out of the deployment
+entirely are worth a state file.
+
 ## Prerequisites
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in: `az login`.
@@ -47,7 +53,7 @@ az provider register --namespace Microsoft.Storage
 ## Deploy
 
 ```sh
-cd deploy/terraform
+cd deploy/azure-terraform
 az login
 terraform init
 terraform apply

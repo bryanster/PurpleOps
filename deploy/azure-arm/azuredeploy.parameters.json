@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "name": {
+      "value": "blacklight"
+    },
+    "imageTag": {
+      "value": "v1.0.2"
+    },
+    "containerCpu": {
+      "value": "1"
+    },
+    "containerMemory": {
+      "value": "2Gi"
+    },
+    "storageShareQuotaGb": {
+      "value": 100
+    },
+    "adminEmail": {
+      "value": ""
+    },
+    "adminName": {
+      "value": "Administrator"
+    },
+    "createSecrets": {
+      "value": true
+    }
+  }
+}
