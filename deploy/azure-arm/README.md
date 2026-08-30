@@ -19,8 +19,10 @@ What it provisions:
 
 The two application secrets are generated during the deployment, stored in Key Vault, and referenced
 by the container app through the managed identity — the values never appear in the container app's
-own secret list. They are `securestring` parameters, so they are not recorded in the deployment
-history either; Key Vault is where they live.
+own secret list. Each is two fresh GUIDs with the hyphens stripped: 64 hexadecimal characters, 244
+bits of randomness, taken from the GUIDs' own bytes rather than through `uniqueString`, whose 64-bit
+hash would throw most of that away. They are `securestring` parameters, so the deployment history
+records the name and the type and no value. Key Vault is where they live.
 
 ## Prerequisites
 
