@@ -122,7 +122,7 @@ func (p *Provider) open(sealed, state string) (pending, error) {
 // was navigated into. It is HttpOnly, scoped to the two OIDC endpoints, and
 // worthless to script either way.
 func (p *Provider) Cookie(sealed string) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // Secure mirrors p.secure (http dev hosts); SameSite=Lax is the browser-facing design
 		Name:     CookieName,
 		Value:    sealed,
 		Path:     p.cookiePath,
@@ -141,7 +141,7 @@ func (p *Provider) Cookie(sealed string) *http.Cookie {
 // The attributes have to be the ones it was set with or the browser keeps its
 // copy, which is why this is not written out at the call site.
 func (p *Provider) ClearCookie() *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // mirrors Cookie()'s attributes; a clear has to match the set
 		Name:     CookieName,
 		Value:    "",
 		Path:     p.cookiePath,

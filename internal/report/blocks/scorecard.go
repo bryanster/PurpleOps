@@ -50,15 +50,15 @@ func (ScorecardRenderer) Render(ctx context.Context, env report.RenderEnv, inst 
 	// Per-tactic cards.
 	for _, tactic := range tacticCov.Rows {
 		b.WriteString(`<div class="bl-report__scorecard-tactic">`)
-		b.WriteString(fmt.Sprintf(`<h3 class="bl-report__scorecard-tactic-name">%s</h3>`, html.EscapeString(tactic.TacticName)))
+		fmt.Fprintf(&b, `<h3 class="bl-report__scorecard-tactic-name">%s</h3>`, html.EscapeString(tactic.TacticName))
 
 		b.WriteString(`<div class="bl-report__scorecard-metrics">`)
-		b.WriteString(fmt.Sprintf(`<div class="bl-report__scorecard-metric"><span class="bl-report__scorecard-metric-label">Attempted</span><span class="bl-report__scorecard-metric-value">%s</span></div>`,
-			f.Count(tactic.TechniquesAttempted)))
-		b.WriteString(fmt.Sprintf(`<div class="bl-report__scorecard-metric"><span class="bl-report__scorecard-metric-label">In Matrix</span><span class="bl-report__scorecard-metric-value">%s</span></div>`,
-			f.Count(tactic.TechniquesInMatrix)))
-		b.WriteString(fmt.Sprintf(`<div class="bl-report__scorecard-metric"><span class="bl-report__scorecard-metric-label">Coverage</span><span class="bl-report__scorecard-metric-value">%s</span></div>`,
-			f.Percent(tactic.TechniquesAttempted, tactic.TechniquesInMatrix)))
+		fmt.Fprintf(&b, `<div class="bl-report__scorecard-metric"><span class="bl-report__scorecard-metric-label">Attempted</span><span class="bl-report__scorecard-metric-value">%s</span></div>`,
+			f.Count(tactic.TechniquesAttempted))
+		fmt.Fprintf(&b, `<div class="bl-report__scorecard-metric"><span class="bl-report__scorecard-metric-label">In Matrix</span><span class="bl-report__scorecard-metric-value">%s</span></div>`,
+			f.Count(tactic.TechniquesInMatrix))
+		fmt.Fprintf(&b, `<div class="bl-report__scorecard-metric"><span class="bl-report__scorecard-metric-label">Coverage</span><span class="bl-report__scorecard-metric-value">%s</span></div>`,
+			f.Percent(tactic.TechniquesAttempted, tactic.TechniquesInMatrix))
 		b.WriteString(`</div>`)
 
 		// Category distribution within this tactic.
@@ -66,8 +66,8 @@ func (ScorecardRenderer) Render(ctx context.Context, env report.RenderEnv, inst 
 			b.WriteString(`<div class="bl-report__scorecard-distribution">`)
 			for _, cat := range scorecardCategoryOrder {
 				if count, ok := tactic.CategoryDistribution[cat]; ok && count > 0 {
-					b.WriteString(fmt.Sprintf(`<span class="bl-report__scorecard-dist-item">%s: %s</span>`,
-						html.EscapeString(cat), f.Count(count)))
+					fmt.Fprintf(&b, `<span class="bl-report__scorecard-dist-item">%s: %s</span>`,
+						html.EscapeString(cat), f.Count(count))
 				}
 			}
 			b.WriteString(`</div>`)

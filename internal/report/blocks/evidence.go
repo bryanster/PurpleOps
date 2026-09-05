@@ -134,7 +134,7 @@ func (EvidenceRenderer) Render(ctx context.Context, env report.RenderEnv, inst r
 
 	for i, r := range rows {
 		b.WriteString(`<tr>`)
-		b.WriteString(fmt.Sprintf(`<td class="bl-report__cell-num">%d</td>`, i+1))
+		fmt.Fprintf(&b, `<td class="bl-report__cell-num">%d</td>`, i+1)
 		b.WriteString(`<td class="bl-report__cell-mono">`)
 		b.WriteString(html.EscapeString(r.Evidence))
 		b.WriteString(`</td>`)
@@ -152,10 +152,8 @@ func (EvidenceRenderer) Render(ctx context.Context, env report.RenderEnv, inst r
 	b.WriteString(`</tbody></table>`)
 
 	if p.Limit > 0 && len(rows) >= p.Limit {
-		b.WriteString(fmt.Sprintf(
-			`<p class="bl-report__footnote">Showing first %d items. Increase the limit parameter to include more.</p>`,
-			p.Limit,
-		))
+		fmt.Fprintf(&b, `<p class="bl-report__footnote">Showing first %d items. Increase the limit parameter to include more.</p>`,
+			p.Limit)
 	}
 
 	b.WriteString(`</section>`)

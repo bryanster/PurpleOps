@@ -11,7 +11,7 @@
 # postCreateCommand, and it is the same command a developer without a container
 # runs.
 
-FROM golang:1.25-trixie
+FROM golang:1.26-trixie
 
 # make: the Makefile is the interface to everything in this repo, and the Go
 #   image does not ship it.

@@ -112,7 +112,7 @@ func (p *Provider) open(sealed string) (pending, error) {
 // It stays HttpOnly and scoped to the SAML endpoints. Nothing else has any
 // reason to be sent it, and it is worthless to script either way.
 func (p *Provider) Cookie(sealed string) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // SameSite=None is required for the IdP POST; comment above explains
 		Name:     CookieName,
 		Value:    sealed,
 		Path:     p.cookiePath,
@@ -134,7 +134,7 @@ func (p *Provider) Cookie(sealed string) *http.Cookie {
 // The attributes have to be the ones it was set with or the browser keeps its
 // copy, which is why this is not written out at the call site.
 func (p *Provider) ClearCookie() *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // mirrors Cookie()'s attributes; a clear has to match the set
 		Name:     CookieName,
 		Value:    "",
 		Path:     p.cookiePath,

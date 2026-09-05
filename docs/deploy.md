@@ -549,7 +549,7 @@ port. It is the same endpoint.
 
 ## Running without Docker
 
-Supported, less tested. You need Go 1.25+, Node 24 (see `.prototools`), a C compiler — the DuckDB
+Supported, less tested. You need Go 1.26+, Node 24 (see `.prototools`), a C compiler — the DuckDB
 driver is cgo — and, for M6, a Chromium binary.
 
 ```sh

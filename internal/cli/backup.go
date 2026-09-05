@@ -173,6 +173,8 @@ func addFileToArchive(tw *tar.Writer, path, name string) error {
 		return err
 	}
 
+	//nolint:gosec // G122: operator-owned backup sources, no attacker path into
+	// the walk; the stat above and this open are the same trusted file.
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -196,26 +198,23 @@ func addDirToArchive(tw *tar.Writer, dir, prefix string) error {
 		}
 		name := filepath.Join(prefix, rel)
 
-		hdr, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		hdr.Name = name
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
+		// Directories are bare headers; files are written whole by
+		// addFileToArchive, so a header and its body always describe the
+		// same stat.
 		if info.IsDir() {
+			hdr, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+			hdr.Name = name
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
 			return nil
 		}
 
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		if _, err := io.Copy(tw, f); err != nil {
-			return err
-		}
-		return nil
+		//nolint:gosec // G122: operator-owned backup sources, no attacker path
+		// into the walk; stat and open happen on the same trusted path.
+		return addFileToArchive(tw, path, name)
 	})
 }

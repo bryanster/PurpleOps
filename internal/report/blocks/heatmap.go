@@ -68,33 +68,32 @@ func (HeatmapRenderer) Render(ctx context.Context, env report.RenderEnv, inst re
 	// Legend.
 	b.WriteString(`<div class="bl-report__heatmap-legend"><span class="bl-report__heatmap-legend-label">Detection:</span>`)
 	for i, label := range analytics.NavigatorLegendLabels {
-		b.WriteString(fmt.Sprintf(`<span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:%s"></span> %s</span>`,
-			analytics.NavigatorColourRamp[i], html.EscapeString(label)))
+		fmt.Fprintf(&b, `<span class="bl-report__heatmap-legend-item"><span class="bl-report__heatmap-swatch" style="background:%s"></span> %s</span>`,
+			analytics.NavigatorColourRamp[i], html.EscapeString(label))
 	}
 	b.WriteString(`</div>`)
 
 	// Summary counts.
 	b.WriteString(`<div class="bl-report__heatmap-summary">`)
-	b.WriteString(fmt.Sprintf(`<p>Techniques attempted: <strong>%s</strong> / %s (%.0f%%)</p>`,
+	fmt.Fprintf(&b, `<p>Techniques attempted: <strong>%s</strong> / %s (%.0f%%)</p>`,
 		f.Count(tc.AttemptedTechniques), f.Count(tc.MatrixTechniques),
-		float64(tc.AttemptedTechniques)/float64(tc.MatrixTechniques)*100))
+		float64(tc.AttemptedTechniques)/float64(tc.MatrixTechniques)*100)
 	b.WriteString(`</div>`)
 
 	if params.Verbosity == "full" {
 		// Per-tactic grid with technique cells.
 		for _, tactic := range tacticCov.Rows {
-			b.WriteString(fmt.Sprintf(`<h3 class="bl-report__heatmap-tactic">%s <span class="bl-report__heatmap-tactic-count">(%s / %s)</span></h3>`,
+			fmt.Fprintf(&b, `<h3 class="bl-report__heatmap-tactic">%s <span class="bl-report__heatmap-tactic-count">(%s / %s)</span></h3>`,
 				html.EscapeString(tactic.TacticName),
 				f.Count(tactic.TechniquesAttempted),
-				f.Count(tactic.TechniquesInMatrix),
-			))
+				f.Count(tactic.TechniquesInMatrix))
 
 			b.WriteString(`<div class="bl-report__heatmap-grid">`)
 			for _, tech := range tc.Rows {
 				if tech.BestCategoryOrdinal == nil {
 					// Not attempted: grey.
-					b.WriteString(fmt.Sprintf(`<div class="bl-report__heatmap-cell" style="background:%s" title="%s — not attempted">%s</div>`,
-						"#e8eaed", html.EscapeString(tech.Name), html.EscapeString(tech.TechniqueID)))
+					fmt.Fprintf(&b, `<div class="bl-report__heatmap-cell" style="background:%s" title="%s — not attempted">%s</div>`,
+						"#e8eaed", html.EscapeString(tech.Name), html.EscapeString(tech.TechniqueID))
 				} else {
 					c := *tech.BestCategoryOrdinal
 					if c < 0 {
@@ -103,12 +102,12 @@ func (HeatmapRenderer) Render(ctx context.Context, env report.RenderEnv, inst re
 					if c > 4 {
 						c = 4
 					}
-					b.WriteString(fmt.Sprintf(`<div class="bl-report__heatmap-cell" style="background:%s;color:%s" title="%s — %s">%s</div>`,
+					fmt.Fprintf(&b, `<div class="bl-report__heatmap-cell" style="background:%s;color:%s" title="%s — %s">%s</div>`,
 						analytics.NavigatorColourRamp[c],
 						heatmapTextColor(c),
 						html.EscapeString(tech.Name),
 						html.EscapeString(tech.BestCategory),
-						html.EscapeString(tech.TechniqueID)))
+						html.EscapeString(tech.TechniqueID))
 				}
 			}
 			b.WriteString(`</div>`)
@@ -122,12 +121,11 @@ func (HeatmapRenderer) Render(ctx context.Context, env report.RenderEnv, inst re
 			if tactic.TechniquesInMatrix > 0 {
 				pct = fmt.Sprintf("%.0f%%", float64(tactic.TechniquesAttempted)/float64(tactic.TechniquesInMatrix)*100)
 			}
-			b.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
+			fmt.Fprintf(&b, `<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
 				html.EscapeString(tactic.TacticName),
 				f.Count(tactic.TechniquesAttempted),
 				f.Count(tactic.TechniquesInMatrix),
-				pct,
-			))
+				pct)
 		}
 		b.WriteString(`</tbody></table>`)
 	}

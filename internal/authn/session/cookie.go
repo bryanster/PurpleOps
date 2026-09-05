@@ -35,7 +35,7 @@ const CookieName = "bl_session"
 // expired session is refused by [Manager.Resolve] whatever the browser did with
 // its copy.
 func (m *Manager) Cookie(token Token, expires time.Time) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // Secure mirrors m.secure: configurable for http dev hosts; G124 wants constant true
 		Name:     CookieName,
 		Value:    token.Reveal(),
 		Path:     "/",
@@ -54,7 +54,7 @@ func (m *Manager) Cookie(token Token, expires time.Time) *http.Cookie {
 // treats it as a different cookie and keeps the original. That is the whole
 // reason this is not written out at the call site.
 func (m *Manager) ClearCookie() *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // mirrors Cookie()'s attributes; a clear has to match the set
 		Name:     CookieName,
 		Value:    "",
 		Path:     "/",
