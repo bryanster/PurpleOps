@@ -37,7 +37,7 @@ describe('global error handling', () => {
     const queryClient = createQueryClient({ onUnauthorized, onServerError })
 
     await queryClient
-      .fetchQuery({
+      .query({
         queryKey: ['test', error.message],
         queryFn: () => {
           throw error
