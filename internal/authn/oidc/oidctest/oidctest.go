@@ -204,6 +204,8 @@ func (p *Provider) authorize(w http.ResponseWriter, r *http.Request) {
 	values.Set("code", code)
 	values.Set("state", query.Get("state"))
 	back.RawQuery = values.Encode()
+	//nolint:gosec // G710: mock IdP — following the caller's redirect_uri is the
+	// contract under test, not an open redirect in shipped code.
 	http.Redirect(w, r, back.String(), http.StatusFound)
 }
 

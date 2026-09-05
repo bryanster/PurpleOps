@@ -72,7 +72,7 @@ func (m *Manager) CSRFToken(token Token) string {
 //     stale copy cannot authorize anything — it fails, and the middleware
 //     replaces it on the way out.
 func (m *Manager) CSRFCookie(csrfToken string) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // HttpOnly:false is deliberate — the double-submit script must read it
 		Name:     CSRFCookieName,
 		Value:    csrfToken,
 		Path:     "/",
@@ -86,7 +86,7 @@ func (m *Manager) CSRFCookie(csrfToken string) *http.Cookie {
 // sent wherever [Manager.ClearCookie] is: the pair is issued together and
 // dropped together, so a signed-out browser is not left holding half of it.
 func (m *Manager) ClearCSRFCookie() *http.Cookie {
-	cookie := m.CSRFCookie("")
+	cookie := m.CSRFCookie("") //nolint:gosec // same deliberate attributes as CSRFCookie, cleared
 	cookie.MaxAge = -1
 	return cookie
 }

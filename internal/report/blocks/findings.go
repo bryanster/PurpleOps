@@ -101,13 +101,13 @@ func (FindingsRenderer) Render(ctx context.Context, env report.RenderEnv, inst r
 		}
 
 		b.WriteString(`<tr>`)
-		b.WriteString(fmt.Sprintf(`<td class="bl-report__cell-sev bl-report__cell-sev--%s">%s</td>`,
-			f.Severity, html.EscapeString(f.Severity)))
+		fmt.Fprintf(&b, `<td class="bl-report__cell-sev bl-report__cell-sev--%s">%s</td>`,
+			f.Severity, html.EscapeString(f.Severity))
 		b.WriteString(`<td>`)
 		b.WriteString(html.EscapeString(f.Title))
 		b.WriteString(`</td>`)
-		b.WriteString(fmt.Sprintf(`<td><span class="bl-report__status bl-report__status--%s">%s</span></td>`,
-			string(f.Status), html.EscapeString(statusLabel)))
+		fmt.Fprintf(&b, `<td><span class="bl-report__status bl-report__status--%s">%s</span></td>`,
+			string(f.Status), html.EscapeString(statusLabel))
 		b.WriteString(`<td class="bl-report__cell-mono">`)
 		b.WriteString(html.EscapeString(techsStr))
 		b.WriteString(`</td>`)

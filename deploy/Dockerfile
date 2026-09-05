@@ -21,7 +21,7 @@
 # build and runtime stages is what guarantees the glibc the binary was linked
 # against is the glibc it finds at runtime.
 ARG DEBIAN_RELEASE=trixie
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.26
 ARG NODE_VERSION=24.18.1
 
 # ─── Stage 1 · the single-page app ────────────────────────────────────────────

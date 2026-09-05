@@ -164,17 +164,17 @@ func (WalkthroughRenderer) Render(ctx context.Context, env report.RenderEnv, ins
 			}
 
 			b.WriteString(`<tr>`)
-			b.WriteString(fmt.Sprintf(`<td class="bl-report__cell-num">%d</td>`, step.Ordinal+1))
+			fmt.Fprintf(&b, `<td class="bl-report__cell-num">%d</td>`, step.Ordinal+1)
 			b.WriteString(`<td>`)
 			b.WriteString(html.EscapeString(step.Name))
 			b.WriteString(`</td>`)
 			b.WriteString(`<td class="bl-report__cell-mono">`)
 			b.WriteString(html.EscapeString(technique))
 			b.WriteString(`</td>`)
-			b.WriteString(fmt.Sprintf(`<td><span class="bl-report__status bl-report__status--%s">%s</span></td>`,
-				status, html.EscapeString(status)))
-			b.WriteString(fmt.Sprintf(`<td><span class="bl-report__outcome bl-report__outcome--%s">%s</span></td>`,
-				outcomeLabel, html.EscapeString(outcomeLabel)))
+			fmt.Fprintf(&b, `<td><span class="bl-report__status bl-report__status--%s">%s</span></td>`,
+				status, html.EscapeString(status))
+			fmt.Fprintf(&b, `<td><span class="bl-report__outcome bl-report__outcome--%s">%s</span></td>`,
+				outcomeLabel, html.EscapeString(outcomeLabel))
 			b.WriteString(`<td>`)
 			b.WriteString(html.EscapeString(detCat))
 			b.WriteString(`</td>`)
@@ -220,10 +220,8 @@ func (WalkthroughRenderer) Render(ctx context.Context, env report.RenderEnv, ins
 			}
 		}
 		b.WriteString(`<div class="bl-report__walkthrough-summary">`)
-		b.WriteString(fmt.Sprintf(
-			`<p>%s steps total, %s attempted, %s detected, %s prevented</p>`,
-			f.Count(total), f.Count(attempted), f.Count(detected), f.Count(prevented),
-		))
+		fmt.Fprintf(&b, `<p>%s steps total, %s attempted, %s detected, %s prevented</p>`,
+			f.Count(total), f.Count(attempted), f.Count(detected), f.Count(prevented))
 		b.WriteString(`</div>`)
 	}
 

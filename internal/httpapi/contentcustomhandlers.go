@@ -409,23 +409,23 @@ func (h *handlers) ExportCustomContent(ctx context.Context, request gen.ExportCu
 	// YAML: header comments with license/attribution, then the document body.
 	var buf bytes.Buffer
 	buf.WriteString("# Blacklight custom content export\n")
-	buf.WriteString(fmt.Sprintf("# Source: %s\n", doc.Meta.SourceName))
+	fmt.Fprintf(&buf, "# Source: %s\n", doc.Meta.SourceName)
 	if doc.Meta.LicenseSPDX != "" {
-		buf.WriteString(fmt.Sprintf("# License: %s", doc.Meta.LicenseSPDX))
+		fmt.Fprintf(&buf, "# License: %s", doc.Meta.LicenseSPDX)
 		if doc.Meta.LicenseName != "" {
-			buf.WriteString(fmt.Sprintf(" (%s)", doc.Meta.LicenseName))
+			fmt.Fprintf(&buf, " (%s)", doc.Meta.LicenseName)
 		}
 		buf.WriteByte('\n')
 	}
 	if doc.Meta.LicenseURL != "" {
-		buf.WriteString(fmt.Sprintf("# License-URL: %s\n", doc.Meta.LicenseURL))
+		fmt.Fprintf(&buf, "# License-URL: %s\n", doc.Meta.LicenseURL)
 	}
 	if doc.Meta.Attribution != "" {
 		for _, line := range strings.Split(doc.Meta.Attribution, "\n") {
 			buf.WriteString("# Attribution: " + line + "\n")
 		}
 	}
-	buf.WriteString(fmt.Sprintf("# Exported-At: %s\n", doc.Meta.ExportedAt.Format(time.RFC3339)))
+	fmt.Fprintf(&buf, "# Exported-At: %s\n", doc.Meta.ExportedAt.Format(time.RFC3339))
 	buf.WriteByte('\n')
 
 	enc := yaml.NewEncoder(&buf)

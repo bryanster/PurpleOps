@@ -275,7 +275,7 @@ func (m *Manager) Discard(ctx context.Context, userID string) error {
 // stops honouring it. The server never trusts that — [Manager.Resolve] checks
 // the row's expiry whatever the browser did with its copy.
 func (m *Manager) Cookie(token Token, expires time.Time) *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // Secure mirrors m.secure: configurable for http dev hosts; G124 wants constant true
 		Name:     CookieName,
 		Value:    token.Reveal(),
 		Path:     m.path,
@@ -292,7 +292,7 @@ func (m *Manager) Cookie(token Token, expires time.Time) *http.Cookie {
 // match the ones it was set with, or a browser keeps the original — which is
 // the whole reason this is not written out at the call site.
 func (m *Manager) ClearCookie() *http.Cookie {
-	return &http.Cookie{
+	return &http.Cookie{ //nolint:gosec // mirrors Cookie()'s attributes; a clear has to match the set
 		Name:     CookieName,
 		Value:    "",
 		Path:     m.path,
