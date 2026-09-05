@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-09-05
+
 ### Added
 
 - **Client SDKs for Go, TypeScript/JavaScript, Python and Rust**, in
@@ -27,6 +29,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`docs/sdk.md`](docs/sdk.md).
 - **`make test-sdk`** — the four SDKs' own tests, and proof that each still
   compiles. A new `SDK tests` job runs it in CI.
+- **A red-team guide with screenshots of every workflow**
+  ([`docs/red-team-guide.md`](docs/red-team-guide.md)) and worked Python SDK
+  examples that drive those workflows end to end
+  ([`sdk/python/examples`](sdk/python/examples)): `red_team_agent.py` signs in,
+  runs a scenario workbook, and files findings; `blue_team_agent.py` is the
+  defender half. Both use only the generated client.
+- **A NixOS deployment example** ([`deploy/nixos-azure/`](deploy/nixos-azure/)):
+  a flake that deploys the container to an Azure VM, TLS included, with one
+  `deploy.sh` invocation.
+- **An Azure ARM deployment template**
+  ([`deploy/azure-arm/`](deploy/azure-arm/)): the container image plus the
+  PostgreSQL and storage sidecars, with session and encryption secrets written
+  to Key Vault. The `terraform` example already covered the same ground; this
+  is the template route for deployments that are not already on Terraform.
 
 ### Changed
 
@@ -39,6 +55,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON a caller sends and receives are identical — but the generated type's name
   changed in the SPA's types and in the server's. A new rule in
   `api/conventions_test.go` refuses the collision from now on.
+- **The Go toolchain floor is now 1.26, and the dependency tree is refreshed
+  across Go, the web client, the e2e suite, the GitHub Actions and the
+  Terraform example.** `chromedp v0.16` needs Go ≥ 1.26, so the pinned toolchain
+  moves with it — `deploy/Dockerfile` and the devcontainer image build on
+  `golang:1.26`, and golangci-lint is pinned to `v2.13.2`. The lint findings
+  that newer release adds are cleared: report and export rendering use
+  `fmt.Fprintf` instead of `WriteString(fmt.Sprintf(…))`, and the deliberate
+  cookie attribute choices (configurable `Secure` for plain-http dev hosts, the
+  script-readable CSRF cookie, the SAML flow's `SameSite=None`) are documented
+  where they are made. The refresh closes the open security advisories:
+  `@tiptap/core` is past GHSA-cp6q-959q-f8rh, and `fast-uri` is past the four
+  high-severity advisories (a web development dependency).
+
+### Fixed
+
+- **A spoofed `Authorization: Bearer` header no longer moves a login or
+  report-share throttle count off the account being guessed.** The bearer
+  credential was checked before the route's, and `tokenAccount` maps a
+  malformed token to the empty string, which the account limiter ignores — so a
+  caller could attach any bearer header and escape the per-account lockout
+  entirely. Sign-in and share-claim routes now name their credential from the
+  body, cookie or URL path first, and the bearer token is only the credential
+  in view when no route has named another.
 
 ## [1.0.2] — 2026-08-15
 
@@ -318,6 +357,7 @@ older binary.
 - **Static asset directory.** The binary is the whole application; nothing is
   served from disk.
 
+[1.0.3]: https://github.com/bryanster/blacklight/releases/tag/v1.0.3
 [1.0.2]: https://github.com/bryanster/blacklight/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bryanster/blacklight/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bryanster/blacklight/releases/tag/v1.0.0
